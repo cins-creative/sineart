@@ -1,46 +1,67 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import type { ReactNode } from "react";
 
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { updateMktMediaProjectScheduleAndTeam } from "@/app/admin/dashboard/quan-ly-media/actions";
+import { htmlToPlainText, sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
+import type {
+  HrNhanSuStaffOption,
+  MktMediaProjectRow as Project,
+  StaffNameById,
+} from "@/lib/data/admin-quan-ly-media";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-type Project = {
-  id: number;
-  project_name: string;
-  project_type: string | null;
-  type: string | null;
-  status: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  brief: string | null;
-  minh_hoa: string[] | null;
-  nguoi_tao: number | null;
-  nguoi_lam: number[] | null;
+type MediaTimelineProps = {
+  initialProjects: Project[];
+  staffNameById?: StaffNameById;
+  mediaTeamStaff?: HrNhanSuStaffOption[];
+  /** Nhân sự ban Media — lọc timeline theo người làm. */
+  mediaBanStaffFilter?: HrNhanSuStaffOption[];
 };
 
-// ── Config ───────────────────────────────────────────────────────────────────
+type ViewMode = "data" | "week" | "month" | "year";
+
+const LS_KEY = "sineart-admin-media-timeline:v2";
 
 const STATUS_ORDER = ["Đang làm", "Chờ xác nhận", "Hoàn thành", "Hủy dự án"];
 
 const STATUS_META: Record<string, { label: string; color: string; dot: string }> = {
-  "Đang làm": { label: "Đang làm", color: "#3B82F6", dot: "#60A5FA" },
-  "Chờ xác nhận": { label: "Chờ xác nhận", color: "#F59E0B", dot: "#FCD34D" },
-  "Hoàn thành": { label: "Hoàn thành", color: "#10B981", dot: "#34D399" },
+  "Đang làm": { label: "Đang làm", color: "#2563EB", dot: "#3B82F6" },
+  "Chờ xác nhận": { label: "Chờ xác nhận", color: "#D97706", dot: "#F59E0B" },
+  "Hoàn thành": { label: "Hoàn thành", color: "#059669", dot: "#10B981" },
   "Hủy dự án": { label: "Hủy dự án", color: "#6B7280", dot: "#9CA3AF" },
 };
 
 const TYPE_COLOR: Record<string, string> = {
   "Album ảnh": "#F8A568",
-  Ảnh: "#EE5CA2",
+  "Ảnh": "#EE5CA2",
   "Video 16x9": "#BB89F8",
   "Short 9x16": "#818CF8",
   Web: "#34D399",
   "Micro interactive": "#FB923C",
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+const BORDER = "#EAEAEA";
+const TEXT = "#323232";
+const TEXT_MUTED = "#888888";
+const HEADER_BG = "#fafafa";
+const GROUP_BG = "#f5f5f6";
+const ROW_ALT = "#fafafa";
+
+const MIN_LABEL_W = 140;
+const MAX_LABEL_W = 440;
+const DEFAULT_LABEL_W = 220;
+const MIN_PX_PER_DAY = 2;
+const MAX_PX_PER_DAY = 48;
+const DEFAULT_PX_PER_DAY = 8;
+const MIN_TRACK_W = 640;
+
+type PersistShape = {
+  labelWidth?: number;
+  pixelsPerDay?: number;
+  collapsed?: string[];
+  viewMode?: ViewMode;
+};
 
 function parseDate(s: string | null): Date | null {
   if (!s) return null;
@@ -57,62 +78,169 @@ function formatDate(s: string | null) {
   return new Date(s).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
 }
 
-// ── Subcomponents ────────────────────────────────────────────────────────────
+function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${day}`;
+}
+
+function barFlatColor(project: Project): string {
+  const t = project.type ?? "";
+  if (TYPE_COLOR[t]) return TYPE_COLOR[t];
+  const st = project.status ?? "";
+  return STATUS_META[st]?.color ?? "#94a3b8";
+}
+
+/** Khoảng thời gian hiển thị: dữ liệu + padding; theo chế độ tuần/tháng/năm; mở rộng khi zoom (px/ngày nhỏ). */
+function computeBounds(projects: Project[], viewMode: ViewMode, pixelsPerDay: number) {
+  const today = startOfLocalDay(new Date());
+  const dates = projects
+    .flatMap((p) => [parseDate(p.start_date), parseDate(p.end_date)])
+    .filter(Boolean) as Date[];
+  let dataMin = dates.length ? startOfLocalDay(new Date(Math.min(...dates.map((d) => d.getTime())))) : today;
+  let dataMax = dates.length ? startOfLocalDay(new Date(Math.max(...dates.map((d) => d.getTime())))) : today;
+  if (dataMin > dataMax) [dataMin, dataMax] = [dataMax, dataMin];
+
+  const pad = 7;
+  let coreStart = addDays(dataMin, -pad);
+  let coreEnd = addDays(dataMax, pad);
+
+  const minSpan =
+    viewMode === "week" ? 84 : viewMode === "month" ? 210 : viewMode === "year" ? 800 : 0;
+  if (minSpan > 0) {
+    const half = Math.floor(minSpan / 2);
+    const ws = addDays(today, -half);
+    const we = addDays(today, half);
+    if (ws.getTime() < coreStart.getTime()) coreStart = ws;
+    if (we.getTime() > coreEnd.getTime()) coreEnd = we;
+  }
+
+  const coreSpan = Math.max(1, daysBetween(coreStart, coreEnd));
+  const zoomExpand = Math.max(1, DEFAULT_PX_PER_DAY / Math.max(MIN_PX_PER_DAY, pixelsPerDay));
+  const extra = Math.round((coreSpan * (zoomExpand - 1)) / 2);
+  const timelineStart = addDays(coreStart, -extra);
+  const timelineEnd = addDays(coreEnd, extra);
+  const totalDays = Math.max(1, daysBetween(timelineStart, timelineEnd));
+  return { timelineStart, timelineEnd, totalDays };
+}
+
+function buildTicks(viewMode: ViewMode, timelineStart: Date, timelineEnd: Date, totalDays: number) {
+  const ticks: { label: string; pct: number }[] = [];
+  const pctAt = (d: Date) => (daysBetween(timelineStart, d) / totalDays) * 100;
+
+  /** Mốc Tuần: mỗi ngày — nhãn chỉ số ngày (trong tháng). */
+  if (viewMode === "week") {
+    const cur = new Date(
+      timelineStart.getFullYear(),
+      timelineStart.getMonth(),
+      timelineStart.getDate(),
+    );
+    while (cur <= timelineEnd) {
+      const p = pctAt(cur);
+      if (p >= -1 && p <= 101) {
+        ticks.push({
+          label: String(cur.getDate()),
+          pct: p,
+        });
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+  } else if (viewMode === "month") {
+    /** Mốc Tháng: mỗi tuần (thứ Hai) — nhãn tuần + tháng. */
+    const c = new Date(timelineStart);
+    const dow = c.getDay();
+    const deltaToMon = dow === 0 ? -6 : 1 - dow;
+    c.setDate(c.getDate() + deltaToMon);
+    while (c.getTime() < timelineStart.getTime()) c.setDate(c.getDate() + 7);
+    while (c <= timelineEnd) {
+      const p = pctAt(c);
+      if (p >= -1 && p <= 101) {
+        const sun = addDays(c, 6);
+        const wFrom = `${String(c.getDate()).padStart(2, "0")}/${String(c.getMonth() + 1).padStart(2, "0")}`;
+        const wTo = `${String(sun.getDate()).padStart(2, "0")}/${String(sun.getMonth() + 1).padStart(2, "0")}`;
+        const monthBit = c.toLocaleDateString("vi-VN", { month: "short", year: "2-digit" });
+        ticks.push({
+          label: `Tuần ${wFrom}–${wTo} · ${monthBit}`,
+          pct: p,
+        });
+      }
+      c.setDate(c.getDate() + 7);
+    }
+  } else if (viewMode === "year") {
+    /** Mốc Năm: một tick mỗi tháng (mồng 1). */
+    const c = new Date(timelineStart.getFullYear(), timelineStart.getMonth(), 1);
+    while (c <= timelineEnd) {
+      const p = pctAt(c);
+      if (p >= -2 && p <= 101) {
+        ticks.push({
+          label: c.toLocaleDateString("vi-VN", { month: "long", year: "numeric" }),
+          pct: p,
+        });
+      }
+      c.setMonth(c.getMonth() + 1);
+    }
+  } else {
+    const c = new Date(timelineStart.getFullYear(), timelineStart.getMonth(), 1);
+    while (c <= timelineEnd) {
+      const p = pctAt(c);
+      if (p >= -1 && p <= 101) {
+        ticks.push({
+          label: c.toLocaleDateString("vi-VN", { month: "short", year: "2-digit" }),
+          pct: p,
+        });
+      }
+      c.setMonth(c.getMonth() + 1);
+    }
+  }
+  return ticks;
+}
 
 function Tooltip({ project, x, y }: { project: Project; x: number; y: number }) {
+  const fill = barFlatColor(project);
   return (
-    <div
-      style={{
-        position: "fixed",
-        left: x + 16,
-        top: y - 8,
-        zIndex: 100,
-        pointerEvents: "none",
-        maxWidth: 280,
-      }}
-    >
+    <div style={{ position: "fixed", left: x + 14, top: y - 6, zIndex: 100, pointerEvents: "none", maxWidth: 280 }}>
       <div
         style={{
-          background: "#0F0F0F",
-          border: "1px solid #2A2A2A",
+          background: "#fff",
+          border: `1px solid ${BORDER}`,
           borderRadius: 10,
           padding: "12px 14px",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+          boxShadow: "0 8px 28px rgba(0,0,0,0.12)",
         }}
       >
-        <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 4 }}>
-          {project.type && (
-            <span
-              style={{
-                background: `${TYPE_COLOR[project.type] ?? "#6B7280"}22`,
-                color: TYPE_COLOR[project.type] || "#9CA3AF",
-                padding: "2px 8px",
-                borderRadius: 4,
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: "0.03em",
-              }}
-            >
-              {project.type}
-            </span>
-          )}
-        </div>
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: "#F3F4F6",
-            lineHeight: 1.4,
-            marginTop: 6,
-          }}
-        >
+        {project.type ? (
+          <span
+            style={{
+              background: `${fill}18`,
+              color: fill,
+              padding: "2px 8px",
+              borderRadius: 4,
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            {project.type}
+          </span>
+        ) : null}
+        <div style={{ fontSize: 13, fontWeight: 600, color: TEXT, lineHeight: 1.4, marginTop: 6 }}>
           {project.project_name}
         </div>
         {project.brief ? (
           <div
             style={{
               fontSize: 11,
-              color: "#6B7280",
+              color: TEXT_MUTED,
               marginTop: 6,
               display: "-webkit-box",
               WebkitLineClamp: 2,
@@ -120,12 +248,725 @@ function Tooltip({ project, x, y }: { project: Project; x: number; y: number }) 
               overflow: "hidden",
             }}
           >
-            {project.brief}
+            {htmlToPlainText(project.brief)}
           </div>
         ) : null}
-        <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 11, color: "#6B7280" }}>
+        <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 11, color: TEXT_MUTED }}>
           <span>▶ {formatDate(project.start_date)}</span>
           <span>⏹ {formatDate(project.end_date)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function detailSectionTitle(text: string) {
+  return (
+    <div
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        color: TEXT_MUTED,
+        marginBottom: 6,
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
+function metaLbl(text: string) {
+  return (
+    <span style={{ color: TEXT_MUTED, fontWeight: 600, fontSize: 11, whiteSpace: "nowrap" }}>{text}</span>
+  );
+}
+
+function resolveStaffRich(id: number | null, staffNameById: StaffNameById): ReactNode {
+  if (id == null) return "—";
+  const name = staffNameById[String(id)];
+  if (!name) return `ID ${id}`;
+  return (
+    <>
+      <span style={{ fontWeight: 600 }}>{name}</span>
+      <span style={{ color: TEXT_MUTED, fontWeight: 500, fontSize: 11, marginLeft: 4 }}>#{id}</span>
+    </>
+  );
+}
+
+function resolveStaffIdsRich(ids: number[] | null | undefined, staffNameById: StaffNameById): ReactNode {
+  if (!ids?.length) return "—";
+  return (
+    <>
+      {ids.map((id, i) => {
+        const name = staffNameById[String(id)];
+        return (
+          <span key={id} style={{ display: "inline" }}>
+            {i > 0 ? <span style={{ color: TEXT_MUTED }}>, </span> : null}
+            {name ? (
+              <>
+                <span style={{ fontWeight: 600 }}>{name}</span>
+                <span style={{ color: TEXT_MUTED, fontWeight: 500, fontSize: 11, marginLeft: 3 }}>#{id}</span>
+              </>
+            ) : (
+              <span style={{ fontWeight: 600 }}>ID {id}</span>
+            )}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+function typePill(text: string) {
+  const c = TYPE_COLOR[text] ?? "#64748b";
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "4px 10px",
+        borderRadius: 8,
+        fontSize: 12,
+        fontWeight: 700,
+        background: `${c}18`,
+        color: c,
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function statusPill(status: string | null) {
+  const m = STATUS_META[status ?? ""] ?? { label: status ?? "—", color: "#64748b" };
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "4px 10px",
+        borderRadius: 8,
+        fontSize: 12,
+        fontWeight: 700,
+        background: `${m.color}16`,
+        color: m.color,
+      }}
+    >
+      {m.label}
+    </span>
+  );
+}
+
+/** Số ngày từ đầu hôm nay (local) đến hết ngày kết thúc — dùng trong modal chi tiết. */
+function remainingDaysLabel(endDateStr: string | null): string {
+  const end = parseDate(endDateStr);
+  if (!end) return "—";
+  const today = startOfLocalDay(new Date());
+  const endDay = startOfLocalDay(end);
+  const n = daysBetween(today, endDay);
+  if (n > 0) return `Còn ${n} ngày`;
+  if (n === 0) return "Hôm nay";
+  return `Quá hạn ${-n} ngày`;
+}
+
+/** Giá trị `YYYY-MM-DD` cho `<input type="date">`. */
+function projectDateToYmdInput(s: string | null): string {
+  if (!s) return "";
+  const t = s.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return "";
+  return ymd(startOfLocalDay(d));
+}
+
+const DATE_IN: React.CSSProperties = {
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+  padding: "6px 8px",
+  fontSize: 12,
+  fontWeight: 600,
+  color: TEXT,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 8,
+  background: "#fff",
+};
+
+function ProjectDetailModal({
+  project,
+  staffNameById,
+  mediaTeamStaff,
+  onClose,
+  onSaved,
+}: {
+  project: Project;
+  staffNameById: StaffNameById;
+  mediaTeamStaff: HrNhanSuStaffOption[];
+  onClose: () => void;
+  onSaved: (p: Project) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [startYmd, setStartYmd] = useState(() => projectDateToYmdInput(project.start_date));
+  const [endYmd, setEndYmd] = useState(() => projectDateToYmdInput(project.end_date));
+  const [lamSet, setLamSet] = useState<Set<number>>(() => new Set(project.nguoi_lam ?? []));
+  const [formErr, setFormErr] = useState<string | null>(null);
+  const [savePending, startSaveTransition] = useTransition();
+
+  useEffect(() => {
+    setStartYmd(projectDateToYmdInput(project.start_date));
+    setEndYmd(projectDateToYmdInput(project.end_date));
+    setLamSet(new Set(project.nguoi_lam ?? []));
+    setFormErr(null);
+  }, [project.id, project.start_date, project.end_date, project.nguoi_lam]);
+
+  useEffect(() => {
+    setEditing(false);
+  }, [project.id]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (editing) {
+        e.preventDefault();
+        setStartYmd(projectDateToYmdInput(project.start_date));
+        setEndYmd(projectDateToYmdInput(project.end_date));
+        setLamSet(new Set(project.nguoi_lam ?? []));
+        setFormErr(null);
+        setEditing(false);
+      } else {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, editing, project.start_date, project.end_date, project.nguoi_lam]);
+
+  const cancelEdit = () => {
+    setStartYmd(projectDateToYmdInput(project.start_date));
+    setEndYmd(projectDateToYmdInput(project.end_date));
+    setLamSet(new Set(project.nguoi_lam ?? []));
+    setFormErr(null);
+    setEditing(false);
+  };
+
+  const staffPickOptions = useMemo(() => {
+    const m = new Map<number, HrNhanSuStaffOption>();
+    for (const s of mediaTeamStaff) m.set(s.id, s);
+    for (const id of project.nguoi_lam ?? []) {
+      if (!m.has(id)) {
+        m.set(id, {
+          id,
+          full_name: `${staffNameById[String(id)] ?? `Nhân sự #${id}`} (đã gán trước — ngoài Marketing/Media)`,
+        });
+      }
+    }
+    return [...m.values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "vi"));
+  }, [mediaTeamStaff, project.nguoi_lam, staffNameById]);
+
+  const imgs = project.minh_hoa?.filter(Boolean) ?? [];
+
+  const toggleLam = (id: number) => {
+    setLamSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const onSave = () => {
+    if (!editing) return;
+    setFormErr(null);
+    if (!startYmd || !endYmd) {
+      setFormErr("Chọn đủ ngày bắt đầu và kết thúc.");
+      return;
+    }
+    startSaveTransition(async () => {
+      const res = await updateMktMediaProjectScheduleAndTeam(project.id, startYmd, endYmd, [...lamSet]);
+      if (!res.ok) {
+        setFormErr(res.error);
+        return;
+      }
+      const nextLam = lamSet.size ? [...lamSet].sort((a, b) => a - b) : null;
+      onSaved({
+        ...project,
+        start_date: startYmd,
+        end_date: endYmd,
+        nguoi_lam: nextLam,
+      });
+      setEditing(false);
+    });
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal
+      aria-labelledby="media-detail-title"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 200,
+        background: "rgba(15,15,18,0.5)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(640px, 100%)",
+          maxHeight: "min(90vh, 720px)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          background: "#fff",
+          borderRadius: 16,
+          border: "1px solid rgba(0,0,0,0.06)",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.2)",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            flexShrink: 0,
+            padding: "12px 42px 12px 14px",
+            background: "linear-gradient(180deg, #eceeee 0%, #f5f6f6 38%, #fafbfb 100%)",
+            borderBottom: `1px solid ${BORDER}`,
+            color: TEXT,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Đóng"
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 10,
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              border: `1px solid ${BORDER}`,
+              background: "#fff",
+              color: TEXT_MUTED,
+              fontSize: 18,
+              lineHeight: 1,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#f3f3f3";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#fff";
+            }}
+          >
+            ×
+          </button>
+          <p
+            id="media-detail-title"
+            style={{
+              margin: 0,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: TEXT_MUTED,
+            }}
+          >
+            Chi tiết dự án media
+          </p>
+          <h2
+            style={{
+              margin: "6px 0 0",
+              fontSize: 18,
+              fontWeight: 800,
+              lineHeight: 1.3,
+              letterSpacing: "-0.02em",
+              color: TEXT,
+            }}
+          >
+            {project.project_name || "—"}
+          </h2>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, alignItems: "center" }}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "2px 8px",
+                borderRadius: 999,
+                background: "#fff",
+                border: `1px solid ${BORDER}`,
+                color: TEXT_MUTED,
+              }}
+            >
+              ID {project.id}
+            </span>
+            {project.project_type ? (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  background: "#fff",
+                  border: `1px solid ${BORDER}`,
+                  color: TEXT,
+                }}
+              >
+                {project.project_type}
+              </span>
+            ) : null}
+            {project.type ? typePill(project.type) : null}
+            {statusPill(project.status)}
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflow: "auto", padding: "12px 14px 14px", background: "#fafafa" }}>
+          <div
+            style={{
+              background: "#fff",
+              border: `1px solid ${BORDER}`,
+              borderRadius: 10,
+              padding: "8px 10px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "max-content 1fr max-content 1fr",
+                columnGap: 10,
+                rowGap: 5,
+                alignItems: "baseline",
+              }}
+            >
+              {metaLbl("Định dạng")}
+              <div style={{ minWidth: 0 }}>{project.type ? typePill(project.type) : "—"}</div>
+              {metaLbl("Loại dự án")}
+              <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, minWidth: 0, wordBreak: "break-word" }}>
+                {project.project_type || "—"}
+              </div>
+
+              {metaLbl("Trạng thái")}
+              <div style={{ gridColumn: "2 / -1", minWidth: 0 }}>{statusPill(project.status)}</div>
+
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  marginTop: 2,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  background: "#f3f5f5",
+                  border: `1px solid ${BORDER}`,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: TEXT_MUTED,
+                    marginBottom: 6,
+                  }}
+                >
+                  Thời gian dự án
+                </div>
+                {editing ? (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "8px 12px",
+                      alignItems: "start",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: TEXT_MUTED, marginBottom: 4 }}>Bắt đầu</div>
+                      <input type="date" value={startYmd} onChange={(e) => setStartYmd(e.target.value)} style={DATE_IN} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: TEXT_MUTED, marginBottom: 4 }}>Kết thúc</div>
+                      <input type="date" value={endYmd} onChange={(e) => setEndYmd(e.target.value)} style={DATE_IN} />
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "8px 12px",
+                      alignItems: "start",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: TEXT_MUTED, marginBottom: 4 }}>Bắt đầu</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: TEXT }}>{formatDate(project.start_date)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: TEXT_MUTED, marginBottom: 4 }}>Kết thúc</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: TEXT }}>{formatDate(project.end_date)}</div>
+                    </div>
+                  </div>
+                )}
+                <div
+                  style={{
+                    marginTop: 8,
+                    paddingTop: 8,
+                    borderTop: `1px dashed ${BORDER}`,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: TEXT,
+                  }}
+                >
+                  <span style={{ color: TEXT_MUTED, fontWeight: 600, marginRight: 8 }}>Số ngày còn lại</span>
+                  {remainingDaysLabel(editing ? endYmd || null : project.end_date)}
+                </div>
+              </div>
+
+              {metaLbl("Người tạo")}
+              <div style={{ gridColumn: "2 / -1", fontSize: 12, color: TEXT }}>
+                {resolveStaffRich(project.nguoi_tao, staffNameById)}
+              </div>
+
+              {metaLbl("Người làm")}
+              <div style={{ gridColumn: "2 / -1", minWidth: 0 }}>
+                {editing ? (
+                  <>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: TEXT_MUTED, marginBottom: 6, lineHeight: 1.4 }}>
+                      Chọn từ ban Marketing / Media. Người đã gán trước (ngoài ban) vẫn hiện để bỏ chọn nếu cần.
+                    </div>
+                    <div
+                      style={{
+                        maxHeight: 160,
+                        overflow: "auto",
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                        background: "#fff",
+                      }}
+                    >
+                      {staffPickOptions.length === 0 ? (
+                        <span style={{ fontSize: 12, color: TEXT_MUTED }}>Chưa có danh sách nhân sự.</span>
+                      ) : (
+                        <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                          {staffPickOptions.map((s) => (
+                            <li key={s.id} style={{ marginBottom: 6 }}>
+                              <label
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 8,
+                                  cursor: "pointer",
+                                  fontSize: 12,
+                                  color: TEXT,
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={lamSet.has(s.id)}
+                                  onChange={() => toggleLam(s.id)}
+                                  style={{ width: 14, height: 14, flexShrink: 0 }}
+                                />
+                                <span style={{ fontWeight: 600 }}>{s.full_name}</span>
+                                <span style={{ fontSize: 11, color: TEXT_MUTED }}>#{s.id}</span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 12, color: TEXT, lineHeight: 1.5 }}>
+                    {resolveStaffIdsRich(project.nguoi_lam, staffNameById)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            {detailSectionTitle("Brief")}
+            {project.brief?.trim() ? (
+              <div
+                className="[&_a]:text-blue-600 [&_a]:underline [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5"
+                style={{
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  background: "#fff",
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                  color: TEXT,
+                  wordBreak: "break-word",
+                }}
+                // eslint-disable-next-line react/no-danger -- HTML brief đã qua sanitize nội bộ admin
+                dangerouslySetInnerHTML={{ __html: sanitizeAdminRichHtml(project.brief) }}
+              />
+            ) : (
+              <div
+                style={{
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  background: "#fff",
+                  fontSize: 13,
+                  color: TEXT_MUTED,
+                }}
+              >
+                Chưa có brief.
+              </div>
+            )}
+          </div>
+
+          {imgs.length ? (
+            <div style={{ marginTop: 12 }}>
+              {detailSectionTitle("Minh họa")}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(132px, 1fr))",
+                  gap: 8,
+                }}
+              >
+                {imgs.map((url) => (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "block",
+                      borderRadius: 10,
+                      overflow: "hidden",
+                      border: `1px solid ${BORDER}`,
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                      transition: "transform 0.15s, box-shadow 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "scale(1.02)";
+                      e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.1)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "scale(1)";
+                      e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)";
+                    }}
+                  >
+                    <img
+                      src={url}
+                      alt="Minh họa dự án"
+                      style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }}
+                    />
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {formErr ? (
+            <div
+              style={{
+                marginTop: 10,
+                borderRadius: 10,
+                border: "1px solid #fecaca",
+                background: "#fef2f2",
+                padding: "10px 12px",
+                fontSize: 12,
+                color: "#991b1b",
+              }}
+            >
+              {formErr}
+            </div>
+          ) : null}
+
+          <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
+            {editing ? (
+              <>
+                <button
+                  type="button"
+                  disabled={savePending}
+                  onClick={onSave}
+                  style={{
+                    padding: "7px 16px",
+                    borderRadius: 8,
+                    border: "none",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: savePending ? "wait" : "pointer",
+                    color: "#fff",
+                    background: "linear-gradient(135deg, #f8a668, #ee5ca2)",
+                    opacity: savePending ? 0.75 : 1,
+                  }}
+                >
+                  {savePending ? "Đang lưu…" : "Lưu thay đổi"}
+                </button>
+                <button
+                  type="button"
+                  disabled={savePending}
+                  onClick={cancelEdit}
+                  style={{
+                    ...BTN,
+                    padding: "7px 16px",
+                    fontWeight: 700,
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  disabled={savePending}
+                  onClick={onClose}
+                  style={{
+                    ...BTN,
+                    padding: "7px 16px",
+                    fontWeight: 700,
+                  }}
+                >
+                  Đóng
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  style={{
+                    padding: "7px 16px",
+                    borderRadius: 8,
+                    border: "none",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    color: "#fff",
+                    background: "linear-gradient(135deg, #f8a668, #ee5ca2)",
+                  }}
+                >
+                  Sửa
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{
+                    ...BTN,
+                    padding: "7px 16px",
+                    fontWeight: 700,
+                  }}
+                >
+                  Đóng
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -136,369 +977,623 @@ function TimelineBar({
   project,
   timelineStart,
   totalDays,
+  trackPx,
+  onOpenDetail,
 }: {
   project: Project;
   timelineStart: Date;
   totalDays: number;
+  trackPx: number;
+  onOpenDetail?: () => void;
 }) {
   const [hover, setHover] = useState(false);
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
 
   const start = parseDate(project.start_date);
   const end = parseDate(project.end_date);
+  const startIdx = start ? Math.max(0, Math.min(totalDays, daysBetween(timelineStart, start))) : 0;
+  const endInclusive = end
+    ? Math.max(startIdx, Math.min(totalDays, daysBetween(timelineStart, end)))
+    : startIdx;
 
-  const meta = STATUS_META[project.status ?? ""] ?? STATUS_META["Hoàn thành"];
-  const typeColor = TYPE_COLOR[project.type ?? ""] ?? "#6B7280";
+  const widthDays = Math.max(1, endInclusive - startIdx + 1);
+  const leftPx = (startIdx / totalDays) * trackPx;
+  const widthPx = (widthDays / totalDays) * trackPx;
 
-  let leftPct = 0;
-  let widthPct = 2;
-
-  if (start && end) {
-    const s = Math.max(0, daysBetween(timelineStart, start));
-    const e = Math.min(totalDays, daysBetween(timelineStart, end));
-    leftPct = (s / totalDays) * 100;
-    widthPct = Math.max(1.5, ((e - s) / totalDays) * 100);
-  } else if (start) {
-    const s = Math.max(0, daysBetween(timelineStart, start));
-    leftPct = (s / totalDays) * 100;
-    widthPct = 2;
-  }
+  const fill = barFlatColor(project);
+  const borderColor = "rgba(0,0,0,0.14)";
 
   return (
     <>
       <div
-        onMouseEnter={(e) => {
+        onMouseEnter={(ev) => {
           setHover(true);
-          setMouse({ x: e.clientX, y: e.clientY });
+          setMouse({ x: ev.clientX, y: ev.clientY });
         }}
-        onMouseMove={(e) => setMouse({ x: e.clientX, y: e.clientY })}
+        onMouseMove={(ev) => setMouse({ x: ev.clientX, y: ev.clientY })}
         onMouseLeave={() => setHover(false)}
         style={{
-          position: "absolute",
-          left: `${leftPct}%`,
-          width: `${widthPct}%`,
-          height: 28,
-          borderRadius: 6,
-          background: `linear-gradient(90deg, ${meta.color}CC, ${typeColor}99)`,
-          border: `1px solid ${meta.color}55`,
-          cursor: "pointer",
-          transition: "transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease",
-          transform: hover ? "scaleY(1.12)" : "scaleY(1)",
-          boxShadow: hover ? `0 0 16px ${meta.color}66` : "none",
-          filter: hover ? "brightness(1.2)" : "brightness(1)",
-          display: "flex",
-          alignItems: "center",
-          paddingLeft: 8,
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-          minWidth: 4,
+          height: 36,
+          position: "relative",
+          borderBottom: `1px solid ${BORDER}`,
+          padding: "4px 0",
         }}
       >
-        <span
+        <div
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onOpenDetail?.();
+            }
+          }}
           style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: "#fff",
-            textShadow: "0 1px 3px rgba(0,0,0,0.5)",
+            position: "absolute",
+            left: leftPx,
+            width: Math.max(8, widthPx),
+            height: 28,
+            top: "50%",
+            transform: "translateY(-50%)",
+            borderRadius: 6,
+            background: fill,
+            border: `1px solid ${borderColor}`,
+            boxShadow: hover ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+            display: "flex",
+            alignItems: "center",
             overflow: "hidden",
-            textOverflow: "ellipsis",
-            letterSpacing: "0.01em",
+            cursor: "default",
+          }}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpenDetail?.();
           }}
         >
-          {project.project_name}
-        </span>
+          <span
+            style={{
+              flex: 1,
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#fff",
+              paddingLeft: 10,
+              paddingRight: 10,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              textShadow: "0 1px 2px rgba(0,0,0,0.25)",
+              pointerEvents: "none",
+            }}
+          >
+            {project.project_name}
+          </span>
+        </div>
       </div>
       {hover ? <Tooltip project={project} x={mouse.x} y={mouse.y} /> : null}
     </>
   );
 }
 
-// ── Main Component ───────────────────────────────────────────────────────────
+const BTN: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  padding: "6px 12px",
+  borderRadius: 8,
+  border: `1px solid ${BORDER}`,
+  background: "#fff",
+  color: TEXT,
+  cursor: "pointer",
+};
 
-export default function MediaTimeline() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
+/** Cuộn vẫn hoạt động; thanh cuộn ẩn (đồng bộ cột nhãn ↔ track). */
+const SCROLL_HIDE =
+  "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0";
+
+export default function MediaTimeline({
+  initialProjects,
+  staffNameById = {},
+  mediaTeamStaff = [],
+  mediaBanStaffFilter = [],
+}: MediaTimelineProps) {
+  const [localProjects, setLocalProjects] = useState<Project[]>(initialProjects);
+  const [filterLamId, setFilterLamId] = useState<number | "">("");
+  const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_W);
+  const [pixelsPerDay, setPixelsPerDay] = useState(DEFAULT_PX_PER_DAY);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [viewMode, setViewMode] = useState<ViewMode>("month");
+  const [hydrated, setHydrated] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [detailProject, setDetailProject] = useState<Project | null>(null);
+
+  const trackScrollRef = useRef<HTMLDivElement>(null);
+  const labelScrollRef = useRef<HTMLDivElement>(null);
+  const scrollSyncLockRef = useRef(false);
+  const labelResize = useRef<{ startX: number; startW: number } | null>(null);
+  const zoomFromWheelRef = useRef(false);
+  const wheelViewportAnchorRef = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      const supabase = createBrowserSupabaseClient();
-      if (!supabase) {
-        if (!cancelled) {
-          setError("Thiếu NEXT_PUBLIC_SUPABASE_URL hoặc NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-          setLoading(false);
-        }
+    setLocalProjects(initialProjects);
+  }, [initialProjects]);
+
+  const visibleProjects = useMemo(() => {
+    if (filterLamId === "") return localProjects;
+    return localProjects.filter((p) => (p.nguoi_lam ?? []).includes(filterLamId));
+  }, [localProjects, filterLamId]);
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(LS_KEY) : null;
+      if (!raw) {
+        setHydrated(true);
         return;
       }
-
-      const { data, error: qErr } = await supabase
-        .from("mkt_quan_ly_media")
-        .select("id, project_name, project_type, type, status, start_date, end_date, brief, minh_hoa, nguoi_tao, nguoi_lam")
-        .order("start_date", { ascending: true });
-
-      if (cancelled) return;
-      if (qErr) {
-        setError(qErr.message);
-        setLoading(false);
-        return;
+      const p = JSON.parse(raw) as PersistShape;
+      if (typeof p.labelWidth === "number") {
+        setLabelWidth(Math.min(MAX_LABEL_W, Math.max(MIN_LABEL_W, Math.round(p.labelWidth))));
       }
-      setProjects((data as Project[]) ?? []);
-      setLoading(false);
+      if (typeof p.pixelsPerDay === "number") {
+        setPixelsPerDay(Math.min(MAX_PX_PER_DAY, Math.max(MIN_PX_PER_DAY, p.pixelsPerDay)));
+      }
+      if (Array.isArray(p.collapsed)) {
+        setCollapsed(new Set(p.collapsed.filter((x) => STATUS_ORDER.includes(x))));
+      }
+      if (p.viewMode === "week" || p.viewMode === "month" || p.viewMode === "year" || p.viewMode === "data") {
+        setViewMode(p.viewMode);
+      }
+    } catch {
+      /* ignore */
     }
-    void load();
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || typeof window === "undefined") return;
+    const payload: PersistShape = {
+      labelWidth,
+      pixelsPerDay,
+      collapsed: [...collapsed],
+      viewMode,
+    };
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(payload));
+    } catch {
+      /* ignore */
+    }
+  }, [labelWidth, pixelsPerDay, collapsed, viewMode, hydrated]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!labelResize.current) return;
+      const dx = e.clientX - labelResize.current.startX;
+      setLabelWidth(
+        Math.min(MAX_LABEL_W, Math.max(MIN_LABEL_W, Math.round(labelResize.current.startW + dx))),
+      );
+    };
+    const onUp = () => {
+      labelResize.current = null;
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
     return () => {
-      cancelled = true;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
     };
   }, []);
 
-  const allDates = projects
-    .flatMap((p) => [parseDate(p.start_date), parseDate(p.end_date)])
-    .filter(Boolean) as Date[];
-  const minDate = allDates.length ? new Date(Math.min(...allDates.map((d) => d.getTime()))) : new Date();
-  const maxDate = allDates.length ? new Date(Math.max(...allDates.map((d) => d.getTime()))) : new Date();
+  const bounds = useMemo(
+    () => computeBounds(visibleProjects, viewMode, pixelsPerDay),
+    [visibleProjects, viewMode, pixelsPerDay],
+  );
+  const { timelineStart, timelineEnd, totalDays } = bounds;
+  const trackPx = Math.max(MIN_TRACK_W, Math.round(totalDays * pixelsPerDay));
 
-  const timelineStart = new Date(minDate);
-  timelineStart.setDate(timelineStart.getDate() - 7);
-  const timelineEnd = new Date(maxDate);
-  timelineEnd.setDate(timelineEnd.getDate() + 7);
-  const totalDays = daysBetween(timelineStart, timelineEnd) || 1;
+  const monthTicks = useMemo(
+    () => buildTicks(viewMode, timelineStart, timelineEnd, totalDays),
+    [viewMode, timelineStart, timelineEnd, totalDays],
+  );
 
-  const monthTicks: { label: string; pct: number }[] = [];
-  const cursor = new Date(timelineStart.getFullYear(), timelineStart.getMonth(), 1);
-  while (cursor <= timelineEnd) {
-    const pct = (daysBetween(timelineStart, cursor) / totalDays) * 100;
-    if (pct >= 0 && pct <= 100) {
-      monthTicks.push({
-        label: cursor.toLocaleDateString("vi-VN", { month: "short", year: "2-digit" }),
-        pct,
-      });
-    }
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-
-  const today = new Date();
-  const todayPct = (daysBetween(timelineStart, today) / totalDays) * 100;
+  const today = startOfLocalDay(new Date());
+  const todayOff = Math.max(0, Math.min(totalDays, daysBetween(timelineStart, today)));
+  const todayPct = totalDays > 0 ? (todayOff / totalDays) * 100 : 50;
   const showToday = todayPct >= 0 && todayPct <= 100;
 
-  const grouped = STATUS_ORDER.reduce<Record<string, Project[]>>((acc, s) => {
-    acc[s] = projects.filter((p) => p.status === s);
-    return acc;
-  }, {});
+  const grouped = useMemo(() => {
+    return STATUS_ORDER.reduce<Record<string, Project[]>>((acc, s) => {
+      acc[s] = visibleProjects.filter((p) => p.status === s);
+      return acc;
+    }, {});
+  }, [visibleProjects]);
 
-  if (loading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: 320,
-          color: "#6B7280",
-          fontFamily: "system-ui",
-          fontSize: 14,
-        }}
-      >
-        Đang tải...
-      </div>
-    );
-  }
+  useLayoutEffect(() => {
+    if (!zoomFromWheelRef.current) return;
+    zoomFromWheelRef.current = false;
+    const sc = trackScrollRef.current;
+    if (!sc) return;
+    const b = computeBounds(visibleProjects, viewMode, pixelsPerDay);
+    const tp = Math.max(MIN_TRACK_W, b.totalDays * pixelsPerDay);
+    const off = Math.max(0, Math.min(b.totalDays, daysBetween(b.timelineStart, startOfLocalDay(new Date()))));
+    const todayX = b.totalDays > 0 ? (off / b.totalDays) * tp : 0;
+    const newScroll = todayX - wheelViewportAnchorRef.current;
+    const maxScroll = Math.max(0, sc.scrollWidth - sc.clientWidth);
+    sc.scrollLeft = Math.max(0, Math.min(newScroll, maxScroll));
+  }, [pixelsPerDay, viewMode, visibleProjects]);
 
-  if (error) {
-    return (
-      <div style={{ padding: 24, color: "#EF4444", fontFamily: "monospace", fontSize: 12 }}>
-        Lỗi: {error}
-      </div>
-    );
-  }
+  useEffect(() => {
+    const el = trackScrollRef.current;
+    if (!el) return;
+    const fn = (e: WheelEvent) => {
+      if (!e.shiftKey) return;
+      e.preventDefault();
+      const sc = trackScrollRef.current;
+      if (!sc) return;
+      const dir = e.deltaY > 0 ? -1 : 1;
+      const raw = Math.abs(e.deltaY);
+      const step = Math.min(22, Math.max(8, Math.round(raw / 25)));
+      const oldPpd = pixelsPerDay;
+      const newPpd = Math.min(MAX_PX_PER_DAY, Math.max(MIN_PX_PER_DAY, oldPpd + dir * step));
+      if (newPpd === oldPpd) return;
+
+      const bOld = computeBounds(visibleProjects, viewMode, oldPpd);
+      const oldTrackPx = Math.max(MIN_TRACK_W, bOld.totalDays * oldPpd);
+      const offOld = Math.max(0, Math.min(bOld.totalDays, daysBetween(bOld.timelineStart, startOfLocalDay(new Date()))));
+      const oldTodayX = bOld.totalDays > 0 ? (offOld / bOld.totalDays) * oldTrackPx : 0;
+      wheelViewportAnchorRef.current = oldTodayX - sc.scrollLeft;
+      zoomFromWheelRef.current = true;
+      setPixelsPerDay(newPpd);
+    };
+    el.addEventListener("wheel", fn, { passive: false });
+    return () => el.removeEventListener("wheel", fn);
+  }, [pixelsPerDay, viewMode, visibleProjects]);
+
+  const scrollTodayCenter = useCallback(() => {
+    const sc = trackScrollRef.current;
+    if (!sc) return;
+    const b = computeBounds(visibleProjects, viewMode, pixelsPerDay);
+    const tp = Math.max(MIN_TRACK_W, b.totalDays * pixelsPerDay);
+    const off = Math.max(0, Math.min(b.totalDays, daysBetween(b.timelineStart, startOfLocalDay(new Date()))));
+    const todayX = b.totalDays > 0 ? (off / b.totalDays) * tp : 0;
+    const vw = sc.clientWidth;
+    const maxScroll = Math.max(0, sc.scrollWidth - sc.clientWidth);
+    sc.scrollLeft = Math.max(0, Math.min(todayX - vw / 2, maxScroll));
+  }, [visibleProjects, viewMode, pixelsPerDay]);
+
+  const onLabelScrollSync = useCallback(() => {
+    const label = labelScrollRef.current;
+    const track = trackScrollRef.current;
+    if (!label || !track || scrollSyncLockRef.current) return;
+    if (track.scrollTop === label.scrollTop) return;
+    scrollSyncLockRef.current = true;
+    track.scrollTop = label.scrollTop;
+    requestAnimationFrame(() => {
+      scrollSyncLockRef.current = false;
+    });
+  }, []);
+
+  const onTrackScrollSync = useCallback(() => {
+    const label = labelScrollRef.current;
+    const track = trackScrollRef.current;
+    if (!label || !track || scrollSyncLockRef.current) return;
+    if (label.scrollTop === track.scrollTop) return;
+    scrollSyncLockRef.current = true;
+    label.scrollTop = track.scrollTop;
+    requestAnimationFrame(() => {
+      scrollSyncLockRef.current = false;
+    });
+  }, []);
 
   const ROW_H = 36;
-  const LABEL_W = 220;
-  const TRACK_PADDING = 16;
+  const GROUP_H = 28;
+  const HEADER_ROW = 32;
+
+  const toggleCollapse = (status: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  };
+
+  const startLabelResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    labelResize.current = { startX: e.clientX, startW: labelWidth };
+  };
+
+  const modeBtn = (active: boolean): React.CSSProperties => ({
+    ...BTN,
+    background: active ? "linear-gradient(135deg,#F8A568,#EE5CA2)" : "#fff",
+    color: active ? "#fff" : TEXT,
+    border: active ? "none" : `1px solid ${BORDER}`,
+  });
 
   return (
     <div
       style={{
-        fontFamily: "'Be Vietnam Pro', 'DM Sans', ui-sans-serif, system-ui, sans-serif",
-        background: "#090909",
-        color: "#E5E7EB",
+        fontFamily: "ui-sans-serif, system-ui, sans-serif",
+        background: "#fff",
+        color: TEXT,
         borderRadius: 16,
-        overflow: "hidden",
-        border: "1px solid #1A1A1A",
+        overflow: "visible",
+        border: `1px solid ${BORDER}`,
         minHeight: 400,
+        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
       }}
     >
       <div
         style={{
-          padding: "20px 24px 16px",
-          borderBottom: "1px solid #1A1A1A",
+          padding: "16px 20px 12px",
+          borderBottom: `1px solid ${BORDER}`,
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
+          flexDirection: "column",
           gap: 12,
+          background: HEADER_BG,
         }}
       >
-        <div>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 16,
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-              color: "#F9FAFB",
-            }}
-          >
-            Media timeline
-          </h2>
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6B7280" }}>
-            {projects.length} dự án · nhóm theo tình trạng · <code style={{ fontSize: 10 }}>mkt_quan_ly_media</code>
-          </p>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em", color: TEXT }}>
+              Media timeline
+            </h2>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: TEXT_MUTED }}>
+              {localProjects.length} dự án
+              {filterLamId !== "" ? (
+                <>
+                  {" "}
+                  · hiển thị {visibleProjects.length}
+                </>
+              ) : null}
+              {" · "}
+              <code style={{ fontSize: 11 }}>mkt_quan_ly_media</code>
+              {" · "}
+              <strong>Shift + cuộn</strong> trên timeline — zoom neo tại <strong>Hôm nay</strong>
+            </p>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: TEXT_MUTED }}>
+              <span style={{ whiteSpace: "nowrap" }}>Người làm (ban Media):</span>
+              <select
+                value={filterLamId === "" ? "" : String(filterLamId)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFilterLamId(v === "" ? "" : Number(v));
+                }}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: TEXT,
+                  padding: "5px 8px",
+                  borderRadius: 8,
+                  border: `1px solid ${BORDER}`,
+                  background: "#fff",
+                  minWidth: 160,
+                  maxWidth: 220,
+                }}
+              >
+                <option value="">Tất cả</option>
+                {mediaBanStaffFilter.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.full_name} #{s.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span style={{ fontSize: 11, color: TEXT_MUTED, marginRight: 4 }}>Đơn vị:</span>
+            {(
+              [
+                ["week", "Tuần"],
+                ["month", "Tháng"],
+                ["year", "Năm"],
+                ["data", "Dữ liệu"],
+              ] as const
+            ).map(([m, lab]) => (
+              <button
+                key={m}
+                type="button"
+                style={modeBtn(viewMode === m)}
+                onClick={() => setViewMode(m)}
+              >
+                {lab}
+              </button>
+            ))}
+            <button
+              type="button"
+              style={{
+                ...BTN,
+                marginLeft: 4,
+                borderColor: "#F8A568",
+                color: "#c2410c",
+                fontWeight: 700,
+              }}
+              onClick={scrollTodayCenter}
+            >
+              Hôm nay
+            </button>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
           {STATUS_ORDER.map((s) => {
             const m = STATUS_META[s];
             const count = grouped[s]?.length ?? 0;
             if (!count) return null;
             return (
-              <div
-                key={s}
-                style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#9CA3AF" }}
-              >
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: m.dot,
-                    display: "inline-block",
-                  }}
-                />
+              <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: TEXT_MUTED }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: m.dot, display: "inline-block" }} />
                 {m.label}
-                <span style={{ color: "#4B5563" }}>({count})</span>
+                <span style={{ color: "#bbb" }}>({count})</span>
               </div>
             );
           })}
         </div>
       </div>
 
-      <div style={{ display: "flex", overflow: "auto" }}>
-        <div style={{ minWidth: LABEL_W, flexShrink: 0, borderRight: "1px solid #1A1A1A" }}>
-          <div style={{ height: 32 }} />
+      {toast ? (
+        <div
+          style={{
+            padding: "10px 16px",
+            fontSize: 12,
+            color: "#b45309",
+            background: "#fffbeb",
+            borderBottom: `1px solid ${BORDER}`,
+          }}
+        >
+          {toast}
+        </div>
+      ) : null}
 
-          {STATUS_ORDER.map((status) => {
+      <div style={{ display: "flex", overflow: "hidden", maxHeight: "min(78vh, calc(100dvh - 12rem))" }}>
+        <div
+          ref={labelScrollRef}
+          onScroll={onLabelScrollSync}
+          className={SCROLL_HIDE}
+          style={{
+            width: labelWidth,
+            minWidth: labelWidth,
+            flexShrink: 0,
+            borderRight: `2px solid ${BORDER}`,
+            position: "relative",
+            overflow: "auto",
+            background: "#fff",
+          }}
+        >
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            onMouseDown={startLabelResize}
+            style={{
+              position: "absolute",
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 6,
+              cursor: "col-resize",
+              zIndex: 5,
+            }}
+          />
+          <div style={{ height: HEADER_ROW }} />
+
+          {STATUS_ORDER.map((status, gidx) => {
             const rows = grouped[status];
             if (!rows?.length) return null;
             const meta = STATUS_META[status];
+            const isCollapsed = collapsed.has(status);
             return (
               <div key={status}>
-                <div
+                <button
+                  type="button"
+                  onClick={() => toggleCollapse(status)}
                   style={{
-                    height: 28,
-                    padding: "0 16px",
+                    width: "100%",
+                    height: GROUP_H,
+                    padding: "0 14px",
                     display: "flex",
                     alignItems: "center",
-                    gap: 6,
-                    background: "#111",
-                    borderTop: "1px solid #1A1A1A",
-                    borderBottom: "1px solid #1A1A1A",
+                    gap: 8,
+                    background: GROUP_BG,
+                    borderTop: `1px solid ${BORDER}`,
+                    borderBottom: `1px solid ${BORDER}`,
+                    borderLeft: "none",
+                    borderRight: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    font: "inherit",
                   }}
                 >
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: meta.dot,
-                      flexShrink: 0,
-                    }}
-                  />
+                  <span style={{ fontSize: 10, color: TEXT_MUTED, width: 14 }}>{isCollapsed ? "▶" : "▼"}</span>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: meta.dot, flexShrink: 0 }} />
                   <span
                     style={{
                       fontSize: 11,
                       fontWeight: 700,
                       color: meta.color,
                       textTransform: "uppercase",
-                      letterSpacing: "0.08em",
+                      letterSpacing: "0.06em",
                     }}
                   >
                     {meta.label}
                   </span>
-                  <span style={{ fontSize: 11, color: "#4B5563", marginLeft: "auto" }}>{rows.length}</span>
-                </div>
-                {rows.map((p) => (
-                  <div
-                    key={p.id}
-                    style={{
-                      height: ROW_H,
-                      padding: "0 16px",
-                      display: "flex",
-                      alignItems: "center",
-                      borderBottom: "1px solid #111",
-                      gap: 6,
-                    }}
-                  >
-                    {p.type ? (
-                      <span
+                  <span style={{ fontSize: 11, color: TEXT_MUTED, marginLeft: "auto" }}>{rows.length}</span>
+                </button>
+                {!isCollapsed
+                  ? rows.map((p, i) => (
+                      <div
+                        key={p.id}
                         style={{
-                          fontSize: 9,
-                          fontWeight: 700,
-                          color: TYPE_COLOR[p.type] || "#6B7280",
-                          background: `${TYPE_COLOR[p.type] || "#6B7280"}18`,
-                          padding: "2px 5px",
-                          borderRadius: 3,
-                          letterSpacing: "0.04em",
-                          flexShrink: 0,
+                          height: ROW_H,
+                          padding: "0 14px",
+                          display: "flex",
+                          alignItems: "center",
+                          borderBottom: `1px solid ${BORDER}`,
+                          gap: 6,
+                          background: (gidx + i) % 2 === 0 ? "#fff" : ROW_ALT,
                         }}
                       >
-                        {p.type}
-                      </span>
-                    ) : null}
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: "#D1D5DB",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        flex: 1,
-                      }}
-                    >
-                      {p.project_name}
-                    </span>
-                  </div>
-                ))}
+                        {p.type ? (
+                          <span
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 700,
+                              color: TYPE_COLOR[p.type] || "#6B7280",
+                              background: `${TYPE_COLOR[p.type] || "#6B7280"}14`,
+                              padding: "2px 5px",
+                              borderRadius: 3,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {p.type}
+                          </span>
+                        ) : null}
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: TEXT,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            flex: 1,
+                          }}
+                        >
+                          {p.project_name}
+                        </span>
+                      </div>
+                    ))
+                  : null}
               </div>
             );
           })}
         </div>
 
-        <div style={{ flex: 1, overflow: "auto", minWidth: 0 }} ref={trackRef}>
-          <div style={{ minWidth: 700, position: "relative" }}>
+        <div
+          ref={trackScrollRef}
+          onScroll={onTrackScrollSync}
+          className={SCROLL_HIDE}
+          style={{ flex: 1, overflow: "auto", minWidth: 0, background: "#fff" }}
+          tabIndex={0}
+          title="Shift + cuộn: zoom (neo Hôm nay). Nút Hôm nay: căn giữa."
+        >
+          <div style={{ width: trackPx, minHeight: 200, position: "relative" }}>
             <div
               style={{
-                height: 32,
-                display: "flex",
-                alignItems: "center",
+                height: HEADER_ROW,
                 position: "relative",
-                borderBottom: "1px solid #1A1A1A",
-                background: "#0D0D0D",
+                borderBottom: `1px solid ${BORDER}`,
+                background: HEADER_BG,
               }}
             >
               {monthTicks.map((t, i) => (
                 <div
-                  key={i}
+                  key={`${t.label}-${i}`}
                   style={{
                     position: "absolute",
                     left: `${t.pct}%`,
                     fontSize: 10,
-                    color: "#4B5563",
+                    color: TEXT_MUTED,
                     fontWeight: 600,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
+                    letterSpacing: "0.02em",
+                    textTransform: "none",
                     transform: "translateX(-50%)",
                     whiteSpace: "nowrap",
+                    top: 10,
                   }}
                 >
                   {t.label}
@@ -509,29 +1604,28 @@ export default function MediaTimeline() {
                   style={{
                     position: "absolute",
                     left: `${todayPct}%`,
-                    top: 6,
+                    top: 4,
                     fontSize: 9,
-                    color: "#F8A568",
+                    color: "#ea580c",
                     fontWeight: 700,
-                    letterSpacing: "0.06em",
                     transform: "translateX(-50%)",
                   }}
                 >
-                  HÔM NAY
+                  Hôm nay
                 </div>
               ) : null}
             </div>
 
             {monthTicks.map((t, i) => (
               <div
-                key={i}
+                key={`g-${t.label}-${i}`}
                 style={{
                   position: "absolute",
                   left: `${t.pct}%`,
-                  top: 32,
+                  top: HEADER_ROW,
                   bottom: 0,
                   width: 1,
-                  background: "#1A1A1A",
+                  background: BORDER,
                   pointerEvents: "none",
                 }}
               />
@@ -542,12 +1636,13 @@ export default function MediaTimeline() {
                 style={{
                   position: "absolute",
                   left: `${todayPct}%`,
-                  top: 32,
+                  top: HEADER_ROW,
                   bottom: 0,
-                  width: 1,
-                  background: "linear-gradient(180deg, #F8A568, #EE5CA222)",
+                  width: 2,
+                  background: "#F8A568",
                   pointerEvents: "none",
-                  zIndex: 10,
+                  zIndex: 4,
+                  opacity: 0.9,
                 }}
               />
             ) : null}
@@ -555,35 +1650,48 @@ export default function MediaTimeline() {
             {STATUS_ORDER.map((status) => {
               const rows = grouped[status];
               if (!rows?.length) return null;
+              const isCollapsed = collapsed.has(status);
               return (
                 <div key={status}>
                   <div
                     style={{
-                      height: 28,
-                      borderTop: "1px solid #1A1A1A",
-                      borderBottom: "1px solid #1A1A1A",
-                      background: "#111",
+                      height: GROUP_H,
+                      borderTop: `1px solid ${BORDER}`,
+                      borderBottom: `1px solid ${BORDER}`,
+                      background: GROUP_BG,
                     }}
                   />
-                  {rows.map((p) => (
-                    <div
-                      key={p.id}
-                      style={{
-                        height: ROW_H,
-                        position: "relative",
-                        borderBottom: "1px solid #111",
-                        padding: `${TRACK_PADDING / 2}px 0`,
-                      }}
-                    >
-                      <TimelineBar project={p} timelineStart={timelineStart} totalDays={totalDays} />
-                    </div>
-                  ))}
+                  {!isCollapsed
+                    ? rows.map((p) => (
+                        <TimelineBar
+                          key={p.id}
+                          project={p}
+                          timelineStart={timelineStart}
+                          totalDays={totalDays}
+                          trackPx={trackPx}
+                          onOpenDetail={() => setDetailProject(p)}
+                        />
+                      ))
+                    : null}
                 </div>
               );
             })}
           </div>
         </div>
       </div>
+
+      {detailProject ? (
+        <ProjectDetailModal
+          project={detailProject}
+          staffNameById={staffNameById}
+          mediaTeamStaff={mediaTeamStaff}
+          onClose={() => setDetailProject(null)}
+          onSaved={(p) => {
+            setLocalProjects((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+            setDetailProject(p);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

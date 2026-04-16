@@ -8,6 +8,8 @@ import { useState } from "react";
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
 
 const DASHBOARD_OVERVIEW_HREF = "/admin/dashboard";
+/** Form order media — đặt gần Tổng quan (dùng chung, ai cũng vào được). */
+const ORDER_MEDIA_HREF = "/admin/dashboard/order-media";
 
 const NAV_MAIN: { label: string; href: string; disabled?: boolean }[] = [
   { label: "Chi nhánh", href: "/admin/dashboard/chi-nhanh" },
@@ -138,6 +140,12 @@ export default function AdminShell({
         <nav className="flex-1 overflow-y-auto px-3 py-4 text-[13px]">
           <Link href={DASHBOARD_OVERVIEW_HREF} className={overviewNavClass(pathname)}>
             Tổng quan
+          </Link>
+          <Link
+            href={ORDER_MEDIA_HREF}
+            className={`mb-3 mt-1 ${navItemClass(ORDER_MEDIA_HREF, pathname, searchParams)}`}
+          >
+            Order nội dung media
           </Link>
           <p className="mb-2 mt-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
             Điều hành

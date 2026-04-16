@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ImagePlus, Loader2, Trash2, Upload } from "lucide-react";
 
+import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -26,23 +27,6 @@ type Props = {
   /** Ẩn khối tiêu đề + hướng dẫn dài (dùng khi cha đã có nhãn, vd. FieldRow). */
   compact?: boolean;
 };
-
-async function uploadToCf(blob: Blob, filename: string): Promise<string> {
-  const fd = new FormData();
-  fd.append("file", blob, filename);
-  const res = await fetch("/admin/api/upload-cf-image", { method: "POST", body: fd, credentials: "same-origin" });
-  const json: unknown = await res.json().catch(() => ({}));
-  if (!res.ok || typeof json !== "object" || json === null || (json as { ok?: unknown }).ok !== true) {
-    const err =
-      typeof json === "object" && json !== null && "error" in json
-        ? String((json as { error?: unknown }).error)
-        : "Tải ảnh thất bại.";
-    throw new Error(err);
-  }
-  const url = (json as { url?: unknown }).url;
-  if (typeof url !== "string" || !url.trim()) throw new Error("Không nhận được link ảnh.");
-  return url.trim();
-}
 
 function pickFileFromClipboard(items: DataTransferItemList): File | null {
   for (let i = 0; i < items.length; i += 1) {
@@ -96,7 +80,7 @@ export function AdminCfImageInput({
     setErr(null);
     setBusy(true);
     try {
-      const u = await uploadToCf(blob, filename);
+      const u = await uploadAdminCfImage(blob, filename);
       setUrl(u);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Lỗi tải ảnh.");

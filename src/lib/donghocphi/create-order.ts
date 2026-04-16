@@ -469,6 +469,11 @@ export async function createDongHocPhiOrder(
         if (khoaHocVienId == null) throw new Error("Thiếu ql_quan_ly_hoc_vien.");
         const ngayCuoi =
           v.soBuoi > 0 ? addDaysIso(ngayDau, v.soBuoi) : ngayDau;
+        /**
+         * Kỳ học (`ngay_dau_ky` / `ngay_cuoi_ky`) được ghi **ngay khi tạo đơn**, cùng lúc `status` = «Chờ thanh toán».
+         * SePay (hoặc đồng bộ tay) chỉ đổi trạng thái đơn/chi tiết sang «Đã thanh toán» — không chờ webhook mới tính ngày.
+         * UI đóng học phí (`fetchKyByKhoaHocVienIds`): nếu chưa có đơn đã TT thì vẫn lấy chi tiết mới nhất → HV thấy kỳ đã gia hạn dù chưa có trigger SePay.
+         */
         // goi_hoc_phi FK trên DB phải trỏ cùng bảng với hpGoiHocPhiTableName() (vd. hp_goi_hoc_phi_new).
         const { error: ctErr } = await supabase.from("hp_thu_hp_chi_tiet").insert({
           don_thu: donId,

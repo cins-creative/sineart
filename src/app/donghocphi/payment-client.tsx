@@ -2588,10 +2588,12 @@ export default function DongHocPhiClient({
                   {!paymentComplete ? (
                     <p className="dhp-qr-hint">
                       Cần <code className="dhp-code">SUPABASE_SERVICE_ROLE_KEY</code> trên
-                      server (đơn tự động — <code className="dhp-code">nguoi_tao</code>{" "}
-                      null). QR thử 2.000–2.300 ₫: dev mặc định bật; production đặt{" "}
-                      <code className="dhp-code">NEXT_PUBLIC_DHP_TEST_MICRO_QR=1</code> — tắt:{" "}
-                      <code className="dhp-code">0</code> hoặc <code className="dhp-code">false</code>.
+                      server (đơn tự động — <code className="dhp-code">nguoi_tao</code> null).
+                      QR thử 2.000–2.300 ₫: bật sẵn khi <code className="dhp-code">next dev</code>;
+                      với <code className="dhp-code">next start</code> / Vercel production đặt{" "}
+                      <code className="dhp-code">NEXT_PUBLIC_DHP_TEST_MICRO_QR=1</code>. SePay khớp{" "}
+                      <strong>mã SA trong nội dung CK</strong>, không bắt buộc trùng số tiền với tổng đơn. Tắt micro
+                      QR: <code className="dhp-code">0</code> hoặc <code className="dhp-code">false</code>.
                     </p>
                   ) : null}
                   {paymentComplete ? (

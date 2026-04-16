@@ -51,9 +51,13 @@ const TEST_QR_MAX_DONG = 2300;
 const TEST_QR_SPAN = TEST_QR_MAX_DONG - TEST_QR_MIN_DONG + 1;
 
 /**
- * Bật QR thử vài nghìn đồng (dev mặc định bật; production tắt).
- * Tắt: `NEXT_PUBLIC_DHP_TEST_MICRO_QR=0` hoặc `false`.
- * Bật ép: `NEXT_PUBLIC_DHP_TEST_MICRO_QR=1`.
+ * Bật VietQR với số tiền thử **2.000–2.300 ₫** (cố định theo mã SA…), tổng đơn DB vẫn là số thật.
+ *
+ * - `next dev`: mặc định **bật** (trừ khi tắt rõ bằng env).
+ * - `next start` / Vercel production: mặc định **tắt** — cần `NEXT_PUBLIC_DHP_TEST_MICRO_QR=1` để debug CK thật.
+ * - Webhook SePay hiện khớp **mã đơn trong nội dung CK** (`SA……`), không so sánh `transfer_amount` với tổng đơn.
+ *
+ * Tắt rõ: `NEXT_PUBLIC_DHP_TEST_MICRO_QR=0` hoặc `false`.
  */
 export function isDhpTestMicroQrEnabled(): boolean {
   const v = process.env.NEXT_PUBLIC_DHP_TEST_MICRO_QR;

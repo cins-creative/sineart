@@ -28,6 +28,8 @@ import DongHocPhiClient, {
 } from "./payment-client";
 import "./donghocphi.css";
 
+export const revalidate = 120;
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function readSingle(param: string | string[] | undefined): string | null {
@@ -53,15 +55,17 @@ export default async function DongHocPhiPage({
   let goiHocPhi: PaymentFeeItem[] = [];
   let hocPhiCombos: HocPhiComboRow[] = [];
   let hocPhiGois: HocPhiGoiRow[] = [];
+  let dhCatalog: DhpDhCatalog | null = null;
 
   if (supabase) {
-    const [monRes, lopEnriched] = await Promise.all([
+    const [monRes, lopEnriched, dhCatRes] = await Promise.all([
       supabase
         .from("ql_mon_hoc")
         .select("id, ten_mon_hoc")
         .order("thu_tu_hien_thi", { ascending: true })
         .order("id", { ascending: true }),
       fetchEnrichedPaymentClasses(supabase),
+      fetchDhNguyenVongCatalog(supabase),
     ]);
 
     monHoc = (monRes.data ?? []).map((row) => ({
@@ -70,6 +74,9 @@ export default async function DongHocPhiPage({
     }));
 
     lopHoc = lopEnriched;
+    if (!dhCatRes.error && dhCatRes.catalog) {
+      dhCatalog = dhCatRes.catalog;
+    }
 
     const monIdsForFees = monHoc.map((m) => m.id);
     const bundle = await fetchPaymentFeeCatalog(monIdsForFees);
@@ -85,17 +92,9 @@ export default async function DongHocPhiPage({
     number,
     { ngayDauKy: string | null; ngayCuoiKy: string | null }
   > = {};
-  let dhCatalog: DhpDhCatalog | null = null;
   let initialNguyenVong: DhpInitialNguyenVongRow[] | null = null;
   let initialHocVienId: number | null = null;
   let initialAvatarUrl: string | null = null;
-
-  if (supabase) {
-    const { catalog, error: dhErr } = await fetchDhNguyenVongCatalog(supabase);
-    if (!dhErr && catalog) {
-      dhCatalog = catalog;
-    }
-  }
 
   if (supabase && initialEmail && isValidStudentEmail(initialEmail)) {
     const em = initialEmail.trim().toLowerCase();

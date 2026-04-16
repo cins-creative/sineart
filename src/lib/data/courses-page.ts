@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import { createClient } from "@/lib/supabase/server";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
@@ -19,6 +21,10 @@ import type {
 
 type LopRow = { id: number; mon_hoc: number | null; url_class: string | null };
 type EnrollRow = { lop_hoc: number | null };
+
+/** Cột tối thiểu cho danh sách / aggregate — tránh `select('*')`. */
+const MON_HOC_CARD_SELECT =
+  "id, ten_mon_hoc, loai_khoa_hoc, thumbnail, is_featured, hinh_thuc, thu_tu_hien_thi, si_so";
 
 function normalizeClassSlug(urlClass: string | null | undefined): string {
   const raw = String(urlClass ?? "").trim();
@@ -210,13 +216,16 @@ function aggregate(
   });
 }
 
-export async function getKhoaHocPageData(): Promise<{
+async function getKhoaHocPageDataUncached(): Promise<{
   courses: KhoaHocCourseCard[];
 }> {
   const supabase = await createClient();
   if (!supabase) return { courses: [] };
   const [monsRes, lopsRes] = await Promise.all([
-    supabase.from("ql_mon_hoc").select("*").order("thu_tu_hien_thi", { ascending: true }),
+    supabase
+      .from("ql_mon_hoc")
+      .select(MON_HOC_CARD_SELECT)
+      .order("thu_tu_hien_thi", { ascending: true }),
     supabase.from("ql_lop_hoc").select("id, mon_hoc, url_class"),
   ]);
   const mons = (monsRes.error ? [] : (monsRes.data ?? [])) as MonHoc[];
@@ -236,6 +245,8 @@ export async function getKhoaHocPageData(): Promise<{
   if (!mons.length) return { courses: [] };
   return { courses: aggregate(mons, lops, enrollments) };
 }
+
+export const getKhoaHocPageData = cache(getKhoaHocPageDataUncached);
 
 function mapMonToDetail(
   row: MonHoc,
@@ -337,7 +348,8 @@ async function fetchTeachersForMon(
     .from("hr_nhan_su")
     .select("id, full_name, portfolio")
     .not("portfolio", "is", null)
-    .order("id", { ascending: true });
+    .order("id", { ascending: true })
+    .limit(80);
   if (error || !data?.length) return [];
   const teachers = mapStaffRows(data as Record<string, unknown>[]);
   return teachers
@@ -472,7 +484,7 @@ async function fetchGoiHocPhiForMon(
  * Xác định `ql_mon_hoc.id` từ slug route (cùng logic với `getKhoaHocDetailBySlug`),
  * dùng khi cần dữ liệu phụ (vd: học phí) mà không có `KhoaHocDetailData`.
  */
-export async function resolveMonIdForKhoaSlug(
+async function resolveMonIdForKhoaSlugUncached(
   slug: string
 ): Promise<number | null> {
   const supabase = await createClient();
@@ -514,18 +526,17 @@ export async function resolveMonIdForKhoaSlug(
   return null;
 }
 
-export async function getKhoaHocDetailBySlug(
+export const resolveMonIdForKhoaSlug = cache(resolveMonIdForKhoaSlugUncached);
+
+async function getKhoaHocDetailBySlugUncached(
   slug: string
 ): Promise<KhoaHocDetailData | null> {
   const supabase = await createClient();
   if (!supabase) return null;
 
-  const monSelect =
-    "id, ten_mon_hoc, loai_khoa_hoc, thumbnail, is_featured, hinh_thuc, si_so";
-
   const { data: allMonsRows } = await supabase
     .from("ql_mon_hoc")
-    .select(monSelect)
+    .select(MON_HOC_CARD_SELECT)
     .order("id", { ascending: true });
 
   const allMons = (allMonsRows ?? []) as MonHoc[];
@@ -559,7 +570,7 @@ export async function getKhoaHocDetailBySlug(
   if (fromLop != null) {
     const { data: mon } = await supabase
       .from("ql_mon_hoc")
-      .select(monSelect)
+      .select(MON_HOC_CARD_SELECT)
       .eq("id", fromLop)
       .maybeSingle();
     if (mon) {
@@ -579,7 +590,7 @@ export async function getKhoaHocDetailBySlug(
     if (Number.isFinite(id)) {
       const { data: mon } = await supabase
         .from("ql_mon_hoc")
-        .select(monSelect)
+        .select(MON_HOC_CARD_SELECT)
         .eq("id", id)
         .maybeSingle();
       if (mon) {
@@ -595,6 +606,8 @@ export async function getKhoaHocDetailBySlug(
 
   return null;
 }
+
+export const getKhoaHocDetailBySlug = cache(getKhoaHocDetailBySlugUncached);
 
 function deriveClassTime(hinhThucTag: HinhThucHocTag, lichHoc: string): string {
   if (hinhThucTag === "Online") return "19h00 - 21h30";
@@ -754,7 +767,7 @@ export async function getOngoingClassesForMon(
   });
 }
 
-export async function getGlobalTeacherPortfolioSlides(
+async function getGlobalTeacherPortfolioSlidesUncached(
   limit: number = 48
 ): Promise<TeacherPortfolioSlide[]> {
   const supabase = await createClient();
@@ -852,6 +865,10 @@ export async function getGlobalTeacherPortfolioSlides(
 
   return slides.slice(0, Math.max(1, limit));
 }
+
+export const getGlobalTeacherPortfolioSlides = cache(
+  getGlobalTeacherPortfolioSlidesUncached,
+);
 
 function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
   const numRaw = row.number;

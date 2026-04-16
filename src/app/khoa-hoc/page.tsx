@@ -6,6 +6,8 @@ import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 import "./khoa-hoc.css";
 import KhoaHocBento from "./_components/KhoaHocBento";
 
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: "Khóa học — Sine Art",
   description:

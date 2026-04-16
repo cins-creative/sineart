@@ -7,8 +7,9 @@ import { useState } from "react";
 
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
 
+const DASHBOARD_OVERVIEW_HREF = "/admin/dashboard";
+
 const NAV_MAIN: { label: string; href: string; disabled?: boolean }[] = [
-  { label: "Tổng quan", href: "/admin/dashboard" },
   { label: "Chi nhánh", href: "/admin/dashboard/chi-nhanh" },
   { label: "Khóa học", href: "/admin/dashboard/khoa-hoc" },
   { label: "Lớp học", href: "/admin/dashboard/lop-hoc" },
@@ -28,6 +29,7 @@ const NAV_HR: { label: string; href: string; disabled?: boolean }[] = [
 
 const NAV_MARKETING: { label: string; href: string; disabled?: boolean }[] = [
   { label: "Marketing analytics", href: "/admin/dashboard/report-mkt" },
+  { label: "Quản lý media", href: "/admin/dashboard/quan-ly-media" },
   { label: "Quản lý bài học viên", href: "/admin/dashboard/quan-ly-bai-hoc-vien" },
 ];
 
@@ -47,12 +49,23 @@ function staffInitial(name: string): string {
   return t.charAt(0).toUpperCase();
 }
 
+/** Trang tổng quan — chỉ highlight khi đúng `/admin/dashboard`, không gồm route con. */
+function overviewNavClass(pathname: string | null): string {
+  const active = pathname === DASHBOARD_OVERVIEW_HREF;
+  const base =
+    "mb-1 block rounded-xl px-3 py-2.5 text-[13px] font-bold tracking-tight transition";
+  if (active) {
+    return `${base} border border-[#f8a668]/40 bg-gradient-to-r from-[#fff4eb] via-[#fef5f3] to-[#fdeef6] text-[#1a1a1a] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]`;
+  }
+  return `${base} border border-transparent bg-gradient-to-r from-[#f8a668]/10 to-[#ee5b9f]/10 text-black/85 hover:border-black/[0.08] hover:from-[#f8a668]/16 hover:to-[#ee5b9f]/14`;
+}
+
 function navItemClass(href: string, pathname: string | null, searchParams: URLSearchParams): string {
   const base = "block rounded-lg px-2 py-2 text-black/80 transition hover:bg-black/[0.04]";
   const [pathPart, queryPart] = href.split("?");
   const pathMatches =
     pathname === pathPart ||
-    (pathPart !== "/admin/dashboard" && (pathname?.startsWith(`${pathPart}/`) ?? false));
+    (pathPart !== DASHBOARD_OVERVIEW_HREF && (pathname?.startsWith(`${pathPart}/`) ?? false));
 
   let queryMatches = true;
   if (pathMatches && queryPart) {
@@ -123,7 +136,10 @@ export default function AdminShell({
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 py-4 text-[13px]">
-          <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
+          <Link href={DASHBOARD_OVERVIEW_HREF} className={overviewNavClass(pathname)}>
+            Tổng quan
+          </Link>
+          <p className="mb-2 mt-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
             Điều hành
           </p>
           <ul className="space-y-0.5">

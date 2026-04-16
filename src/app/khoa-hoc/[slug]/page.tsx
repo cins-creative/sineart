@@ -16,6 +16,8 @@ import "../khoa-hoc.css";
 import "../khoa-hoc-detail.css";
 import KhoaHocDetailView from "../_components/KhoaHocDetailView";
 
+export const revalidate = 300;
+
 /** Fallback tiêu đề khi không load được DB (slug mới = tên môn đã slugify) */
 const SLUG_LABELS: Record<string, string> = {
   "hinh-hoa": "Hình họa",
@@ -65,10 +67,6 @@ export default async function KhoaHocSlugPage({
     (monIdForFee != null
       ? await getKhoaHocDetailBySlug(`mon-${monIdForFee}`)
       : null);
-  const hocPhiBlock =
-    monIdForFee != null
-      ? await getHocPhiBlockData(monIdForFee)
-      : null;
   const fallbackFromCourses =
     monIdForFee != null
       ? courses.find((c) => c.id === monIdForFee)?.tenMonHoc
@@ -78,7 +76,8 @@ export default async function KhoaHocSlugPage({
 
   /** Cùng chuỗi với `h1.kd-title` trong KhoaHocDetailView — lọc gallery bài học viên */
   const galleryCourseTitle = detail?.tenMonHoc ?? fallback ?? slug;
-  const [studentGallery, baiTapList, ongoingClasses] = await Promise.all([
+  const [hocPhiBlock, studentGallery, baiTapList, ongoingClasses] = await Promise.all([
+    monIdForFee != null ? getHocPhiBlockData(monIdForFee) : Promise.resolve(null),
     getStudentGalleryForKhoaHocPage(detail, galleryCourseTitle),
     monIdForFee != null
       ? getBaiTapListForMon(monIdForFee)

@@ -12,6 +12,9 @@ import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 import "./sineart-home.css";
 
+/** ISR — dữ liệu public; admin có `revalidatePath` khi đổi môn/lớp. */
+export const revalidate = 300;
+
 export default async function Home() {
   const [data, { courses }] = await Promise.all([
     getHomePageData(),

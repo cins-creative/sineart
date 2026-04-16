@@ -85,6 +85,38 @@ table.bcc-fin-table thead th {
   vertical-align: top;
 }
 
+/* Vùng cuộn bảng — tách trục để sticky `left` bám đúng scrollport (tránh lệch một số layout flex). */
+.bcc-fin-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/*
+  Cột nhãn tbody: sticky ngang; z < thead để cuộn dọc cả header luôn nằm trên nội dung bảng.
+*/
+table.bcc-fin-table th.bcc-fin-label-cell,
+table.bcc-fin-table td.bcc-fin-label-cell {
+  position: sticky !important;
+  left: 0 !important;
+}
+
+table.bcc-fin-table td.bcc-fin-label-cell {
+  z-index: 22;
+}
+
+/* Toàn bộ ô thead (sticky top): một lớp z cao hơn tbody (ô số z-0). Ô góc Chỉ tiêu cao hơn các th còn lại khi chồng góc. */
+table.bcc-fin-table thead > tr > th {
+  z-index: 60 !important;
+}
+table.bcc-fin-table thead > tr > th.bcc-fin-label-cell {
+  z-index: 90 !important;
+}
+
+/* Cột số nằm dưới cột chỉ tiêu khi chồng lớp khi cuộn ngang */
+table.bcc-fin-table tbody td.bcc-num-cell {
+  position: relative;
+  z-index: 0;
+}
+
 table.bcc-fin-table tbody tr:hover td.bcc-num-cell {
-  background: #eff6ff !important;
+  background: #ececed !important;
 }

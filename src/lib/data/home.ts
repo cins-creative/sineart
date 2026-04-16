@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { createClient } from "@/lib/supabase/server";
 import { toJSONSafe } from "@/lib/serialize";
 import {
@@ -24,6 +26,10 @@ import type {
   HomeReview,
   TeacherArtSlide,
 } from "@/types/homepage";
+
+/** Chỉ cột cần cho trang chủ — nhẹ hơn `select('*')`. */
+const MON_HOC_HOME_SELECT =
+  "id, ten_mon_hoc, loai_khoa_hoc, thumbnail, is_featured, thu_tu_hien_thi, hinh_thuc";
 export type HomePagePayload = {
   stats: { students: string; years: string; groups: string };
   featuredCourse: {
@@ -184,15 +190,12 @@ function mapMonHocToCourses(mon: MonHoc[]) {
   return { featuredCourse, miniCourses };
 }
 
-export async function getHomePageData(): Promise<HomePagePayload> {
-  let cinsCareers: CareerCard[] = [];
-  try {
-    cinsCareers = await fetchNganhHocCardsFromCins();
-  } catch {
-    cinsCareers = [];
-  }
-  const careersResolved =
-    cinsCareers.length > 0 ? cinsCareers : CAREER_CARDS;
+async function getHomePageDataUncached(): Promise<HomePagePayload> {
+  const supabase = await createClient();
+  /** Song song với Supabase — tránh chặn 1–2s do CINS. */
+  const cinsPromise = fetchNganhHocCardsFromCins().catch((): CareerCard[] => []);
+
+  const baseCareers = CAREER_CARDS;
 
   const base: HomePagePayload = {
     stats: FALLBACK_STATS,
@@ -202,11 +205,16 @@ export async function getHomePageData(): Promise<HomePagePayload> {
     galleryMonHocTabs: FALLBACK_GALLERY_MON_HOC_TABS,
     teacherArtSlides: [],
     reviews: FALLBACK_REVIEWS,
-    careers: careersResolved,
+    careers: baseCareers,
   };
 
-  const supabase = await createClient();
-  if (!supabase) return toJSONSafe(base);
+  if (!supabase) {
+    const cinsCareers = await cinsPromise;
+    return toJSONSafe({
+      ...base,
+      careers: cinsCareers.length > 0 ? cinsCareers : CAREER_CARDS,
+    });
+  }
 
   try {
     const staffPortfolioQuery = supabase
@@ -215,6 +223,7 @@ export async function getHomePageData(): Promise<HomePagePayload> {
       .not("portfolio", "is", null);
 
     const [
+      cinsCareers,
       monRes,
       galleryItems,
       teacherRes,
@@ -222,9 +231,10 @@ export async function getHomePageData(): Promise<HomePagePayload> {
       lopOpenRes,
       monCountRes,
     ] = await Promise.all([
+      cinsPromise,
       supabase
         .from("ql_mon_hoc")
-        .select("*")
+        .select(MON_HOC_HOME_SELECT)
         .order("thu_tu_hien_thi", { ascending: true }),
       fetchHvBaiHocVienGalleryItems(supabase, 48, { onlyStudentWork: true }),
       staffPortfolioQuery,
@@ -295,6 +305,9 @@ export async function getHomePageData(): Promise<HomePagePayload> {
         ? String(monCountRes.count)
         : FALLBACK_STATS.groups;
 
+    const careersResolved =
+      cinsCareers.length > 0 ? cinsCareers : CAREER_CARDS;
+
     return toJSONSafe({
       stats: { students, years: FALLBACK_STATS.years, groups },
       featuredCourse,
@@ -306,12 +319,18 @@ export async function getHomePageData(): Promise<HomePagePayload> {
       careers: careersResolved,
     });
   } catch {
-    return toJSONSafe(base);
+    const cinsCareers = await cinsPromise.catch((): CareerCard[] => []);
+    return toJSONSafe({
+      ...base,
+      careers: cinsCareers.length > 0 ? cinsCareers : CAREER_CARDS,
+    });
   }
 }
 
-/** Trang `/gallery` — nhiều tác phẩm hơn trang chủ + strip giáo viên (portfolio). */
-export async function getGalleryPagePayload(): Promise<{
+/** Một request = một lần fetch (dedupe metadata + page nếu có). */
+export const getHomePageData = cache(getHomePageDataUncached);
+
+async function getGalleryPagePayloadUncached(): Promise<{
   gallery: GalleryDisplayItem[];
   galleryMonHocTabs: GalleryMonHocTab[];
   teacherArtSlides: TeacherArtSlide[];
@@ -336,7 +355,7 @@ export async function getGalleryPagePayload(): Promise<{
     const [monRes, galleryItems, teacherRes] = await Promise.all([
       supabase
         .from("ql_mon_hoc")
-        .select("*")
+        .select(MON_HOC_HOME_SELECT)
         .order("thu_tu_hien_thi", { ascending: true }),
       fetchHvBaiHocVienGalleryItems(supabase, 300, { onlyStudentWork: true }),
       staffPortfolioQuery,
@@ -372,3 +391,5 @@ export async function getGalleryPagePayload(): Promise<{
     return toJSONSafe(base);
   }
 }
+
+export const getGalleryPagePayload = cache(getGalleryPagePayloadUncached);

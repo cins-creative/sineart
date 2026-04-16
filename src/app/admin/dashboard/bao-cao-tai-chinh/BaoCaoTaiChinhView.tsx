@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { BarChart3, Plus, Trash2 } from "lucide-react";
+import { BarChart3, Plus } from "lucide-react";
 
-import { deleteBaoCaoTaiChinhRow, saveBaoCaoTaiChinhColumn } from "@/app/admin/dashboard/bao-cao-tai-chinh/actions";
+import { saveBaoCaoTaiChinhColumn } from "@/app/admin/dashboard/bao-cao-tai-chinh/actions";
 import {
   type BaoCaoColumn,
   type ColData,
@@ -26,7 +25,8 @@ const DEFAULT_COL_W = 150;
 const MIN_LABEL_W = 140;
 const MIN_COL_W = 90;
 const BORDER = "#EAEAEA";
-const HEADER_BG = "#1a1a2e";
+/** Viền phải cột chỉ tiêu — tách rõ khối số liệu khi cuộn ngang. */
+const LABEL_COL_BORDER_RIGHT = "2px solid #aeb2ba";
 
 function useColumnResize(colIds: string[]) {
   const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_W);
@@ -100,17 +100,17 @@ function newEmptyCol(id: string, nam: string, thang: string): BaoCaoColumn {
   return { id, nam, thang, data: {}, dirty: false };
 }
 
+/** Nền dòng — tông trung tính, tránh xanh/hồng/amber chồng chéo. */
 function getRowBg(row: RowDef, idx: number): string | null {
   if (row.type === "section") return null;
-  if (row.type === "result") return "#FFF5FB";
-  if (row.type === "formula") return "#F0FDF9";
+  if (row.type === "result") return "#ececed";
+  if (row.type === "formula") return "#f5f5f6";
   return idx % 2 === 0 ? "#FFFFFF" : "#FAFAFA";
 }
 
 type Props = { initialColumns: BaoCaoColumn[] };
 
 export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
-  const router = useRouter();
   const [columns, setColumns] = useState<BaoCaoColumn[]>(() =>
     initialColumns.map((c) => ({ ...c, dirty: c.dirty ?? false })),
   );
@@ -121,7 +121,6 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
   const [addErr, setAddErr] = useState("");
   const [editingCell, setEditingCell] = useState<{ colId: string; key: string } | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [deletingColId, setDeletingColId] = useState<string | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
   const displayCols = buildDisplayCols(columns);
@@ -177,29 +176,6 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
       setColumns((prev) =>
         prev.map((c) => (c.id === colId ? { ...c, saving: false, error: msg } : c)),
       );
-    }
-  };
-
-  const deleteMonthColumn = async (col: BaoCaoColumn) => {
-    if (col.isQuarter) return;
-    const short = THANG_FULL_TO_SHORT[col.thang] || col.thang;
-    const label = `${short} ${col.nam}`.trim();
-    if (!globalThis.confirm(`Xóa cột dữ liệu «${label}»? Thao tác không hoàn tác.`)) return;
-
-    setDeletingColId(col.id);
-    try {
-      if (col.recordId != null && col.recordId > 0) {
-        const res = await deleteBaoCaoTaiChinhRow(col.recordId);
-        if (!res.ok) {
-          setColumns((prev) => prev.map((c) => (c.id === col.id ? { ...c, error: res.error } : c)));
-          return;
-        }
-      }
-      setColumns((prev) => prev.filter((c) => c.id !== col.id));
-      setEditingCell((ed) => (ed?.colId === col.id ? null : ed));
-      router.refresh();
-    } finally {
-      setDeletingColId(null);
     }
   };
 
@@ -323,38 +299,41 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
             ) : (
               <div
                 ref={tableRef}
-                className="min-h-0 flex-1 overflow-auto overscroll-contain [max-height:min(72vh,calc(100dvh-11rem))]"
+                className="bcc-fin-scroll min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain [max-height:min(72vh,calc(100dvh-11rem))]"
               >
                 <table className="bcc-fin-table w-max min-w-full border-separate border-spacing-0 text-[13px]">
                   <thead>
                     <tr>
                       <th
-                        className="sticky left-0 top-0 z-[45] border-b border-r border-[#EAEAEA] bg-[#fafafa] p-0 text-left shadow-[2px_0_8px_rgba(0,0,0,0.06)]"
-                        style={{ width: labelWidth, minWidth: labelWidth }}
+                        className="bcc-fin-label-cell sticky left-0 top-0 border-b border-[#EAEAEA] bg-[#fafafa] p-0 text-left shadow-[2px_0_8px_rgba(0,0,0,0.06)]"
+                        style={{
+                          width: labelWidth,
+                          minWidth: labelWidth,
+                          borderRight: LABEL_COL_BORDER_RIGHT,
+                        }}
                       >
-                        <div className="relative px-4 py-3 text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
+                        <div className="relative px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[#5c5c5c]">
                           <span>Chỉ tiêu</span>
                           {resizeHandle(onLabelResizeStart, "label")}
                         </div>
                       </th>
                       {displayCols.map((col) => {
                         const w = getColW(col.id);
-                        const busyDel = deletingColId === col.id;
                         if (col.isQuarter) {
                           return (
                             <th
                               key={col.id}
-                              className="sticky top-0 z-[34] border-b border-l border-r border-amber-200/90 bg-amber-50 p-0 text-center align-top"
+                              className="sticky top-0 border-b border-l border-r border-[#EAEAEA] bg-[#f3f3f4] p-0 text-center align-top"
                               style={{ width: w, minWidth: w }}
                             >
                               <div className="relative px-2 pb-2 pt-2.5">
                                 <div className="flex items-center justify-center gap-1">
-                                  <span className="text-[9px] font-bold text-amber-700/70">Σ</span>
-                                  <span className="text-[13px] font-extrabold text-amber-900">
+                                  <span className="text-[9px] font-bold text-[#888]">Σ</span>
+                                  <span className="text-[13px] font-extrabold text-[#323232]">
                                     {col.quarterLabel}
                                   </span>
                                 </div>
-                                <div className="mt-0.5 text-[9px] font-medium text-amber-800/70">
+                                <div className="mt-0.5 text-[9px] font-medium text-[#888]">
                                   {col.quarterPartial ? (
                                     <span>{col.quarterCount}/3 tháng</span>
                                   ) : (
@@ -369,23 +348,10 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
                         return (
                           <th
                             key={col.id}
-                            className="sticky top-0 z-[33] border-b border-r border-[#EAEAEA] bg-[#fafafa] p-0 text-center align-top"
+                            className="sticky top-0 border-b border-r border-[#EAEAEA] bg-[#fafafa] p-0 text-center align-top"
                             style={{ width: w, minWidth: w }}
                           >
                             <div className="relative px-2 pb-2 pt-2.5">
-                              <button
-                                type="button"
-                                disabled={busyDel || col.saving}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void deleteMonthColumn(col);
-                                }}
-                                className="absolute right-1 top-1 z-20 rounded-md p-1 text-[#AAA] transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-                                title="Xóa cột tháng"
-                                aria-label={`Xóa ${THANG_FULL_TO_SHORT[col.thang] || col.thang} ${col.nam}`}
-                              >
-                                <Trash2 size={13} strokeWidth={2} />
-                              </button>
                               <div className="text-[13px] font-extrabold leading-tight text-[#1a1a2e]">
                                 {THANG_FULL_TO_SHORT[col.thang] || col.thang}
                               </div>
@@ -424,7 +390,7 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
                         );
                       })}
                       <th
-                        className="sticky top-0 z-[33] min-w-[52px] border-b border-[#EAEAEA] bg-[#fafafa] px-1 py-2.5 text-center"
+                        className="sticky top-0 min-w-[52px] border-b border-[#EAEAEA] bg-[#fafafa] px-1 py-2.5 text-center"
                         style={{ width: 52 }}
                       >
                         <button
@@ -444,16 +410,25 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
                         return (
                           <tr key={row.key}>
                             <td
-                              colSpan={displayCols.length + 2}
-                              className="border-b border-t px-4 py-1.5 text-[9px] font-extrabold uppercase tracking-widest"
+                              className="bcc-fin-label-cell sticky left-0 z-[22] border-b border-t border-[#EAEAEA] px-4 py-1.5 text-left text-[9px] font-extrabold uppercase tracking-widest text-[#5c5c5c] shadow-[4px_0_14px_rgba(0,0,0,0.04)]"
                               style={{
-                                background: `${row.color ?? HEADER_BG}14`,
-                                borderTopColor: `${row.color}28`,
-                                borderBottomColor: `${row.color}18`,
-                                color: row.color ?? HEADER_BG,
+                                width: labelWidth,
+                                minWidth: labelWidth,
+                                background: "#ebebec",
+                                borderRight: LABEL_COL_BORDER_RIGHT,
                               }}
                             >
                               {row.label}
+                            </td>
+                            <td
+                              colSpan={displayCols.length + 1}
+                              className="border-b border-t border-[#EAEAEA] px-4 py-1.5 text-[9px] font-extrabold uppercase tracking-widest text-[#5c5c5c]"
+                              style={{
+                                background: "#ebebec",
+                              }}
+                              aria-hidden
+                            >
+                              {"\u00a0"}
                             </td>
                           </tr>
                         );
@@ -464,27 +439,22 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
                       return (
                         <tr key={row.key} className={cn(!isFormula && "cursor-pointer")}>
                           <td
-                            className="sticky left-0 z-[25] border-b border-r text-nowrap shadow-[2px_0_6px_rgba(0,0,0,0.04)]"
+                            className="bcc-fin-label-cell sticky left-0 z-[22] border-b text-nowrap font-bold text-[#323232] shadow-[4px_0_12px_rgba(0,0,0,0.04)]"
                             style={{
                               width: labelWidth,
                               minWidth: labelWidth,
-                              background: isResult ? "#FFF0F8" : isFormula ? "#F0FDF9" : rowBg ?? "#fff",
-                              borderRightColor: BORDER,
+                              background: rowBg ?? "#fff",
+                              borderRight: LABEL_COL_BORDER_RIGHT,
                               borderBottomColor: BORDER,
                               paddingTop: 7,
                               paddingBottom: 7,
                               paddingLeft: 12 + (row.indent ?? 0) * 16,
                               paddingRight: 12,
                               fontSize: isResult ? 11 : 12,
-                              fontWeight: row.bold ? 800 : isResult ? 700 : 400,
-                              color: isFormula
-                                ? row.color ?? "#059669"
-                                : isResult
-                                  ? row.color ?? "#1a1a1a"
-                                  : "#1a1a1a",
+                              fontWeight: row.bold ? 800 : 700,
+                              color: isResult ? "#1a1a1a" : "#323232",
                             }}
                           >
-                            {isFormula ? <span className="mr-1 opacity-60">📊</span> : null}
                             {row.label}
                           </td>
                           {displayCols.map((col) => {
@@ -511,40 +481,17 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
                                 style={{
                                   width: cw,
                                   minWidth: cw,
-                                  background: isQ
-                                    ? isResult
-                                      ? "#fff7ed"
-                                      : isFormula
-                                        ? "#ecfdf5"
-                                        : "#fffbeb"
-                                    : isEditing
-                                      ? "#FFFBF0"
-                                      : isResult
-                                        ? "#FFF5FB"
-                                        : isFormula
-                                          ? "#F0FDF9"
-                                          : rowBg ?? "#fff",
-                                  borderRight: isQ ? "1px solid rgba(251,191,36,0.45)" : `1px solid ${BORDER}`,
-                                  borderLeft: isQ ? "1px solid rgba(251,191,36,0.35)" : undefined,
-                                  borderBottom: isQ ? "1px solid rgba(251,191,36,0.25)" : `1px solid ${BORDER}`,
+                                  background: isEditing ? "#f3f4f6" : (rowBg ?? "#fff"),
+                                  borderRight: `1px solid ${BORDER}`,
+                                  borderBottom: `1px solid ${BORDER}`,
                                   padding: "6px 10px",
                                   fontSize: isQ ? 11 : 12,
-                                  fontWeight: isQ ? 700 : row.bold ? 700 : 400,
-                                  color: isQ
-                                    ? isNeg
-                                      ? "#dc2626"
-                                      : val === 0
-                                        ? "rgba(146,64,14,0.35)"
-                                        : "#92400e"
-                                    : isFormula
-                                      ? row.color ?? "#059669"
-                                      : isResult
-                                        ? isNeg
-                                          ? "#dc2626"
-                                          : row.color ?? "#db2777"
-                                        : isNeg
-                                          ? "#dc2626"
-                                          : "#1a1a1a",
+                                  fontWeight: isQ || row.bold ? 600 : isResult ? 600 : 400,
+                                  color: isNeg
+                                    ? "#dc2626"
+                                    : val === 0 && (isQ || isFormula)
+                                      ? "#b4b4b4"
+                                      : "#323232",
                                   cursor: isFormula || isQ ? "default" : "text",
                                 }}
                               >

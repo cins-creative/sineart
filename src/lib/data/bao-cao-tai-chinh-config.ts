@@ -473,6 +473,7 @@ export function buildDisplayCols(columns: BaoCaoColumn[]): BaoCaoColumn[] {
     const yearCols = byYear[year].sort(
       (a, b) => THANG_FULL_ORDER.indexOf(a.thang) - THANG_FULL_ORDER.indexOf(b.thang),
     );
+    /** Trước: Q1+tháng Q1, Q2+tháng… — sau: Q1…Q4 (cột tổng quý), rồi toàn bộ tháng theo lịch. */
     for (let q = 1; q <= 4; q++) {
       const qMonths = QUARTER_MONTHS[q];
       const present = yearCols.filter((c) => qMonths.includes(c.thang));
@@ -489,7 +490,9 @@ export function buildDisplayCols(columns: BaoCaoColumn[]): BaoCaoColumn[] {
         quarterPartial: present.length < 3,
         quarterCount: present.length,
       });
-      for (const col of present) display.push(col);
+    }
+    for (const col of yearCols) {
+      display.push(col);
     }
   }
   return display;

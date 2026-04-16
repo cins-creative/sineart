@@ -83,7 +83,7 @@ export async function fetchAdminHeThongBaiTapBundle(supabase: SupabaseClient): P
   };
 
   const baiTap: AdminBaiTapRow[] = (btRows ?? []).map((raw) => {
-    const r = raw as {
+    const r = raw as unknown as {
       id: unknown;
       ten_bai_tap?: unknown;
       bai_so?: unknown;

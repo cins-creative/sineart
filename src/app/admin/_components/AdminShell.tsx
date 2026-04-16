@@ -22,7 +22,7 @@ const NAV_MAIN: { label: string; href: string; disabled?: boolean }[] = [
 const NAV_HR: { label: string; href: string; disabled?: boolean }[] = [
   { label: "Nhân sự", href: "/admin/dashboard/quan-ly-nhan-su" },
   { label: "Bảng lương", href: "#", disabled: true },
-  { label: "Báo cáo tài chính", href: "#", disabled: true },
+  { label: "Báo cáo tài chính", href: "/admin/dashboard/bao-cao-tai-chinh" },
   { label: "Upload sao kê", href: "#", disabled: true },
 ];
 
@@ -31,6 +31,8 @@ type Props = {
   staffEmail: string;
   /** `hr_nhan_su.vai_tro` (null nếu trống hoặc không đọc được). */
   staffRole: string | null;
+  /** `hr_nhan_su.avatar` — hiển thị ảnh đại diện; nếu trống thì dùng chữ cái + gradient. */
+  staffAvatarUrl?: string | null;
   children: React.ReactNode;
 };
 
@@ -48,7 +50,13 @@ function navItemClass(href: string, pathname: string | null): string {
   return base;
 }
 
-export default function AdminShell({ staffName, staffEmail, staffRole, children }: Props) {
+export default function AdminShell({
+  staffName,
+  staffEmail,
+  staffRole,
+  staffAvatarUrl,
+  children,
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [busy, setBusy] = useState(false);
@@ -71,11 +79,25 @@ export default function AdminShell({ staffName, staffEmail, staffRole, children 
     >
       <aside className="fixed left-0 top-0 z-[8] hidden h-full w-[260px] flex-col border-r border-black/[0.06] bg-white md:flex">
         <div className="flex h-14 min-w-0 items-center gap-2 border-b border-black/[0.06] px-5">
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
-            style={{ background: "linear-gradient(135deg, #f8a668, #ee5b9f)" }}
-          >
-            {staffInitial(staffName)}
+          <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-black/[0.06] bg-black/[0.04]">
+            {staffAvatarUrl?.trim() ? (
+              <img
+                src={staffAvatarUrl.trim()}
+                alt={staffName.trim() ? `Ảnh đại diện ${staffName.trim()}` : "Ảnh đại diện"}
+                width={36}
+                height={36}
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div
+                className="flex h-full w-full items-center justify-center text-sm font-bold text-white"
+                style={{ background: "linear-gradient(135deg, #f8a668, #ee5b9f)" }}
+                aria-hidden
+              >
+                {staffInitial(staffName)}
+              </div>
+            )}
           </div>
           <div className="min-w-0 leading-tight">
             <div className="truncate text-sm font-semibold">{staffName || "—"}</div>

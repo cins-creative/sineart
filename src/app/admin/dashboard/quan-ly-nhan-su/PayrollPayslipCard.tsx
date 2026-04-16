@@ -184,7 +184,30 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, { nv: AdminNhanSuRo
               <PayslipReadField value={bl.so_buoi_nghi_trong_thang != null ? String(bl.so_buoi_nghi_trong_thang) : "—"} />
             </PayslipFieldRow>
             <PayslipFieldRow label="Nghỉ tối đa / năm">
-              <PayslipReadField value={nv.so_buoi_nghi_toi_da != null ? String(nv.so_buoi_nghi_toi_da) : "—"} />
+              <PayslipReadField
+                value={
+                  nv.so_buoi_nghi_toi_da != null && Number.isFinite(Number(nv.so_buoi_nghi_toi_da))
+                    ? String(Math.trunc(Number(nv.so_buoi_nghi_toi_da)))
+                    : "—"
+                }
+              />
+            </PayslipFieldRow>
+            <PayslipFieldRow label="Số buổi nghỉ còn lại">
+              <PayslipReadField
+                value={(() => {
+                  const ceiling =
+                    nv.so_buoi_nghi_toi_da != null && Number.isFinite(Number(nv.so_buoi_nghi_toi_da))
+                      ? Math.trunc(Number(nv.so_buoi_nghi_toi_da))
+                      : null;
+                  if (ceiling == null) return "—";
+                  const used =
+                    bl.tong_so_buoi_nghi_trong_nam != null && Number.isFinite(Number(bl.tong_so_buoi_nghi_trong_nam))
+                      ? Math.max(0, Math.trunc(Number(bl.tong_so_buoi_nghi_trong_nam)))
+                      : null;
+                  if (used == null) return "—";
+                  return String(Math.max(0, ceiling - used));
+                })()}
+              />
             </PayslipFieldRow>
           </div>
         </div>

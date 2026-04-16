@@ -139,7 +139,7 @@ async function fetchStudentHocTagsByHvIds(
     }
     if (error || !data?.length) continue;
 
-    for (const raw of data as Record<string, unknown>[]) {
+    for (const raw of data as unknown as Record<string, unknown>[]) {
       const hid = Number(raw.hoc_vien_id);
       if (!Number.isFinite(hid) || hid <= 0) continue;
       const statusRaw = raw.status != null ? String(raw.status).trim() : "";

@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   Calendar,
   Check,
   ChevronLeft,
+  ClipboardCopy,
   DollarSign,
   User,
   X,
@@ -14,6 +15,7 @@ import {
 
 import { createHrBangTinhLuong, createHrLichDiemDanhChoBang } from "@/app/admin/dashboard/quan-ly-nhan-su/actions";
 import type { AdminBangTinhLuongListItem, AdminNhanSuRow } from "@/lib/data/admin-quan-ly-nhan-su";
+import { copyDomAsPngToClipboard } from "@/lib/copy-dom-png-clipboard";
 import { cn } from "@/lib/utils";
 
 import { PayrollPayslipCard } from "./PayrollPayslipCard";
@@ -68,7 +70,11 @@ export function TaoBangTinhLuongModal({ row, onClose, onSuccess }: Props) {
   const [thuongInput, setThuongInput] = useState("");
   const [creating, setCreating] = useState(false);
   const [done, setDone] = useState(false);
+  const [doneYearLeaveTong, setDoneYearLeaveTong] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const payslipDoneRef = useRef<HTMLDivElement>(null);
+  const [taoCopyBusy, setTaoCopyBusy] = useState(false);
+  const [taoCopyNotice, setTaoCopyNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -147,6 +153,7 @@ export function TaoBangTinhLuongModal({ row, onClose, onSuccess }: Props) {
         setError(r.error);
         return;
       }
+      setDoneYearLeaveTong(r.tong_so_buoi_nghi_trong_nam);
       setDone(true);
       onSuccess(newLuongId);
     } finally {
@@ -157,27 +164,59 @@ export function TaoBangTinhLuongModal({ row, onClose, onSuccess }: Props) {
   /** Snapshot bảng + điểm danh vừa tạo — dùng render phiếu lương (trước khi refresh danh sách). */
   const doneBangLuong = useMemo((): AdminBangTinhLuongListItem | null => {
     if (!done || newLuongId == null) return null;
-    const tam = tamUngInput.trim() === "" ? null : Math.round(Number(tamUngInput));
-    const thu = thuongInput.trim() === "" ? null : Math.round(Number(thuongInput));
-    const tq = buoiQuyDinh.trim() === "" ? null : Math.round(Number(buoiQuyDinh));
-    const sn = buoiNghi.trim() === "" ? null : Math.round(Number(buoiNghi));
+    const parseOptInt = (raw: string): number | null => {
+      if (raw.trim() === "") return null;
+      const n = Math.round(Number(raw));
+      return Number.isFinite(n) ? n : null;
+    };
     const soLam = Math.round(Number(buoiLam));
     return {
       id: newLuongId,
       nhan_vien: nvId,
       created_at: null,
-      tam_ung: tamUngInput.trim() !== "" && Number.isFinite(tam!) ? tam : null,
-      thuong: thuongInput.trim() !== "" && Number.isFinite(thu!) ? thu : null,
+      tam_ung: parseOptInt(tamUngInput),
+      thuong: parseOptInt(thuongInput),
       luong_co_ban: null,
       tro_cap: null,
       lich_diem_danh: null,
       ky_thang: thang,
       ky_nam: nam,
       so_buoi_lam_viec: Number.isFinite(soLam) ? soLam : null,
-      so_buoi_nghi_trong_thang: sn != null && Number.isFinite(sn) ? sn : null,
-      tong_buoi_lam_viec_trong_thang: tq != null && Number.isFinite(tq) ? tq : null,
+      so_buoi_nghi_trong_thang: parseOptInt(buoiNghi),
+      tong_buoi_lam_viec_trong_thang: parseOptInt(buoiQuyDinh),
+      tong_so_buoi_nghi_trong_nam: doneYearLeaveTong,
     };
-  }, [buoiLam, buoiNghi, buoiQuyDinh, done, nam, newLuongId, nvId, tamUngInput, thang, thuongInput]);
+  }, [buoiLam, buoiNghi, buoiQuyDinh, done, doneYearLeaveTong, nam, newLuongId, nvId, tamUngInput, thang, thuongInput]);
+
+  useEffect(() => {
+    if (!done) {
+      setTaoCopyNotice(null);
+      setDoneYearLeaveTong(null);
+    }
+  }, [done]);
+
+  useEffect(() => {
+    if (!taoCopyNotice) return;
+    const t = window.setTimeout(() => setTaoCopyNotice(null), 4500);
+    return () => window.clearTimeout(t);
+  }, [taoCopyNotice]);
+
+  const copyTaoPayslipImage = useCallback(async () => {
+    const el = payslipDoneRef.current;
+    if (!el || taoCopyBusy) return;
+    setTaoCopyBusy(true);
+    setTaoCopyNotice(null);
+    try {
+      const r = await copyDomAsPngToClipboard(el);
+      if (!r.ok) {
+        window.alert(r.error);
+        return;
+      }
+      setTaoCopyNotice("Đã sao chép ảnh phiếu lương — dán (Ctrl+V) vào Zalo/Messenger.");
+    } finally {
+      setTaoCopyBusy(false);
+    }
+  }, [taoCopyBusy]);
 
   return (
     <motion.div
@@ -384,6 +423,11 @@ export function TaoBangTinhLuongModal({ row, onClose, onSuccess }: Props) {
                     onChange={(e) => setBuoiNghi(e.target.value)}
                     placeholder="Để trống nếu không có"
                   />
+                  <p className="mt-1.5 m-0 text-[10px] font-medium leading-snug text-[#AAA]">
+                    Số buổi nghỉ ghi vào lịch điểm danh; phiếu lương tính <strong className="font-semibold text-[#666]">còn phép</strong>{" "}
+                    = định mức <code className="rounded bg-[#f0f0f0] px-0.5">so_buoi_nghi_toi_da</code> trừ tổng nghỉ trong cùng năm (
+                    <code className="rounded bg-[#f0f0f0] px-0.5">nam</code> trên lịch), mỗi năm tính lại từ dữ liệu lịch.
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -419,10 +463,22 @@ export function TaoBangTinhLuongModal({ row, onClose, onSuccess }: Props) {
                 transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 className="space-y-3"
               >
-                <p className="m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] font-semibold leading-snug text-emerald-900">
-                  Đã tạo xong. Phiếu lương bên dưới — đóng modal để xem lại trong tab Bảng lương (dữ liệu đã đồng bộ).
-                </p>
-                <PayrollPayslipCard nv={row} bl={doneBangLuong} />
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={taoCopyBusy}
+                    title="Chụp phiếu lương thành ảnh PNG vào clipboard — dán gửi nhân viên"
+                    onClick={() => void copyTaoPayslipImage()}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] font-bold text-[#323232] transition hover:bg-[#fafafa] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <ClipboardCopy size={16} className="shrink-0 text-[#555]" aria-hidden />
+                    {taoCopyBusy ? "Đang tạo ảnh…" : "Sao chép ảnh"}
+                  </button>
+                </div>
+                {taoCopyNotice ? (
+                  <p className="m-0 text-right text-[11px] font-medium text-[#1A9A5C]">{taoCopyNotice}</p>
+                ) : null}
+                <PayrollPayslipCard ref={payslipDoneRef} nv={row} bl={doneBangLuong} />
                 <button
                   type="button"
                   onClick={onClose}

@@ -264,7 +264,9 @@ export async function createHrBangTinhLuong(payload: {
   return { ok: true, id };
 }
 
-export type CreateLichDiemDanhResult = { ok: true } | { ok: false; error: string };
+export type CreateLichDiemDanhResult =
+  | { ok: true; tong_so_buoi_nghi_trong_nam: number }
+  | { ok: false; error: string };
 
 /** Bước 2 Framer: tạo `hr_lich_diem_danh` gắn `bang_tinh_luong`. */
 export async function createHrLichDiemDanhChoBang(payload: {
@@ -325,8 +327,27 @@ export async function createHrLichDiemDanhChoBang(payload: {
     return { ok: false, error: error.message || "Không tạo được lịch điểm danh." };
   }
 
+  let tongNam = 0;
+  const { data: yearRows, error: yearErr } = await supabase
+    .from("hr_lich_diem_danh")
+    .select("so_buoi_nghi_trong_thang")
+    .eq("nhan_vien", nv)
+    .eq("nam", nam);
+  if (yearErr) {
+    return { ok: false, error: yearErr.message || "Không đọc được tổng nghỉ trong năm." };
+  }
+  for (const yr of yearRows ?? []) {
+    const v =
+      yr != null && typeof yr === "object" && "so_buoi_nghi_trong_thang" in yr
+        ? (yr as { so_buoi_nghi_trong_thang: unknown }).so_buoi_nghi_trong_thang
+        : null;
+    if (v == null || !Number.isFinite(Number(v))) continue;
+    const n = Math.trunc(Number(v));
+    if (n > 0) tongNam += n;
+  }
+
   revalidatePath(ADMIN_PATH);
-  return { ok: true };
+  return { ok: true, tong_so_buoi_nghi_trong_nam: tongNam };
 }
 
 export type DeleteBangTinhLuongResult = { ok: true } | { ok: false; error: string };

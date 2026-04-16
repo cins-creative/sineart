@@ -364,19 +364,25 @@ function BaiTapDrawer({
       return;
     }
     const bai_so = baiSo.trim() === "" ? null : Number(baiSo);
-    if (baiSo.trim() !== "" && (!Number.isFinite(bai_so) || bai_so < 1)) {
+    if (baiSo.trim() !== "" && (bai_so === null || !Number.isFinite(bai_so) || bai_so < 1)) {
       onError("Bài số không hợp lệ.");
       return;
     }
     const mon_hoc = monId === "" ? null : Number(monId);
-    if (monId !== "" && (!Number.isFinite(mon_hoc) || mon_hoc <= 0)) {
-      onError("Chọn môn học hợp lệ.");
-      return;
+    if (monId !== "") {
+      const m = mon_hoc;
+      if (m == null || !Number.isFinite(m) || m <= 0) {
+        onError("Chọn môn học hợp lệ.");
+        return;
+      }
     }
     const so_buoi = soBuoi.trim() === "" ? null : Number(soBuoi);
-    if (soBuoi.trim() !== "" && (!Number.isFinite(so_buoi) || so_buoi < 0)) {
-      onError("Số buổi không hợp lệ.");
-      return;
+    if (soBuoi.trim() !== "") {
+      const s = so_buoi;
+      if (s == null || !Number.isFinite(s) || s < 0) {
+        onError("Số buổi không hợp lệ.");
+        return;
+      }
     }
     setBusy(true);
     const payload = {

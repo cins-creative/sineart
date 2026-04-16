@@ -153,6 +153,8 @@ export type AdminBangTinhLuongListItem = {
   so_buoi_lam_viec: number | null;
   so_buoi_nghi_trong_thang: number | null;
   tong_buoi_lam_viec_trong_thang: number | null;
+  /** Tổng `so_buoi_nghi_trong_thang` trong năm `ky_nam` (reset theo năm — khớp cột `nam` lịch điểm danh). */
+  tong_so_buoi_nghi_trong_nam: number | null;
 };
 
 export type AdminPhongOption = { id: number; ten: string };
@@ -243,7 +245,7 @@ export async function fetchAdminQuanLyNhanSuBundle(supabase: SupabaseClient): Pr
   if (phongIds.size > 0) {
     let pr = await supabase.from("hr_phong").select("id, ten_phong, ban").in("id", [...phongIds]);
     if (pr.error && isMissingColumnError(pr.error.message ?? "")) {
-      pr = await supabase.from("hr_phong").select("id, ten_phong").in("id", [...phongIds]);
+      pr = (await supabase.from("hr_phong").select("id, ten_phong").in("id", [...phongIds])) as typeof pr;
     }
     if (!pr.error && pr.data) {
       for (const r of pr.data as unknown as Record<string, unknown>[]) {
@@ -266,7 +268,10 @@ export async function fetchAdminQuanLyNhanSuBundle(supabase: SupabaseClient): Pr
   let allPhongOptions: AdminPhongOption[] = [];
   let apRes = await supabase.from("hr_phong").select("id, ten_phong, ban").order("ten_phong", { ascending: true });
   if (apRes.error && isMissingColumnError(apRes.error.message ?? "")) {
-    apRes = await supabase.from("hr_phong").select("id, ten_phong").order("ten_phong", { ascending: true });
+    apRes = (await supabase
+      .from("hr_phong")
+      .select("id, ten_phong")
+      .order("ten_phong", { ascending: true })) as typeof apRes;
   }
   if (!apRes.error && apRes.data) {
     for (const r of apRes.data as unknown as Record<string, unknown>[]) {
@@ -363,7 +368,13 @@ function mapBangListRow(
     so_buoi_lam_viec: lich?.so_buoi_lam_viec ?? null,
     so_buoi_nghi_trong_thang: lich?.so_buoi_nghi_trong_thang ?? null,
     tong_buoi_lam_viec_trong_thang: lich?.tong_buoi_lam_viec_trong_thang ?? null,
+    tong_so_buoi_nghi_trong_nam: null,
   };
+}
+
+function normNamLich(n: unknown): string {
+  if (n == null) return "";
+  return String(n).trim();
 }
 
 async function fetchBangTinhLuongByStaffId(
@@ -428,14 +439,39 @@ async function fetchBangTinhLuongByStaffId(
     }
   }
 
+  const leaveSumByNvYear = new Map<string, number>();
+  if (staffIds.length > 0) {
+    const { data: leaveRows, error: leaveErr } = await supabase
+      .from("hr_lich_diem_danh")
+      .select("nhan_vien, nam, so_buoi_nghi_trong_thang")
+      .in("nhan_vien", staffIds);
+    if (!leaveErr && leaveRows) {
+      for (const lr of leaveRows as unknown as Record<string, unknown>[]) {
+        const nvid = Number(lr.nhan_vien);
+        const namK = normNamLich(lr.nam);
+        if (!Number.isFinite(nvid) || nvid <= 0 || namK === "") continue;
+        const sn = nNumBang(lr.so_buoi_nghi_trong_thang);
+        if (sn == null || sn <= 0) continue;
+        const key = `${nvid}|${namK}`;
+        leaveSumByNvYear.set(key, (leaveSumByNvYear.get(key) ?? 0) + Math.trunc(sn));
+      }
+    }
+  }
+
   const byStaff: Record<number, AdminBangTinhLuongListItem[]> = {};
   for (const raw of bangRows) {
     const id = Number(raw.id);
     const lich = Number.isFinite(id) && id > 0 ? lichFirstByBang.get(id) ?? null : null;
     const row = mapBangListRow(raw, lich);
     if (row.nhan_vien <= 0) continue;
+    const kyNam = normNamLich(row.ky_nam);
+    const tongNam =
+      kyNam !== ""
+        ? leaveSumByNvYear.get(`${row.nhan_vien}|${kyNam}`) ?? 0
+        : null;
+    const rowWithYear: AdminBangTinhLuongListItem = { ...row, tong_so_buoi_nghi_trong_nam: tongNam };
     const cur = byStaff[row.nhan_vien] ?? [];
-    cur.push(row);
+    cur.push(rowWithYear);
     byStaff[row.nhan_vien] = cur;
   }
 

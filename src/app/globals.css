@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  /* Trùng nền thương hiệu (sineart-home --bg) — tránh “rãnh đen” hai bên khi .sa-root max 480px */
+  --background: #ffffff;
+  --foreground: #2d2020;
+  --font: var(--font-quicksand), system-ui, sans-serif;
+  /* Chữ navigation — tương phản rõ trên nền sáng */
+  --nav-text: #0a0a0a;
+}
+
+html {
+  overflow-x: clip;
+  background: var(--background);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Trang Sine Art là layout sáng; không đổi body sang #0a0a0a để tránh viền tối hai bên */
+    --background: #ffffff;
+    --foreground: #2d2020;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-quicksand), system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Keep Next route announcer accessible and out of layout/nav stacking. */
+next-route-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  pointer-events: none;
+}

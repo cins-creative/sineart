@@ -1,0 +1,348 @@
+/* Theo bai-tap-list.html — scope module */
+
+.root {
+  --btl-bg: #ffffff;
+  --btl-surface: #f7f6f3;
+  --btl-border: rgba(0, 0, 0, 0.1);
+  --btl-border-hover: rgba(0, 0, 0, 0.2);
+  --btl-text: #1a1a1a;
+  --btl-muted: #6b6b6b;
+  --btl-hint: #a0a0a0;
+  --badge-bb-bg: #fbeaf0;
+  --badge-bb-text: #993556;
+  --badge-tl-bg: #faeeda;
+  --badge-tl-text: #854f0b;
+  --badge-tc-bg: #e1f5ee;
+  --badge-tc-text: #0f6e56;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-pill: 999px;
+  width: 100%;
+  font-size: 14px;
+  color: var(--btl-text);
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.subjectSelect {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--btl-border);
+  background: var(--btl-bg);
+  color: var(--btl-text);
+  cursor: pointer;
+}
+
+.subjectBlock {
+  margin-bottom: 2rem;
+}
+
+.subjectHeader {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--btl-muted);
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--btl-border);
+  letter-spacing: 0.02em;
+}
+
+.lessonRow {
+  background: var(--btl-bg);
+  border: 1px solid var(--btl-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 6px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.lessonRow:hover {
+  border-color: var(--btl-border-hover);
+}
+
+.lessonRowOpen {
+  border-color: var(--btl-border-hover);
+}
+
+.lessonHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+}
+
+.thumbWrap {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--btl-surface);
+  border: 1px solid var(--btl-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.thumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumbPlaceholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    135deg,
+    rgba(248, 166, 104, 0.35) 0%,
+    rgba(238, 91, 159, 0.28) 100%
+  );
+  position: relative;
+}
+
+.thumbPlaceholder::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(255, 255, 255, 0.35) 0%,
+    transparent 55%
+  );
+}
+
+.headMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.lessonRowOpen .lessonHead {
+  background: var(--btl-surface);
+  border-bottom: 1px solid var(--btl-border);
+}
+
+.baiSo {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--btl-hint);
+  letter-spacing: 0.02em;
+}
+
+.tenBai {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--btl-text);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+.badgeBb {
+  background: var(--badge-bb-bg);
+  color: var(--badge-bb-text);
+}
+
+.badgeTl {
+  background: var(--badge-tl-bg);
+  color: var(--badge-tl-text);
+}
+
+.badgeTc {
+  background: var(--badge-tc-bg);
+  color: var(--badge-tc-text);
+}
+
+.buoiTag {
+  font-size: 12px;
+  color: var(--btl-muted);
+  background: var(--btl-surface);
+  border: 1px solid var(--btl-border);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  min-width: 60px;
+  text-align: center;
+}
+
+.chevron {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--btl-hint);
+}
+
+.lessonBodyMotion {
+  overflow: hidden;
+  border-top: 1px solid transparent;
+}
+
+.lessonRowOpen .lessonBodyMotion {
+  border-top-color: var(--btl-border);
+}
+
+.lessonBodyInner {
+  padding: 16px 14px 18px;
+}
+
+.sectionLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--btl-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.lietKeList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.lietKeList li {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--btl-text);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.lietKeList li::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--btl-border-hover);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.videoWrap {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--btl-surface);
+}
+
+.videoWrap iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.lockBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px 16px;
+  background: var(--btl-surface);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--btl-border-hover);
+  text-align: center;
+}
+
+.lockIcon {
+  width: 28px;
+  height: 28px;
+  color: var(--btl-hint);
+}
+
+.lockTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--btl-text);
+  margin: 0;
+}
+
+.lockSub {
+  font-size: 13px;
+  color: var(--btl-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.lockCta {
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 22px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: #993556;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.lockCta:hover {
+  opacity: 0.85;
+}
+
+.empty {
+  font-size: 14px;
+  color: var(--btl-hint);
+  padding: 1.5rem 0;
+  text-align: center;
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .thumbWrap {
+    width: 64px;
+    height: 64px;
+    border-radius: 10px;
+  }
+
+  .lessonHead {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+}

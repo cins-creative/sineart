@@ -1,0 +1,315 @@
+import type { CareerCard } from "@/types/career";
+import type { GalleryDisplayItem, GalleryMonHocTab, HomeReview } from "@/types/homepage";
+
+/** Giá trị `ten_mon_hoc` tương ứng từng nhóm demo (fallback) */
+const GALLERY_KEY_TO_TEN_MON_HOC: Record<
+  "hh" | "bc" | "tt" | "dg" | "mt",
+  string
+> = {
+  hh: "Hình họa",
+  bc: "Bố cục màu",
+  tt: "Trang trí màu",
+  dg: "Digital",
+  mt: "MT Cơ bản",
+};
+
+/** Tab môn — `tenMonHoc` khớp cột `ql_mon_hoc.ten_mon_hoc` */
+export const FALLBACK_GALLERY_MON_HOC_TABS: GalleryMonHocTab[] = [
+  { tenMonHoc: "Hình họa", label: "Hình họa" },
+  { tenMonHoc: "Bố cục màu", label: "Bố cục màu" },
+  { tenMonHoc: "Trang trí màu", label: "Trang trí màu" },
+  { tenMonHoc: "Digital", label: "Digital" },
+  { tenMonHoc: "MT Cơ bản", label: "MT Cơ bản" },
+];
+
+const GALLERY_ROWS: [
+  number,
+  "hh" | "bc" | "tt" | "dg" | "mt",
+  string,
+  string,
+][] = [
+  [1, "hh", "Bảo Châu", "Hình họa · Chân dung"],
+  [2, "bc", "Minh Khôi", "Bố cục màu"],
+  [3, "tt", "Lan Phương", "Trang trí màu"],
+  [4, "dg", "Thảo Vy", "Digital · Illustration"],
+  [5, "hh", "Quang Huy", "Hình họa · Tĩnh vật"],
+  [6, "mt", "Ngọc Anh", "MT Cơ bản"],
+  [7, "bc", "Tuấn Kiệt", "Bố cục màu"],
+  [8, "dg", "Bích Ngọc", "Digital · Character"],
+  [9, "hh", "Hải Nam", "Hình họa · Người"],
+  [10, "tt", "Phương Linh", "Trang trí · Hoa văn"],
+  [11, "bc", "Gia Bảo", "Bố cục màu · Phong cảnh"],
+  [12, "dg", "Khánh Linh", "Digital · UI"],
+  [13, "hh", "Thiên Ân", "Hình họa · Nâng cao"],
+  [14, "mt", "Minh Tú", "MT Cơ bản · Thiếu nhi"],
+  [15, "tt", "Yến Nhi", "Trang trí màu · Nâng cao"],
+  [16, "bc", "Đức Khoa", "Bố cục màu · Trừu tượng"],
+  [17, "hh", "Bảo Long", "Hình họa · Chân dung"],
+  [18, "dg", "Thu Trang", "Digital · Poster"],
+  [19, "tt", "Ngọc Hân", "Trang trí · Pattern"],
+  [20, "bc", "Quốc Toàn", "Bố cục màu"],
+  [21, "hh", "Hương Giang", "Hình họa · Người"],
+  [22, "mt", "Bảo An", "MT Cơ bản"],
+  [23, "tt", "Lan Chi", "Trang trí · Nâng cao"],
+  [24, "dg", "Tuấn Dũng", "Digital · Animation"],
+  [25, "hh", "Minh Châu", "Hình họa · Nâng cao"],
+  [26, "bc", "Hải Đăng", "Bố cục màu · Phong cảnh"],
+  [27, "tt", "Thu Hiền", "Trang trí màu"],
+  [28, "mt", "Gia Huy", "MT Cơ bản · Thiếu nhi"],
+  [29, "dg", "Quỳnh Anh", "Digital · UI/UX"],
+  [30, "bc", "Văn Khoa", "Bố cục màu"],
+  [31, "hh", "Phú Quý", "Hình họa · Tĩnh vật"],
+  [32, "tt", "Bảo Trân", "Trang trí màu · Họa tiết"],
+];
+
+/** Ảnh minh hoạ khi DB không có `hv_bai_hoc_vien` — tránh masonry trống (photo null). */
+const FALLBACK_GALLERY_PHOTO_URLS: string[] = [
+  "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=800&q=80&auto=format&fit=max",
+  "https://images.unsplash.com/photo-1547826039-bfc35e0f1ea8?w=800&q=80&auto=format&fit=max",
+  "https://images.unsplash.com/photo-1460661419201-fd6442daa149?w=800&q=80&auto=format&fit=max",
+  "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=800&q=80&auto=format&fit=max",
+  "https://images.unsplash.com/photo-1513475382583-d06e58bcb0e0?w=800&q=80&auto=format&fit=max",
+  "https://images.unsplash.com/photo-1499781350541-7783fef6a31d?w=800&q=80&auto=format&fit=max",
+  "https://images.unsplash.com/photo-1501472319162-ef46d99ab450?w=800&q=80&auto=format&fit=max",
+  "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?w=800&q=80&auto=format&fit=max",
+];
+
+export const FALLBACK_GALLERY: GalleryDisplayItem[] = GALLERY_ROWS.map(
+  ([mi, fk, studentName, categoryLabel], i) => ({
+    id: `fb-g-${i}`,
+    photo: FALLBACK_GALLERY_PHOTO_URLS[i % FALLBACK_GALLERY_PHOTO_URLS.length] ?? null,
+    /** Demo: điểm giảm dần để khớp sort trang chủ */
+    score: 100 - i,
+    studentName,
+    categoryLabel,
+    tenMonHoc: GALLERY_KEY_TO_TEN_MON_HOC[fk],
+    baiMau: false,
+    mi,
+  })
+);
+
+export const FALLBACK_STATS = {
+  students: "350+",
+  years: "5+",
+  groups: "5",
+};
+
+export const FALLBACK_FEATURED_COURSE = {
+  name: "Hình họa",
+  sub: "3 cấp độ · 5 lớp · 2–8 HV/lớp",
+  grad: "linear-gradient(135deg,#f8a668,#ee5b9f)",
+  thumbnail: null as string | null,
+  slug: "hinh-hoa",
+};
+
+export const FALLBACK_MINI_COURSES = [
+  {
+    name: "Bố cục màu",
+    sub: "2 lớp · T3, T5",
+    grad: "linear-gradient(135deg,#6efec0,#fde859)",
+    emoji: "🎨",
+    tint: "rgba(110,254,192,.18)",
+    thumbnail: null as string | null,
+    slug: "bo-cuc-mau",
+  },
+  {
+    name: "Trang trí màu",
+    sub: "3 lớp · T2, T4, T7",
+    grad: "linear-gradient(135deg,#bb89f8,#ee5b9f)",
+    emoji: "🖌️",
+    tint: "rgba(187,137,248,.15)",
+    thumbnail: null as string | null,
+    slug: "trang-tri-mau",
+  },
+  {
+    name: "Digital",
+    sub: "2 lớp · T6, CN",
+    grad: "linear-gradient(135deg,#f8a668,#fde859)",
+    emoji: "💻",
+    tint: "rgba(248,166,104,.12)",
+    thumbnail: null as string | null,
+    slug: "digital",
+  },
+  {
+    name: "MT Cơ bản",
+    sub: "4 lớp · Hằng ngày",
+    grad: "linear-gradient(135deg,#e0e0e0,#c0c0c0)",
+    emoji: "🎭",
+    tint: "rgba(45,32,32,.05)",
+    thumbnail: null as string | null,
+    slug: "mt-co-ban",
+  },
+  {
+    name: "Ký hoạ nhanh",
+    sub: "1 lớp · T7",
+    grad: "linear-gradient(135deg,#ee5b9f,#bb89f8)",
+    emoji: "🖼️",
+    tint: "rgba(238,91,159,.1)",
+    thumbnail: null as string | null,
+    slug: "ky-hoa-nhanh",
+  },
+  {
+    name: "Màu nước",
+    sub: "2 lớp · T4, CN",
+    grad: "linear-gradient(135deg,#fde859,#ee5b9f)",
+    emoji: "🖍️",
+    tint: "rgba(253,232,89,.12)",
+    thumbnail: null as string | null,
+    slug: "mau-nuoc",
+  },
+  {
+    name: "Calligraphy",
+    sub: "1 lớp · CN",
+    grad: "linear-gradient(135deg,#6efec0,#f8a668)",
+    emoji: "🖊️",
+    tint: "rgba(110,254,192,.1)",
+    thumbnail: null as string | null,
+    slug: "calligraphy",
+  },
+  {
+    name: "Thiếu nhi",
+    sub: "3 lớp · T2, T4, T6",
+    grad: "linear-gradient(135deg,#f8a668,#bb89f8)",
+    emoji: "🎪",
+    tint: "rgba(248,166,104,.08)",
+    thumbnail: null as string | null,
+    slug: "thieu-nhi",
+  },
+];
+
+export const FALLBACK_REVIEWS: HomeReview[] = [
+  {
+    id: "r0",
+    name: "Nguyễn Bảo Châu",
+    course: "Hình họa · 3 tháng",
+    avatarEmoji: "👧",
+    avatarUrl: null,
+    text: "Trước đây mình không nghĩ mình vẽ được gì ra hồn. Sau 3 tháng ở Sine Art, mình tự tin hơn hẳn và bán được bức tranh đầu tiên!",
+    stars: 5,
+    source: "Google",
+    grad: "linear-gradient(135deg,#f8a668,#ee5b9f)",
+    artTag: "Tác phẩm của Châu",
+  },
+  {
+    id: "r1",
+    name: "Minh Khôi",
+    course: "Bố cục màu · 2 tháng",
+    avatarEmoji: "👦",
+    avatarUrl: null,
+    text: "Mình thử nhiều nơi nhưng Sine Art là nơi đầu tiên mình thực sự thấy tiến bộ sau từng buổi học. Thầy cô rất sát sao.",
+    stars: 5,
+    source: "Google",
+    grad: "linear-gradient(135deg,#6efec0,#fde859)",
+    artTag: "Tác phẩm của Khôi",
+  },
+  {
+    id: "r2",
+    name: "Lan Phương",
+    course: "Trang trí màu · 4 tháng",
+    avatarEmoji: "👩",
+    avatarUrl: null,
+    text: "Mình 35 tuổi mới bắt đầu học vẽ, tưởng quá muộn. Nhưng thầy cô ở đây rất kiên nhẫn, bây giờ mình vẽ được rồi và còn thấy yêu nghề!",
+    stars: 5,
+    source: "Google",
+    grad: "linear-gradient(135deg,#bb89f8,#ee5b9f)",
+    artTag: "Tác phẩm của Phương",
+  },
+  {
+    id: "r3",
+    name: "Tuấn Kiệt",
+    course: "Digital · 2 tháng",
+    avatarEmoji: "🧑",
+    avatarUrl: null,
+    text: "Chỉ sau 2 tháng học Digital mình đã có portfolio xin được việc freelance đầu tiên. Cực kỳ thực chiến, không lý thuyết suông!",
+    stars: 5,
+    source: "Google",
+    grad: "linear-gradient(135deg,#f8a668,#fde859)",
+    artTag: "Portfolio của Kiệt",
+  },
+  {
+    id: "r4",
+    name: "Thảo Vy",
+    course: "MT Cơ bản · 1 tháng",
+    avatarEmoji: "👩",
+    avatarUrl: null,
+    text: "Con gái mình 8 tuổi học ở đây, cô giáo rất nhẹ nhàng và chú ý từng bé. Chỉ 1 tháng mà bé đã vẽ tặng bà ngoại bức tranh đẹp lắm!",
+    stars: 5,
+    source: "Google",
+    grad: "linear-gradient(135deg,#ee5b9f,#bb89f8)",
+    artTag: "Tác phẩm của Vy",
+  },
+];
+
+/** Fallback khi chưa fetch được CINS — cùng cấu trúc ngành học (name / ma_nganh / thumbnail). */
+export const CAREER_CARDS: CareerCard[] = [
+  {
+    slug: "thiet-ke-do-hoa",
+    emoji: "🎓",
+    title: "Thiết kế đồ họa",
+    sub: "7210402",
+    href: "https://cins.vn/nganh-hoc/thiet-ke-do-hoa",
+    imageUrl: null,
+    tint: "rgba(248,166,104,.08)",
+    grad: "linear-gradient(135deg,#f8a668,#fde859)",
+  },
+  {
+    slug: "dien-anh-truyen-hinh",
+    emoji: "📚",
+    title: "Điện ảnh – Truyền hình",
+    sub: "7320101",
+    href: "https://cins.vn/nganh-hoc/dien-anh-truyen-hinh",
+    imageUrl: null,
+    tint: "rgba(238,91,159,.08)",
+    grad: "linear-gradient(135deg,#ee5b9f,#bb89f8)",
+  },
+  {
+    slug: "thiet-ke-thoi-trang",
+    emoji: "✨",
+    title: "Thiết kế thời trang",
+    sub: "7210404",
+    href: "https://cins.vn/nganh-hoc/thiet-ke-thoi-trang",
+    imageUrl: null,
+    tint: "rgba(187,137,248,.08)",
+    grad: "linear-gradient(135deg,#bb89f8,#6efec0)",
+  },
+  {
+    slug: "my-thuat",
+    emoji: "🎨",
+    title: "Mỹ thuật",
+    sub: "7220103",
+    href: "https://cins.vn/nganh-hoc/my-thuat",
+    imageUrl: null,
+    tint: "rgba(110,254,192,.08)",
+    grad: "linear-gradient(135deg,#6efec0,#fde859)",
+  },
+  {
+    slug: "kien-truc",
+    emoji: "📐",
+    title: "Kiến trúc",
+    sub: "7580101",
+    href: "https://cins.vn/nganh-hoc/kien-truc",
+    imageUrl: null,
+    tint: "rgba(253,232,89,.1)",
+    grad: "linear-gradient(135deg,#fde859,#f8a668)",
+  },
+  {
+    slug: "nhom-xay-dung",
+    emoji: "🏛️",
+    title: "Nhóm ngành xây dựng",
+    sub: "7580101",
+    href: "https://cins.vn/nganh-hoc/nhom-xay-dung",
+    imageUrl: null,
+    tint: "rgba(248,166,104,.1)",
+    grad: "linear-gradient(135deg,#f8a668,#ee5b9f)",
+  },
+  {
+    slug: "thiet-ke-noi-that",
+    emoji: "🖌️",
+    title: "Thiết kế nội thất",
+    sub: "7580108",
+    href: "https://cins.vn/nganh-hoc/thiet-ke-noi-that",
+    imageUrl: null,
+    tint: "rgba(238,91,159,.06)",
+    grad: "linear-gradient(135deg,#ee5b9f,#fde859)",
+  },
+];

@@ -1,0 +1,127 @@
+/* HocPhiBlock — theo brief hoc-phi-block + prototype HTML */
+
+.hpb-wrap {
+  color: #1a1917;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.hpb-price-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.hpb-price-main {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--kd-green, #1d9e75);
+  letter-spacing: -0.02em;
+}
+
+.hpb-price-orig {
+  font-size: 14px;
+  color: #b4b2a9;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.hpb-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.hpb-badge--disc {
+  background: #e94057;
+  color: #fff;
+}
+
+.hpb-badge--save {
+  background: #e1f5ee;
+  color: #085041;
+}
+
+.hpb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.hpb-row-label {
+  font-size: 13px;
+  color: #6b6860;
+  min-width: 130px;
+  flex-shrink: 0;
+}
+
+.hpb-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hpb-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 13px;
+  border-radius: 99px;
+  border: 1.5px solid rgba(0, 0, 0, 0.14);
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  user-select: none;
+  font-family: var(--font, ui-sans-serif, system-ui, sans-serif);
+}
+
+.hpb-pill:hover:not(:disabled) {
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+.hpb-pill--active {
+  border-color: var(--kd-purple, #ee5b9f);
+  background: var(--kd-purple, #ee5b9f);
+  color: #fff;
+  font-weight: 600;
+}
+
+.hpb-pill--disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.hpb-state {
+  padding: 24px;
+  border-radius: 12px;
+  background: #fff;
+  color: #6b6860;
+  font-size: 13px;
+  text-align: center;
+  border: 0.5px solid rgba(0, 0, 0, 0.08);
+}
+
+.hpb-state--err {
+  background: #fcebeb;
+  color: #a32d2d;
+}
+
+.hpb-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--kd-purple, #ee5b9f);
+  text-decoration: none;
+}
+
+.hpb-link:hover {
+  text-decoration: underline;
+}

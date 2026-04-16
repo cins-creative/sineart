@@ -1,0 +1,23 @@
+# Đổi tên thành wrangler.toml, chỉnh bucket / KV id, rồi:
+#   wrangler secret put API_SECRET
+#   wrangler secret put SUPABASE_URL
+#   ... (xem comment đầu index.mjs)
+
+name = "sine-art-api"
+# Nếu chạy `wrangler deploy` từ thư mục workers/sine-art-api:
+main = "index.mjs"
+# Nếu chạy từ root repo sineart-web:
+# main = "workers/sine-art-api/index.mjs"
+compatibility_date = "2024-09-01"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "YOUR_R2_BUCKET_NAME"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "YOUR_KV_NAMESPACE_ID"
+
+# Tuỳ chọn (hoặc dùng toàn secret):
+# [vars]
+# CF_ACCOUNT_ID = "xxx"

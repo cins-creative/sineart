@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import AdminShell from "@/app/admin/_components/AdminShell";
 import { ADMIN_SESSION_COOKIE } from "@/lib/admin/constants";
@@ -27,13 +28,15 @@ export default async function AdminDashboardLayout({
   }
 
   return (
-    <AdminShell
-      staffName={session.name}
-      staffEmail={session.email}
-      staffRole={staffRole}
-      staffAvatarUrl={staffAvatar}
-    >
-      {children}
-    </AdminShell>
+    <Suspense fallback={<div className="min-h-screen bg-[#F5F4F2]" />}>
+      <AdminShell
+        staffName={session.name}
+        staffEmail={session.email}
+        staffRole={staffRole}
+        staffAvatarUrl={staffAvatar}
+      >
+        {children}
+      </AdminShell>
+    </Suspense>
   );
 }

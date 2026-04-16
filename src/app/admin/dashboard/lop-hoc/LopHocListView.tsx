@@ -347,7 +347,7 @@ function LopDetailPanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#fafafa]">
+    <div className="flex h-full min-h-0 flex-col bg-white">
       <div
         className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-black/[0.06] px-4 py-3.5"
         style={{ background: "linear-gradient(135deg,#BC8AF910,#ED5C9D08)" }}
@@ -672,7 +672,7 @@ function CreateLopModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -808,7 +808,6 @@ export default function LopHocListView({
   }, []);
 
   const isMobile = w < 580;
-  const detailW = Math.min(520, Math.max(300, w * 0.42));
 
   const filteredLop = useMemo(() => {
     const s = lopSearch.toLowerCase().trim();
@@ -867,13 +866,7 @@ export default function LopHocListView({
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
-          <div className="mx-auto flex min-h-[min(64vh,560px)] w-full max-w-[1200px] flex-row overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-            <div
-              className="flex min-h-0 min-w-0 flex-col transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
-              style={{
-                width: selected && !isMobile ? `calc(100% - ${detailW}px)` : "100%",
-              }}
-            >
+          <div className="mx-auto flex min-h-[min(64vh,560px)] w-full max-w-[1200px] flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <div className="shrink-0 space-y-2 border-b border-[#EAEAEA] bg-white px-6 py-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
@@ -948,43 +941,46 @@ export default function LopHocListView({
               </div>
             )}
           </div>
-            </div>
-
-            {!isMobile ? (
-              <div
-                className="shrink-0 overflow-hidden border-l border-[#EAEAEA] bg-[#fafafa] transition-[width,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
-                style={{ width: selected ? detailW : 0, opacity: selected ? 1 : 0 }}
-              >
-                {selected ? (
-                  <LopDetailPanel
-                    key={selected.id}
-                    item={selected}
-                    monList={monList}
-                    nhanSuList={nhanSuList}
-                    chiNhanhList={chiNhanhList}
-                    hvStats={statsByLopId[String(selected.id)] ?? null}
-                    onClose={() => setSelectedId(null)}
-                  />
-                ) : null}
-              </div>
-            ) : null}
           </div>
         </div>
       </div>
 
-      {isMobile && selected ? (
-        <div className="fixed inset-0 z-50 bg-[#fafafa]">
-          <LopDetailPanel
-            key={selected.id}
-            item={selected}
-            monList={monList}
-            nhanSuList={nhanSuList}
-            chiNhanhList={chiNhanhList}
-            hvStats={statsByLopId[String(selected.id)] ?? null}
-            onClose={() => setSelectedId(null)}
-          />
-        </div>
-      ) : null}
+      <AnimatePresence>
+        {selected ? (
+          <>
+            <motion.button
+              key="lop-detail-backdrop"
+              type="button"
+              aria-label="Đóng"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[100] bg-black/35 backdrop-blur-[2px]"
+              onClick={() => setSelectedId(null)}
+            />
+            <motion.div
+              key={`lop-detail-drawer-${selected.id}`}
+              role="dialog"
+              aria-modal="true"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "tween", duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+              className="fixed bottom-0 right-0 top-0 z-[110] flex w-full max-w-[min(100vw,440px)] flex-col border-l border-[#EAEAEA] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]"
+            >
+              <LopDetailPanel
+                item={selected}
+                monList={monList}
+                nhanSuList={nhanSuList}
+                chiNhanhList={chiNhanhList}
+                hvStats={statsByLopId[String(selected.id)] ?? null}
+                onClose={() => setSelectedId(null)}
+              />
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showCreate ? (

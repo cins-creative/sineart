@@ -50,3 +50,23 @@ export async function saveBaoCaoTaiChinhColumn(input: {
   revalidatePath(ADMIN_PATH);
   return { ok: true, id };
 }
+
+export type BaoCaoTaiChinhDeleteResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteBaoCaoTaiChinhRow(recordId: number): Promise<BaoCaoTaiChinhDeleteResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  if (!Number.isFinite(recordId) || recordId <= 0) {
+    return { ok: false, error: "Id dòng không hợp lệ." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const { error } = await supabase.from("tc_bao_cao_tai_chinh").delete().eq("id", recordId);
+  if (error) return { ok: false, error: error.message || "Không xóa được kỳ báo cáo." };
+
+  revalidatePath(ADMIN_PATH);
+  return { ok: true };
+}

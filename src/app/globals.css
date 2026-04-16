@@ -58,6 +58,33 @@ body.bcc-resizing {
   cursor: col-resize;
 }
 
-table.bcc-fin-table tr:hover td.bcc-data-cell {
+/*
+  Preflight đặt `table { border-collapse: collapse }` — dễ làm `position: sticky` trên `th`/`td`
+  hỏng hoặc bố cục cột “xếp dọc”. Ép lại mô hình table + border-separate cho bảng này.
+*/
+table.bcc-fin-table {
+  display: table;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+table.bcc-fin-table thead {
+  display: table-header-group;
+}
+table.bcc-fin-table tbody {
+  display: table-row-group;
+}
+table.bcc-fin-table tr {
+  display: table-row;
+}
+table.bcc-fin-table th,
+table.bcc-fin-table td {
+  display: table-cell;
+  vertical-align: middle;
+}
+table.bcc-fin-table thead th {
+  vertical-align: top;
+}
+
+table.bcc-fin-table tbody tr:hover td.bcc-num-cell {
   background: #eff6ff !important;
 }

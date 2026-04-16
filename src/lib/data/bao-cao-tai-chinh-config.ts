@@ -65,12 +65,32 @@ const DS_ACC = "#10b981";
 const DS_RED = "#ef4444";
 const DS_AMBER = "#f59e0b";
 
+/**
+ * Đọc số tiền / số từ ô nhập hoặc DB.
+ * Hỗ trợ dạng VN: `171.430.068` (dấu chấm phân cách nghìn), số nguyên thuần, và số âm `-1.234.567`.
+ * Tránh `parseFloat("171.430.068") === 171.43` (lỗi cũ làm sai toàn bộ công thức & cột quý).
+ */
 export const n = (s?: string): number => {
-  const v = parseFloat((s ?? "").replace(/[^0-9.-]/g, ""));
-  return Number.isNaN(v) ? 0 : v;
+  if (s == null) return 0;
+  let t = String(s).trim().replace(/\s/g, "");
+  if (!t || t === "—") return 0;
+  const neg = t.startsWith("-");
+  if (neg) t = t.slice(1);
+  let v = 0;
+  if (/^\d+$/.test(t)) {
+    v = parseInt(t, 10);
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(t)) {
+    v = parseInt(t.replace(/\./g, ""), 10);
+  } else {
+    const x = parseFloat(t.replace(/,/g, "."));
+    v = Number.isNaN(x) ? 0 : x;
+  }
+  const out = neg ? -v : v;
+  return Number.isFinite(out) ? out : 0;
 };
 
-export const fmtNum = (v: number): string => (v === 0 ? "—" : v.toLocaleString("vi-VN"));
+export const fmtNum = (v: number): string =>
+  v === 0 ? "—" : Math.round(v).toLocaleString("vi-VN", { maximumFractionDigits: 0 });
 
 export const ROWS: RowDef[] = [
   { key: "__sec_dt", label: "DOANH THU LỚP HỌC", type: "section", color: "#3b82f6" },
@@ -400,10 +420,10 @@ export function buildSupabasePayload(
   for (const key of INPUT_KEYS) {
     const col = KEY_TO_COL[key];
     if (!col) continue;
-    sums[col] = (sums[col] ?? 0) + (parseFloat(data[key] ?? "0") || 0);
+    sums[col] = (sums[col] ?? 0) + n(data[key]);
   }
   for (const [col, sum] of Object.entries(sums)) {
-    body[col] = sum;
+    body[col] = Math.round(sum);
   }
   return body;
 }
@@ -411,7 +431,7 @@ export function buildSupabasePayload(
 function mergeColData(cols: ColData[]): ColData {
   const result: ColData = {};
   for (const k of INPUT_KEYS) {
-    const sum = cols.reduce((acc, c) => acc + n(c[k]), 0);
+    const sum = Math.round(cols.reduce((acc, c) => acc + n(c[k]), 0));
     if (sum !== 0) result[k] = String(sum);
   }
   return result;

@@ -2,7 +2,7 @@
 
 import { Home } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
@@ -21,9 +21,14 @@ const NAV_MAIN: { label: string; href: string; disabled?: boolean }[] = [
 
 const NAV_HR: { label: string; href: string; disabled?: boolean }[] = [
   { label: "Nhân sự", href: "/admin/dashboard/quan-ly-nhan-su" },
-  { label: "Bảng lương", href: "#", disabled: true },
   { label: "Báo cáo tài chính", href: "/admin/dashboard/bao-cao-tai-chinh" },
-  { label: "Upload sao kê", href: "#", disabled: true },
+  { label: "Thống kê thu chi", href: "/admin/dashboard/thong-ke-thu-chi" },
+  { label: "Upload sao kê", href: "/admin/dashboard/sao-ke" },
+];
+
+const NAV_MARKETING: { label: string; href: string; disabled?: boolean }[] = [
+  { label: "Marketing analytics", href: "/admin/dashboard/report-mkt" },
+  { label: "Quản lý bài học viên", href: "/admin/dashboard/quan-ly-bai-hoc-vien" },
 ];
 
 type Props = {
@@ -42,11 +47,23 @@ function staffInitial(name: string): string {
   return t.charAt(0).toUpperCase();
 }
 
-function navItemClass(href: string, pathname: string | null): string {
+function navItemClass(href: string, pathname: string | null, searchParams: URLSearchParams): string {
   const base = "block rounded-lg px-2 py-2 text-black/80 transition hover:bg-black/[0.04]";
-  const active =
-    pathname === href || (href !== "/admin/dashboard" && (pathname?.startsWith(`${href}/`) ?? false));
-  if (active) return `${base} bg-black/[0.06] font-medium text-black`;
+  const [pathPart, queryPart] = href.split("?");
+  const pathMatches =
+    pathname === pathPart ||
+    (pathPart !== "/admin/dashboard" && (pathname?.startsWith(`${pathPart}/`) ?? false));
+
+  let queryMatches = true;
+  if (pathMatches && queryPart) {
+    const want = new URLSearchParams(queryPart);
+    queryMatches = [...want.entries()].every(([k, v]) => searchParams.get(k) === v);
+  } else if (pathMatches && !queryPart && pathPart === "/admin/dashboard/quan-ly-bai-hoc-vien") {
+    const tab = searchParams.get("tab");
+    queryMatches = tab == null || tab === "cho";
+  }
+
+  if (pathMatches && queryMatches) return `${base} bg-black/[0.06] font-medium text-black`;
   return base;
 }
 
@@ -59,6 +76,7 @@ export default function AdminShell({
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [busy, setBusy] = useState(false);
 
   async function logout() {
@@ -116,7 +134,7 @@ export default function AdminShell({
                     {item.label}
                   </span>
                 ) : (
-                  <Link href={item.href} className={navItemClass(item.href, pathname)}>
+                  <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
                     {item.label}
                   </Link>
                 )}
@@ -134,7 +152,25 @@ export default function AdminShell({
                     {item.label}
                   </span>
                 ) : (
-                  <Link href={item.href} className={navItemClass(item.href, pathname)}>
+                  <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
+                    {item.label}
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
+            Marketing
+          </p>
+          <ul className="space-y-0.5">
+            {NAV_MARKETING.map((item) => (
+              <li key={item.label}>
+                {item.disabled ? (
+                  <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
+                    {item.label}
+                  </span>
+                ) : (
+                  <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
                     {item.label}
                   </Link>
                 )}

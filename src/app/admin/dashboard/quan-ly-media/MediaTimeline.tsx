@@ -56,6 +56,9 @@ const MAX_PX_PER_DAY = 48;
 const DEFAULT_PX_PER_DAY = 8;
 const MIN_TRACK_W = 640;
 
+/** Số dự án tối đa vẽ trên timeline (giảm tải DOM). */
+const MAX_TIMELINE_PROJECTS = 10;
+
 type PersistShape = {
   labelWidth?: number;
   pixelsPerDay?: number;
@@ -1097,6 +1100,8 @@ export default function MediaTimeline({
 }: MediaTimelineProps) {
   const [localProjects, setLocalProjects] = useState<Project[]>(initialProjects);
   const [filterLamId, setFilterLamId] = useState<number | "">("");
+  /** Lọc theo `project.status`; rỗng = tất cả (kết hợp với lọc người làm). */
+  const [filterStatus, setFilterStatus] = useState<string>("");
   const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_W);
   const [pixelsPerDay, setPixelsPerDay] = useState(DEFAULT_PX_PER_DAY);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -1116,10 +1121,34 @@ export default function MediaTimeline({
     setLocalProjects(initialProjects);
   }, [initialProjects]);
 
-  const visibleProjects = useMemo(() => {
+  const poolAfterAssignee = useMemo(() => {
     if (filterLamId === "") return localProjects;
     return localProjects.filter((p) => (p.nguoi_lam ?? []).includes(filterLamId));
   }, [localProjects, filterLamId]);
+
+  const statusCounts = useMemo(() => {
+    const o: Record<string, number> = {};
+    for (const s of STATUS_ORDER) o[s] = 0;
+    for (const p of poolAfterAssignee) {
+      const st = p.status ?? "";
+      if (st in o) o[st]++;
+    }
+    return o;
+  }, [poolAfterAssignee]);
+
+  const visibleProjects = useMemo(() => {
+    let list = poolAfterAssignee;
+    if (filterStatus !== "" && STATUS_ORDER.includes(filterStatus)) {
+      list = list.filter((p) => p.status === filterStatus);
+    }
+    const sorted = [...list].sort((a, b) => {
+      const da = parseDate(a.start_date)?.getTime() ?? 0;
+      const db = parseDate(b.start_date)?.getTime() ?? 0;
+      if (da !== db) return da - db;
+      return a.id - b.id;
+    });
+    return sorted.slice(0, MAX_TIMELINE_PROJECTS);
+  }, [poolAfterAssignee, filterStatus]);
 
   useEffect(() => {
     try {
@@ -1335,19 +1364,6 @@ export default function MediaTimeline({
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em", color: TEXT }}>
               Media timeline
             </h2>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: TEXT_MUTED }}>
-              {localProjects.length} dự án
-              {filterLamId !== "" ? (
-                <>
-                  {" "}
-                  · hiển thị {visibleProjects.length}
-                </>
-              ) : null}
-              {" · "}
-              <code style={{ fontSize: 11 }}>mkt_quan_ly_media</code>
-              {" · "}
-              <strong>Shift + cuộn</strong> trên timeline — zoom neo tại <strong>Hôm nay</strong>
-            </p>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: TEXT_MUTED }}>
@@ -1411,17 +1427,36 @@ export default function MediaTimeline({
             </button>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: TEXT_MUTED, fontWeight: 600 }}>Trạng thái:</span>
           {STATUS_ORDER.map((s) => {
             const m = STATUS_META[s];
-            const count = grouped[s]?.length ?? 0;
-            if (!count) return null;
+            const count = statusCounts[s] ?? 0;
+            const active = filterStatus === s;
             return (
-              <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: TEXT_MUTED }}>
+              <button
+                key={s}
+                type="button"
+                onClick={() => setFilterStatus((prev) => (prev === s ? "" : s))}
+                title={active ? "Bấm lần nữa để bỏ lọc" : "Lọc timeline theo trạng thái"}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 12,
+                  color: active ? TEXT : TEXT_MUTED,
+                  fontWeight: active ? 700 : 500,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  border: active ? `1px solid ${m.color}` : `1px solid ${BORDER}`,
+                  background: active ? `${m.color}14` : "#fff",
+                  cursor: "pointer",
+                }}
+              >
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: m.dot, display: "inline-block" }} />
                 {m.label}
-                <span style={{ color: "#bbb" }}>({count})</span>
-              </div>
+                <span style={{ color: active ? m.color : "#bbb" }}>({count})</span>
+              </button>
             );
           })}
         </div>

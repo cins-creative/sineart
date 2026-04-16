@@ -5,7 +5,8 @@ import { Suspense } from "react";
 import AdminShell from "@/app/admin/_components/AdminShell";
 import { ADMIN_SESSION_COOKIE } from "@/lib/admin/constants";
 import { verifyAdminSessionToken } from "@/lib/admin/jwt-admin";
-import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
+import { resolveDashboardNavAccess } from "@/lib/admin/dashboard-nav-visibility";
+import { fetchAdminStaffShellPhongTenPhongs, fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +22,15 @@ export default async function AdminDashboardLayout({
   let staffRole: string | null = null;
   let staffAvatar: string | null = null;
   const supabase = createServiceRoleClient();
+  let dashboardNav = resolveDashboardNavAccess(null, []);
   if (supabase) {
-    const profile = await fetchAdminStaffShellProfile(supabase, session.staffId);
+    const [profile, phongTenPhongs] = await Promise.all([
+      fetchAdminStaffShellProfile(supabase, session.staffId),
+      fetchAdminStaffShellPhongTenPhongs(supabase, session.staffId),
+    ]);
     staffRole = profile.vai_tro;
     staffAvatar = profile.avatar;
+    dashboardNav = resolveDashboardNavAccess(profile.vai_tro, phongTenPhongs);
   }
 
   return (
@@ -34,6 +40,7 @@ export default async function AdminDashboardLayout({
         staffEmail={session.email}
         staffRole={staffRole}
         staffAvatarUrl={staffAvatar}
+        dashboardNav={dashboardNav}
       >
         {children}
       </AdminShell>

@@ -37,6 +37,7 @@ import { useRouter } from "next/navigation";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import {
+  createNhanSu,
   deleteHrBangTinhLuongFull,
   syncHrNhanSuPhong,
   updateNhanSuAvatar,
@@ -432,6 +433,9 @@ const inpEdit =
   "w-full rounded-xl border border-black/[0.08] bg-[#F5F7F7] px-3 py-2.5 text-[13px] font-medium text-[#1a1a2e] outline-none transition focus:border-[#BC8AF9] focus:bg-white";
 
 const STATUS_FORM_OPTIONS = ["Đang làm", "Thử việc", "Nghỉ"] as const;
+
+/** Giống Framer — `HINH_THUC_COLOR` / form tạo NV. */
+const HINH_THUC_FORM_OPTIONS = ["Fulltime", "Theo buổi", "Theo sản phẩm"] as const;
 
 function statusForForm(raw: string | null): string {
   const s = statusNormLabel(raw);
@@ -1009,6 +1013,330 @@ function StaffAvatarField({
       />
       {saveErr ? <p className="m-0 text-[11px] font-semibold text-red-600">{saveErr}</p> : null}
     </div>
+  );
+}
+
+/** Modal tạo `hr_nhan_su` + `hr_nhan_su_phong` — flow tương đương Framer `createNhanSu` / `setPhongForNhanSu`. */
+function StaffCreateModal({
+  onClose,
+  onCreated,
+  chiNhanhById,
+  banById,
+  phongToBanId,
+  allPhongOptions,
+}: {
+  onClose: () => void;
+  onCreated: (row: AdminNhanSuRow) => void;
+  chiNhanhById: Record<number, string>;
+  banById: Record<number, string>;
+  phongToBanId: Record<number, number>;
+  allPhongOptions: AdminPhongOption[];
+}) {
+  const [fullName, setFullName] = useState("");
+  const [chiNhanhId, setChiNhanhId] = useState<string>("");
+  const [vaiTro, setVaiTro] = useState("nhan_vien");
+  const [status, setStatus] = useState<string>("Đang làm");
+  const [hinhThuc, setHinhThuc] = useState<string>("Fulltime");
+  const [ngaySinh, setNgaySinh] = useState("");
+  const [saStart, setSaStart] = useState("");
+  const [email, setEmail] = useState("");
+  const [sdt, setSdt] = useState("");
+  const [phongDraftIds, setPhongDraftIds] = useState<number[]>([]);
+  const [phongListOpen, setPhongListOpen] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  const branchOptions = useMemo(
+    () =>
+      Object.entries(chiNhanhById)
+        .map(([id, ten]) => ({ id: Number(id), ten }))
+        .filter((x) => Number.isFinite(x.id) && x.id > 0)
+        .sort((a, b) => a.ten.localeCompare(b.ten, "vi")),
+    [chiNhanhById],
+  );
+
+  const displayBanIds = useMemo(() => {
+    const set = new Set<number>();
+    for (const pid of phongDraftIds) {
+      const b = phongToBanId[pid];
+      if (b != null && b > 0) set.add(b);
+    }
+    return [...set].sort((a, b) => a - b);
+  }, [phongDraftIds, phongToBanId]);
+
+  const phongTen = useCallback(
+    (pid: number) => allPhongOptions.find((p) => p.id === pid)?.ten ?? `Phòng #${pid}`,
+    [allPhongOptions],
+  );
+
+  const phongOrphanIds = useMemo(
+    () => phongDraftIds.filter((id) => !allPhongOptions.some((p) => p.id === id)),
+    [phongDraftIds, allPhongOptions],
+  );
+
+  const togglePhongId = useCallback((id: number, nextChecked: boolean) => {
+    setPhongDraftIds((xs) => {
+      const has = xs.includes(id);
+      if (nextChecked && !has) return [...xs, id];
+      if (!nextChecked && has) return xs.filter((x) => x !== id);
+      return xs;
+    });
+  }, []);
+
+  const submit = async () => {
+    if (!fullName.trim()) {
+      setErr("Nhập họ tên nhân viên.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    const chi = chiNhanhId.trim() === "" ? null : Number(chiNhanhId);
+    if (chiNhanhId.trim() !== "" && !Number.isFinite(chi)) {
+      setErr("Chi nhánh không hợp lệ.");
+      setBusy(false);
+      return;
+    }
+    const r = await createNhanSu({
+      full_name: fullName.trim(),
+      chi_nhanh_id: chi,
+      vai_tro: vaiTro,
+      status,
+      hinh_thuc_tinh_luong: hinhThuc,
+      phong_ids: phongDraftIds,
+      ngay_sinh: ngaySinh.trim() || null,
+      sa_startdate: saStart.trim() || null,
+      email: email.trim() || null,
+      sdt: sdt.trim() || null,
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    onCreated(r.row);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 24, opacity: 0 }}
+        transition={{ type: "spring", damping: 28, stiffness: 380 }}
+        className="flex max-h-[100dvh] w-full max-w-[520px] flex-col overflow-hidden rounded-t-2xl bg-white shadow-[0_24px_64px_rgba(0,0,0,0.18)] sm:max-h-[92vh] sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-black/[0.06] px-5 py-4">
+          <div className="min-w-0">
+            <div className="text-[17px] font-extrabold text-[#1a1a2e]">Thêm nhân viên mới</div>
+            <div className="mt-0.5 text-[11px] text-[#888]">Lưu vào bảng hr_nhan_su — có thể chỉnh lương / bảng lương sau.</div>
+          </div>
+          <button
+            type="button"
+            aria-label="Đóng"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#EAEAEA] bg-[#fafafa] text-[#666] transition hover:bg-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-[13px]">
+          <SectionTitle>Cơ bản</SectionTitle>
+          <FieldRow label="Tên nhân viên *">
+            <input
+              className={inpEdit}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Họ và tên"
+              autoComplete="name"
+            />
+          </FieldRow>
+          <FieldRow label="Chi nhánh">
+            <select
+              className={cn(inpEdit, "bg-white")}
+              value={chiNhanhId}
+              onChange={(e) => setChiNhanhId(e.target.value)}
+            >
+              <option value="">— Chưa gán —</option>
+              {branchOptions.map((b) => (
+                <option key={b.id} value={String(b.id)}>
+                  {b.ten}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+          <FieldRow label="Vai trò">
+            <select className={cn(inpEdit, "bg-white")} value={vaiTro} onChange={(e) => setVaiTro(e.target.value)}>
+              <option value="nhan_vien">Nhân viên</option>
+              <option value="quan_ly">Quản lý</option>
+              <option value="admin">Admin</option>
+            </select>
+          </FieldRow>
+          <FieldRow label="Tình trạng">
+            <select className={cn(inpEdit, "bg-white")} value={status} onChange={(e) => setStatus(e.target.value)}>
+              {STATUS_FORM_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+          <FieldRow label="Hình thức lương">
+            <select className={cn(inpEdit, "bg-white")} value={hinhThuc} onChange={(e) => setHinhThuc(e.target.value)}>
+              {HINH_THUC_FORM_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+
+          <SectionTitle>Liên hệ</SectionTitle>
+          <FieldRow label="SĐT">
+            <input className={inpEdit} value={sdt} onChange={(e) => setSdt(e.target.value)} inputMode="tel" />
+          </FieldRow>
+          <FieldRow label="Email">
+            <input className={inpEdit} value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
+          </FieldRow>
+
+          <SectionTitle>Thời gian</SectionTitle>
+          <FieldRow label="Ngày sinh">
+            <input type="date" className={cn(inpEdit, "bg-white")} value={ngaySinh} onChange={(e) => setNgaySinh(e.target.value)} />
+          </FieldRow>
+          <FieldRow label="Ngày vào Sine Art">
+            <input type="date" className={cn(inpEdit, "bg-white")} value={saStart} onChange={(e) => setSaStart(e.target.value)} />
+          </FieldRow>
+
+          <SectionTitle>Phòng ban</SectionTitle>
+          <FieldRow label="Thuộc phòng">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-start gap-2">
+                <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                  {phongDraftIds.length === 0 ? (
+                    <span className="text-[12px] leading-8 text-[#AAA]">Chưa chọn phòng</span>
+                  ) : (
+                    phongDraftIds.map((pid) => (
+                      <span
+                        key={pid}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#F8C4DC] bg-[#FFF5F9] px-2.5 py-1 text-[11px] font-bold text-[#C2185B]"
+                      >
+                        {phongTen(pid)}
+                        <button
+                          type="button"
+                          aria-label={`Bỏ ${phongTen(pid)}`}
+                          className="ml-0.5 flex h-5 w-5 items-center justify-center rounded-full text-[#C2185B] hover:bg-[#F8C4DC]/60"
+                          onClick={() => togglePhongId(pid, false)}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+                <button
+                  type="button"
+                  aria-expanded={phongListOpen}
+                  title={phongListOpen ? "Thu gọn" : "Chọn phòng"}
+                  onClick={() => setPhongListOpen((o) => !o)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/[0.08] bg-white text-[#555] shadow-sm transition hover:bg-[#fafafa]"
+                >
+                  {phongListOpen ? <ChevronUp size={18} className="opacity-80" aria-hidden /> : <Pencil size={16} className="opacity-80" aria-hidden />}
+                </button>
+              </div>
+              {phongListOpen ? (
+                <div
+                  className="max-h-[min(40vh,260px)] overflow-y-auto rounded-xl border border-black/[0.08] bg-white px-1 py-1.5"
+                  role="group"
+                  aria-label="Chọn phòng"
+                >
+                  {allPhongOptions.length === 0 && phongOrphanIds.length === 0 ? (
+                    <p className="m-0 px-2 py-2 text-[12px] text-[#AAA]">Chưa có danh sách phòng.</p>
+                  ) : (
+                    <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+                      {phongOrphanIds.map((id) => (
+                        <li key={`orphan-${id}`}>
+                          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-[#F5F7F7]">
+                            <input
+                              type="checkbox"
+                              checked
+                              onChange={() => togglePhongId(id, false)}
+                              className="h-4 w-4 shrink-0 rounded border-[#CCC] accent-[#E91E8C]"
+                            />
+                            <span className="min-w-0 font-medium text-[#1a1a2e]">{phongTen(id)}</span>
+                          </label>
+                        </li>
+                      ))}
+                      {allPhongOptions.map((p) => {
+                        const checked = phongDraftIds.includes(p.id);
+                        return (
+                          <li key={p.id}>
+                            <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-[#F5F7F7]">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => togglePhongId(p.id, e.target.checked)}
+                                className="h-4 w-4 shrink-0 rounded border-[#CCC] accent-[#E91E8C]"
+                              />
+                              <span className="min-w-0 font-medium text-[#1a1a2e]">{p.ten}</span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </FieldRow>
+          <FieldRow label="Thuộc ban (suy ra từ phòng)">
+            <div className="flex flex-wrap gap-1.5">
+              {displayBanIds.length === 0 ? (
+                <span className="text-[12px] text-[#AAA]">—</span>
+              ) : (
+                displayBanIds.map((bid) => <BanPill key={bid} label={banById[bid] ?? `Ban #${bid}`} />)
+              )}
+            </div>
+          </FieldRow>
+
+          {err ? <p className="m-0 text-[11px] font-semibold text-red-600">{err}</p> : null}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-black/[0.06] bg-[#fafafa] px-5 py-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] font-bold text-[#555] shadow-sm transition hover:bg-white disabled:opacity-45"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void submit()}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:opacity-95 disabled:opacity-45"
+          >
+            <Plus size={15} aria-hidden />
+            {busy ? "Đang tạo…" : "Tạo nhân viên"}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -1899,6 +2227,8 @@ export default function QuanLyNhanSuView({
   const [statusFilter, setStatusFilter] = useState<StatusFilterKey>("all");
   const [branchId, setBranchId] = useState<number | "all">("all");
   const [selected, setSelected] = useState<AdminNhanSuRow | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const router = useRouter();
   const [staffListPage, setStaffListPage] = useState(1);
   const [cols, setCols] = useState<Record<ColKey, boolean>>(DEFAULT_COLS);
   const [colsHydrated, setColsHydrated] = useState(false);
@@ -2070,7 +2400,10 @@ export default function QuanLyNhanSuView({
             </div>
             <button
               type="button"
-              onClick={() => window.alert("Thêm nhân viên: tính năng sẽ bổ sung sau.")}
+              onClick={() => {
+                setSelected(null);
+                setCreateOpen(true);
+              }}
               className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-3 text-[12px] font-bold text-white hover:opacity-95"
             >
               <Plus size={15} strokeWidth={2.5} />
@@ -2197,7 +2530,10 @@ export default function QuanLyNhanSuView({
                           "group cursor-pointer border-b border-[#f3f3f3] transition-colors last:border-0",
                           "hover:bg-[#fafafa]"
                         )}
-                        onClick={() => setSelected(r)}
+                        onClick={() => {
+                          setCreateOpen(false);
+                          setSelected(r);
+                        }}
                       >
                         <td className="sticky left-0 z-[1] whitespace-nowrap border-r border-[#f0f0f0] bg-white px-2 py-2.5 pl-3 text-[11px] tabular-nums text-[#AAA] group-hover:bg-[#fafafa]">
                           {rowOrdinal}
@@ -2380,6 +2716,21 @@ export default function QuanLyNhanSuView({
       </div>
 
       <AnimatePresence>
+        {createOpen ? (
+          <StaffCreateModal
+            key="create-staff"
+            onClose={() => setCreateOpen(false)}
+            onCreated={(row) => {
+              setCreateOpen(false);
+              setSelected(row);
+              void router.refresh();
+            }}
+            chiNhanhById={chiNhanhById}
+            banById={banById}
+            phongToBanId={phongToBanId}
+            allPhongOptions={allPhongOptions}
+          />
+        ) : null}
         {selected ? (
           <StaffDetailPanel
             row={selected}

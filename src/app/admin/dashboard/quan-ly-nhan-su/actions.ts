@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
+import { HR_NHAN_SU_SELECT_MIN, mapHrNhanSuRow, type AdminNhanSuRow } from "@/lib/data/admin-quan-ly-nhan-su";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const ADMIN_PATH = "/admin/dashboard/quan-ly-nhan-su";
@@ -107,6 +108,131 @@ export async function updateNhanSuThongTin(payload: NhanSuThongTinPayload): Prom
 
   revalidatePath(ADMIN_PATH);
   return { ok: true };
+}
+
+export type CreateNhanSuPayload = {
+  full_name: string;
+  chi_nhanh_id: number | null;
+  vai_tro: string | null;
+  status: string | null;
+  hinh_thuc_tinh_luong: string | null;
+  phong_ids: number[];
+  ngay_sinh?: string | null;
+  sa_startdate?: string | null;
+  email?: string | null;
+  sdt?: string | null;
+};
+
+export type CreateNhanSuResult = { ok: true; row: AdminNhanSuRow } | { ok: false; error: string };
+
+const VAI_TRO_ALLOWED = new Set(["admin", "quan_ly", "nhan_vien"]);
+
+/**
+ * Tạo bản ghi `hr_nhan_su` mới + gán phòng (`hr_nhan_su_phong`), giống flow Framer `createNhanSu` + `setPhongForNhanSu`.
+ */
+export async function createNhanSu(payload: CreateNhanSuPayload): Promise<CreateNhanSuResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) {
+    return { ok: false, error: "Phiên đăng nhập không hợp lệ. Đăng nhập lại." };
+  }
+
+  const full_name = payload.full_name.trim();
+  if (!full_name) {
+    return { ok: false, error: "Nhập họ tên nhân viên." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) {
+    return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
+  }
+
+  const toDateOrNull = (s: string | null | undefined): string | null => {
+    if (s == null || String(s).trim() === "") return null;
+    const t = String(s).trim().slice(0, 10);
+    return /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(t) ? t : null;
+  };
+
+  const trimOrNull = (s: string | null | undefined): string | null =>
+    s != null && String(s).trim() !== "" ? String(s).trim() : null;
+
+  const vaiRaw = (payload.vai_tro ?? "").trim().toLowerCase();
+  const vai_tro = VAI_TRO_ALLOWED.has(vaiRaw) ? vaiRaw : "nhan_vien";
+
+  const status =
+    payload.status != null && String(payload.status).trim() !== ""
+      ? String(payload.status).trim()
+      : "Đang làm";
+
+  const hinh_thuc_tinh_luong =
+    payload.hinh_thuc_tinh_luong != null && String(payload.hinh_thuc_tinh_luong).trim() !== ""
+      ? String(payload.hinh_thuc_tinh_luong).trim()
+      : "Fulltime";
+
+  const chi =
+    payload.chi_nhanh_id != null && Number.isFinite(Number(payload.chi_nhanh_id)) && Number(payload.chi_nhanh_id) > 0
+      ? Number(payload.chi_nhanh_id)
+      : null;
+
+  const phongIds = [...new Set(payload.phong_ids.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0))];
+
+  let ban: number | null = null;
+  if (phongIds.length > 0) {
+    const { data: phRow, error: phErr } = await supabase.from("hr_phong").select("ban").eq("id", phongIds[0]).maybeSingle();
+    if (!phErr && phRow && phRow.ban != null && Number.isFinite(Number(phRow.ban))) {
+      ban = Number(phRow.ban);
+    }
+  }
+
+  const insertBody: Record<string, unknown> = {
+    full_name,
+    chi_nhanh_id: chi,
+    vai_tro,
+    status,
+    hinh_thuc_tinh_luong,
+    ban,
+    ngay_sinh: toDateOrNull(payload.ngay_sinh ?? null),
+    sa_startdate: toDateOrNull(payload.sa_startdate ?? null),
+    email: trimOrNull(payload.email ?? null),
+    sdt: trimOrNull(payload.sdt ?? null),
+  };
+
+  const trySelects = [
+    "id, created_at, full_name, sdt, email, avatar, bank_name, bank_stk, chi_nhanh_id, status, ghi_chu, rate_thuong_co_ban, rate_thuong_hoc_vien, hinh_thuc_tinh_luong, luong_co_ban, tro_cap, \"BHXH\", so_buoi_nghi_toi_da, ngay_sinh, sa_startdate, facebook, stk_nhan_luong, hop_dong_lao_dong, thong_tin_khac, vai_tro, ban, portfolio, bio, nam_kinh_nghiem",
+    "id, created_at, full_name, sdt, email, avatar, bank_name, bank_stk, chi_nhanh_id, status, ghi_chu, rate_thuong_co_ban, rate_thuong_hoc_vien, hinh_thuc_tinh_luong, luong_co_ban, tro_cap, so_buoi_nghi_toi_da, ngay_sinh, sa_startdate, facebook, stk_nhan_luong, hop_dong_lao_dong, thong_tin_khac, vai_tro, ban, portfolio, bio, nam_kinh_nghiem",
+    HR_NHAN_SU_SELECT_MIN,
+  ];
+
+  let createdRaw: Record<string, unknown> | null = null;
+  let lastErr: string | null = null;
+  for (const sel of trySelects) {
+    const { data, error } = await supabase.from("hr_nhan_su").insert(insertBody).select(sel).maybeSingle();
+    if (!error && data && typeof data === "object") {
+      createdRaw = data as Record<string, unknown>;
+      break;
+    }
+    lastErr = error?.message ?? "insert failed";
+  }
+
+  if (!createdRaw) {
+    return { ok: false, error: lastErr ?? "Không tạo được nhân sự." };
+  }
+
+  const newId = Number(createdRaw.id);
+  if (!Number.isFinite(newId) || newId <= 0) {
+    return { ok: false, error: "Không nhận được ID nhân sự sau khi tạo." };
+  }
+
+  if (phongIds.length > 0) {
+    const rows = phongIds.map((phong_id) => ({ nhan_su_id: newId, phong_id }));
+    const { error: insPh } = await supabase.from("hr_nhan_su_phong").insert(rows);
+    if (insPh) {
+      await supabase.from("hr_nhan_su").delete().eq("id", newId);
+      return { ok: false, error: insPh.message || "Không gán được phòng — đã hủy tạo nhân sự." };
+    }
+  }
+
+  revalidatePath(ADMIN_PATH);
+  return { ok: true, row: mapHrNhanSuRow(createdRaw) };
 }
 
 export type SyncHrNhanSuPhongResult = { ok: true } | { ok: false; error: string };

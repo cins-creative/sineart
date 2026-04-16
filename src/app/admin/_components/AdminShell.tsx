@@ -3,37 +3,18 @@
 import { Home } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
-
-const DASHBOARD_OVERVIEW_HREF = "/admin/dashboard";
-/** Form order media — đặt gần Tổng quan (dùng chung, ai cũng vào được). */
-const ORDER_MEDIA_HREF = "/admin/dashboard/order-media";
-
-const NAV_MAIN: { label: string; href: string; disabled?: boolean }[] = [
-  { label: "Chi nhánh", href: "/admin/dashboard/chi-nhanh" },
-  { label: "Khóa học", href: "/admin/dashboard/khoa-hoc" },
-  { label: "Lớp học", href: "/admin/dashboard/lop-hoc" },
-  { label: "Quản lý hóa đơn", href: "/admin/dashboard/quan-ly-hoa-don" },
-  { label: "Quản lý học viên", href: "/admin/dashboard/quan-ly-hoc-vien" },
-  { label: "Thu chi khác", href: "/admin/dashboard/thu-chi-khac" },
-  { label: "Quản lý họa cụ", href: "/admin/dashboard/quan-ly-hoa-cu" },
-  { label: "Hệ thống bài tập", href: "/admin/dashboard/he-thong-bai-tap" },
-];
-
-const NAV_HR: { label: string; href: string; disabled?: boolean }[] = [
-  { label: "Nhân sự", href: "/admin/dashboard/quan-ly-nhan-su" },
-  { label: "Báo cáo tài chính", href: "/admin/dashboard/bao-cao-tai-chinh" },
-  { label: "Thống kê thu chi", href: "/admin/dashboard/thong-ke-thu-chi" },
-  { label: "Upload sao kê", href: "/admin/dashboard/sao-ke" },
-];
-
-const NAV_MARKETING: { label: string; href: string; disabled?: boolean }[] = [
-  { label: "Marketing analytics", href: "/admin/dashboard/report-mkt" },
-  { label: "Quản lý media", href: "/admin/dashboard/quan-ly-media" },
-  { label: "Quản lý bài học viên", href: "/admin/dashboard/quan-ly-bai-hoc-vien" },
-];
+import {
+  DASHBOARD_OVERVIEW_HREF,
+  NAV_MAIN,
+  NAV_HR,
+  NAV_MARKETING,
+  ORDER_MEDIA_HREF,
+} from "@/lib/admin/dashboard-nav-config";
+import type { DashboardNavAccess } from "@/lib/admin/dashboard-nav-visibility";
+import { canAccessDashboardHref } from "@/lib/admin/dashboard-nav-visibility";
 
 type Props = {
   staffName: string;
@@ -42,6 +23,8 @@ type Props = {
   staffRole: string | null;
   /** `hr_nhan_su.avatar` — hiển thị ảnh đại diện; nếu trống thì dùng chữ cái + gradient. */
   staffAvatarUrl?: string | null;
+  /** Menu sidebar theo `hr_phong.ten_phong` (allowlist href). */
+  dashboardNav: DashboardNavAccess;
   children: React.ReactNode;
 };
 
@@ -87,12 +70,30 @@ export default function AdminShell({
   staffEmail,
   staffRole,
   staffAvatarUrl,
+  dashboardNav,
   children,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [busy, setBusy] = useState(false);
+
+  const allowed = dashboardNav.allowedHrefs;
+
+  const navMainVisible = useMemo(
+    () => NAV_MAIN.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href)),
+    [allowed],
+  );
+  const navHrVisible = useMemo(
+    () => NAV_HR.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href)),
+    [allowed],
+  );
+  const navMarketingVisible = useMemo(
+    () => NAV_MARKETING.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href)),
+    [allowed],
+  );
+
+  const showOrderMedia = canAccessDashboardHref(allowed, ORDER_MEDIA_HREF);
 
   async function logout() {
     setBusy(true);
@@ -141,66 +142,82 @@ export default function AdminShell({
           <Link href={DASHBOARD_OVERVIEW_HREF} className={overviewNavClass(pathname)}>
             Tổng quan
           </Link>
-          <Link
-            href={ORDER_MEDIA_HREF}
-            className={`mb-3 mt-1 ${navItemClass(ORDER_MEDIA_HREF, pathname, searchParams)}`}
-          >
-            Order nội dung media
-          </Link>
-          <p className="mb-2 mt-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
-            Điều hành
-          </p>
-          <ul className="space-y-0.5">
-            {NAV_MAIN.map((item) => (
-              <li key={item.label}>
-                {item.disabled ? (
-                  <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
-                    {item.label}
-                  </span>
-                ) : (
-                  <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
-                    {item.label}
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
-          <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
-            Nhân sự & TC
-          </p>
-          <ul className="space-y-0.5">
-            {NAV_HR.map((item) => (
-              <li key={item.label}>
-                {item.disabled ? (
-                  <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
-                    {item.label}
-                  </span>
-                ) : (
-                  <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
-                    {item.label}
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
-          <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
-            Marketing
-          </p>
-          <ul className="space-y-0.5">
-            {NAV_MARKETING.map((item) => (
-              <li key={item.label}>
-                {item.disabled ? (
-                  <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
-                    {item.label}
-                  </span>
-                ) : (
-                  <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
-                    {item.label}
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
+          {showOrderMedia ? (
+            <Link
+              href={ORDER_MEDIA_HREF}
+              className={`mb-3 mt-1 ${navItemClass(ORDER_MEDIA_HREF, pathname, searchParams)}`}
+            >
+              Order nội dung media
+            </Link>
+          ) : (
+            <div className="mb-3 mt-1" aria-hidden />
+          )}
+          {navMainVisible.length > 0 ? (
+            <>
+              <p className="mb-2 mt-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
+                Điều hành
+              </p>
+              <ul className="space-y-0.5">
+                {navMainVisible.map((item) => (
+                  <li key={item.label}>
+                    {item.disabled ? (
+                      <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
+                        {item.label}
+                      </span>
+                    ) : (
+                      <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
+                        {item.label}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {navHrVisible.length > 0 ? (
+            <>
+              <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
+                Nhân sự & TC
+              </p>
+              <ul className="space-y-0.5">
+                {navHrVisible.map((item) => (
+                  <li key={item.label}>
+                    {item.disabled ? (
+                      <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
+                        {item.label}
+                      </span>
+                    ) : (
+                      <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
+                        {item.label}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {navMarketingVisible.length > 0 ? (
+            <>
+              <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
+                Marketing
+              </p>
+              <ul className="space-y-0.5">
+                {navMarketingVisible.map((item) => (
+                  <li key={item.label}>
+                    {item.disabled ? (
+                      <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
+                        {item.label}
+                      </span>
+                    ) : (
+                      <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
+                        {item.label}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </nav>
       </aside>
 

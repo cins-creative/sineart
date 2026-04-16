@@ -55,7 +55,8 @@ function nInt(raw: unknown): number | null {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
-function mapRow(raw: Record<string, unknown>): AdminNhanSuRow {
+/** Map một dòng PostgREST `hr_nhan_su` → `AdminNhanSuRow` (dùng sau insert / patch). */
+export function mapHrNhanSuRow(raw: Record<string, unknown>): AdminNhanSuRow {
   const id = Number(raw.id);
   const bankStk = raw.bank_stk != null ? String(raw.bank_stk).trim() || null : null;
   const stkNhan = raw.stk_nhan_luong != null ? String(raw.stk_nhan_luong).trim() || null : null;
@@ -105,12 +106,13 @@ const SELECT_FULL =
 const SELECT_NO_BHXH =
   "id, created_at, full_name, sdt, email, avatar, bank_name, bank_stk, chi_nhanh_id, status, ghi_chu, rate_thuong_co_ban, rate_thuong_hoc_vien, hinh_thuc_tinh_luong, luong_co_ban, tro_cap, so_buoi_nghi_toi_da, ngay_sinh, sa_startdate, facebook, stk_nhan_luong, hop_dong_lao_dong, thong_tin_khac, vai_tro, ban, portfolio, bio, nam_kinh_nghiem";
 
-const SELECT_MIN = "id, full_name, sdt, email, avatar";
+/** Dùng sau `insert` khi `SELECT_FULL` có thể lỗi cột. */
+export const HR_NHAN_SU_SELECT_MIN = "id, full_name, sdt, email, avatar";
 
 async function fetchStaffRows(
   supabase: SupabaseClient
 ): Promise<{ rows: AdminNhanSuRow[]; usedMinimalSelect: boolean; error: string | null }> {
-  const attempts = [SELECT_FULL, SELECT_NO_BHXH, SELECT_MIN];
+  const attempts = [SELECT_FULL, SELECT_NO_BHXH, HR_NHAN_SU_SELECT_MIN];
   let usedMinimalSelect = false;
 
   for (const select of attempts) {
@@ -120,10 +122,10 @@ async function fetchStaffRows(
       .order("full_name", { ascending: true });
 
     if (!error) {
-      if (select === SELECT_MIN) usedMinimalSelect = true;
+      if (select === HR_NHAN_SU_SELECT_MIN) usedMinimalSelect = true;
       const list = (data ?? []) as unknown as Record<string, unknown>[];
       return {
-        rows: list.map(mapRow).filter((r) => r.id > 0),
+        rows: list.map(mapHrNhanSuRow).filter((r) => r.id > 0),
         usedMinimalSelect,
         error: null,
       };

@@ -7,6 +7,12 @@ export type AdminStaffShellProfile = {
   avatar: string | null;
 };
 
+function unwrapJoin<T extends Record<string, unknown>>(v: T | T[] | null | undefined): T | null {
+  if (v == null) return null;
+  if (Array.isArray(v)) return (v[0] as T | undefined) ?? null;
+  return v;
+}
+
 /**
  * Vai trò + ảnh đại diện sidebar admin từ `hr_nhan_su`.
  */
@@ -33,4 +39,34 @@ export async function fetchAdminStaffShellProfile(
     a != null && String(a).trim() ? String(a).trim() : null;
 
   return { vai_tro, avatar };
+}
+
+/**
+ * Các `hr_phong.ten_phong` mà nhân sự thuộc (qua `hr_nhan_su_phong` → `hr_phong`).
+ * Dùng phân quyền menu dashboard.
+ */
+export async function fetchAdminStaffShellPhongTenPhongs(
+  supabase: SupabaseClient,
+  staffId: number,
+): Promise<string[]> {
+  if (!Number.isFinite(staffId) || staffId <= 0) return [];
+
+  const { data, error } = await supabase
+    .from("hr_nhan_su_phong")
+    .select("hr_phong!inner(ten_phong)")
+    .eq("nhan_su_id", staffId);
+
+  if (error || !data?.length) return [];
+
+  const out = new Set<string>();
+  for (const row of data as { hr_phong?: unknown }[]) {
+    const ph = unwrapJoin(row.hr_phong as Record<string, unknown> | Record<string, unknown>[] | null);
+    if (!ph) continue;
+    const ten =
+      typeof (ph as { ten_phong?: unknown }).ten_phong === "string"
+        ? String((ph as { ten_phong: string }).ten_phong).trim()
+        : "";
+    if (ten) out.add(ten);
+  }
+  return [...out];
 }

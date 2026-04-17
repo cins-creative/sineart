@@ -1,3 +1,4 @@
+import { isValidStudentEmail } from "@/lib/donghocphi/profile-step1";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import {
   firstApplicableComboDiscountDong,
@@ -195,7 +196,7 @@ export async function createDongHocPhiOrder(
   const sdt = student.sdt?.trim() ?? "";
   const email = student.email?.trim().toLowerCase() ?? "";
   const fb = student.facebook?.trim() ?? "";
-  if (name.length < 2 || sdt.length < 8 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || fb.length < 1) {
+  if (name.length < 2 || sdt.length < 8 || !isValidStudentEmail(email) || fb.length < 1) {
     return { ok: false, error: "Thiếu hoặc sai thông tin học viên (họ tên, SĐT, email, Facebook).", code: "VALIDATION" };
   }
   if (!lines.length) {

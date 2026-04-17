@@ -9,6 +9,7 @@ import {
   saveClassroomSession,
   type ClassroomSessionRecord,
 } from "@/lib/phong-hoc/classroom-session";
+import { isValidStudentEmail, STUDENT_EMAIL_REQUIREMENT_VI } from "@/lib/donghocphi/profile-step1";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
@@ -25,10 +26,6 @@ function buildDongHocPhiUrl(
   if (extra?.intent === "new") q.set("intent", "new");
   const qs = q.toString();
   return qs ? `/donghocphi?${qs}` : "/donghocphi";
-}
-
-function isValidEmail(s: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 }
 
 export type DongHocPhiEmailGateModalProps = {
@@ -103,8 +100,8 @@ export default function DongHocPhiEmailGateModal({
 
   const handleContinueWithEmail = useCallback(async () => {
     const t = email.trim();
-    if (!isValidEmail(t)) {
-      setError("Vui lòng nhập email hợp lệ.");
+    if (!isValidStudentEmail(t)) {
+      setError(STUDENT_EMAIL_REQUIREMENT_VI);
       return;
     }
     setError("");
@@ -299,13 +296,14 @@ export default function DongHocPhiEmailGateModal({
           <p className="kd-dhp-block-hint">
             Hệ thống kiểm tra email trước khi chuyển trang thanh toán.
           </p>
+          <p className="kd-dhp-block-hint">{STUDENT_EMAIL_REQUIREMENT_VI}</p>
           <input
             ref={inputRef}
             className={`kd-dhp-input${error ? " kd-dhp-input--err" : ""}`}
             type="email"
             name="dhp-email"
             autoComplete="email"
-            placeholder="vd: tenban@gmail.com"
+            placeholder="vd. tenban@gmail.com — Outlook/Hotmail, Yahoo…"
             value={email}
             disabled={checkingEmail}
             onChange={(e) => {

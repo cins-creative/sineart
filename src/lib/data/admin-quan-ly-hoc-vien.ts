@@ -71,6 +71,17 @@ function nId(v: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/** `ql_thong_tin_hoc_vien.sdt` — PostgREST có thể trả bigint/số; bỏ qua kiểu không phải chuỗi số. */
+function coerceQlhvSdt(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === "boolean" || typeof v === "object") return null;
+  const s =
+    typeof v === "bigint"
+      ? v.toString().trim()
+      : String(v).replace(/^[\s"'`]+|[\s"'`]+$/g, "").trim();
+  return s === "" ? null : s;
+}
+
 /**
  * Gói dữ liệu cho trang admin «Quản lý học viên».
  *
@@ -273,7 +284,7 @@ export async function fetchAdminQuanLyHocVienBundle(supabase: SupabaseClient): P
         full_name: String(r.full_name ?? "").trim() || "—",
         email: r.email != null ? String(r.email).trim() || null : null,
         avatar: r.avatar != null && String(r.avatar).trim() !== "" ? String(r.avatar).trim() : null,
-        sdt: r.sdt != null ? String(r.sdt).trim() || null : null,
+        sdt: coerceQlhvSdt(r.sdt),
         is_hoc_vien_mau: Boolean(r.is_hoc_vien_mau),
         facebook: r.facebook != null ? String(r.facebook).trim() || null : null,
         sex: r.sex != null ? String(r.sex).trim() || null : null,

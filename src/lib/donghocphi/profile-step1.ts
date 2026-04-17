@@ -11,8 +11,57 @@ export type QlHocVienStep1Fields = {
   avatar: string | null;
 };
 
+/**
+ * Các domain email «cá nhân» được chấp nhận (Gmail, Yahoo, Outlook, …).
+ * Không chấp nhận email doanh nghiệp / tên miền tùy chỉnh — bổ sung domain tại đây nếu cần.
+ */
+const STUDENT_EMAIL_ALLOWED_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "yahoo.co.uk",
+  "yahoo.fr",
+  "yahoo.de",
+  "yahoo.it",
+  "yahoo.es",
+  "yahoo.ca",
+  "yahoo.com.br",
+  "yahoo.com.au",
+  "yahoo.co.jp",
+  "yahoo.com.vn",
+  "ymail.com",
+  "rocketmail.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "proton.me",
+  "protonmail.com",
+  "aol.com",
+  "mail.com",
+  "gmx.com",
+  "gmx.de",
+  "gmx.net",
+  "zoho.com",
+  "tutanota.com",
+  "tutamail.com",
+  "fastmail.com",
+  "hey.com",
+]);
+
+/** Thông báo hiển thị khi email sai định dạng hoặc không thuộc nhà cung cấp được hỗ trợ. */
+export const STUDENT_EMAIL_REQUIREMENT_VI =
+  "Vui lòng dùng email cá nhân phổ biến (Gmail, Hotmail/Outlook, Yahoo, iCloud, Proton, …). Không dùng email doanh nghiệp hoặc tên miền riêng.";
+
 export function isValidStudentEmail(s: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+  const t = s.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return false;
+  const at = t.lastIndexOf("@");
+  const domain = at >= 0 ? t.slice(at + 1) : "";
+  return STUDENT_EMAIL_ALLOWED_DOMAINS.has(domain);
 }
 
 /** Đủ điều kiện bỏ qua bước 1 / tạo đơn — khớp validate nút bước 1 + API create-order */

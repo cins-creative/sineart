@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
   useTransition,
+  type ComponentPropsWithoutRef,
   type ReactNode,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -57,15 +58,23 @@ import { cn } from "@/lib/utils";
 
 const TT_ORDER: Record<string, number> = {
   "Đang học": 0,
-  Nghỉ: 1,
+  "Chưa học": 1,
+  Nghỉ: 2,
 };
 
 const TT_COLOR: Record<string, { bg: string; text: string }> = {
   "Đang học": { bg: "#dcfce7", text: "#16a34a" },
+  "Chưa học": { bg: "#e2e8f0", text: "#475569" },
   Nghỉ: { bg: "#fee2e2", text: "#dc2626" },
 };
 
 type LopOpt = { id: number; name: string; mon_hoc: number | null };
+
+/** Lọc danh sách theo `computeOverallStatus` (gộp mọi khoá của HV). */
+type QuanLyHvStatusFilter = "all" | "Đang học" | "Chưa học" | "Nghỉ";
+
+/** Lọc theo số khoá đang còn hạn (`deriveEnrollmentStatus === "Đang học"`). */
+type QuanLyHvDangKhoaBucket = null | "1" | "2" | "3+";
 
 const LOAI_KHOA_OPTIONS = ["Luyện thi", "Digital", "Kids", "Bổ trợ"] as const;
 const SEX_OPTIONS = ["Nam", "Nữ", "Khác"] as const;
@@ -122,10 +131,10 @@ function fmtDate(d: string | null): string {
   }
 }
 
-/** Bỏ dấu ngoặc / quote thừa thường gặp khi nhập SĐT. */
-function displaySdt(raw: string | null): string {
-  if (!raw) return "—";
-  const t = raw.replace(/^[\s"'`]+|[\s"'`]+$/g, "").trim();
+/** Bỏ dấu ngoặc / quote thừa thường gặp khi nhập SĐT (`ql_thong_tin_hoc_vien.sdt`). */
+function displaySdt(raw: string | number | null | undefined): string {
+  if (raw == null) return "—";
+  const t = String(raw).replace(/^[\s"'`]+|[\s"'`]+$/g, "").trim();
   return t || "—";
 }
 
@@ -148,17 +157,26 @@ function isoDateInput(d: string | null): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
 }
 
-/** Tình trạng khoá từ ngày cuối kỳ trên `hp_thu_hp_chi_tiet` (không cột `status` ghi danh). */
-function deriveEnrollmentStatus(k: AdminQlhvEnrollment): "Đang học" | "Nghỉ" {
-  if (!k.ngay_cuoi_ky) return "Đang học";
+const ISO_YMD = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Đã có kỳ học phí trên `hp_thu_hp_chi_tiet` (đủ ngày đầu + cuối kỳ). */
+function hasHpTuitionKy(k: AdminQlhvEnrollment): boolean {
+  const dau = (k.ngay_dau_ky ?? "").trim().slice(0, 10);
+  const cuoi = (k.ngay_cuoi_ky ?? "").trim().slice(0, 10);
+  return ISO_YMD.test(dau) && ISO_YMD.test(cuoi);
+}
+
+/** Tình trạng khoá từ kỳ HP (`hp_thu_hp_chi_tiet`); chưa có kỳ → «Chưa học». */
+function deriveEnrollmentStatus(k: AdminQlhvEnrollment): "Chưa học" | "Đang học" | "Nghỉ" {
+  if (!hasHpTuitionKy(k)) return "Chưa học";
   try {
-    const e = new Date(k.ngay_cuoi_ky);
+    const e = new Date((k.ngay_cuoi_ky ?? "").trim().slice(0, 10));
     e.setHours(0, 0, 0, 0);
     const t = new Date();
     t.setHours(0, 0, 0, 0);
     return e.getTime() >= t.getTime() ? "Đang học" : "Nghỉ";
   } catch {
-    return "Đang học";
+    return "Chưa học";
   }
 }
 
@@ -166,6 +184,7 @@ function computeOverallStatus(khs: AdminQlhvEnrollment[]): string {
   if (!khs?.length) return "Nghỉ";
   const statuses = khs.map(deriveEnrollmentStatus);
   if (statuses.includes("Đang học")) return "Đang học";
+  if (statuses.includes("Chưa học")) return "Chưa học";
   return "Nghỉ";
 }
 
@@ -234,11 +253,15 @@ function TinhTrangBadge({ value }: { value: string }) {
   );
 }
 
+/** Hết kỳ (âm ngày) = đã «Nghỉ» — không hiển thị «nợ», chỉ dấu gạch. */
 function DaysLabel({ days }: { days: number }) {
-  const color = days < 0 ? "#EE5CA2" : days <= 5 ? "#F8A568" : "#16a34a";
+  if (days < 0) {
+    return <span className="text-xs font-bold text-slate-400">—</span>;
+  }
+  const color = days <= 5 ? "#F8A568" : "#16a34a";
   return (
     <span className="text-xs font-bold" style={{ color }}>
-      {days < 0 ? `Nợ ${Math.abs(days)} ngày` : `${days} ngày`}
+      {days} ngày
     </span>
   );
 }
@@ -541,7 +564,11 @@ function EnrollmentCard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <TinhTrangBadge value={tinhTrangKy} />
-          <DaysLabel days={daysPersisted} />
+          {tinhTrangKy === "Chưa học" ? (
+            <span className="text-[10px] font-bold text-slate-400">—</span>
+          ) : (
+            <DaysLabel days={daysPersisted} />
+          )}
           {canDelete ? (
             <button
               type="button"
@@ -660,7 +687,11 @@ function EnrollmentCard({
                   </div>
                 </div>
                 <div className="flex justify-end pt-0.5">
-                  <DaysLabel days={daysKyPreview} />
+                  {!editKy && tinhTrangKy === "Chưa học" ? (
+                    <span className="text-[10px] font-bold text-slate-400">—</span>
+                  ) : (
+                    <DaysLabel days={daysKyPreview} />
+                  )}
                 </div>
               </div>
               <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-2">
@@ -774,11 +805,24 @@ function EnrollmentCard({
   );
 }
 
-function HvInfoRow({ label, value }: { label: string; value: ReactNode }) {
+function HvInfoRow({
+  label,
+  value,
+  valueProps,
+}: {
+  label: string;
+  value: ReactNode;
+  valueProps?: ComponentPropsWithoutRef<"div">;
+}) {
   return (
     <div className="flex min-w-0 items-start gap-2 border-b border-[#f0f0f0] py-1 last:border-0">
       <div className="w-[5.5rem] shrink-0 pt-px text-[9px] font-bold uppercase leading-tight text-[#AAA]">{label}</div>
-      <div className="min-w-0 flex-1 break-words text-left text-[12px] font-semibold leading-snug text-gray-800">{value}</div>
+      <div
+        className="min-w-0 flex-1 break-words text-left text-[12px] font-semibold leading-snug text-gray-800"
+        {...valueProps}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -1455,7 +1499,11 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
           <>
             <HvInfoRow label="Họ tên" value={student.full_name?.trim() || "—"} />
             <HvInfoRow label="Email" value={student.email?.trim() || "—"} />
-            <HvInfoRow label="SĐT" value={displaySdt(student.sdt)} />
+            <HvInfoRow
+              label="SĐT"
+              value={displaySdt(student.sdt)}
+              valueProps={{ "data-supabase-column": "sdt" }}
+            />
             <HvInfoRow
               label="Facebook"
               value={
@@ -1480,7 +1528,13 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
             />
             <HvInfoRow
               label="Ngày kết thúc"
-              value={ngayKetThucTinh ? fmtDate(ngayKetThucTinh) : computeOverallStatus(enrollments) === "Đang học" ? "Đang học" : "—"}
+              value={(() => {
+                const overall = computeOverallStatus(enrollments);
+                if (ngayKetThucTinh) return fmtDate(ngayKetThucTinh);
+                if (overall === "Đang học") return "Đang học";
+                if (overall === "Chưa học") return "Chưa học";
+                return "—";
+              })()}
             />
             <HvInfoRow label="Số tháng học" value={soThangTaiSine} />
             <HvInfoRow label="Năm thi" value={student.nam_thi != null ? String(student.nam_thi) : "—"} />
@@ -1716,6 +1770,64 @@ function AddKhoaModal({
   );
 }
 
+type QlhvStatCardTone = "slate" | "emerald" | "amber" | "rose" | "violet" | "sky";
+
+function QlhvStatCard({
+  label,
+  value,
+  tone = "slate",
+  title,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number | string;
+  tone?: QlhvStatCardTone;
+  /** Tooltip — mô tả thêm khi cần. */
+  title?: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  const toneCls =
+    tone === "emerald"
+      ? "border-emerald-200/90 bg-emerald-50/50"
+      : tone === "amber"
+        ? "border-amber-200/90 bg-amber-50/45"
+        : tone === "rose"
+          ? "border-rose-200/90 bg-rose-50/45"
+          : tone === "violet"
+            ? "border-violet-200/90 bg-violet-50/40"
+            : tone === "sky"
+              ? "border-sky-200/90 bg-sky-50/45"
+              : "border-slate-200/90 bg-white";
+  const ring = active ? "ring-2 ring-[#BC8AF9] ring-offset-1 ring-offset-white" : "";
+  const base = cn(
+    "flex min-h-[3.25rem] w-full min-w-0 flex-col justify-center rounded-lg border px-2 py-1.5 text-left shadow-sm sm:min-h-[3.5rem]",
+    onClick ? "cursor-pointer transition hover:brightness-[0.97] active:brightness-95" : "cursor-default",
+    toneCls,
+    ring
+  );
+  const tip = title ?? label;
+  const inner = (
+    <>
+      <p className="line-clamp-2 text-[10px] font-semibold leading-snug text-slate-600">{label}</p>
+      <p className="mt-1 text-base font-extrabold tabular-nums leading-none text-slate-900 sm:text-lg">{value}</p>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button type="button" className={base} onClick={onClick} title={tip}>
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <div className={base} title={tip}>
+      {inner}
+    </div>
+  );
+}
+
 export default function QuanLyHocVienView({
   students,
   enrollments,
@@ -1730,7 +1842,9 @@ export default function QuanLyHocVienView({
   const [w, setW] = useState(1200);
   const [query, setQuery] = useState("");
   const [filterClass, setFilterClass] = useState("");
+  const [filterStatus, setFilterStatus] = useState<QuanLyHvStatusFilter>("all");
   const [filterMau, setFilterMau] = useState(false);
+  const [filterDangKhoaBucket, setFilterDangKhoaBucket] = useState<QuanLyHvDangKhoaBucket>(null);
   const [sortTT, setSortTT] = useState<SortDir>("asc");
   const [sortDays, setSortDays] = useState<SortDir>(null);
   const [selected, setSelected] = useState<AdminQlhvStudent | null>(null);
@@ -1795,6 +1909,17 @@ export default function QuanLyHocVienView({
   const filtered = useMemo(() => {
     let list = students;
     if (filterMau) list = list.filter((hv) => hv.is_hoc_vien_mau);
+    if (filterStatus !== "all") {
+      list = list.filter((hv) => computeOverallStatus(byHv.get(hv.id) ?? []) === filterStatus);
+    }
+    if (filterDangKhoaBucket) {
+      list = list.filter((hv) => {
+        const n = (byHv.get(hv.id) ?? []).filter((k) => deriveEnrollmentStatus(k) === "Đang học").length;
+        if (filterDangKhoaBucket === "1") return n === 1;
+        if (filterDangKhoaBucket === "2") return n === 2;
+        return n >= 3;
+      });
+    }
     if (filterClass.trim()) {
       list = list.filter((hv) =>
         (byHv.get(hv.id) ?? []).some((kh) => lopDisplayName(kh.lop) === filterClass)
@@ -1820,11 +1945,34 @@ export default function QuanLyHocVienView({
       return 0;
     });
     return list;
-  }, [students, filterMau, filterClass, query, sortTT, sortDays, byHv]);
+  }, [students, filterMau, filterStatus, filterDangKhoaBucket, filterClass, query, sortTT, sortDays, byHv]);
+
+  const activeLopEnrollmentCount = useMemo(() => {
+    let n = 0;
+    for (const row of enrollments) {
+      if (deriveEnrollmentStatus(row) === "Đang học") n += 1;
+    }
+    return n;
+  }, [enrollments]);
+
+  /** Số học viên theo số lớp (khoá) đang còn hạn — mỗi khoá `deriveEnrollmentStatus === "Đang học"`. */
+  const hvDangHocLopBuckets = useMemo(() => {
+    let oneLop = 0;
+    let twoLop = 0;
+    let threePlusLop = 0;
+    for (const hv of students) {
+      const khs = byHv.get(hv.id) ?? [];
+      const nActive = khs.filter((k) => deriveEnrollmentStatus(k) === "Đang học").length;
+      if (nActive === 1) oneLop += 1;
+      else if (nActive === 2) twoLop += 1;
+      else if (nActive >= 3) threePlusLop += 1;
+    }
+    return { oneLop, twoLop, threePlusLop };
+  }, [students, byHv]);
 
   useEffect(() => {
     setHvPage(1);
-  }, [query, filterClass, filterMau, sortTT, sortDays]);
+  }, [query, filterClass, filterMau, filterStatus, filterDangKhoaBucket, sortTT, sortDays]);
 
   const hvTotalPages = useMemo(
     () => Math.max(1, Math.ceil(filtered.length / HV_PAGE_SIZE)),
@@ -1841,7 +1989,7 @@ export default function QuanLyHocVienView({
   }, [filtered, hvPage]);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { "Đang học": 0, Nghỉ: 0 };
+    const c: Record<string, number> = { "Đang học": 0, "Chưa học": 0, Nghỉ: 0 };
     for (const hv of students) {
       const tt = computeOverallStatus(byHv.get(hv.id) ?? []);
       if (tt in c) c[tt]++;
@@ -1854,7 +2002,11 @@ export default function QuanLyHocVienView({
   const extractRow = useCallback(
     (hv: AdminQlhvStudent) => {
       const khs = byHv.get(hv.id) ?? [];
-      const activeKh = khs.find((k) => deriveEnrollmentStatus(k) === "Đang học") ?? khs[0] ?? null;
+      const activeKh =
+        khs.find((k) => deriveEnrollmentStatus(k) === "Đang học") ??
+        khs.find((k) => deriveEnrollmentStatus(k) === "Chưa học") ??
+        khs[0] ??
+        null;
       const tdId = activeKh?.tien_do_hoc;
       const curBai = tdId ? baiTapById[String(tdId)] ?? null : null;
       return {
@@ -1926,83 +2078,161 @@ export default function QuanLyHocVienView({
       ref={containerRef}
       className="-m-4 flex min-h-[calc(100vh-5.5rem)] w-[calc(100%+2rem)] max-w-none min-w-0 flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6 md:w-[calc(100%+3rem)]"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#F8A568] to-[#EE5CA2]">
-            <Users size={20} strokeWidth={2} className="text-white" />
+      <header className="relative z-20 overflow-visible border-b border-[#EAEAEA] bg-white px-3 py-2.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)] sm:px-5 sm:py-3">
+        <div className="mx-auto flex max-w-[1200px] flex-col gap-2 overflow-visible">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#F8A568] to-[#EE5CA2]">
+                <Users size={18} strokeWidth={2} className="text-white" />
+              </div>
+              <h1 className="m-0 text-[16px] font-bold tracking-tight text-[#323232]">Quản lý học viên</h1>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowCreateStudent(true)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-3 py-1.5 text-[11px] font-bold text-white shadow-sm hover:opacity-95"
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              Thêm học viên
+            </button>
           </div>
-          <div>
-            <div className="text-[17px] font-bold tracking-tight text-[#323232]">Quản lý học viên</div>
-            <div className="text-xs text-[#AAAAAA]">
-              {students.length} học viên · {counts["Đang học"]} đang học · {counts["Nghỉ"]} nghỉ
-              {mauCount > 0 ? ` · ${mauCount} mẫu` : ""}
+          <p className="m-0 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Chạm thẻ để lọc (trừ «Khoá đang học»)</p>
+          <div className="grid grid-cols-5 grid-rows-2 gap-1.5 overflow-visible">
+            <QlhvStatCard
+              label="Tổng học viên"
+              value={students.length}
+              tone="slate"
+              title="Xoá lọc tình trạng / số lớp / mẫu — giữ tìm kiếm và lọc theo tên lớp"
+              active={filterStatus === "all" && !filterMau && !filterDangKhoaBucket}
+              onClick={() => {
+                setFilterStatus("all");
+                setFilterMau(false);
+                setFilterDangKhoaBucket(null);
+              }}
+            />
+            <QlhvStatCard
+              label="Đang học"
+              value={counts["Đang học"]}
+              tone="emerald"
+              title="Lọc theo tình trạng tổng: đang học (bấm lại để bỏ lọc)"
+              active={filterStatus === "Đang học" && !filterMau && !filterDangKhoaBucket}
+              onClick={() => {
+                setFilterMau(false);
+                setFilterDangKhoaBucket(null);
+                setFilterStatus((s) => (s === "Đang học" ? "all" : "Đang học"));
+              }}
+            />
+            <QlhvStatCard
+              label="Chưa học"
+              value={counts["Chưa học"]}
+              tone="amber"
+              title="Lọc theo tình trạng tổng: chưa có kỳ học phí đủ trên mọi lớp"
+              active={filterStatus === "Chưa học" && !filterMau && !filterDangKhoaBucket}
+              onClick={() => {
+                setFilterMau(false);
+                setFilterDangKhoaBucket(null);
+                setFilterStatus((s) => (s === "Chưa học" ? "all" : "Chưa học"));
+              }}
+            />
+            <QlhvStatCard
+              label="Nghỉ"
+              value={counts["Nghỉ"]}
+              tone="rose"
+              title="Lọc theo tình trạng tổng: đã hết hạn mọi khoá"
+              active={filterStatus === "Nghỉ" && !filterMau && !filterDangKhoaBucket}
+              onClick={() => {
+                setFilterMau(false);
+                setFilterDangKhoaBucket(null);
+                setFilterStatus((s) => (s === "Nghỉ" ? "all" : "Nghỉ"));
+              }}
+            />
+            <QlhvStatCard
+              label="Khoá đang học"
+              value={activeLopEnrollmentCount}
+              tone="violet"
+              title="Tổng số ghi danh còn trong kỳ học phí (chỉ xem, không lọc)"
+            />
+            <QlhvStatCard
+              label="Một lớp còn hạn"
+              value={hvDangHocLopBuckets.oneLop}
+              tone="sky"
+              title="Học viên có đúng một khoá đang còn hạn"
+              active={filterDangKhoaBucket === "1"}
+              onClick={() => {
+                setFilterMau(false);
+                setFilterStatus("all");
+                setFilterDangKhoaBucket((b) => (b === "1" ? null : "1"));
+              }}
+            />
+            <QlhvStatCard
+              label="Hai lớp còn hạn"
+              value={hvDangHocLopBuckets.twoLop}
+              tone="sky"
+              title="Học viên có đúng hai khoá đang còn hạn"
+              active={filterDangKhoaBucket === "2"}
+              onClick={() => {
+                setFilterMau(false);
+                setFilterStatus("all");
+                setFilterDangKhoaBucket((b) => (b === "2" ? null : "2"));
+              }}
+            />
+            <QlhvStatCard
+              label="Ba lớp trở lên"
+              value={hvDangHocLopBuckets.threePlusLop}
+              tone="sky"
+              title="Học viên có từ ba khoá đang còn hạn trở lên"
+              active={filterDangKhoaBucket === "3+"}
+              onClick={() => {
+                setFilterMau(false);
+                setFilterStatus("all");
+                setFilterDangKhoaBucket((b) => (b === "3+" ? null : "3+"));
+              }}
+            />
+            <QlhvStatCard
+              label="Học viên mẫu"
+              value={mauCount}
+              tone="amber"
+              title="Chỉ hiện học viên được gắn sao mẫu"
+              active={filterMau && !filterDangKhoaBucket}
+              onClick={() => {
+                setFilterDangKhoaBucket(null);
+                setFilterStatus("all");
+                setFilterMau((m) => !m);
+              }}
+            />
+            <div className="min-h-[3.25rem] min-w-0 rounded-lg border border-transparent sm:min-h-[3.5rem]" aria-hidden />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 overflow-visible pt-0.5">
+            <div className="relative min-h-[36px] min-w-0 flex-1 basis-[min(100%,18rem)]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/35" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Tìm tên, email, SĐT…"
+                className="h-9 w-full rounded-lg border border-[#EAEAEA] bg-white py-0 pl-8 pr-8 text-xs text-[#1a1a2e] outline-none focus:border-[#BC8AF9]"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  aria-label="Xóa tìm"
+                  onClick={() => setQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-black/35 hover:text-black/60"
+                >
+                  <X size={14} />
+                </button>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 items-center rounded-lg border border-[#EAEAEA] bg-slate-50/80 px-2 py-1">
+              <ClassFilterDropdown classes={allClasses} active={filterClass} onSelect={setFilterClass} />
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowCreateStudent(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-4 py-2 text-xs font-bold text-white shadow-sm hover:opacity-95"
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            Thêm học viên mới
-          </button>
-        </div>
-      </div>
+      </header>
 
       <div className="flex w-full max-w-full min-w-0 flex-col">
         <div className="w-full max-w-full min-w-0 px-[10px] pb-6 pt-3">
         <div className="mx-auto flex min-h-[min(64vh,560px)] w-full max-w-[1200px] flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
             <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col">
-              <div className="w-full shrink-0 space-y-2 border-b border-[#EAEAEA] bg-white px-[10px] py-3">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Tìm tên, email, SĐT…"
-                    className="h-9 w-full rounded-lg border border-[#EAEAEA] bg-white pl-9 pr-9 text-xs text-[#1a1a2e] outline-none focus:border-[#BC8AF9]"
-                  />
-                  {query ? (
-                    <button
-                      type="button"
-                      aria-label="Xóa tìm"
-                      onClick={() => setQuery("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-black/35 hover:text-black/60"
-                    >
-                      <X size={16} />
-                    </button>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFilterMau(false)}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                      !filterMau ? "border-[#BC8AF9] bg-[#BC8AF9]/15 text-[#BC8AF9]" : "border-[#EAEAEA] text-black/50"
-                    )}
-                  >
-                    Tất cả
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFilterMau(true)}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                      filterMau ? "border-amber-400 bg-amber-50 text-amber-900" : "border-[#EAEAEA] text-black/50"
-                    )}
-                  >
-                    <Star size={11} className={filterMau ? "fill-amber-500 text-amber-500" : ""} />
-                    Mẫu
-                    {mauCount > 0 ? (
-                      <span className="rounded-full bg-amber-500/25 px-1.5 text-[10px] font-extrabold tabular-nums">{mauCount}</span>
-                    ) : null}
-                  </button>
-                </div>
-              </div>
-
               <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col px-[10px] pb-6 pt-3">
                 <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden rounded-xl border border-[#EAEAEA] bg-white">
             {!isMobile ? (
@@ -2028,9 +2258,7 @@ export default function QuanLyHocVienView({
                 </div>
                 <div className="w-[120px] shrink-0">Tiến độ</div>
                 <div className="min-w-0 flex-1">Ghi chú</div>
-                <div className="w-[100px] shrink-0">
-                  <ClassFilterDropdown classes={allClasses} active={filterClass} onSelect={setFilterClass} />
-                </div>
+                <div className="w-[100px] shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400">Lớp</div>
               </div>
             ) : null}
 
@@ -2038,7 +2266,13 @@ export default function QuanLyHocVienView({
               {filtered.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-14 text-center text-sm text-slate-500">
                   <span className="text-2xl">{filterMau ? "⭐" : "🔍"}</span>
-                  {filterMau ? "Chưa có học viên mẫu nào" : "Không tìm thấy kết quả"}
+                  {filterMau
+                    ? "Chưa có học viên mẫu nào"
+                    : query.trim()
+                      ? "Không tìm thấy kết quả"
+                      : filterStatus !== "all" || filterClass.trim() || filterDangKhoaBucket
+                        ? "Không có học viên khớp bộ lọc"
+                        : "Không tìm thấy kết quả"}
                 </div>
               ) : isMobile ? (
                 <div className="p-3">
@@ -2075,12 +2309,14 @@ export default function QuanLyHocVienView({
                           <div className="mb-2 flex flex-wrap gap-1">
                             {khs.slice(0, 3).map((kh, ki) => {
                               const name = lopDisplayName(kh.lop);
+                              const ttKh = deriveEnrollmentStatus(kh);
                               const d = daysLeft(kh.ngay_cuoi_ky);
-                              const cfg = TT_COLOR[deriveEnrollmentStatus(kh)] ?? { bg: "#f3f4f6", text: "#6b7280" };
+                              const cfg = TT_COLOR[ttKh] ?? { bg: "#f3f4f6", text: "#6b7280" };
+                              const daysBit = ttKh === "Chưa học" || d < 0 ? "—" : `${d}`;
                               return (
                                 <span key={ki} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: cfg.bg, color: cfg.text }}>
                                   <span className="h-1 w-1 rounded-full" style={{ background: cfg.text }} />
-                                  {name} · {d < 0 ? `Nợ ${Math.abs(d)}` : `${d}`}
+                                  {name} · {daysBit}
                                 </span>
                               );
                             })}
@@ -2138,16 +2374,18 @@ export default function QuanLyHocVienView({
                         {khs.length === 0 ? <span className="text-[10px] text-slate-200">—</span> : null}
                         {khs.slice(0, 2).map((kh, ki) => {
                           const name = lopDisplayName(kh.lop);
-                          const d = daysLeft(kh.ngay_cuoi_ky);
                           const tt = deriveEnrollmentStatus(kh);
+                          const d = daysLeft(kh.ngay_cuoi_ky);
                           const cfg = TT_COLOR[tt] ?? { bg: "#f3f4f6", text: "#6b7280" };
-                          const dColor = d < 0 ? "#EE5CA2" : d <= 5 ? "#F8A568" : "#16a34a";
+                          const daysText = tt === "Chưa học" || d < 0 ? "—" : `${d}`;
+                          const dColor =
+                            daysText === "—" ? "#94a3b8" : d <= 5 ? "#F8A568" : "#16a34a";
                           return (
                             <div key={ki} className="flex min-w-0 items-center gap-1">
                               <span className="h-1 w-1 shrink-0 rounded-full" style={{ background: cfg.text }} />
                               <span className="min-w-0 flex-1 truncate text-[10px] text-slate-600">{name}</span>
                               <span className="shrink-0 text-[10px] font-bold" style={{ color: dColor }}>
-                                {d < 0 ? `Nợ ${Math.abs(d)}` : `${d}`}
+                                {daysText}
                               </span>
                               <span className="shrink-0 rounded-full px-1.5 py-px text-[9px] font-semibold" style={{ background: cfg.bg, color: cfg.text }}>
                                 {tt}

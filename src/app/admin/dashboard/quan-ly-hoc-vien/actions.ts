@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
+import { isValidStudentEmail, STUDENT_EMAIL_REQUIREMENT_VI } from "@/lib/donghocphi/profile-step1";
 import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import { insertQlQuanLyHocVienEnrollment } from "@/lib/supabase/insert-ql-quan-ly-hoc-vien";
@@ -225,6 +226,11 @@ export async function createHocVien(payload: HocVienProfilePayload): Promise<{ o
   const full_name = String(payload.full_name ?? "").trim();
   if (!full_name) return { ok: false, error: "Nhập họ tên." };
 
+  const emCreate = String(payload.email ?? "").trim();
+  if (emCreate !== "" && !isValidStudentEmail(emCreate)) {
+    return { ok: false, error: STUDENT_EMAIL_REQUIREMENT_VI };
+  }
+
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
 
@@ -246,6 +252,11 @@ export async function updateHocVienProfile(studentId: number, payload: HocVienPr
 
   const full_name = String(payload.full_name ?? "").trim();
   if (!full_name) return { ok: false, error: "Nhập họ tên." };
+
+  const emUp = String(payload.email ?? "").trim();
+  if (emUp !== "" && !isValidStudentEmail(emUp)) {
+    return { ok: false, error: STUDENT_EMAIL_REQUIREMENT_VI };
+  }
 
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };

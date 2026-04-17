@@ -19,6 +19,7 @@ import {
   dbRowToStep1Fields,
   isValidStudentEmail,
   profileCompleteForSkipStep1,
+  STUDENT_EMAIL_REQUIREMENT_VI,
   type QlHocVienStep1Fields,
 } from "@/lib/donghocphi/profile-step1";
 import { hocVienProfileHref } from "@/lib/hoc-vien/profile-url";
@@ -1880,10 +1881,13 @@ export default function DongHocPhiClient({
                   name="email"
                   type="email"
                   autoComplete="email"
-                  placeholder="Nhập email học viên của bạn"
+                  placeholder="vd. tenban@gmail.com — Hotmail/Outlook, Yahoo, iCloud…"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
+                <p className="dhp-s1-avatar-sub" role="note">
+                  {STUDENT_EMAIL_REQUIREMENT_VI}
+                </p>
               </div>
 
               <div className="dhp-field-row">

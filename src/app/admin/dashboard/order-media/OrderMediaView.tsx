@@ -3,23 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
-import {
-  Bold,
-  ClipboardList,
-  ImagePlus,
-  Italic,
-  List,
-  Loader2,
-  ListOrdered,
-  Trash2,
-  Underline,
-  Upload,
-} from "lucide-react";
+import { Bold, ClipboardList, Italic, List, Loader2, ListOrdered, Underline } from "lucide-react";
 
+import AdminMinhHoaDropzone, {
+  minhHoaUrlsFromSlots,
+  type MinhHoaUploadSlot,
+} from "@/app/admin/_components/AdminMinhHoaDropzone";
 import { createMktMediaOrder } from "@/app/admin/dashboard/quan-ly-media/actions";
 import { MKT_MEDIA_TYPE_OPTIONS } from "@/lib/data/mkt-media-form";
 import { htmlToPlainText, sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
-import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -28,8 +20,6 @@ type Props = {
   defaultEndYmd: string;
 };
 
-type MinhHoaSlot = { id: string; url: string | null; uploading: boolean; error: string | null };
-
 function fieldLabel(text: string, required?: boolean) {
   return (
     <label className="mb-1.5 block text-[12px] font-bold text-[#555]">
@@ -37,23 +27,6 @@ function fieldLabel(text: string, required?: boolean) {
       {required ? <span className="text-red-600"> *</span> : null}
     </label>
   );
-}
-
-function collectImageFilesFromDataTransfer(dt: DataTransfer): File[] {
-  const byKey = new Map<string, File>();
-  const add = (f: File | null) => {
-    if (!f || !f.type.startsWith("image/")) return;
-    const k = `${f.name}-${f.size}-${f.lastModified}`;
-    if (!byKey.has(k)) byKey.set(k, f);
-  };
-  if (dt.files?.length) {
-    for (let i = 0; i < dt.files.length; i += 1) add(dt.files.item(i));
-  }
-  for (let i = 0; i < dt.items.length; i += 1) {
-    const it = dt.items[i];
-    if (it.kind === "file") add(it.getAsFile());
-  }
-  return [...byKey.values()];
 }
 
 function execBriefCmd(el: HTMLDivElement | null, command: string, value?: string) {
@@ -79,56 +52,12 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
   const [startDate, setStartDate] = useState(defaultStartYmd);
   const [endDate, setEndDate] = useState(defaultEndYmd);
   const briefRef = useRef<HTMLDivElement>(null);
-  const [minhHoa, setMinhHoa] = useState<MinhHoaSlot[]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [minhHoa, setMinhHoa] = useState<MinhHoaUploadSlot[]>([]);
 
   const inputCls = useMemo(
     () =>
       "w-full rounded-xl border border-[#EAEAEA] bg-white px-3 py-2.5 text-[13px] text-[#323232] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] outline-none transition focus:border-[#f8a668] focus:ring-2 focus:ring-[#f8a668]/25",
     [],
-  );
-
-  const uploadSlots = useCallback((files: File[]) => {
-    for (const file of files) {
-      const id = crypto.randomUUID();
-      setMinhHoa((prev) => [...prev, { id, url: null, uploading: true, error: null }]);
-      void uploadAdminCfImage(file, file.name || "image.png")
-        .then((url) => {
-          setMinhHoa((prev) =>
-            prev.map((s) => (s.id === id ? { ...s, url, uploading: false, error: null } : s)),
-          );
-        })
-        .catch((e: unknown) => {
-          const msg = e instanceof Error ? e.message : "Lỗi tải ảnh.";
-          setMinhHoa((prev) =>
-            prev.map((s) => (s.id === id ? { ...s, url: null, uploading: false, error: msg } : s)),
-          );
-        });
-    }
-  }, []);
-
-  const removeMinhHoa = useCallback((id: string) => {
-    setMinhHoa((prev) => prev.filter((s) => s.id !== id));
-  }, []);
-
-  const onPasteMinhHoa = useCallback(
-    (e: React.ClipboardEvent) => {
-      const files = collectImageFilesFromDataTransfer(e.clipboardData);
-      if (files.length) {
-        e.preventDefault();
-        uploadSlots(files);
-      }
-    },
-    [uploadSlots],
-  );
-
-  const onDropMinhHoa = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      const files = collectImageFilesFromDataTransfer(e.dataTransfer);
-      if (files.length) uploadSlots(files);
-    },
-    [uploadSlots],
   );
 
   const submit = useCallback(() => {
@@ -140,7 +69,7 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
       setErr(`Brief quá dài (tối đa khoảng ${BRIEF_MAX_PLAIN} ký tự nội dung).`);
       return;
     }
-    const urls = minhHoa.map((s) => s.url).filter((u): u is string => Boolean(u?.trim()));
+    const urls = minhHoaUrlsFromSlots(minhHoa);
     if (minhHoa.some((s) => s.uploading)) {
       setErr("Đợi ảnh minh họa tải xong rồi gửi order.");
       return;
@@ -315,81 +244,7 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
 
             <div>
               {fieldLabel("Minh họa")}
-              <div
-                tabIndex={0}
-                role="region"
-                aria-label="Minh họa — dán hoặc kéo thả ảnh"
-                onPaste={onPasteMinhHoa}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={onDropMinhHoa}
-                className="rounded-xl border border-dashed border-[#EAEAEA] bg-[#fafafa] px-3 py-3 outline-none transition focus:border-[#f8a668] focus:ring-2 focus:ring-[#f8a668]/25"
-              >
-                <div className="mb-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 rounded-[10px] border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] font-semibold text-[#555] hover:bg-white"
-                  >
-                    <Upload size={14} aria-hidden />
-                    Chọn ảnh
-                  </button>
-                  <span className="inline-flex items-center gap-1 text-[11px] text-[#aaa]">
-                    <ImagePlus size={14} aria-hidden />
-                    Nhấn vào khung rồi dán
-                  </span>
-                </div>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="sr-only"
-                  onChange={(e) => {
-                    const list = e.target.files;
-                    if (list?.length) uploadSlots([...list]);
-                    e.target.value = "";
-                  }}
-                />
-                {minhHoa.length === 0 ? (
-                  <p className="text-[12px] text-[#aaa]">Chưa có ảnh minh họa.</p>
-                ) : (
-                  <ul className="m-0 grid list-none grid-cols-2 gap-2 p-0 sm:grid-cols-3">
-                    {minhHoa.map((s) => (
-                      <li
-                        key={s.id}
-                        className="relative overflow-hidden rounded-lg border border-[#EAEAEA] bg-white"
-                        style={{ aspectRatio: "4/3" }}
-                      >
-                        {s.url ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- URL Cloudflare động
-                          <img src={s.url} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-[#f5f5f5] text-[11px] text-[#888]">
-                            {s.uploading ? (
-                              <Loader2 className="h-6 w-6 animate-spin text-[#ee5ca2]" aria-label="Đang tải" />
-                            ) : (
-                              "Lỗi"
-                            )}
-                          </div>
-                        )}
-                        {s.error && !s.url ? (
-                          <div className="absolute inset-x-0 bottom-0 bg-red-50/95 px-1 py-0.5 text-[9px] leading-tight text-red-700">
-                            {s.error}
-                          </div>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => removeMinhHoa(s.id)}
-                          className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-md border border-black/10 bg-white/95 text-red-600 shadow-sm hover:bg-red-50"
-                          aria-label="Xóa ảnh"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <AdminMinhHoaDropzone slots={minhHoa} setSlots={setMinhHoa} />
             </div>
           </div>
 

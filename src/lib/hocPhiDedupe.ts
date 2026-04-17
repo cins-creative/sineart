@@ -1,5 +1,16 @@
 import type { HocPhiGoiRow } from "@/types/khoa-hoc";
 
+/** Nhận diện gói cấp tốc theo `special` (không phân biệt hoa thường / dấu). */
+export function isHocPhiCapTocSpecial(s: string | null | undefined): boolean {
+  const raw = (s ?? "").trim();
+  if (!raw) return false;
+  const t = raw
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+  return t.includes("cap toc");
+}
+
 export function durationKey(g: Pick<HocPhiGoiRow, "number" | "don_vi">): string {
   return `${g.number}|${g.don_vi.trim().toLowerCase()}`;
 }

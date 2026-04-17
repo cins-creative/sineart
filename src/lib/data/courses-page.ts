@@ -870,6 +870,12 @@ export const getGlobalTeacherPortfolioSlides = cache(
   getGlobalTeacherPortfolioSlidesUncached,
 );
 
+function hocPhiBlockGoiSelectColumns(): string {
+  return hpGoiHocPhiTableName() === "hp_goi_hoc_phi"
+    ? 'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi'
+    : 'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi, special';
+}
+
 function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
   const numRaw = row.number;
   const numberValue =
@@ -889,6 +895,11 @@ function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
     soBuoiParsed != null && Number.isFinite(soBuoiParsed) && soBuoiParsed >= 0
       ? Math.round(soBuoiParsed)
       : null;
+  const sp = row.special;
+  const special =
+    sp == null || sp === ""
+      ? null
+      : String(sp).trim() || null;
 
   return {
     id: Number(row.id),
@@ -900,6 +911,7 @@ function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
     combo_id:
       comboNum != null && Number.isFinite(comboNum) ? comboNum : null,
     so_buoi,
+    special,
   };
 }
 
@@ -924,11 +936,10 @@ export async function getHocPhiBlockData(
   }
 
   const goiTable = hpGoiHocPhiTableName();
+  const goiCols = hocPhiBlockGoiSelectColumns();
   const { data: mainRows, error: e1 } = await supabase
     .from(goiTable)
-    .select(
-      'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi'
-    )
+    .select(goiCols)
     .eq("mon_hoc", monId)
     .order("number", { ascending: true });
 
@@ -950,7 +961,7 @@ export async function getHocPhiBlockData(
     return { gois: [], combos: [], monMap };
   }
 
-  const main = (mainRows ?? []) as Record<string, unknown>[];
+  const main = (mainRows ?? []) as unknown as Record<string, unknown>[];
   const comboIds = [
     ...new Set(
       main
@@ -965,16 +976,15 @@ export async function getHocPhiBlockData(
   if (comboIds.length > 0) {
     const { data: extra } = await supabase
       .from(goiTable)
-      .select(
-        'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi'
-      )
+      .select(goiCols)
       .in("combo_id", comboIds);
-    if (extra?.length) {
+    const extraRows = (extra ?? []) as unknown as Record<string, unknown>[];
+    if (extraRows.length) {
       const byId = new Map<number, Record<string, unknown>>();
       for (const r of merged) byId.set(Number(r.id), r);
-      for (const r of extra) {
-        const id = Number((r as Record<string, unknown>).id);
-        if (!byId.has(id)) byId.set(id, r as Record<string, unknown>);
+      for (const r of extraRows) {
+        const id = Number(r.id);
+        if (!byId.has(id)) byId.set(id, r);
       }
       merged = [...byId.values()];
     }

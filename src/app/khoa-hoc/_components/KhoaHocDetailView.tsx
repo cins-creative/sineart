@@ -182,6 +182,8 @@ export default function KhoaHocDetailView({
   studentGallery = [],
   hocPhiBlock = null,
   hocPhiMonId = null,
+  /** Chỉ loại «Luyện thi» (`ql_mon_hoc.loai_khoa_hoc`) mới hiện nút / gói cấp tốc. */
+  hocPhiAllowCapToc = false,
   teacherPortfolioSlides = [],
   baiTapList = [],
   ongoingClasses = [],
@@ -194,6 +196,7 @@ export default function KhoaHocDetailView({
   hocPhiBlock?: HocPhiBlockData | null;
   /** `ql_mon_hoc.id` dùng cho học phí — có thể có khi `detail` null (slug khớp DB) */
   hocPhiMonId?: number | null;
+  hocPhiAllowCapToc?: boolean;
   /** Toàn bộ portfolio nhân sự (không filter) */
   teacherPortfolioSlides?: TeacherPortfolioSlide[];
   /** `hv_he_thong_bai_tap` theo môn — chương trình đào tạo */
@@ -511,13 +514,6 @@ export default function KhoaHocDetailView({
             ))}
           </ul>
 
-          {d?.tinhChat ? (
-            <>
-              <div className="kd-div" />
-              <div className="kd-highlight">{d.tinhChat}</div>
-            </>
-          ) : null}
-
           <div className="kd-div" />
 
           <h2 className="kd-sec">Nội dung môn học</h2>
@@ -711,7 +707,12 @@ export default function KhoaHocDetailView({
 
         <aside className="kd-sidebar" aria-label="Thông tin khóa học">
           {hocPhiBlock != null && hocPhiMonId != null ? (
-            <HocPhiBlock key={hocPhiMonId} monHocId={hocPhiMonId} data={hocPhiBlock} />
+            <HocPhiBlock
+              key={hocPhiMonId}
+              monHocId={hocPhiMonId}
+              data={hocPhiBlock}
+              allowCapTocToggle={hocPhiAllowCapToc}
+            />
           ) : null}
 
           <div className="kd-sb-meta-card">

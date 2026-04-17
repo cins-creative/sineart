@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-type LoginProps = { passwordUpdatedBanner?: boolean };
+type LoginProps = { passwordUpdatedBanner?: boolean; sessionEndedInactiveBanner?: boolean };
 
-export default function AdminLoginView({ passwordUpdatedBanner }: LoginProps) {
+export default function AdminLoginView({
+  passwordUpdatedBanner,
+  sessionEndedInactiveBanner,
+}: LoginProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,6 +45,11 @@ export default function AdminLoginView({ passwordUpdatedBanner }: LoginProps) {
       if (data.code === "PASSWORD_NOT_SET") {
         setHintSetup(true);
         setError(data.error ?? "Tài khoản chưa có mật khẩu.");
+        return;
+      }
+
+      if (data.code === "STAFF_INACTIVE") {
+        setError(data.error ?? "Tài khoản không còn quyền đăng nhập admin.");
         return;
       }
 
@@ -100,6 +108,12 @@ export default function AdminLoginView({ passwordUpdatedBanner }: LoginProps) {
         {passwordUpdatedBanner ? (
           <div className="mb-6 rounded-lg border border-[#365314] bg-[#14532d]/35 px-3 py-2 text-sm text-[#bbf7d0]">
             Đã đặt mật khẩu thành công. Bạn có thể đăng nhập.
+          </div>
+        ) : null}
+
+        {sessionEndedInactiveBanner ? (
+          <div className="mb-6 rounded-lg border border-[#7f1d1d] bg-[#450a0a]/45 px-3 py-2 text-sm text-[#fecaca]">
+            Phiên đã kết thúc vì trạng thái nhân sự là nghỉ. Vui lòng liên hệ quản trị nếu cần truy cập lại.
           </div>
         ) : null}
 

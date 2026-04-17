@@ -1,5 +1,89 @@
 /* HocPhiBlock — theo brief hoc-phi-block + prototype HTML */
 
+.hpb-goi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.hpb-goi-head .kd-goi-tiny {
+  margin-bottom: 0;
+}
+
+/* Chưa bật: nền xám trong nút; bật (.hpb-cap-toc--on) = đỏ/lửa */
+.hpb-cap-toc {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 3px 10px 4px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(0, 0, 0, 0.12);
+  background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #71717a;
+  cursor: pointer;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease,
+    filter 0.2s ease;
+  font-family: var(--font, ui-sans-serif, system-ui, sans-serif);
+}
+
+.hpb-cap-toc:hover:not(.hpb-cap-toc--on) {
+  border-color: rgba(0, 0, 0, 0.2);
+  color: #52525b;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f4f5 100%);
+  transform: scale(1.03);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.hpb-cap-toc:active {
+  transform: scale(0.97);
+}
+
+.hpb-cap-toc--on {
+  border-color: rgba(220, 38, 38, 0.55);
+  color: #7f1d1d;
+  background: linear-gradient(165deg, #fff1f2 0%, #fecaca 45%, #fca5a5 100%);
+  box-shadow:
+    0 0 0 1px rgba(248, 113, 113, 0.45),
+    0 2px 12px rgba(220, 38, 38, 0.22);
+}
+
+.hpb-cap-toc--on:hover {
+  filter: brightness(1.03);
+}
+
+.hpb-cap-toc:not(.hpb-cap-toc--on) .hpb-cap-toc-flame {
+  color: #a1a1aa;
+  filter: none;
+}
+
+.hpb-cap-toc--on .hpb-cap-toc-flame {
+  color: #dc2626;
+  filter: drop-shadow(0 0 5px rgba(248, 113, 113, 0.85));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hpb-cap-toc:hover:not(.hpb-cap-toc--on) {
+    transform: none;
+  }
+}
+
 .hpb-wrap {
   color: #1a1917;
   font-size: 14px;

@@ -1,9 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BarChart3, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, BarChart3, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { saveBaoCaoTaiChinhColumn } from "@/app/admin/dashboard/bao-cao-tai-chinh/actions";
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
+import {
+  deleteBaoCaoTaiChinhRow,
+  saveBaoCaoTaiChinhColumn,
+  updateBaoCaoTaiChinhPeriod,
+} from "@/app/admin/dashboard/bao-cao-tai-chinh/actions";
 import {
   type BaoCaoColumn,
   type ColData,
@@ -111,6 +117,8 @@ function getRowBg(row: RowDef, idx: number): string | null {
 type Props = { initialColumns: BaoCaoColumn[] };
 
 export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
+  const router = useRouter();
+  const { canDelete: roleMayDeleteCol } = useAdminDashboardAbilities();
   const [columns, setColumns] = useState<BaoCaoColumn[]>(() =>
     initialColumns.map((c) => ({ ...c, dirty: c.dirty ?? false })),
   );
@@ -122,6 +130,21 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
   const [editingCell, setEditingCell] = useState<{ colId: string; key: string } | null>(null);
   const [editValue, setEditValue] = useState("");
   const tableRef = useRef<HTMLDivElement>(null);
+
+  const [editPeriodOpen, setEditPeriodOpen] = useState(false);
+  const [editPeriodColId, setEditPeriodColId] = useState<string | null>(null);
+  const [editPeriodNam, setEditPeriodNam] = useState(String(centerYear));
+  const [editPeriodThangShort, setEditPeriodThangShort] = useState("");
+  const [editPeriodErr, setEditPeriodErr] = useState("");
+  const [editPeriodBusy, setEditPeriodBusy] = useState(false);
+
+  const [deleteColOpen, setDeleteColOpen] = useState(false);
+  const [deleteColId, setDeleteColId] = useState<string | null>(null);
+  const [deleteColLabel, setDeleteColLabel] = useState("");
+  const [deleteColRecordId, setDeleteColRecordId] = useState<number | null>(null);
+  const [deleteColAck, setDeleteColAck] = useState(false);
+  const [deleteColBusy, setDeleteColBusy] = useState(false);
+  const [deleteColErr, setDeleteColErr] = useState("");
 
   const displayCols = buildDisplayCols(columns);
   const colIds = displayCols.map((c) => c.id);
@@ -251,9 +274,137 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
   const yearOpts = namOptions(centerYear);
   const monthCount = columns.length;
 
+  const usedThangForEdit = columns
+    .filter((c) => c.nam === editPeriodNam && c.id !== editPeriodColId)
+    .map((c) => THANG_FULL_TO_SHORT[c.thang])
+    .filter(Boolean);
+  const availableThangEdit = THANG_OPT.filter(
+    (t) => !usedThangForEdit.includes(t) || t === editPeriodThangShort,
+  );
+
+  function sortCols(list: BaoCaoColumn[]): BaoCaoColumn[] {
+    return [...list].sort((a, b) => {
+      const ya = parseInt(a.nam, 10);
+      const yb = parseInt(b.nam, 10);
+      if (ya !== yb) return ya - yb;
+      return THANG_FULL_ORDER.indexOf(a.thang) - THANG_FULL_ORDER.indexOf(b.thang);
+    });
+  }
+
+  function openEditPeriod(col: BaoCaoColumn) {
+    if (col.isQuarter) return;
+    setEditPeriodErr("");
+    setEditPeriodColId(col.id);
+    setEditPeriodNam(col.nam);
+    const short = THANG_FULL_TO_SHORT[col.thang];
+    setEditPeriodThangShort(short && THANG_OPT.includes(short) ? short : "");
+    setEditPeriodOpen(true);
+  }
+
+  function openDeleteColumn(col: BaoCaoColumn) {
+    if (col.isQuarter) return;
+    const short = THANG_FULL_TO_SHORT[col.thang] || col.thang;
+    setDeleteColErr("");
+    setDeleteColLabel(`${short} · ${col.nam}`);
+    setDeleteColId(col.id);
+    setDeleteColRecordId(col.recordId ?? null);
+    setDeleteColAck(false);
+    setDeleteColOpen(true);
+  }
+
+  async function submitEditPeriod() {
+    if (!editPeriodColId) return;
+    const col = columns.find((c) => c.id === editPeriodColId);
+    if (!col) return;
+    if (!editPeriodThangShort) {
+      setEditPeriodErr("Chọn tháng");
+      return;
+    }
+    const thangFull = THANG_SHORT_TO_FULL[editPeriodThangShort];
+    if (!thangFull) {
+      setEditPeriodErr("Tháng không hợp lệ");
+      return;
+    }
+    if (columns.some((c) => c.id !== col.id && c.nam === editPeriodNam && c.thang === thangFull)) {
+      setEditPeriodErr("Kỳ này đã tồn tại");
+      return;
+    }
+    setEditPeriodErr("");
+    if (col.recordId != null && col.recordId > 0) {
+      setEditPeriodBusy(true);
+      try {
+        const res = await updateBaoCaoTaiChinhPeriod({
+          recordId: col.recordId,
+          newNam: editPeriodNam,
+          newThang: thangFull,
+          data: col.data,
+        });
+        if (!res.ok) {
+          setEditPeriodErr(res.error);
+          return;
+        }
+        setColumns((prev) =>
+          sortCols(
+            prev.map((c) =>
+              c.id === col.id
+                ? {
+                    ...c,
+                    nam: editPeriodNam,
+                    thang: thangFull,
+                    dirty: false,
+                    error: undefined,
+                    id: String(res.id),
+                    recordId: res.id,
+                  }
+                : c,
+            ),
+          ),
+        );
+        setEditPeriodOpen(false);
+        setEditPeriodColId(null);
+        router.refresh();
+      } finally {
+        setEditPeriodBusy(false);
+      }
+    } else {
+      setColumns((prev) =>
+        sortCols(
+          prev.map((c) =>
+            c.id === col.id ? { ...c, nam: editPeriodNam, thang: thangFull, dirty: true } : c,
+          ),
+        ),
+      );
+      setEditPeriodOpen(false);
+      setEditPeriodColId(null);
+    }
+  }
+
+  async function submitDeleteColumn() {
+    if (!deleteColId || !deleteColAck) return;
+    setDeleteColErr("");
+    setDeleteColBusy(true);
+    try {
+      if (deleteColRecordId != null && deleteColRecordId > 0) {
+        const res = await deleteBaoCaoTaiChinhRow(deleteColRecordId);
+        if (!res.ok) {
+          setDeleteColErr(res.error);
+          return;
+        }
+        router.refresh();
+      }
+      setColumns((prev) => prev.filter((c) => c.id !== deleteColId));
+      setDeleteColOpen(false);
+      setDeleteColAck(false);
+      setDeleteColId(null);
+      setDeleteColRecordId(null);
+    } finally {
+      setDeleteColBusy(false);
+    }
+  }
+
   return (
     <div
-      className="-m-4 flex max-h-[calc(100dvh-5.5rem)] min-h-0 w-[calc(100%+2rem)] max-w-none min-w-0 flex-col overflow-hidden bg-[#F5F7F7] font-sans text-[#323232] md:-m-6 md:w-[calc(100%+3rem)]"
+      className="-m-4 flex h-[calc(100dvh-5.5rem)] max-h-[calc(100dvh-5.5rem)] min-h-0 w-[calc(100%+2rem)] max-w-none min-w-0 flex-col overflow-hidden bg-[#F5F7F7] font-sans text-[#323232] md:-m-6 md:w-[calc(100%+3rem)]"
       data-supabase-table="tc_bao_cao_tai_chinh"
     >
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
@@ -264,7 +415,7 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
           <div className="min-w-0">
             <div className="text-[17px] font-bold tracking-tight text-[#323232]">Báo cáo tài chính</div>
             <div className="text-xs text-[#AAAAAA]">
-              {monthCount} kỳ nhập · bảng theo tháng / quý
+              {monthCount} kỳ nhập · bảng theo tháng / quý · hover tiêu đề cột tháng để đổi kỳ / xóa
             </div>
           </div>
         </div>
@@ -279,7 +430,7 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
       </div>
 
       <div className="flex min-h-0 w-full max-w-full min-w-0 flex-1 flex-col">
-        <div className="flex min-h-0 w-full max-w-full min-w-0 flex-1 flex-col px-[10px] pb-6 pt-3">
+        <div className="flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col px-[10px] pb-6 pt-3">
           <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
             {columns.length === 0 ? (
               <div className="flex min-h-[min(48vh,420px)] flex-col items-center justify-center gap-3 px-6 py-12">
@@ -299,7 +450,7 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
             ) : (
               <div
                 ref={tableRef}
-                className="bcc-fin-scroll min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain [max-height:min(72vh,calc(100dvh-11rem))]"
+                className="bcc-fin-scroll min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain"
               >
                 <table className="bcc-fin-table w-max min-w-full border-separate border-spacing-0 text-[13px]">
                   <thead>
@@ -325,6 +476,7 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
                               key={col.id}
                               className="sticky top-0 border-b border-l border-r border-[#EAEAEA] bg-[#f3f3f4] p-0 text-center align-top"
                               style={{ width: w, minWidth: w }}
+                              title="Cột tổng quý — chỉnh hoặc xóa trên từng tháng trong quý"
                             >
                               <div className="relative px-2 pb-2 pt-2.5">
                                 <div className="flex items-center justify-center gap-1">
@@ -348,7 +500,7 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
                         return (
                           <th
                             key={col.id}
-                            className="sticky top-0 border-b border-r border-[#EAEAEA] bg-[#fafafa] p-0 text-center align-top"
+                            className="group sticky top-0 border-b border-r border-[#EAEAEA] bg-[#fafafa] p-0 text-center align-top"
                             style={{ width: w, minWidth: w }}
                           >
                             <div className="relative px-2 pb-2 pt-2.5">
@@ -356,6 +508,35 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
                                 {THANG_FULL_TO_SHORT[col.thang] || col.thang}
                               </div>
                               <div className="mt-0.5 text-[10px] font-semibold text-[#AAA]">{col.nam}</div>
+                              <div
+                                className={cn(
+                                  "mt-1 flex min-h-[26px] items-center justify-center gap-0.5 transition-opacity duration-200 ease-out",
+                                  "pointer-events-none opacity-0",
+                                  "group-hover:pointer-events-auto group-hover:opacity-100",
+                                  "group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+                                )}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => openEditPeriod(col)}
+                                  className="rounded-md p-1 text-[#888] transition hover:bg-black/[0.05] hover:text-[#BC8AF9]"
+                                  aria-label={`Đổi kỳ ${THANG_FULL_TO_SHORT[col.thang] || col.thang} ${col.nam}`}
+                                  title="Đổi năm / tháng kỳ"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                                </button>
+                                {roleMayDeleteCol ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openDeleteColumn(col)}
+                                    className="rounded-md p-1 text-[#888] transition hover:bg-red-50 hover:text-red-600"
+                                    aria-label={`Xóa kỳ ${THANG_FULL_TO_SHORT[col.thang] || col.thang} ${col.nam}`}
+                                    title="Xóa kỳ"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                                  </button>
+                                ) : null}
+                              </div>
                               <div className="mt-1.5 flex justify-center gap-1">
                                 {col.dirty ? (
                                   <button
@@ -623,6 +804,195 @@ export default function BaoCaoTaiChinhView({ initialColumns }: Props) {
                 style={{ background: "linear-gradient(135deg,#F8A568,#EE5CA2)" }}
               >
                 + Thêm tháng
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editPeriodOpen && editPeriodColId ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => {
+            if (editPeriodBusy) return;
+            setEditPeriodOpen(false);
+            setEditPeriodColId(null);
+            setEditPeriodErr("");
+          }}
+        >
+          <div
+            className="w-full max-w-[360px] rounded-[20px] border border-[#EAEAEA] bg-white p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bcc-edit-period-title"
+          >
+            <h3 id="bcc-edit-period-title" className="m-0 text-lg font-extrabold text-[#1a1a1a]">
+              Đổi kỳ báo cáo
+            </h3>
+            <p className="mb-5 mt-1.5 text-[13px] text-[#888]">Năm và tháng đại diện cho cột (không trùng kỳ khác).</p>
+            <div className="mb-3 grid grid-cols-2 gap-2.5">
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-[#AAA]">
+                  Năm
+                </label>
+                <select
+                  value={editPeriodNam}
+                  onChange={(e) => {
+                    setEditPeriodNam(e.target.value);
+                    setEditPeriodErr("");
+                  }}
+                  className="h-10 w-full cursor-pointer rounded-[10px] border border-[#EAEAEA] bg-white px-2.5 text-[13px] outline-none focus:border-[#BC8AF9]"
+                >
+                  {yearOpts.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-[#AAA]">
+                  Tháng
+                </label>
+                <select
+                  value={editPeriodThangShort}
+                  onChange={(e) => {
+                    setEditPeriodThangShort(e.target.value);
+                    setEditPeriodErr("");
+                  }}
+                  className="h-10 w-full cursor-pointer rounded-[10px] border border-[#EAEAEA] bg-white px-2.5 text-[13px] outline-none focus:border-[#BC8AF9]"
+                >
+                  <option value="">— Chọn —</option>
+                  {availableThangEdit.length === 0 ? (
+                    <option disabled value="">
+                      Không còn tháng trống
+                    </option>
+                  ) : (
+                    availableThangEdit.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+            </div>
+            {editPeriodErr ? <p className="mb-3 text-xs font-semibold text-red-600">{editPeriodErr}</p> : null}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={editPeriodBusy}
+                onClick={() => {
+                  setEditPeriodOpen(false);
+                  setEditPeriodColId(null);
+                  setEditPeriodErr("");
+                }}
+                className="flex-1 rounded-xl border border-[#EAEAEA] bg-white py-3 text-[13px] font-semibold text-[#666] disabled:opacity-50"
+              >
+                Huỷ
+              </button>
+              <button
+                type="button"
+                disabled={editPeriodBusy}
+                onClick={() => void submitEditPeriod()}
+                className="flex-[2] rounded-xl border-0 py-3 text-[13px] font-bold text-white disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg,#F8A568,#EE5CA2)" }}
+              >
+                {editPeriodBusy ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Đang lưu…
+                  </span>
+                ) : (
+                  "Lưu kỳ"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {roleMayDeleteCol && deleteColOpen && deleteColId ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => {
+            if (deleteColBusy) return;
+            setDeleteColOpen(false);
+            setDeleteColAck(false);
+            setDeleteColErr("");
+          }}
+        >
+          <div
+            className="w-full max-w-[400px] rounded-2xl border border-[#EAEAEA] bg-white p-6 shadow-[0_24px_48px_rgba(0,0,0,0.12)]"
+            role="dialog"
+            aria-labelledby="bcc-del-col-title"
+            aria-describedby="bcc-del-col-desc"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="bcc-del-col-title" className="m-0 text-[17px] font-bold text-[#323232]">
+              Xóa kỳ báo cáo?
+            </h2>
+            <p id="bcc-del-col-desc" className="mt-2 text-sm leading-relaxed text-[#666]">
+              Bạn sắp xóa kỳ <span className="font-semibold text-[#1a1a2e]">{deleteColLabel}</span> khỏi bảng báo cáo
+              tài chính.
+            </p>
+            <div
+              className="mt-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-left"
+              role="alert"
+            >
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" strokeWidth={2} aria-hidden />
+              <div className="min-w-0">
+                <div className="text-[13px] font-bold text-amber-900">Cảnh báo</div>
+                <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[12px] leading-snug text-amber-950/90">
+                  <li>Toàn bộ số liệu đã nhập cho kỳ này sẽ bị xóa vĩnh viễn khỏi cơ sở dữ liệu.</li>
+                  <li>Không thể hoàn tác từ giao diện này.</li>
+                </ul>
+              </div>
+            </div>
+            <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#EAEAEA] bg-[#fafafa] px-3 py-2.5 text-left">
+              <input
+                type="checkbox"
+                checked={deleteColAck}
+                onChange={(e) => setDeleteColAck(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-[#ccc] text-[#EE5CA2] focus:ring-[#BC8AF9]"
+              />
+              <span className="text-[12px] font-semibold leading-snug text-[#323232]">
+                Tôi hiểu rủi ro và muốn xóa kỳ này
+              </span>
+            </label>
+            {deleteColErr ? (
+              <p className="mt-3 text-xs font-semibold text-red-600">{deleteColErr}</p>
+            ) : null}
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                disabled={deleteColBusy}
+                onClick={() => {
+                  setDeleteColOpen(false);
+                  setDeleteColAck(false);
+                  setDeleteColErr("");
+                }}
+                className="flex-1 rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#666] disabled:opacity-50"
+              >
+                Huỷ
+              </button>
+              <button
+                type="button"
+                disabled={deleteColBusy || !deleteColAck}
+                onClick={() => void submitDeleteColumn()}
+                className="flex-[2] rounded-[10px] border border-red-200 bg-red-600 px-5 py-2.5 text-[13px] font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleteColBusy ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Đang xóa…
+                  </span>
+                ) : (
+                  "Xóa kỳ"
+                )}
               </button>
             </div>
           </div>

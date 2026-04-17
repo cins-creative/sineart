@@ -358,17 +358,6 @@
   text-decoration: underline;
 }
 
-.kd-highlight {
-  background: var(--kd-purple-light);
-  border-left: 3px solid var(--kd-purple-mid);
-  border-radius: 0 10px 10px 0;
-  padding: 13px 16px;
-  font-size: 13px;
-  color: var(--kd-purple-soft);
-  line-height: 1.7;
-  margin-bottom: 14px;
-}
-
 /* Learn grid */
 .kd-learn-grid {
   list-style: none;

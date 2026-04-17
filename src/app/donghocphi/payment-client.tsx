@@ -19,7 +19,6 @@ import {
   dbRowToStep1Fields,
   isValidStudentEmail,
   profileCompleteForSkipStep1,
-  STUDENT_EMAIL_REQUIREMENT_VI,
   type QlHocVienStep1Fields,
 } from "@/lib/donghocphi/profile-step1";
 import { hocVienProfileHref } from "@/lib/hoc-vien/profile-url";
@@ -29,6 +28,7 @@ import {
   firstQlhvPerLopFromQlRows,
   qlEnrollmentKyByLopFromHpMap,
 } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
+import { isHocPhiCapTocSpecial } from "@/lib/hocPhiDedupe";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -61,48 +61,6 @@ function readDhpStoredPickRaw(): DhpStoredClassPickV1 | null {
   } catch {
     return null;
   }
-}
-
-function materializeStoredClassPick(
-  stored: DhpStoredClassPickV1,
-  lopHoc: PaymentClassItem[],
-  goiHocPhi: PaymentFeeItem[]
-): {
-  classIds: number[];
-  feeByClassId: Record<number, number>;
-  skipRenewalByClassId: Record<number, boolean>;
-} {
-  const validLop = new Set(lopHoc.map((c) => c.id));
-  const classIds = stored.classIds.filter((id) => Number.isFinite(id) && validLop.has(id));
-
-  const feesByMon: Record<number, PaymentFeeItem[]> = {};
-  for (const fee of goiHocPhi) {
-    feesByMon[fee.monHocId] = feesByMon[fee.monHocId]
-      ? [...feesByMon[fee.monHocId], fee]
-      : [fee];
-  }
-  const feeByClassId: Record<number, number> = {};
-  for (const id of classIds) {
-    const cls = lopHoc.find((c) => c.id === id);
-    if (!cls) continue;
-    const list = feesByMon[cls.monHocId] ?? [];
-    const saved = stored.feeByClassId[String(id)];
-    if (saved != null && list.some((f) => f.id === saved)) {
-      feeByClassId[id] = saved;
-    } else if (list[0]) {
-      feeByClassId[id] = list[0].id;
-    }
-  }
-  const skipRenewalByClassId: Record<number, boolean> = {};
-  if (stored.skipRenewalByClassId) {
-    for (const [k, v] of Object.entries(stored.skipRenewalByClassId)) {
-      const id = Number(k);
-      if (Number.isFinite(id) && classIds.includes(id) && v) {
-        skipRenewalByClassId[id] = true;
-      }
-    }
-  }
-  return { classIds, feeByClassId, skipRenewalByClassId };
 }
 
 function writeDhpClassPickToStorage(
@@ -166,6 +124,8 @@ export type PaymentClassItem = {
   gvNames: string;
   /** `ql_lop_hoc.avatar` — ảnh đại diện lớp. */
   avatar: string | null;
+  /** `ql_lop_hoc.special` — nhận cấp tốc cùng quy tắc `isHocPhiCapTocSpecial` / `HocPhiBlock`. */
+  special: string | null;
   filled: number;
   total: number;
   isFull: boolean;
@@ -186,7 +146,71 @@ export type PaymentFeeItem = {
   soBuoi: number | null;
   /** `hp_combo_mon.id` khi gói thuộc combo — dùng với `hp_combo_mon.gia_giam`. */
   comboId: number | null;
+  /** `hp_goi_hoc_phi_new.special` — khớp lớp cấp tốc (`ql_lop_hoc.special`). */
+  special: string | null;
 };
+
+/** Gói học phí hiển thị cho lớp: thường vs cấp tốc — cùng `isHocPhiCapTocSpecial` với `HocPhiBlock`. */
+function feesForClass(cls: PaymentClassItem, allFees: PaymentFeeItem[]): PaymentFeeItem[] {
+  const wantCap = isHocPhiCapTocSpecial(cls.special);
+  return allFees.filter(
+    (f) =>
+      f.monHocId === cls.monHocId &&
+      (wantCap ? isHocPhiCapTocSpecial(f.special) : !isHocPhiCapTocSpecial(f.special)),
+  );
+}
+
+/**
+ * Chỉ dùng `feeByClassId` nếu gói đó thuộc đúng môn + tier (cấp tốc / thường) của lớp —
+ * tránh id cũ sau khi đổi lớp hoặc đồng bộ catalog.
+ */
+function pickFeeIdForClass(
+  cls: PaymentClassItem,
+  allFees: PaymentFeeItem[],
+  feeByClassId: Record<number, number>
+): number | undefined {
+  const fees = feesForClass(cls, allFees);
+  if (!fees.length) return undefined;
+  const pref = feeByClassId[cls.id];
+  if (pref != null && fees.some((f) => f.id === pref)) return pref;
+  return fees[0]?.id;
+}
+
+function materializeStoredClassPick(
+  stored: DhpStoredClassPickV1,
+  lopHoc: PaymentClassItem[],
+  goiHocPhi: PaymentFeeItem[]
+): {
+  classIds: number[];
+  feeByClassId: Record<number, number>;
+  skipRenewalByClassId: Record<number, boolean>;
+} {
+  const validLop = new Set(lopHoc.map((c) => c.id));
+  const classIds = stored.classIds.filter((id) => Number.isFinite(id) && validLop.has(id));
+
+  const feeByClassId: Record<number, number> = {};
+  for (const id of classIds) {
+    const cls = lopHoc.find((c) => c.id === id);
+    if (!cls) continue;
+    const list = feesForClass(cls, goiHocPhi);
+    const saved = stored.feeByClassId[String(id)];
+    if (saved != null && list.some((f) => f.id === saved)) {
+      feeByClassId[id] = saved;
+    } else if (list[0]) {
+      feeByClassId[id] = list[0].id;
+    }
+  }
+  const skipRenewalByClassId: Record<number, boolean> = {};
+  if (stored.skipRenewalByClassId) {
+    for (const [k, v] of Object.entries(stored.skipRenewalByClassId)) {
+      const id = Number(k);
+      if (Number.isFinite(id) && classIds.includes(id) && v) {
+        skipRenewalByClassId[id] = true;
+      }
+    }
+  }
+  return { classIds, feeByClassId, skipRenewalByClassId };
+}
 
 const SEX_OPTIONS = ["Nam", "Nữ", "Khác"] as const;
 
@@ -357,22 +381,6 @@ function classSeatBadge(cls: PaymentClassItem): { className: string; label: stri
   return { className: "dhp-oc-badge dhp-oc-badge--open", label: "Còn chỗ" };
 }
 
-/**
- * Chỉ dùng `feeByClassId` nếu gói đó thuộc đúng môn của lớp — tránh gửi id cũ (vd. 1)
- * sau khi đổi lớp/môn hoặc đồng bộ catalog, gây lỗi «Không tìm thấy gói học phí» trên API.
- */
-function pickFeeIdForClass(
-  cls: PaymentClassItem,
-  feesByMon: Record<number, PaymentFeeItem[]>,
-  feeByClassId: Record<number, number>
-): number | undefined {
-  const fees = feesByMon[cls.monHocId] ?? [];
-  if (!fees.length) return undefined;
-  const pref = feeByClassId[cls.id];
-  if (pref != null && fees.some((f) => f.id === pref)) return pref;
-  return fees[0]?.id;
-}
-
 async function loadQlEnrollmentKyFromHp(
   supabase: NonNullable<ReturnType<typeof createBrowserSupabaseClient>>,
   qlRows: unknown[],
@@ -396,20 +404,14 @@ function buildEnrollmentSelection(
   lopHoc: PaymentClassItem[],
   goiHocPhi: PaymentFeeItem[]
 ): { selectedClassIds: number[]; feeByClassId: Record<number, number> } {
-  const feesByMon: Record<number, PaymentFeeItem[]> = {};
-  for (const fee of goiHocPhi) {
-    feesByMon[fee.monHocId] = feesByMon[fee.monHocId]
-      ? [...feesByMon[fee.monHocId], fee]
-      : [fee];
-  }
   const valid =
     enrolledLopIds?.filter((id) => lopHoc.some((c) => c.id === id)) ?? [];
   const feeByClassId: Record<number, number> = {};
   for (const id of valid) {
     const cls = lopHoc.find((c) => c.id === id);
     if (!cls) continue;
-    const f = feesByMon[cls.monHocId]?.[0];
-    if (f) feeByClassId[id] = f.id;
+    const fid = pickFeeIdForClass(cls, goiHocPhi, {});
+    if (fid != null) feeByClassId[id] = fid;
   }
   return { selectedClassIds: valid, feeByClassId };
 }
@@ -954,23 +956,15 @@ export default function DongHocPhiClient({
     });
   }, [lopHoc, selectedClassIds, monHoc]);
 
-  const availableFeeByMon = useMemo(() => {
-    const map: Record<number, PaymentFeeItem[]> = {};
-    for (const fee of goiHocPhi) {
-      map[fee.monHocId] = map[fee.monHocId] ? [...map[fee.monHocId], fee] : [fee];
-    }
-    return map;
-  }, [goiHocPhi]);
-
   const subtotalGoiDong = useMemo(() => {
     return selectedClasses.reduce((sum, cls) => {
       if (skipRenewalByClassId[cls.id]) return sum;
-      const feeId = pickFeeIdForClass(cls, availableFeeByMon, feeByClassId);
+      const feeId = pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
       const selectedFee =
         feeId != null ? goiHocPhi.find((f) => f.id === feeId) : undefined;
       return sum + (selectedFee?.giaThucDong ?? 0);
     }, 0);
-  }, [selectedClasses, skipRenewalByClassId, availableFeeByMon, feeByClassId, goiHocPhi]);
+    }, [selectedClasses, skipRenewalByClassId, feeByClassId, goiHocPhi]);
 
   const payingComboLines = useMemo(() => {
     const out: {
@@ -981,7 +975,7 @@ export default function DongHocPhiClient({
     }[] = [];
     for (const cls of selectedClasses) {
       if (skipRenewalByClassId[cls.id]) continue;
-      const feeId = pickFeeIdForClass(cls, availableFeeByMon, feeByClassId);
+      const feeId = pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
       if (feeId == null) continue;
       const fee = goiHocPhi.find((f) => f.id === feeId);
       if (!fee) continue;
@@ -993,7 +987,7 @@ export default function DongHocPhiClient({
       });
     }
     return out;
-  }, [selectedClasses, skipRenewalByClassId, availableFeeByMon, feeByClassId, goiHocPhi]);
+  }, [selectedClasses, skipRenewalByClassId, feeByClassId, goiHocPhi]);
 
   const comboDiscountDong = useMemo(
     () =>
@@ -1009,7 +1003,7 @@ export default function DongHocPhiClient({
   const summaryLineDiscountDong = useMemo(() => {
     return selectedClasses.reduce((acc, cls) => {
       if (skipRenewalByClassId[cls.id]) return acc;
-      const feeId = pickFeeIdForClass(cls, availableFeeByMon, feeByClassId);
+      const feeId = pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
       if (feeId == null) return acc;
       const fee = goiHocPhi.find((f) => f.id === feeId);
       if (!fee) return acc;
@@ -1017,7 +1011,7 @@ export default function DongHocPhiClient({
       const thuc = Math.max(0, Math.round(fee.giaThucDong));
       return acc + Math.max(0, goc - thuc);
     }, 0);
-  }, [selectedClasses, skipRenewalByClassId, availableFeeByMon, feeByClassId, goiHocPhi]);
+  }, [selectedClasses, skipRenewalByClassId, feeByClassId, goiHocPhi]);
 
   /** Chiết khấu % gói + `gia_giam` combo (`hp_combo_mon`) khi đủ điều kiện — khớp `HocPhiBlock`. */
   const summaryDiscountTotalDong = useMemo(
@@ -1044,12 +1038,12 @@ export default function DongHocPhiClient({
           if (skipRenewalByClassId[id]) return `${id}:skip`;
           const c = lopHoc.find((x) => x.id === id);
           const fid = c
-            ? pickFeeIdForClass(c, availableFeeByMon, feeByClassId)
+            ? pickFeeIdForClass(c, goiHocPhi, feeByClassId)
             : undefined;
           return `${id}:${fid ?? ""}`;
         })
         .join("|"),
-    [selectedClassIds, skipRenewalByClassId, lopHoc, availableFeeByMon, feeByClassId]
+    [selectedClassIds, skipRenewalByClassId, lopHoc, goiHocPhi, feeByClassId]
   );
 
   useEffect(() => {
@@ -1422,12 +1416,12 @@ export default function DongHocPhiClient({
     const paying = selectedClasses.filter((c) => !skipRenewalByClassId[c.id]);
     if (paying.length === 0 || total <= 0) return false;
     for (const c of paying) {
-      if (pickFeeIdForClass(c, availableFeeByMon, feeByClassId) == null) {
+      if (pickFeeIdForClass(c, goiHocPhi, feeByClassId) == null) {
         return false;
       }
     }
     return true;
-  }, [selectedClasses, skipRenewalByClassId, total, availableFeeByMon, feeByClassId]);
+  }, [selectedClasses, skipRenewalByClassId, total, goiHocPhi, feeByClassId]);
 
   const canGoStep2 =
     fullName.trim().length > 1 &&
@@ -1575,7 +1569,7 @@ export default function DongHocPhiClient({
     }
   }
 
-  function toggleClass(id: number, monId: number): void {
+  function toggleClass(id: number): void {
     const row = lopHoc.find((c) => c.id === id);
     if (row?.isFull) return;
 
@@ -1594,7 +1588,8 @@ export default function DongHocPhiClient({
         });
         return next;
       }
-      const defaultFee = availableFeeByMon[monId]?.[0];
+      const list = row ? feesForClass(row, goiHocPhi) : [];
+      const defaultFee = list[0];
       if (defaultFee) {
         setFeeByClassId((feePrev) => ({ ...feePrev, [id]: defaultFee.id }));
       }
@@ -1695,7 +1690,7 @@ export default function DongHocPhiClient({
       const lines = selectedClasses
         .filter((c) => !skipRenewalByClassId[c.id])
         .map((c) => {
-          const feeId = pickFeeIdForClass(c, availableFeeByMon, feeByClassId);
+          const feeId = pickFeeIdForClass(c, goiHocPhi, feeByClassId);
           if (feeId == null) throw new Error("Thiếu gói học phí cho một lớp.");
           return { lopId: c.id, goiId: feeId };
         });
@@ -1786,15 +1781,17 @@ export default function DongHocPhiClient({
           <div>
             <p className="dhp-kicker">Đóng học phí tự động</p>
             <h1 className="dhp-title">Trang thanh toán</h1>
-            <p className="dhp-sub">
-              Điền thông tin theo hồ sơ học viên, chọn lớp và gói học phí — dữ liệu bước 1 tương ứng bảng{" "}
-              <code className="dhp-code">ql_thong_tin_hoc_vien</code>.
-            </p>
           </div>
         </header>
 
-        {step === 1 || step === 2 ? (
-          <div className="dhp-actions dhp-actions--step-bar">
+        {step === 1 || step === 2 || (step === 3 && !paymentComplete) ? (
+          <div
+            className={
+              step === 3
+                ? "dhp-actions dhp-actions--step-bar dhp-actions--step3-only"
+                : "dhp-actions dhp-actions--step-bar"
+            }
+          >
             {step === 1 ? (
               <button
                 type="button"
@@ -1808,7 +1805,7 @@ export default function DongHocPhiClient({
                     ? "Tiếp theo"
                     : "Tiếp theo — Tra hồ sơ & chọn lớp"}
               </button>
-            ) : (
+            ) : step === 2 ? (
               <>
                 <button type="button" className="dhp-btn dhp-btn-ghost" onClick={() => setStep(1)}>
                   Quay lại
@@ -1817,6 +1814,14 @@ export default function DongHocPhiClient({
                   Xác nhận — Tiếp tục thanh toán
                 </button>
               </>
+            ) : (
+              <button
+                type="button"
+                className="dhp-btn dhp-btn-ghost"
+                onClick={() => setStep(2)}
+              >
+                ← Đổi lớp
+              </button>
             )}
           </div>
         ) : null}
@@ -1875,19 +1880,18 @@ export default function DongHocPhiClient({
               </div>
 
               <div className="dhp-field dhp-field--full">
-                <label htmlFor="dhp-email">Email</label>
+                <label htmlFor="dhp-email">Email *</label>
                 <input
                   id="dhp-email"
                   name="email"
                   type="email"
                   autoComplete="email"
-                  placeholder="vd. tenban@gmail.com — Hotmail/Outlook, Yahoo, iCloud…"
+                  required
+                  aria-required="true"
+                  placeholder="vd. tenban@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
-                <p className="dhp-s1-avatar-sub" role="note">
-                  {STUDENT_EMAIL_REQUIREMENT_VI}
-                </p>
               </div>
 
               <div className="dhp-field-row">
@@ -1957,11 +1961,6 @@ export default function DongHocPhiClient({
               {dhCatalog && loaiKhoaHoc === "Luyện thi" ? (
                 <div className="dhp-nv-block">
                   <div className="dhp-sec-label dhp-nv-sec">Muốn thi vào trường &amp; ngành</div>
-                  <p className="dhp-nv-hint">
-                    Tùy chọn — có thể bỏ trống. Có thể thêm nhiều dòng; mỗi dòng là một cặp trường và ngành (theo
-                    danh mục đã liên kết). Dữ liệu được ghi vào hệ thống khi bạn tạo đơn thanh toán ở bước 3 — không
-                    cần nút Lưu riêng.
-                  </p>
                   <div className="dhp-nv-rows">
                     {nguyenVongRows.map((row, idx) => {
                       const nganhOpts =
@@ -2140,6 +2139,7 @@ export default function DongHocPhiClient({
             <div className="dhp-oc-grid">
               {classesForTab.map((cls) => {
                 const checked = selectedClassIds.includes(cls.id);
+                const isCapTocLop = isHocPhiCapTocSpecial(cls.special);
                 const thumbSrc = cls.avatar
                   ? cfImageForThumbnail(cls.avatar) || cls.avatar
                   : null;
@@ -2154,17 +2154,18 @@ export default function DongHocPhiClient({
                       !cls.isFull ? "dhp-oc-card--pickable" : "",
                       cls.isFull ? "dhp-oc-card--disabled" : "",
                       checked && !cls.isFull ? "dhp-oc-card--selected" : "",
+                      isCapTocLop ? "dhp-oc-card--cap-toc" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
                     onClick={() => {
-                      if (!cls.isFull) toggleClass(cls.id, cls.monHocId);
+                      if (!cls.isFull) toggleClass(cls.id);
                     }}
                     onKeyDown={(e) => {
                       if (cls.isFull) return;
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        toggleClass(cls.id, cls.monHocId);
+                        toggleClass(cls.id);
                       }
                     }}
                     aria-pressed={cls.isFull ? undefined : checked}
@@ -2186,7 +2187,17 @@ export default function DongHocPhiClient({
                       </div>
                       <div className="dhp-oc-details-main">
                         <p className="dhp-oc-gv">GV: {cls.gvNames}</p>
-                        <h3 className="dhp-oc-card-title">{cls.tenLop}</h3>
+                        <div className="dhp-oc-title-row">
+                          <h3 className="dhp-oc-card-title">{cls.tenLop}</h3>
+                          {isCapTocLop ? (
+                            <span
+                              className="dhp-oc-cap-pill"
+                              title="Lớp cấp tốc (ql_lop_hoc.special — cùng quy tắc gói «Cấp tốc» trên khóa học)"
+                            >
+                              Cấp tốc
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="dhp-oc-lich">{cls.lichHoc}</p>
                       </div>
                     </div>
@@ -2210,11 +2221,11 @@ export default function DongHocPhiClient({
               <div className="dhp-s3-left">
                 <div className="dhp-s3-list">
                   {selectedClasses.map((cls, idx) => {
-                    const fees = availableFeeByMon[cls.monHocId] ?? [];
+                    const fees = feesForClass(cls, goiHocPhi);
                     const skipRenew = Boolean(skipRenewalByClassId[cls.id]);
                     const selectedFeeId = skipRenew
                       ? undefined
-                      : pickFeeIdForClass(cls, availableFeeByMon, feeByClassId);
+                      : pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
                     const fee =
                       selectedFeeId != null
                         ? goiHocPhi.find((f) => f.id === selectedFeeId)
@@ -2307,8 +2318,7 @@ export default function DongHocPhiClient({
                                   }));
                                 }}
                               >
-                                <div className="dhp-gt">Không</div>
-                                <div className="dhp-gd">gia hạn</div>
+                                <div className="dhp-gt dhp-gt--skip-full">Không gia hạn luôn</div>
                                 <div className="dhp-gp dhp-gp--muted">0 ₫</div>
                               </button>
                             </div>
@@ -2377,15 +2387,6 @@ export default function DongHocPhiClient({
                     );
                   })}
                 </div>
-                <div className="dhp-s3-nav dhp-s3-nav--single">
-                  <button
-                    type="button"
-                    className="dhp-s3-btn-back dhp-s3-btn-back--full"
-                    onClick={() => setStep(2)}
-                  >
-                    ← Đổi lớp
-                  </button>
-                </div>
               </div>
 
               <aside className="dhp-s3-right">
@@ -2412,7 +2413,7 @@ export default function DongHocPhiClient({
                       const skipRenew = Boolean(skipRenewalByClassId[cls.id]);
                       const selectedFeeId = skipRenew
                         ? undefined
-                        : pickFeeIdForClass(cls, availableFeeByMon, feeByClassId);
+                        : pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
                       const fee =
                         selectedFeeId != null
                           ? goiHocPhi.find((f) => f.id === selectedFeeId)
@@ -2703,7 +2704,7 @@ export default function DongHocPhiClient({
                                   const skipRenew = Boolean(skipRenewalByClassId[cls.id]);
                                   const selectedFeeId = skipRenew
                                     ? undefined
-                                    : pickFeeIdForClass(cls, availableFeeByMon, feeByClassId);
+                                    : pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
                                   const fee =
                                     selectedFeeId != null
                                       ? goiHocPhi.find((f) => f.id === selectedFeeId)
@@ -2754,7 +2755,7 @@ export default function DongHocPhiClient({
                             const skipRenew = Boolean(skipRenewalByClassId[cls.id]);
                             const selectedFeeId = skipRenew
                               ? undefined
-                              : pickFeeIdForClass(cls, availableFeeByMon, feeByClassId);
+                              : pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
                             const fee =
                               selectedFeeId != null
                                 ? goiHocPhi.find((f) => f.id === selectedFeeId)

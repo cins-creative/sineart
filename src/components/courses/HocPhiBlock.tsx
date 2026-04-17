@@ -1,12 +1,19 @@
 "use client";
 
+import { Flame } from "lucide-react";
 import type {
   HocPhiBlockData,
   HocPhiComboRow,
   HocPhiGoiRow,
 } from "@/types/khoa-hoc";
-import { dedupeMon1Pills, durationKey, sameDur } from "@/lib/hocPhiDedupe";
+import {
+  dedupeMon1Pills,
+  durationKey,
+  isHocPhiCapTocSpecial,
+  sameDur,
+} from "@/lib/hocPhiDedupe";
 import { useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import "./hoc-phi-block.css";
 
 function calc(giaGoc: number, disc: number): number {
@@ -29,27 +36,51 @@ function hasPartnerPackageAtDuration(
     (r) =>
       r.mon_hoc === partnerMonId &&
       r.number === number &&
-      r.don_vi.trim() === dv
+      r.don_vi.trim() === dv,
   );
 }
 
 export default function HocPhiBlock({
   monHocId,
   data,
+  /** Chỉ khi môn thuộc loại «Luyện thi» (theo `ql_mon_hoc.loai_khoa_hoc` trên trang khóa). */
+  allowCapTocToggle = false,
 }: {
   monHocId: number;
   data: HocPhiBlockData;
+  allowCapTocToggle?: boolean;
 }) {
-  const { gois, combos, monMap } = data;
+  const { gois: goisAll, combos, monMap } = data;
+
+  const hasExpressPackages = useMemo(
+    () => goisAll.some((r) => isHocPhiCapTocSpecial(r.special)),
+    [goisAll],
+  );
+
+  const showCapTocToggle = allowCapTocToggle && hasExpressPackages;
+
+  const [expressMode, setExpressMode] = useState(false);
+
+  useEffect(() => {
+    if (!showCapTocToggle) setExpressMode(false);
+  }, [showCapTocToggle]);
+
+  const gois = useMemo(() => {
+    if (!allowCapTocToggle) {
+      return goisAll.filter((r) => !isHocPhiCapTocSpecial(r.special));
+    }
+    if (expressMode) return goisAll.filter((r) => isHocPhiCapTocSpecial(r.special));
+    return goisAll.filter((r) => !isHocPhiCapTocSpecial(r.special));
+  }, [goisAll, expressMode, allowCapTocToggle]);
 
   const mon1Gois = useMemo(
     () => gois.filter((r) => r.mon_hoc === monHocId),
-    [gois, monHocId]
+    [gois, monHocId],
   );
 
   const mon1Pills = useMemo(
     () => dedupeMon1Pills(mon1Gois),
-    [mon1Gois]
+    [mon1Gois],
   );
 
   const [selGoi, setSelGoi] = useState<HocPhiGoiRow | null>(null);
@@ -63,7 +94,7 @@ export default function HocPhiBlock({
     setSelGoi(mon1Pills[0] ?? null);
     setSelPartners(new Set());
     setPartnerDur({});
-  }, [monHocId, mon1Pills]);
+  }, [monHocId, mon1Pills, expressMode]);
 
   const partnerMonIds = useMemo(
     () =>
@@ -76,13 +107,13 @@ export default function HocPhiBlock({
                 r.mon_hoc !== monHocId &&
                 gois.some(
                   (g) =>
-                    g.mon_hoc === monHocId && g.combo_id === r.combo_id
-                )
+                    g.mon_hoc === monHocId && g.combo_id === r.combo_id,
+                ),
             )
-            .map((r) => r.mon_hoc)
+            .map((r) => r.mon_hoc),
         ),
       ],
-    [gois, monHocId]
+    [gois, monHocId],
   );
 
   const activeCombo: HocPhiComboRow | null = useMemo(() => {
@@ -110,6 +141,24 @@ export default function HocPhiBlock({
       }) ?? null
     );
   }, [selGoi, selPartners, partnerDur, gois, combos, monHocId]);
+
+  const headerRow = (
+    <div className="hpb-goi-head">
+      <div className="kd-goi-tiny">Học phí</div>
+      {showCapTocToggle ? (
+        <button
+          type="button"
+          className={cn("hpb-cap-toc", expressMode && "hpb-cap-toc--on")}
+          aria-pressed={expressMode}
+          title="Gói cấp tốc (theo cột special trên admin)"
+          onClick={() => setExpressMode((v) => !v)}
+        >
+          <Flame className="hpb-cap-toc-flame" size={14} strokeWidth={2.2} aria-hidden />
+          <span>Cấp tốc</span>
+        </button>
+      ) : null}
+    </div>
+  );
 
   function handleSelectMon1(number: number, don_vi: string) {
     const dv = don_vi.trim();
@@ -173,9 +222,11 @@ export default function HocPhiBlock({
   if (!mon1Pills.length) {
     return (
       <section className="hpb-wrap kd-goi-widget" aria-label="Bảng học phí">
-        <div className="kd-goi-tiny">Học phí</div>
+        {headerRow}
         <div className="hpb-state">
-          Chưa có gói học phí cho môn này.
+          {expressMode
+            ? "Chưa có gói cấp tốc cho môn này (đặt special chứa «Cấp tốc» trên admin)."
+            : "Chưa có gói học phí cho môn này."}
         </div>
         <a href="/donghocphi" className="hpb-link kd-goi-link">
           Đăng ký / đóng học phí →
@@ -186,7 +237,7 @@ export default function HocPhiBlock({
 
   return (
     <section className="hpb-wrap kd-goi-widget" aria-label="Bảng học phí">
-      <div className="kd-goi-tiny">Học phí</div>
+      {headerRow}
       <div className="hpb-price-wrap">
         <span className="hpb-price-main">
           {selGoi ? vnd(total) : "—"}

@@ -52,6 +52,7 @@ import type {
   AdminNhanSuRow,
   AdminPhongOption,
 } from "@/lib/data/admin-quan-ly-nhan-su";
+import { normalizeHrStaffStatusDisplayLabel } from "@/lib/admin/staff-employment-status";
 import { copyDomAsPngToClipboard } from "@/lib/copy-dom-png-clipboard";
 import { cn } from "@/lib/utils";
 
@@ -214,27 +215,7 @@ function vaiTroLabel(raw: string | null): string {
 }
 
 function statusNormLabel(raw: string | null): string {
-  if (!raw?.trim()) return "—";
-  const s = raw.trim();
-  const lower = s.toLowerCase();
-  const aliases: Record<string, string> = {
-    active: "Đang làm",
-    inactive: "Nghỉ",
-    "đang làm": "Đang làm",
-    "dang lam": "Đang làm",
-    "đang làm việc": "Đang làm",
-    "thử việc": "Thử việc",
-    "thu viec": "Thử việc",
-    nghỉ: "Nghỉ",
-    "nghỉ việc": "Nghỉ",
-    "nghi viec": "Nghỉ",
-    resigned: "Nghỉ",
-    offline: "Nghỉ",
-  };
-  const mapped = aliases[lower];
-  if (mapped) return mapped;
-  if (STATUS_PILL[s]) return s;
-  return s;
+  return normalizeHrStaffStatusDisplayLabel(raw);
 }
 
 function statusFilterKey(raw: string | null): StatusFilterKey {

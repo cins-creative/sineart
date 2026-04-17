@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { signAdminSessionToken } from "@/lib/admin/jwt-admin";
+import { isHrStaffBlockedFromAdminStatus } from "@/lib/admin/staff-employment-status";
 import { hasPasswordSet, fetchStaffByEmailForAuth } from "@/lib/admin/staff-row";
 import { verifyPassword, hashPassword } from "@/lib/admin/password";
 import { attachAdminSessionCookie } from "@/lib/admin/session-cookie";
@@ -48,6 +49,17 @@ export async function POST(req: Request): Promise<NextResponse> {
   const ok = await verifyPassword(password, row.password);
   if (!ok) {
     return NextResponse.json({ ok: false, code: "AUTH", error: "Email hoặc mật khẩu không đúng." }, { status: 401 });
+  }
+
+  if (isHrStaffBlockedFromAdminStatus(row.status)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "STAFF_INACTIVE",
+        error: "Tài khoản đang ở trạng thái nghỉ — không thể đăng nhập admin.",
+      },
+      { status: 403 }
+    );
   }
 
   const stored = String(row.password ?? "");

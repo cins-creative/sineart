@@ -204,25 +204,36 @@
   margin-bottom: 6px;
 }
 
-.dhp-nv-hint {
-  font-size: 12px;
-  line-height: 1.45;
-  color: #888;
-  margin: 0 0 10px;
-}
-
 .dhp-nv-rows {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-bottom: 8px;
+  min-width: 0;
 }
 
 .dhp-nv-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  /* Cột trường hẹp hơn ngành; minmax(0,…) + min-width:0 trên ô/select tránh tràn do option tên dài */
+  grid-template-columns: minmax(0, 34%) minmax(0, 1fr) auto;
   gap: 8px;
   align-items: end;
+  min-width: 0;
+}
+
+.dhp-nv-row > .dhp-field {
+  min-width: 0;
+}
+
+.dhp-nv-row .dhp-field select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.dhp-nv-row > .dhp-field:first-child select {
+  font-size: 12px;
 }
 
 .dhp-field--nv {
@@ -396,6 +407,11 @@
   margin-top: 0;
   margin-bottom: 14px;
   flex-wrap: wrap;
+}
+
+/* Bước 3 (trước khi hoàn tất): một nút «Đổi lớp» — căn trái như thao tác quay lại */
+.dhp-actions--step-bar.dhp-actions--step3-only {
+  justify-content: flex-start;
 }
 
 .dhp-btn {
@@ -603,21 +619,11 @@
   transition: box-shadow 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 
-/* Grayscale chỉ áp vào ảnh + phần text; badge (`.dhp-oc-details-foot`) giữ màu */
 .dhp-oc-muted-block {
   display: flex;
   flex-direction: column;
   min-width: 0;
   flex: 1;
-  transition: filter 0.22s ease;
-}
-
-.dhp-oc-card--pickable:not(.dhp-oc-card--selected) .dhp-oc-muted-block {
-  filter: saturate(0);
-}
-
-.dhp-oc-card--pickable.dhp-oc-card--selected:not(.dhp-oc-card--disabled) .dhp-oc-muted-block {
-  filter: none;
 }
 
 .dhp-oc-card--pickable {
@@ -635,10 +641,6 @@
 
 .dhp-oc-card--pickable:hover:not(.dhp-oc-card--disabled) {
   border-color: #f8a66866;
-}
-
-.dhp-oc-card--disabled .dhp-oc-muted-block {
-  filter: saturate(0);
 }
 
 .dhp-oc-card--disabled {
@@ -688,6 +690,36 @@
   font-weight: 800;
   line-height: 1.3;
   color: var(--ink, #2d2020);
+}
+
+.dhp-oc-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.dhp-oc-title-row .dhp-oc-card-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.dhp-oc-cap-pill {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(220, 38, 38, 0.45);
+  color: #9f1239;
+  background: linear-gradient(180deg, #fff1f2 0%, #fecdd3 100%);
+  line-height: 1.2;
+}
+
+.dhp-oc-card--cap-toc {
+  border-color: rgba(248, 113, 113, 0.38);
 }
 
 .dhp-oc-lich {
@@ -1293,6 +1325,8 @@
 .dhp-s3-left {
   flex: 1;
   min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .dhp-s3-list {
@@ -1332,9 +1366,9 @@
 }
 
 .dhp-ktitle {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink, #2d2020);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink, #1c1917);
   flex: 1;
   line-height: 1.35;
 }
@@ -1348,17 +1382,18 @@
 
 .dhp-kb-lich {
   margin: 0 0 2px;
-  font-size: 11px;
-  color: #999;
+  font-size: 12px;
+  color: #57534e;
   line-height: 1.45;
+  font-weight: 600;
 }
 
 .dhp-kb-fl {
-  font-size: 10px;
-  font-weight: 700;
-  color: #aaa;
+  font-size: 11px;
+  font-weight: 800;
+  color: #44403c;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   margin: 0;
 }
 
@@ -1491,40 +1526,15 @@
   background: #f5f5f4;
 }
 
-.dhp-gb--skip.dhp-gb--on .dhp-gt {
+.dhp-gb--skip .dhp-gt--skip-full {
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+  font-weight: 800;
+}
+
+.dhp-gb--skip.dhp-gb--on .dhp-gt--skip-full {
   color: #44403c;
-}
-
-.dhp-gb--skip.dhp-gb--on .dhp-gd {
-  color: #78716c;
-}
-
-.dhp-s3-nav {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.dhp-s3-nav--single {
-  flex-direction: column;
-}
-
-.dhp-s3-btn-back {
-  flex: 1;
-  padding: 9px;
-  border: 1.5px solid #eee;
-  border-radius: 11px;
-  background: #fff;
-  color: #888;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.dhp-s3-btn-back--full {
-  flex: none;
-  width: 100%;
 }
 
 .dhp-s3-btn-create {
@@ -1548,10 +1558,6 @@
   opacity: 0.55;
   cursor: not-allowed;
   filter: none;
-}
-
-.dhp-s3-btn-back:hover {
-  background: #fafafa;
 }
 
 .dhp-qr-err {
@@ -1584,16 +1590,16 @@
   max-width: 280px;
 }
 
-/* date-box — sineart_full_flow_final.html (.date-box …) */
+/* date-box — gia hạn: nhãn đậm, số buổi xanh lá (đồng bộ tóm tắt đơn) */
 .dhp-date-box {
   margin-top: 10px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 11px;
-  border: 1px solid #f0f0f0;
-  background: #fafafa;
+  border: 1px solid #e7e5e4;
+  background: #fafaf9;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 7px;
 }
 
 .dhp-date-row {
@@ -1601,7 +1607,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .dhp-date-row--stack {
@@ -1630,19 +1636,23 @@
 }
 
 .dhp-date-k {
-  color: #aaa;
-  font-weight: 600;
+  color: #44403c;
+  font-weight: 700;
   flex-shrink: 0;
+  font-size: 13px;
 }
 
 .dhp-date-k--total {
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1c1917;
   align-self: center;
 }
 
 .dhp-date-v {
-  color: var(--ink, #2d2020);
-  font-weight: 700;
+  color: var(--ink, #1c1917);
+  font-weight: 800;
+  font-size: 13px;
   text-align: right;
   line-height: 1.35;
   max-width: min(100%, 220px);
@@ -1658,18 +1668,18 @@
 
 .dhp-pill-buoi {
   display: inline-flex;
-  padding: 2px 7px;
+  padding: 3px 9px;
   border-radius: 20px;
-  background: rgba(110, 254, 192, 0.28);
-  color: var(--ink, #2d2020);
-  font-size: 11px;
-  font-weight: 700;
+  background: rgba(34, 197, 94, 0.2);
+  color: #14532d;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .dhp-date-new {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
-  color: var(--ink, #2d2020);
+  color: var(--ink, #1c1917);
 }
 
 .dhp-date-total-val {
@@ -1681,20 +1691,22 @@
 }
 
 .dhp-tn {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 800;
-  color: #ee5b9f;
+  color: #15803d;
+  letter-spacing: -0.02em;
 }
 
 .dhp-tn-unit {
-  font-size: 11px;
-  color: #f8a668;
-  font-weight: 600;
+  font-size: 12px;
+  color: #166534;
+  font-weight: 700;
 }
 
 .dhp-tn-hint {
-  font-size: 10px;
-  color: #bbb;
+  font-size: 11px;
+  color: #78716c;
+  font-weight: 600;
 }
 
 .dhp-date-note {
@@ -1725,21 +1737,21 @@
 }
 
 .dhp-s3-fl {
-  font-size: 10px;
-  font-weight: 700;
-  color: #aaa;
+  font-size: 11px;
+  font-weight: 800;
+  color: #0a0a0a;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0 0 8px;
+  letter-spacing: 0.08em;
+  margin: 0 0 10px;
 }
 
 .dhp-s3-sec-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #f8a668;
-  margin: 0 0 9px;
+  color: #c2410c;
+  margin: 0 0 10px;
 }
 
 .dhp-hv-row {
@@ -1766,25 +1778,27 @@
 }
 
 .dhp-hv-n {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink, #2d2020);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink, #1c1917);
   margin-bottom: 1px;
 }
 
 .dhp-hv-s {
-  font-size: 11px;
-  color: #888;
+  font-size: 12px;
+  color: #57534e;
+  font-weight: 600;
   line-height: 1.35;
 }
 
 .dhp-sum-box {
-  background: #fafafa;
+  background: #fafaf9;
   border-radius: 11px;
-  padding: 10px 12px;
+  padding: 12px 14px;
+  border: 1px solid #e7e5e4;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .dhp-sum-block:last-of-type .dhp-sdiv {
@@ -1795,13 +1809,14 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
-  gap: 8px;
+  font-size: 13px;
+  gap: 10px;
 }
 
 .dhp-sk {
-  color: #888;
-  font-weight: 600;
+  color: #44403c;
+  font-weight: 700;
+  font-size: 13px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1809,24 +1824,28 @@
 }
 
 .dhp-sk--muted {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
+  color: #57534e;
 }
 
 .dhp-sv {
-  color: var(--ink, #2d2020);
-  font-weight: 700;
+  color: var(--ink, #1c1917);
+  font-weight: 800;
   text-align: right;
+  font-size: 13px;
 }
 
 .dhp-sv--money {
-  font-size: 11px;
-  color: #ee5b9f;
+  font-size: 14px;
+  color: #be185d;
+  font-weight: 800;
 }
 
 .dhp-sv--sessions {
-  font-size: 11px;
-  color: #bb89f8;
+  font-size: 14px;
+  font-weight: 800;
+  color: #15803d;
 }
 
 .dhp-sv--strike {
@@ -1858,9 +1877,9 @@
 }
 
 .dhp-st-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink, #2d2020);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink, #1c1917);
 }
 
 .dhp-st-val {

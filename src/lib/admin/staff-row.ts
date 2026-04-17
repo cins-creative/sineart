@@ -5,6 +5,7 @@ export type HrNhanSuAuthRow = {
   email: string | null;
   full_name: string | null;
   password: string | null;
+  status: string | null;
 };
 
 function normalizeEmail(email: string): string {
@@ -16,6 +17,7 @@ function mapHrRow(data: {
   email?: unknown;
   full_name?: unknown;
   password?: unknown;
+  status?: unknown;
 }): HrNhanSuAuthRow | null {
   const id = Number(data.id);
   if (!Number.isFinite(id) || id <= 0) return null;
@@ -24,6 +26,7 @@ function mapHrRow(data: {
     email: data.email != null ? String(data.email) : null,
     full_name: data.full_name != null ? String(data.full_name) : null,
     password: data.password != null ? String(data.password) : null,
+    status: data.status != null ? String(data.status) : null,
   };
 }
 
@@ -40,7 +43,7 @@ export async function fetchStaffByEmailForAuth(
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
 
-  const select = "id, email, full_name, password";
+  const select = "id, email, full_name, password, status";
 
   for (const candidate of [...new Set([normalized, trimmed])]) {
     if (!candidate) continue;

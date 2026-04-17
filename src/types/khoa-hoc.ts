@@ -94,6 +94,8 @@ export type HocPhiGoiRow = {
   combo_id: number | null;
   /** `hp_goi_hoc_phi_new.so_buoi` — số buổi gói (đóng học phí). */
   so_buoi: number | null;
+  /** `hp_goi_hoc_phi_new.special` — vd. «Cấp tốc» để tách gói cấp tốc. */
+  special: string | null;
 };
 
 /** Một dòng `hp_combo_mon` */

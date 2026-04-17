@@ -7,6 +7,7 @@ import {
 import { ADMIN_PWD_RESET_JWT_TYP, ADMIN_PWD_SETUP_JWT_TYP } from "@/lib/admin/constants";
 import { isAdminJwtSecretConfigured, signPasswordActionToken } from "@/lib/admin/jwt-admin";
 import { getSiteOrigin } from "@/lib/admin/site-origin";
+import { isHrStaffBlockedFromAdminStatus } from "@/lib/admin/staff-employment-status";
 import { hasPasswordSet, fetchStaffByEmailForAuth } from "@/lib/admin/staff-row";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -42,7 +43,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   const row = await fetchStaffByEmailForAuth(supabase, email);
-  if (!row?.email) {
+  if (!row?.email || isHrStaffBlockedFromAdminStatus(row.status)) {
     return NextResponse.json(PUBLIC_OK);
   }
 

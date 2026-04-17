@@ -18,7 +18,7 @@ export default function KhoaHocPage({
   searchParams: Promise<{ nhom?: string }>;
 }) {
   return (
-    <div className="sa-root khoa-hoc-page">
+    <div className="sa-root khoa-hoc-page khoa-hoc-catalog">
       <Suspense fallback={<KhoaHocPageSkeleton />}>
         <KhoaHocPageContent searchParams={searchParams} />
       </Suspense>

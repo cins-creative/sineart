@@ -18,6 +18,11 @@
   margin-right: auto;
 }
 
+/* Trang mục lục /khoa-hoc — căn giữa, không rộng quá trên desktop */
+.sa-root.khoa-hoc-page.khoa-hoc-catalog {
+  max-width: 700px;
+}
+
 .sa-root.khoa-hoc-page::after {
   opacity: 0;
 }

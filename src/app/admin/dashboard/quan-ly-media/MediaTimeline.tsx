@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 
-import { updateMktMediaProjectScheduleAndTeam } from "@/app/admin/dashboard/quan-ly-media/actions";
+import AdminMinhHoaDropzone, {
+  minhHoaUrlsFromSlots,
+  slotsFromMinhHoaUrls,
+  type MinhHoaUploadSlot,
+} from "@/app/admin/_components/AdminMinhHoaDropzone";
+import { updateMktMediaProjectDetail } from "@/app/admin/dashboard/quan-ly-media/actions";
 import { htmlToPlainText, sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
 import type {
   HrNhanSuStaffOption,
@@ -11,6 +16,7 @@ import type {
   StaffAvatarById,
   StaffNameById,
 } from "@/lib/data/admin-quan-ly-media";
+import { MKT_MEDIA_STATUS_OPTIONS, MKT_MEDIA_TYPE_OPTIONS } from "@/lib/data/mkt-media-form";
 
 type MediaTimelineProps = {
   initialProjects: Project[];
@@ -440,7 +446,7 @@ function remainingDaysLabel(endDateStr: string | null): string {
   return `Quá hạn ${-n} ngày`;
 }
 
-/** Giá trị `YYYY-MM-DD` cho `<input type="date">`. */
+/** Chuẩn hóa từ DB / ISO → `YYYY-MM-DD` (nội bộ). */
 function projectDateToYmdInput(s: string | null): string {
   if (!s) return "";
   const t = s.trim();
@@ -448,6 +454,47 @@ function projectDateToYmdInput(s: string | null): string {
   const d = new Date(t);
   if (Number.isNaN(d.getTime())) return "";
   return ymd(startOfLocalDay(d));
+}
+
+/** `YYYY-MM-DD` → `dd/mm/yy` (ô nhập trong modal). */
+function ymdIsoToDdMmYy(ymdIso: string): string {
+  const t = ymdIso.trim();
+  if (!t) return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return "";
+  const y = Number(t.slice(0, 4));
+  const mo = t.slice(5, 7);
+  const d = t.slice(8, 10);
+  if (!Number.isFinite(y)) return "";
+  const yy = String(y % 100).padStart(2, "0");
+  return `${d}/${mo}/${yy}`;
+}
+
+/** `dd/mm/yy` hoặc `dd/mm/yyyy` → `YYYY-MM-DD` hoặc null. Năm 2 chữ số: 70–99 → 19xx, còn lại → 20xx. */
+function parseDdMmYyToYmd(s: string): string | null {
+  const raw = s.trim();
+  if (!raw) return null;
+  const m4 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+  const m2 = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(raw);
+  const m = m4 ?? m2;
+  if (!m) return null;
+  const d = Number(m[1]);
+  const mo = Number(m[2]);
+  let y = Number(m[3]);
+  if (!Number.isFinite(d) || !Number.isFinite(mo) || !Number.isFinite(y)) return null;
+  if (m2) y = y >= 70 ? 1900 + y : 2000 + y;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Khi blur: chấp nhận dán `YYYY-MM-DD` và chuẩn hóa về `dd/mm/yy`. */
+function normalizeDateDisplayAfterBlur(raw: string): string {
+  const t = raw.trim();
+  if (!t) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return ymdIsoToDdMmYy(t.slice(0, 10));
+  const ymd = parseDdMmYyToYmd(t);
+  return ymd ? ymdIsoToDdMmYy(ymd) : raw;
 }
 
 const DATE_IN: React.CSSProperties = {
@@ -462,6 +509,24 @@ const DATE_IN: React.CSSProperties = {
   borderRadius: 8,
   background: "#fff",
 };
+
+const SELECT_IN: React.CSSProperties = { ...DATE_IN, cursor: "pointer", fontWeight: 600 };
+
+const TEXT_IN: React.CSSProperties = { ...DATE_IN, fontWeight: 600 };
+
+const TEXTAREA_IN: React.CSSProperties = {
+  ...DATE_IN,
+  minHeight: 88,
+  resize: "vertical" as const,
+  lineHeight: 1.45,
+  fontWeight: 500,
+};
+
+function coerceMediaStatusLabel(s: string | null | undefined): string {
+  const t = (s ?? "").trim();
+  if ((MKT_MEDIA_STATUS_OPTIONS as readonly string[]).includes(t)) return t;
+  return "Chờ xác nhận";
+}
 
 function ProjectDetailModal({
   project,
@@ -479,18 +544,49 @@ function ProjectDetailModal({
   onSaved: (p: Project) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [startYmd, setStartYmd] = useState(() => projectDateToYmdInput(project.start_date));
-  const [endYmd, setEndYmd] = useState(() => projectDateToYmdInput(project.end_date));
+  const [startDdMmYy, setStartDdMmYy] = useState(() =>
+    ymdIsoToDdMmYy(projectDateToYmdInput(project.start_date)),
+  );
+  const [endDdMmYy, setEndDdMmYy] = useState(() => ymdIsoToDdMmYy(projectDateToYmdInput(project.end_date)));
   const [lamSet, setLamSet] = useState<Set<number>>(() => new Set(project.nguoi_lam ?? []));
+  const [projectName, setProjectName] = useState(() => project.project_name || "");
+  const [projectType, setProjectType] = useState(() => project.project_type?.trim() ?? "");
+  const [typeVal, setTypeVal] = useState(() => project.type?.trim() ?? "");
+  const [statusVal, setStatusVal] = useState(() => coerceMediaStatusLabel(project.status));
+  const [briefDraft, setBriefDraft] = useState(() => project.brief ?? "");
+  const [minhHoaSlots, setMinhHoaSlots] = useState<MinhHoaUploadSlot[]>(() =>
+    slotsFromMinhHoaUrls(project.minh_hoa),
+  );
+  const [nguoiTao, setNguoiTao] = useState<number | null>(() => project.nguoi_tao ?? null);
   const [formErr, setFormErr] = useState<string | null>(null);
   const [savePending, startSaveTransition] = useTransition();
 
   useEffect(() => {
-    setStartYmd(projectDateToYmdInput(project.start_date));
-    setEndYmd(projectDateToYmdInput(project.end_date));
+    setStartDdMmYy(ymdIsoToDdMmYy(projectDateToYmdInput(project.start_date)));
+    setEndDdMmYy(ymdIsoToDdMmYy(projectDateToYmdInput(project.end_date)));
     setLamSet(new Set(project.nguoi_lam ?? []));
+    setProjectName(project.project_name || "");
+    setProjectType(project.project_type?.trim() ?? "");
+    setTypeVal(project.type?.trim() ?? "");
+    setStatusVal(coerceMediaStatusLabel(project.status));
+    setBriefDraft(project.brief ?? "");
+    setMinhHoaSlots(slotsFromMinhHoaUrls(project.minh_hoa));
+    setNguoiTao(project.nguoi_tao ?? mediaTeamStaff[0]?.id ?? null);
     setFormErr(null);
-  }, [project.id, project.start_date, project.end_date, project.nguoi_lam]);
+  }, [
+    project.id,
+    project.start_date,
+    project.end_date,
+    project.nguoi_lam,
+    project.project_name,
+    project.project_type,
+    project.type,
+    project.status,
+    project.brief,
+    project.minh_hoa,
+    project.nguoi_tao,
+    mediaTeamStaff,
+  ]);
 
   useEffect(() => {
     setEditing(false);
@@ -501,9 +597,16 @@ function ProjectDetailModal({
       if (e.key !== "Escape") return;
       if (editing) {
         e.preventDefault();
-        setStartYmd(projectDateToYmdInput(project.start_date));
-        setEndYmd(projectDateToYmdInput(project.end_date));
+        setStartDdMmYy(ymdIsoToDdMmYy(projectDateToYmdInput(project.start_date)));
+        setEndDdMmYy(ymdIsoToDdMmYy(projectDateToYmdInput(project.end_date)));
         setLamSet(new Set(project.nguoi_lam ?? []));
+        setProjectName(project.project_name || "");
+        setProjectType(project.project_type?.trim() ?? "");
+        setTypeVal(project.type?.trim() ?? "");
+        setStatusVal(coerceMediaStatusLabel(project.status));
+        setBriefDraft(project.brief ?? "");
+        setMinhHoaSlots(slotsFromMinhHoaUrls(project.minh_hoa));
+        setNguoiTao(project.nguoi_tao ?? mediaTeamStaff[0]?.id ?? null);
         setFormErr(null);
         setEditing(false);
       } else {
@@ -512,12 +615,33 @@ function ProjectDetailModal({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, editing, project.start_date, project.end_date, project.nguoi_lam]);
+  }, [
+    onClose,
+    editing,
+    project.start_date,
+    project.end_date,
+    project.nguoi_lam,
+    project.project_name,
+    project.project_type,
+    project.type,
+    project.status,
+    project.brief,
+    project.minh_hoa,
+    project.nguoi_tao,
+    mediaTeamStaff,
+  ]);
 
   const cancelEdit = () => {
-    setStartYmd(projectDateToYmdInput(project.start_date));
-    setEndYmd(projectDateToYmdInput(project.end_date));
+    setStartDdMmYy(ymdIsoToDdMmYy(projectDateToYmdInput(project.start_date)));
+    setEndDdMmYy(ymdIsoToDdMmYy(projectDateToYmdInput(project.end_date)));
     setLamSet(new Set(project.nguoi_lam ?? []));
+    setProjectName(project.project_name || "");
+    setProjectType(project.project_type?.trim() ?? "");
+    setTypeVal(project.type?.trim() ?? "");
+    setStatusVal(coerceMediaStatusLabel(project.status));
+    setBriefDraft(project.brief ?? "");
+    setMinhHoaSlots(slotsFromMinhHoaUrls(project.minh_hoa));
+    setNguoiTao(project.nguoi_tao ?? mediaTeamStaff[0]?.id ?? null);
     setFormErr(null);
     setEditing(false);
   };
@@ -536,7 +660,20 @@ function ProjectDetailModal({
     return [...m.values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "vi"));
   }, [mediaTeamStaff, project.nguoi_lam, staffNameById]);
 
-  const imgs = project.minh_hoa?.filter(Boolean) ?? [];
+  const creatorPickOptions = useMemo(() => {
+    const m = new Map<number, HrNhanSuStaffOption>();
+    for (const s of mediaTeamStaff) m.set(s.id, s);
+    const tid = project.nguoi_tao;
+    if (tid && !m.has(tid)) {
+      m.set(tid, {
+        id: tid,
+        full_name: `${staffNameById[String(tid)] ?? `Nhân sự #${tid}`} (người tạo — ngoài Marketing/Media)`,
+      });
+    }
+    return [...m.values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "vi"));
+  }, [mediaTeamStaff, project.nguoi_tao, staffNameById]);
+
+  const imgs = (project.minh_hoa ?? []).filter(Boolean);
 
   const toggleLam = (id: number) => {
     setLamSet((prev) => {
@@ -550,19 +687,59 @@ function ProjectDetailModal({
   const onSave = () => {
     if (!editing) return;
     setFormErr(null);
-    if (!startYmd || !endYmd) {
-      setFormErr("Chọn đủ ngày bắt đầu và kết thúc.");
+    if (!projectName.trim()) {
+      setFormErr("Nhập tên dự án.");
       return;
     }
+    const startYmd = parseDdMmYyToYmd(startDdMmYy);
+    const endYmd = parseDdMmYyToYmd(endDdMmYy);
+    if (!startYmd || !endYmd) {
+      setFormErr("Nhập đủ ngày hợp lệ (định dạng dd/mm/yy).");
+      return;
+    }
+    const ds = parseDate(startYmd);
+    const de = parseDate(endYmd);
+    if (ds && de && de.getTime() < ds.getTime()) {
+      setFormErr("Ngày kết thúc phải sau hoặc trùng ngày bắt đầu.");
+      return;
+    }
+    if (minhHoaSlots.some((s) => s.uploading)) {
+      setFormErr("Đợi ảnh minh họa tải xong rồi mới lưu.");
+      return;
+    }
+    if (minhHoaSlots.some((s) => s.error && !s.url)) {
+      setFormErr("Có ảnh minh họa lỗi — xóa ảnh lỗi hoặc tải lại.");
+      return;
+    }
+    const minh_hoa = minhHoaUrlsFromSlots(minhHoaSlots);
     startSaveTransition(async () => {
-      const res = await updateMktMediaProjectScheduleAndTeam(project.id, startYmd, endYmd, [...lamSet]);
+      const res = await updateMktMediaProjectDetail(project.id, {
+        project_name: projectName.trim(),
+        project_type: projectType.trim() || null,
+        type: typeVal.trim() || null,
+        status: statusVal,
+        brief: briefDraft.trim() || null,
+        minh_hoa,
+        nguoi_tao: nguoiTao,
+        start_date: startYmd,
+        end_date: endYmd,
+        nguoi_lam_ids: [...lamSet],
+      });
       if (!res.ok) {
         setFormErr(res.error);
         return;
       }
       const nextLam = lamSet.size ? [...lamSet].sort((a, b) => a - b) : null;
+      const briefNext = briefDraft.trim() ? sanitizeAdminRichHtml(briefDraft) : null;
       onSaved({
         ...project,
+        project_name: projectName.trim(),
+        project_type: projectType.trim() || null,
+        type: typeVal.trim() || null,
+        status: statusVal,
+        brief: briefNext,
+        minh_hoa: minh_hoa.length ? minh_hoa : null,
+        nguoi_tao: nguoiTao,
         start_date: startYmd,
         end_date: endYmd,
         nguoi_lam: nextLam,
@@ -684,18 +861,34 @@ function ProjectDetailModal({
           >
             Chi tiết dự án media
           </p>
-          <h2
-            style={{
-              margin: "6px 0 0",
-              fontSize: 18,
-              fontWeight: 800,
-              lineHeight: 1.3,
-              letterSpacing: "-0.02em",
-              color: TEXT,
-            }}
-          >
-            {project.project_name || "—"}
-          </h2>
+          {editing ? (
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="Tên dự án"
+              style={{
+                ...TEXT_IN,
+                marginTop: 6,
+                fontSize: 16,
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+              }}
+            />
+          ) : (
+            <h2
+              style={{
+                margin: "6px 0 0",
+                fontSize: 18,
+                fontWeight: 800,
+                lineHeight: 1.3,
+                letterSpacing: "-0.02em",
+                color: TEXT,
+              }}
+            >
+              {project.project_name || "—"}
+            </h2>
+          )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, alignItems: "center" }}>
             <span
               style={{
@@ -710,7 +903,7 @@ function ProjectDetailModal({
             >
               ID {project.id}
             </span>
-            {project.project_type ? (
+            {!editing && project.project_type ? (
               <span
                 style={{
                   fontSize: 11,
@@ -725,8 +918,8 @@ function ProjectDetailModal({
                 {project.project_type}
               </span>
             ) : null}
-            {project.type ? typePill(project.type) : null}
-            {statusPill(project.status)}
+            {!editing && project.type ? typePill(project.type) : null}
+            {!editing ? statusPill(project.status) : null}
           </div>
         </div>
 
@@ -750,14 +943,51 @@ function ProjectDetailModal({
               }}
             >
               {metaLbl("Định dạng")}
-              <div style={{ minWidth: 0 }}>{project.type ? typePill(project.type) : "—"}</div>
+              <div style={{ minWidth: 0 }}>
+                {editing ? (
+                  <select value={typeVal} onChange={(e) => setTypeVal(e.target.value)} style={SELECT_IN}>
+                    <option value="">—</option>
+                    {MKT_MEDIA_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                ) : project.type ? (
+                  typePill(project.type)
+                ) : (
+                  "—"
+                )}
+              </div>
               {metaLbl("Loại dự án")}
-              <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, minWidth: 0, wordBreak: "break-word" }}>
-                {project.project_type || "—"}
+              <div style={{ minWidth: 0, wordBreak: "break-word" }}>
+                {editing ? (
+                  <input
+                    type="text"
+                    value={projectType}
+                    onChange={(e) => setProjectType(e.target.value)}
+                    placeholder="VD: Sine Art"
+                    style={TEXT_IN}
+                  />
+                ) : (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: TEXT }}>{project.project_type || "—"}</span>
+                )}
               </div>
 
               {metaLbl("Trạng thái")}
-              <div style={{ gridColumn: "2 / -1", minWidth: 0 }}>{statusPill(project.status)}</div>
+              <div style={{ gridColumn: "2 / -1", minWidth: 0 }}>
+                {editing ? (
+                  <select value={statusVal} onChange={(e) => setStatusVal(e.target.value)} style={SELECT_IN}>
+                    {MKT_MEDIA_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  statusPill(project.status)
+                )}
+              </div>
 
               <div
                 style={{
@@ -792,11 +1022,29 @@ function ProjectDetailModal({
                   >
                     <div>
                       <div style={{ fontSize: 10, fontWeight: 600, color: TEXT_MUTED, marginBottom: 4 }}>Bắt đầu</div>
-                      <input type="date" value={startYmd} onChange={(e) => setStartYmd(e.target.value)} style={DATE_IN} />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="dd/mm/yy"
+                        value={startDdMmYy}
+                        onChange={(e) => setStartDdMmYy(e.target.value)}
+                        onBlur={() => setStartDdMmYy((v) => normalizeDateDisplayAfterBlur(v))}
+                        style={DATE_IN}
+                      />
                     </div>
                     <div>
                       <div style={{ fontSize: 10, fontWeight: 600, color: TEXT_MUTED, marginBottom: 4 }}>Kết thúc</div>
-                      <input type="date" value={endYmd} onChange={(e) => setEndYmd(e.target.value)} style={DATE_IN} />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="dd/mm/yy"
+                        value={endDdMmYy}
+                        onChange={(e) => setEndDdMmYy(e.target.value)}
+                        onBlur={() => setEndDdMmYy((v) => normalizeDateDisplayAfterBlur(v))}
+                        style={DATE_IN}
+                      />
                     </div>
                   </div>
                 ) : (
@@ -829,13 +1077,33 @@ function ProjectDetailModal({
                   }}
                 >
                   <span style={{ color: TEXT_MUTED, fontWeight: 600, marginRight: 8 }}>Số ngày còn lại</span>
-                  {remainingDaysLabel(editing ? endYmd || null : project.end_date)}
+                  {remainingDaysLabel(editing ? parseDdMmYyToYmd(endDdMmYy) : project.end_date)}
                 </div>
               </div>
 
               {metaLbl("Người tạo")}
-              <div style={{ gridColumn: "2 / -1", fontSize: 12, color: TEXT }}>
-                {resolveStaffRich(project.nguoi_tao, staffNameById)}
+              <div style={{ gridColumn: "2 / -1", minWidth: 0 }}>
+                {editing ? (
+                  <select
+                    value={nguoiTao != null ? String(nguoiTao) : ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setNguoiTao(v === "" ? null : Number(v));
+                    }}
+                    style={SELECT_IN}
+                  >
+                    {creatorPickOptions.length === 0 ? (
+                      <option value="">—</option>
+                    ) : null}
+                    {creatorPickOptions.map((s) => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.full_name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span style={{ fontSize: 12, color: TEXT }}>{resolveStaffRich(project.nguoi_tao, staffNameById)}</span>
+                )}
               </div>
 
               {metaLbl("Người làm")}
@@ -904,7 +1172,19 @@ function ProjectDetailModal({
 
           <div style={{ marginTop: 10 }}>
             {detailSectionTitle("Brief")}
-            {project.brief?.trim() ? (
+            {editing ? (
+              <>
+                <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 600, color: TEXT_MUTED, lineHeight: 1.4 }}>
+                  HTML được lọc khi lưu (script/style bị loại).
+                </p>
+                <textarea
+                  value={briefDraft}
+                  onChange={(e) => setBriefDraft(e.target.value)}
+                  rows={8}
+                  style={{ ...TEXTAREA_IN, width: "100%", minHeight: 140 }}
+                />
+              </>
+            ) : project.brief?.trim() ? (
               <div
                 className="[&_a]:text-blue-600 [&_a]:underline [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5"
                 style={{
@@ -936,9 +1216,26 @@ function ProjectDetailModal({
             )}
           </div>
 
-          {imgs.length ? (
-            <div style={{ marginTop: 12 }}>
-              {detailSectionTitle("Minh họa")}
+          <div style={{ marginTop: 12 }}>
+            {detailSectionTitle("Minh họa")}
+            {editing ? (
+              <AdminMinhHoaDropzone slots={minhHoaSlots} setSlots={setMinhHoaSlots} />
+            ) : null}
+            {!editing && !imgs.length ? (
+              <div
+                style={{
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  background: "#fff",
+                  fontSize: 13,
+                  color: TEXT_MUTED,
+                }}
+              >
+                Chưa có minh họa.
+              </div>
+            ) : null}
+            {!editing && imgs.length ? (
               <div
                 style={{
                   display: "grid",
@@ -977,8 +1274,8 @@ function ProjectDetailModal({
                   </a>
                 ))}
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
 
           {formErr ? (
             <div

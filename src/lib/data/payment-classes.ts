@@ -9,6 +9,8 @@ export type EnrichedPaymentClass = {
   gvNames: string;
   /** Ảnh đại diện lớp — `ql_lop_hoc.avatar`. */
   avatar: string | null;
+  /** `ql_lop_hoc.special` — nhận «cấp tốc» giống gói học phí / `HocPhiBlock`. */
+  special: string | null;
   filled: number;
   total: number;
   isFull: boolean;
@@ -23,7 +25,7 @@ export async function fetchEnrichedPaymentClasses(
 ): Promise<EnrichedPaymentClass[]> {
   const { data: lopRows, error: lopErr } = await supabase
     .from("ql_lop_hoc")
-    .select("id, class_name, class_full_name, mon_hoc, lich_hoc, teacher, avatar")
+    .select("id, class_name, class_full_name, mon_hoc, lich_hoc, teacher, avatar, special")
     .not("mon_hoc", "is", null)
     .order("id", { ascending: true });
 
@@ -87,6 +89,11 @@ export async function fetchEnrichedPaymentClasses(
     const gvNames = gvNameList.length ? gvNameList.join(" · ") : "Đang cập nhật";
     const avatarRaw = String(r.avatar ?? "").trim();
     const avatar = avatarRaw.length > 0 ? avatarRaw : null;
+    const spRaw = r.special;
+    const special =
+      spRaw == null || spRaw === ""
+        ? null
+        : String(spRaw).trim() || null;
     const tenLop =
       String(r.class_full_name ?? "").trim() ||
       String(r.class_name ?? "").trim() ||
@@ -100,6 +107,7 @@ export async function fetchEnrichedPaymentClasses(
       lichHoc,
       gvNames,
       avatar,
+      special,
       filled,
       total: totalSeat,
       isFull,

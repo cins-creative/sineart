@@ -32,6 +32,11 @@ export async function KhoaHocSlugPageContent({
     (monIdForFee != null
       ? await getKhoaHocDetailBySlug(`mon-${monIdForFee}`)
       : null);
+  const loaiKhoaHocForFee =
+    detail?.loaiKhoaHoc?.trim() ??
+    courses.find((c) => c.id === monIdForFee)?.loaiKhoaHoc?.trim() ??
+    null;
+  const hocPhiAllowCapToc = loaiKhoaHocForFee === "Luyện thi";
   const fallbackFromCourses =
     monIdForFee != null
       ? courses.find((c) => c.id === monIdForFee)?.tenMonHoc
@@ -63,6 +68,7 @@ export async function KhoaHocSlugPageContent({
           studentGallery={studentGallery}
           hocPhiBlock={hocPhiBlock}
           hocPhiMonId={monIdForFee ?? null}
+          hocPhiAllowCapToc={hocPhiAllowCapToc}
           teacherPortfolioSlides={teacherPortfolioSlides}
           baiTapList={baiTapList}
           ongoingClasses={ongoingClasses}

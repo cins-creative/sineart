@@ -38,10 +38,14 @@ type LopPayload = {
   chi_nhanh_id: number | null;
   avatar: string | null;
   lich_hoc: string | null;
-  url_class: string | null;
-  url_google_meet: string | null;
   device: string | null;
 };
+
+/** DB `ql_lop_hoc.teacher` có thể là `bigint[]` / jsonb mảng — PostgREST báo "expected JSON array" nếu gửi scalar. */
+function teacherForDb(teacherId: number | null): number | number[] | null {
+  if (teacherId == null) return null;
+  return [teacherId];
+}
 
 function readLopPayload(fd: FormData): { ok: true; data: LopPayload } | { ok: false; error: string } {
   const class_name = optionalText(fd, "class_name");
@@ -60,8 +64,6 @@ function readLopPayload(fd: FormData): { ok: true; data: LopPayload } | { ok: fa
       chi_nhanh_id: parseFk(fd, "chi_nhanh_id"),
       avatar: optionalText(fd, "avatar"),
       lich_hoc: optionalText(fd, "lich_hoc"),
-      url_class: optionalText(fd, "url_class"),
-      url_google_meet: optionalText(fd, "url_google_meet"),
       device: optionalText(fd, "device"),
     },
   };
@@ -84,11 +86,17 @@ export async function createLopHoc(
     return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
   }
 
-  let payload: Record<string, unknown> = { ...parsed.data };
+  let payload: Record<string, unknown> = {
+    ...parsed.data,
+    teacher: teacherForDb(parsed.data.teacher),
+  };
   let { error } = await supabase.from("ql_lop_hoc").insert(payload);
-  if (error && String(error.message).toLowerCase().includes("url_google_meet")) {
-    payload = { ...parsed.data };
-    delete payload.url_google_meet;
+  if (
+    error &&
+    parsed.data.teacher != null &&
+    String(error.message).toLowerCase().includes("teacher")
+  ) {
+    payload = { ...parsed.data, teacher: parsed.data.teacher };
     ({ error } = await supabase.from("ql_lop_hoc").insert(payload));
   }
   if (error && String(error.message).toLowerCase().includes("column")) {
@@ -96,7 +104,7 @@ export async function createLopHoc(
       class_name: parsed.data.class_name,
       class_full_name: parsed.data.class_full_name,
       mon_hoc: parsed.data.mon_hoc,
-      teacher: parsed.data.teacher,
+      teacher: teacherForDb(parsed.data.teacher),
       chi_nhanh_id: parsed.data.chi_nhanh_id,
     };
     ({ error } = await supabase.from("ql_lop_hoc").insert(minimal));
@@ -131,11 +139,17 @@ export async function updateLopHoc(
     return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
   }
 
-  let updatePayload: Record<string, unknown> = { ...parsed.data };
+  let updatePayload: Record<string, unknown> = {
+    ...parsed.data,
+    teacher: teacherForDb(parsed.data.teacher),
+  };
   let { error } = await supabase.from("ql_lop_hoc").update(updatePayload).eq("id", id);
-  if (error && String(error.message).toLowerCase().includes("url_google_meet")) {
-    updatePayload = { ...parsed.data };
-    delete updatePayload.url_google_meet;
+  if (
+    error &&
+    parsed.data.teacher != null &&
+    String(error.message).toLowerCase().includes("teacher")
+  ) {
+    updatePayload = { ...parsed.data, teacher: parsed.data.teacher };
     ({ error } = await supabase.from("ql_lop_hoc").update(updatePayload).eq("id", id));
   }
   if (error) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -22,10 +22,12 @@ import {
   createHpComboMon,
   deleteHpComboMon,
   saveGoiHocPhi,
+  saveGoiHocPhiBulk,
   updateHpComboMon,
 } from "@/app/admin/dashboard/goi-hoc-phi/actions";
 import type {
   ComboMonFormState,
+  GoiHocPhiBulkRowInput,
   GoiHocPhiFormState,
 } from "@/app/admin/dashboard/goi-hoc-phi/actions";
 import type {
@@ -66,6 +68,77 @@ const GOI_LIST_PAGE_SIZE = 10;
 function tenCombo(id: number | null, combos: AdminComboOption[]): string {
   if (id == null) return "—";
   return combos.find((c) => c.id === id)?.ten_combo ?? `#${id}`;
+}
+
+/** Bản nháp một dòng khi chỉnh sửa cả bảng (chuỗi giống form modal). */
+type EditableGoiDraft = {
+  id: number;
+  mon_hoc: string;
+  goi_number: string;
+  don_vi: string;
+  gia_goc: string;
+  discount: string;
+  combo_id: string;
+  special: string;
+  so_buoi: string;
+};
+
+function rowToDraft(r: AdminGoiHocPhiRow): EditableGoiDraft {
+  return {
+    id: r.id,
+    mon_hoc: r.mon_hoc != null ? String(r.mon_hoc) : "",
+    goi_number: r.goiNumber != null ? String(r.goiNumber) : "",
+    don_vi: r.don_vi ?? "",
+    gia_goc: r.gia_goc != null ? String(Math.round(r.gia_goc)) : "",
+    discount: r.discount != null ? String(r.discount) : "",
+    combo_id: r.combo_id != null ? String(r.combo_id) : "",
+    special: r.special ?? "",
+    so_buoi: r.so_buoi != null ? String(r.so_buoi) : "",
+  };
+}
+
+function parseClientNumNullable(raw: string): number | null {
+  const t = raw.replace(/\s/g, "").replace(/,/g, "").trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+function draftToBulkInput(
+  d: EditableGoiDraft,
+): { ok: true; row: GoiHocPhiBulkRowInput } | { ok: false; error: string } {
+  const monRaw = d.mon_hoc.trim();
+  const mon_hoc = monRaw === "" ? null : Number(monRaw);
+  if (mon_hoc != null && (!Number.isFinite(mon_hoc) || mon_hoc <= 0)) {
+    return { ok: false, error: `Gói #${d.id}: Môn học không hợp lệ.` };
+  }
+  const comboRaw = d.combo_id.trim();
+  const combo_id = comboRaw === "" ? null : Number(comboRaw);
+  if (combo_id != null && (!Number.isFinite(combo_id) || combo_id <= 0)) {
+    return { ok: false, error: `Gói #${d.id}: Combo không hợp lệ.` };
+  }
+  const don_vi = d.don_vi.trim() || null;
+  if (don_vi != null && don_vi.length > 500) {
+    return { ok: false, error: `Gói #${d.id}: Đơn vị quá dài (tối đa 500 ký tự).` };
+  }
+  const specialTrim = d.special.trim();
+  if (specialTrim.length > 500) {
+    return { ok: false, error: `Gói #${d.id}: Gói đặc biệt quá dài (tối đa 500 ký tự).` };
+  }
+  return {
+    ok: true,
+    row: {
+      id: d.id,
+      mon_hoc,
+      goi_number: parseClientNumNullable(d.goi_number),
+      don_vi,
+      gia_goc: parseClientNumNullable(d.gia_goc),
+      discount: parseClientNumNullable(d.discount),
+      combo_id,
+      so_buoi: parseClientNumNullable(d.so_buoi),
+      special: specialTrim === "" ? null : specialTrim,
+    },
+  };
 }
 
 function ComboMonCreateModal({
@@ -281,6 +354,8 @@ function ComboMonEditModal({
 function GoiModal({
   row,
   isNew,
+  goiTableName,
+  specialSuggestions,
   monOptions,
   allComboOptions,
   onComboCreated,
@@ -288,6 +363,8 @@ function GoiModal({
 }: {
   row: AdminGoiHocPhiRow | null;
   isNew: boolean;
+  goiTableName: string;
+  specialSuggestions: string[];
   monOptions: AdminMonOption[];
   allComboOptions: AdminComboOption[];
   onComboCreated: (c: AdminComboOption) => void;
@@ -303,6 +380,8 @@ function GoiModal({
   const [comboEditOpen, setComboEditOpen] = useState(false);
   const [comboEditKey, setComboEditKey] = useState(0);
   const [deleteComboWarningOpen, setDeleteComboWarningOpen] = useState(false);
+  const specialListId = useId();
+  const supportsSpecial = goiTableName !== "hp_goi_hoc_phi";
   const [form, setForm] = useState({
     mon_hoc: row?.mon_hoc != null ? String(row.mon_hoc) : "",
     goi_number: row?.goiNumber != null ? String(row.goiNumber) : "",
@@ -310,6 +389,7 @@ function GoiModal({
     gia_goc: row?.gia_goc != null ? String(Math.round(row.gia_goc)) : "",
     discount: row?.discount != null ? String(row.discount) : "",
     combo_id: row?.combo_id != null ? String(row.combo_id) : "",
+    special: row?.special ?? "",
     so_buoi: row?.so_buoi != null ? String(row.so_buoi) : "",
   });
 
@@ -354,6 +434,7 @@ function GoiModal({
       gia_goc: row?.gia_goc != null ? String(Math.round(row.gia_goc)) : "",
       discount: row?.discount != null ? String(row.discount) : "",
       combo_id: row?.combo_id != null ? String(row.combo_id) : "",
+      special: row?.special ?? "",
       so_buoi: row?.so_buoi != null ? String(row.so_buoi) : "",
     });
     setModalError("");
@@ -559,6 +640,32 @@ function GoiModal({
             </button>
           </div>
 
+          {supportsSpecial ? (
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
+                Gói đặc biệt <span className="font-normal normal-case text-black/40">(special)</span>
+              </span>
+              <datalist id={specialListId}>
+                {specialSuggestions.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+              <input
+                name="special"
+                list={specialListId}
+                value={form.special}
+                onChange={(e) => setForm((f) => ({ ...f, special: e.target.value }))}
+                maxLength={500}
+                autoComplete="off"
+                className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
+                placeholder="Chọn gợi ý hoặc gõ nhãn mới…"
+              />
+              <p className="mt-1 text-[11px] leading-snug text-black/45">
+                Gợi ý lấy từ các giá trị đã lưu trên gói khác; để trống nếu không áp dụng.
+              </p>
+            </label>
+          ) : null}
+
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">Số buổi</span>
             <input
@@ -704,14 +811,21 @@ function GoiModal({
 }
 
 export default function GoiHocPhiView({ bundle }: Props) {
+  const router = useRouter();
+  const tableSpecialListId = useId();
+  const editBaselineRef = useRef<Map<number, string>>(new Map());
   const [bannerError, setBannerError] = useState(bundle.loadError ?? "");
   const [comboBannerDismissed, setComboBannerDismissed] = useState(false);
   const [extraComboOptions, setExtraComboOptions] = useState<AdminComboOption[]>([]);
   const [filterMonId, setFilterMonId] = useState<string>("");
   const [rowSearch, setRowSearch] = useState("");
   const [goiListPage, setGoiListPage] = useState(1);
-  const [selected, setSelected] = useState<AdminGoiHocPhiRow | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [editDraftById, setEditDraftById] = useState<Map<number, EditableGoiDraft> | null>(null);
+  const [bulkHint, setBulkHint] = useState<{ ok: boolean; text: string } | null>(null);
+  const [bulkSavePending, startBulkSave] = useTransition();
+
+  const tableEditMode = editDraftById != null;
 
   useEffect(() => {
     setBannerError(bundle.loadError ?? "");
@@ -734,6 +848,8 @@ export default function GoiHocPhiView({ bundle }: Props) {
     return [...byId.values()].sort((a, b) => a.id - b.id);
   }, [bundle.comboOptions, extraComboOptions]);
 
+  const comboPickList = allComboOptions.length > 0;
+
   const filteredRows = useMemo(() => {
     let list = sorted;
     if (filterMonId === "__none__") list = list.filter((r) => r.mon_hoc == null);
@@ -749,13 +865,15 @@ export default function GoiHocPhiView({ bundle }: Props) {
         const dv = (r.don_vi ?? "").toLowerCase();
         const gn = fmtNum(r.goiNumber).toLowerCase();
         const sb = fmtNum(r.so_buoi).toLowerCase();
+        const sp = (r.special ?? "").toLowerCase();
         return (
           String(r.id).includes(s) ||
           monName.includes(s) ||
           comboName.includes(s) ||
           dv.includes(s) ||
           gn.includes(s) ||
-          sb.includes(s)
+          sb.includes(s) ||
+          sp.includes(s)
         );
       });
     }
@@ -790,6 +908,87 @@ export default function GoiHocPhiView({ bundle }: Props) {
     });
   };
 
+  const specialSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of bundle.rows) {
+      const t = (r.special ?? "").trim();
+      if (t) set.add(t);
+    }
+    if (editDraftById) {
+      for (const d of editDraftById.values()) {
+        const t = d.special.trim();
+        if (t) set.add(t);
+      }
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "vi"));
+  }, [bundle.rows, editDraftById]);
+
+  const tableEditDirty = useMemo(() => {
+    if (!editDraftById) return false;
+    const base = editBaselineRef.current;
+    for (const [id, d] of editDraftById) {
+      if (JSON.stringify(d) !== base.get(id)) return true;
+    }
+    return false;
+  }, [editDraftById]);
+
+  function beginTableEdit() {
+    setBulkHint(null);
+    const drafts = new Map<number, EditableGoiDraft>();
+    const baseline = new Map<number, string>();
+    for (const row of sorted) {
+      const d = rowToDraft(row);
+      drafts.set(row.id, d);
+      baseline.set(row.id, JSON.stringify(d));
+    }
+    editBaselineRef.current = baseline;
+    setEditDraftById(drafts);
+  }
+
+  function cancelTableEdit() {
+    setEditDraftById(null);
+    editBaselineRef.current = new Map();
+    setBulkHint(null);
+  }
+
+  function patchEditDraft(id: number, patch: Partial<EditableGoiDraft>) {
+    setEditDraftById((prev) => {
+      if (!prev) return prev;
+      const cur = prev.get(id);
+      if (!cur) return prev;
+      const next = new Map(prev);
+      next.set(id, { ...cur, ...patch });
+      return next;
+    });
+  }
+
+  function runSaveAllTable() {
+    if (!editDraftById) return;
+    setBulkHint(null);
+    const toSave: GoiHocPhiBulkRowInput[] = [];
+    const base = editBaselineRef.current;
+    for (const [id, d] of editDraftById) {
+      if (JSON.stringify(d) === base.get(id)) continue;
+      const parsed = draftToBulkInput(d);
+      if (!parsed.ok) {
+        setBulkHint({ ok: false, text: parsed.error });
+        return;
+      }
+      toSave.push(parsed.row);
+    }
+    startBulkSave(async () => {
+      const res = await saveGoiHocPhiBulk(toSave);
+      if (res.ok) {
+        setBulkHint({ ok: true, text: res.message });
+        setEditDraftById(null);
+        editBaselineRef.current = new Map();
+        router.refresh();
+      } else {
+        setBulkHint({ ok: false, text: res.error });
+      }
+    });
+  }
+
   return (
     <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
@@ -808,16 +1007,48 @@ export default function GoiHocPhiView({ bundle }: Props) {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setSelected(null);
-            setIsNew(true);
-          }}
-          className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-[18px] py-2.5 text-[13px] font-semibold text-white"
-        >
-          <Plus size={15} /> Thêm gói
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {tableEditMode ? (
+            <>
+              <button
+                type="button"
+                disabled={bulkSavePending}
+                onClick={cancelTableEdit}
+                className="rounded-xl border border-[#EAEAEA] bg-white px-[16px] py-2.5 text-[13px] font-semibold text-black/70 hover:bg-[#F5F7F7] disabled:opacity-50"
+              >
+                Hủy chỉnh sửa
+              </button>
+              <button
+                type="button"
+                disabled={bulkSavePending || !tableEditDirty}
+                onClick={runSaveAllTable}
+                className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-[18px] py-2.5 text-[13px] font-semibold text-white disabled:opacity-50"
+              >
+                <Save size={15} />
+                {bulkSavePending ? "Đang lưu…" : "Lưu tất cả"}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={sorted.length === 0}
+              onClick={beginTableEdit}
+              className="flex items-center gap-1.5 rounded-xl border border-[#EAEAEA] bg-white px-[16px] py-2.5 text-[13px] font-semibold text-[#323232] hover:border-[#BC8AF9]/40 hover:bg-[#BC8AF9]/8 disabled:opacity-45"
+            >
+              <Pencil size={15} />
+              Chỉnh sửa bảng
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={tableEditMode}
+            title={tableEditMode ? "Hủy chỉnh sửa bảng hoặc lưu trước khi thêm gói mới." : undefined}
+            onClick={() => setIsNew(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-[18px] py-2.5 text-[13px] font-semibold text-white disabled:opacity-45"
+          >
+            <Plus size={15} /> Thêm gói
+          </button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-x-auto px-6 pb-6 pt-3">
@@ -853,7 +1084,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
               <input
                 value={rowSearch}
                 onChange={(e) => setRowSearch(e.target.value)}
-                placeholder="Tìm ID, môn, combo, đơn vị, số buổi…"
+                placeholder="Tìm ID, môn, combo, gói đặc biệt, đơn vị, số buổi…"
                 className="h-10 w-full rounded-xl border border-[#EAEAEA] bg-white pl-10 pr-9 text-sm outline-none focus:ring-2 focus:ring-[#BC8AF9]"
                 aria-label="Tìm trong danh sách gói"
               />
@@ -893,8 +1124,34 @@ export default function GoiHocPhiView({ bundle }: Props) {
               </span>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] border-collapse text-left text-sm">
+          {bulkHint ? (
+            <div
+              className={
+                bulkHint.ok
+                  ? "border-b border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-950"
+                  : "border-b border-[#FFCDD2] bg-[#FFF0F3] px-4 py-2.5 text-sm text-[#C0244E]"
+              }
+            >
+              {bulkHint.text}
+            </div>
+          ) : null}
+          {tableEditMode ? (
+            <p className="m-0 border-b border-amber-100 bg-amber-50/90 px-4 py-2 text-xs leading-relaxed text-amber-950">
+              Đang chỉnh sửa toàn bộ danh sách đã tải. Dùng <strong className="font-semibold">Lưu tất cả</strong> để ghi
+              xuống database. Chuyển trang vẫn giữ bản nháp cho mọi dòng.
+            </p>
+          ) : null}
+          <div className="w-full min-w-0 overflow-x-auto">
+            {bundle.tableName !== "hp_goi_hoc_phi" && tableEditMode ? (
+              <datalist id={tableSpecialListId}>
+                {specialSuggestions.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+            ) : null}
+            <table
+              className={`w-full border-collapse text-left text-sm ${tableEditMode ? "min-w-[1180px]" : "min-w-[1020px]"}`}
+            >
               <thead>
                 <tr className="border-b border-[#EAEAEA] bg-[#FAFAFA] text-[11px] font-bold uppercase tracking-wide text-black/45">
                   <th className="px-4 py-3">ID</th>
@@ -904,58 +1161,173 @@ export default function GoiHocPhiView({ bundle }: Props) {
                   <th className="px-4 py-3">Giá gốc</th>
                   <th className="px-4 py-3">Discount</th>
                   <th className="px-4 py-3">Combo</th>
+                  {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                    <th className="px-4 py-3">Gói đặc biệt</th>
+                  ) : null}
                   <th className="px-4 py-3">Số buổi</th>
                   <th className="px-4 py-3">Tạo</th>
-                  <th className="px-4 py-3 w-[100px]" />
                 </tr>
               </thead>
               <tbody>
                 {sorted.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-16 text-center text-[#AAAAAA]">
+                    <td
+                      colSpan={bundle.tableName !== "hp_goi_hoc_phi" ? 10 : 9}
+                      className="px-4 py-16 text-center text-[#AAAAAA]"
+                    >
                       Chưa có gói nào. Nhấn &quot;Thêm gói&quot; để tạo.
                     </td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-16 text-center text-[#AAAAAA]">
+                    <td
+                      colSpan={bundle.tableName !== "hp_goi_hoc_phi" ? 10 : 9}
+                      className="px-4 py-16 text-center text-[#AAAAAA]"
+                    >
                       Không có gói nào khớp bộ lọc môn. Đổi &quot;Lọc theo môn&quot; hoặc thêm gói cho môn này.
                     </td>
                   </tr>
                 ) : (
-                  pagedRows.map((r) => (
-                    <tr key={r.id} className="border-b border-[#F0F0F0] hover:bg-[#FFFBF8]/80">
-                      <td className="px-4 py-3 font-mono text-xs text-black/70">{r.id}</td>
-                      <td className="max-w-[200px] truncate px-4 py-3 font-medium">{tenMon(r.mon_hoc, bundle.monOptions)}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.goiNumber)}</td>
-                      <td className="max-w-[120px] truncate px-4 py-3 text-black/70">{r.don_vi ?? "—"}</td>
-                      <td className="px-4 py-3 text-xs font-semibold">{fmtVnd(r.gia_goc)}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.discount)}</td>
-                      <td className="max-w-[160px] truncate px-4 py-3 text-xs text-black/70">
-                        {tenCombo(r.combo_id, allComboOptions)}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.so_buoi)}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-black/55">{fmtDate(r.created_at)}</td>
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelected(r);
-                            setIsNew(false);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#323232] hover:border-[#BC8AF9]/40 hover:bg-[#BC8AF9]/8"
-                        >
-                          <Pencil size={12} />
-                          Sửa
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  pagedRows.map((r) => {
+                    const d = tableEditMode && editDraftById ? editDraftById.get(r.id) : undefined;
+                    const draft = d;
+                    const showRowEdit = Boolean(tableEditMode && draft);
+                    const cellInput =
+                      "min-w-0 max-w-[9.5rem] rounded-lg border border-[#EAEAEA] bg-white px-2 py-1 text-xs outline-none ring-[#BC8AF9] focus:ring-1";
+                    return (
+                      <tr key={r.id} className="border-b border-[#F0F0F0] hover:bg-[#FFFBF8]/80">
+                        <td className="px-4 py-3 font-mono text-xs text-black/70">{r.id}</td>
+                        {showRowEdit && draft ? (
+                          <>
+                            <td className="max-w-[200px] px-4 py-2">
+                              <select
+                                value={draft.mon_hoc}
+                                onChange={(e) => patchEditDraft(r.id, { mon_hoc: e.target.value })}
+                                className={`${cellInput} max-w-[200px]`}
+                                aria-label={`Môn học gói #${r.id}`}
+                              >
+                                <option value="">— Không gán —</option>
+                                {bundle.monOptions.map((m) => (
+                                  <option key={m.id} value={String(m.id)}>
+                                    {m.ten_mon_hoc}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-4 py-2">
+                              <input
+                                value={draft.goi_number}
+                                onChange={(e) => patchEditDraft(r.id, { goi_number: e.target.value })}
+                                className={`${cellInput} w-20 font-mono`}
+                                inputMode="decimal"
+                                aria-label={`Số number gói #${r.id}`}
+                              />
+                            </td>
+                            <td className="max-w-[140px] px-4 py-2">
+                              <input
+                                value={draft.don_vi}
+                                onChange={(e) => patchEditDraft(r.id, { don_vi: e.target.value })}
+                                maxLength={500}
+                                className={`${cellInput} w-full max-w-[140px]`}
+                                aria-label={`Đơn vị gói #${r.id}`}
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <input
+                                value={draft.gia_goc}
+                                onChange={(e) => patchEditDraft(r.id, { gia_goc: e.target.value })}
+                                className={`${cellInput} w-28 font-mono`}
+                                inputMode="numeric"
+                                aria-label={`Giá gốc gói #${r.id}`}
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <input
+                                value={draft.discount}
+                                onChange={(e) => patchEditDraft(r.id, { discount: e.target.value })}
+                                className={`${cellInput} w-24 font-mono`}
+                                inputMode="decimal"
+                                aria-label={`Discount gói #${r.id}`}
+                              />
+                            </td>
+                            <td className="max-w-[180px] px-4 py-2">
+                              {comboPickList ? (
+                                <select
+                                  value={draft.combo_id}
+                                  onChange={(e) => patchEditDraft(r.id, { combo_id: e.target.value })}
+                                  className={`${cellInput} max-w-[180px]`}
+                                  aria-label={`Combo gói #${r.id}`}
+                                >
+                                  <option value="">— Không combo —</option>
+                                  {allComboOptions.map((c) => (
+                                    <option key={c.id} value={String(c.id)}>
+                                      {c.ten_combo}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  value={draft.combo_id}
+                                  onChange={(e) => patchEditDraft(r.id, { combo_id: e.target.value })}
+                                  className={`${cellInput} w-24 font-mono`}
+                                  inputMode="numeric"
+                                  placeholder="ID"
+                                  aria-label={`Combo id gói #${r.id}`}
+                                />
+                              )}
+                            </td>
+                            {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                              <td className="max-w-[160px] px-4 py-2">
+                                <input
+                                  value={draft.special}
+                                  list={tableSpecialListId}
+                                  onChange={(e) => patchEditDraft(r.id, { special: e.target.value })}
+                                  maxLength={500}
+                                  autoComplete="off"
+                                  className={`${cellInput} w-full max-w-[160px]`}
+                                  aria-label={`Gói đặc biệt gói #${r.id}`}
+                                />
+                              </td>
+                            ) : null}
+                            <td className="px-4 py-2">
+                              <input
+                                value={draft.so_buoi}
+                                onChange={(e) => patchEditDraft(r.id, { so_buoi: e.target.value })}
+                                className={`${cellInput} w-20 font-mono`}
+                                inputMode="decimal"
+                                aria-label={`Số buổi gói #${r.id}`}
+                              />
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="max-w-[200px] truncate px-4 py-3 font-medium">
+                              {tenMon(r.mon_hoc, bundle.monOptions)}
+                            </td>
+                            <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.goiNumber)}</td>
+                            <td className="max-w-[120px] truncate px-4 py-3 text-black/70">{r.don_vi ?? "—"}</td>
+                            <td className="px-4 py-3 text-xs font-semibold">{fmtVnd(r.gia_goc)}</td>
+                            <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.discount)}</td>
+                            <td className="max-w-[160px] truncate px-4 py-3 text-xs text-black/70">
+                              {tenCombo(r.combo_id, allComboOptions)}
+                            </td>
+                            {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                              <td className="max-w-[160px] truncate px-4 py-3 text-xs text-black/70">
+                                {(r.special ?? "").trim() || "—"}
+                              </td>
+                            ) : null}
+                            <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.so_buoi)}</td>
+                          </>
+                        )}
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-black/55">{fmtDate(r.created_at)}</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
             {filteredRows.length > GOI_LIST_PAGE_SIZE ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#EAEAEA] bg-[#FAFAFA] px-4 py-2 text-[11px] text-black/55">
+              <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 border-t border-[#EAEAEA] bg-[#FAFAFA] px-4 py-2 text-[11px] text-black/55">
                 <span className="tabular-nums">
                   {(goiListPage - 1) * GOI_LIST_PAGE_SIZE + 1}–
                   {Math.min(goiListPage * GOI_LIST_PAGE_SIZE, filteredRows.length)} / {filteredRows.length}
@@ -990,19 +1362,18 @@ export default function GoiHocPhiView({ bundle }: Props) {
       </div>
 
       <AnimatePresence>
-        {(selected != null || isNew) && (
+        {isNew ? (
           <GoiModal
-            row={selected}
-            isNew={isNew}
+            row={null}
+            isNew
+            goiTableName={bundle.tableName}
+            specialSuggestions={specialSuggestions}
             monOptions={bundle.monOptions}
             allComboOptions={allComboOptions}
             onComboCreated={mergeCombo}
-            onClose={() => {
-              setSelected(null);
-              setIsNew(false);
-            }}
+            onClose={() => setIsNew(false)}
           />
-        )}
+        ) : null}
       </AnimatePresence>
     </div>
   );

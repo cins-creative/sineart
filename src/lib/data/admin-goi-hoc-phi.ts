@@ -26,6 +26,8 @@ export type AdminGoiHocPhiRow = {
   gia_goc: number | null;
   discount: number | null;
   combo_id: number | null;
+  /** `hp_goi_hoc_phi_new.special` — null nếu bảng legacy không có cột. */
+  special: string | null;
   so_buoi: number | null;
 };
 
@@ -45,10 +47,17 @@ export type AdminGoiHocPhiBundle = {
   comboWarning: string | null;
 };
 
-const GOI_SELECT = 'id, created_at, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi';
+const GOI_SELECT_BASE =
+  'id, created_at, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi';
+
+function goiSelectForTable(tableName: string): string {
+  if (tableName === "hp_goi_hoc_phi") return GOI_SELECT_BASE;
+  return `${GOI_SELECT_BASE}, special`;
+}
 
 function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
   const numRaw = raw.number ?? raw["number"];
+  const specialRaw = raw.special;
   return {
     id: Number(raw.id),
     created_at: String(raw.created_at ?? ""),
@@ -58,6 +67,10 @@ function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
     gia_goc: parseNumericNullable(raw.gia_goc),
     discount: parseNumericNullable(raw.discount),
     combo_id: parseNumericNullable(raw.combo_id),
+    special:
+      specialRaw == null || specialRaw === ""
+        ? null
+        : String(specialRaw).trim() || null,
     so_buoi: parseNumericNullable(raw.so_buoi),
   };
 }
@@ -70,7 +83,7 @@ export async function fetchAdminGoiHocPhiBundle(
 
   const { data: goiRows, error: goiErr } = await supabase
     .from(tableName)
-    .select(GOI_SELECT)
+    .select(goiSelectForTable(tableName))
     .order("id", { ascending: false });
 
   if (goiErr) {

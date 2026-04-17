@@ -250,8 +250,6 @@ type DetailForm = {
   chi_nhanh_id: string;
   device: string;
   lich_hoc: string;
-  url_class: string;
-  url_google_meet: string;
   avatar: string;
 };
 
@@ -264,8 +262,6 @@ function rowToForm(r: AdminLopRow): DetailForm {
     chi_nhanh_id: r.chi_nhanh_id != null ? String(r.chi_nhanh_id) : "",
     device: r.device ?? "",
     lich_hoc: r.lich_hoc ?? "",
-    url_class: r.url_class ?? "",
-    url_google_meet: r.url_google_meet ?? "",
     avatar: r.avatar ?? "",
   };
 }
@@ -320,8 +316,6 @@ function LopDetailPanel({
     fd.set("chi_nhanh_id", form.chi_nhanh_id);
     fd.set("device", form.device);
     fd.set("lich_hoc", form.lich_hoc);
-    fd.set("url_class", form.url_class);
-    fd.set("url_google_meet", form.url_google_meet);
     fd.set("avatar", form.avatar);
     startTransition(async () => {
       const r = await updateLopHoc(null, fd);
@@ -559,54 +553,11 @@ function LopDetailPanel({
           )}
         </div>
 
-        <div className="rounded-xl border border-black/[0.06] bg-white p-3.5">
-          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-widest text-blue-600">Đường dẫn</p>
-          {editing ? (
-            <div className="flex flex-col gap-2.5">
-              <div>
-                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">URL lớp học</div>
-                <input className={inpClass()} value={form.url_class} onChange={(e) => setK("url_class", e.target.value)} placeholder="https://…" />
-              </div>
-              <div>
-                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">URL Google Meet</div>
-                <input
-                  className={inpClass()}
-                  value={form.url_google_meet}
-                  onChange={(e) => setK("url_google_meet", e.target.value)}
-                  placeholder="https://meet.google.com/…"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2 text-[13px]">
-              <div>
-                <span className="text-[10px] font-bold uppercase text-[#AAA]">URL lớp học</span>
-                {item.url_class ? (
-                  <a href={item.url_class} target="_blank" rel="noreferrer" className="mt-1 block break-all text-blue-600">
-                    {item.url_class}
-                  </a>
-                ) : (
-                  <p className="m-0 mt-1 text-gray-300">—</p>
-                )}
-              </div>
-              <div>
-                <span className="text-[10px] font-bold uppercase text-[#AAA]">Google Meet</span>
-                {item.url_google_meet ? (
-                  <a href={item.url_google_meet} target="_blank" rel="noreferrer" className="mt-1 block break-all text-emerald-600">
-                    {item.url_google_meet}
-                  </a>
-                ) : (
-                  <p className="m-0 mt-1 text-gray-300">—</p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
         {editing ? (
           <div className="rounded-xl border border-black/[0.06] bg-white p-3.5">
             <AdminCfImageInput
               label="Ảnh lớp"
+              name="avatar"
               value={form.avatar}
               onValueChange={(u) => setK("avatar", u)}
             />
@@ -681,7 +632,7 @@ function CreateLopModal({
         initial={{ opacity: 0, scale: 0.96, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96 }}
-        className="flex max-h-[90vh] w-full max-w-[520px] flex-col overflow-hidden rounded-[20px] bg-white shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-[520px] flex-col overflow-visible rounded-[20px] bg-white shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-[#f0f0f0] px-5 py-4">
@@ -695,7 +646,7 @@ function CreateLopModal({
             <X size={16} />
           </button>
         </div>
-        <form action={action} className="flex min-h-0 flex-1 flex-col">
+        <form key="create-lop" action={action} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
             {state?.ok === false ? (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{state.error}</div>
@@ -759,14 +710,6 @@ function CreateLopModal({
                 <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Lịch học</div>
                 <input name="lich_hoc" className={inpClass()} placeholder="T2, T4, T6 — 8:00" />
               </div>
-            </div>
-            <div>
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">URL lớp học</div>
-              <input name="url_class" type="url" className={inpClass()} placeholder="https://…" />
-            </div>
-            <div>
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Google Meet</div>
-              <input name="url_google_meet" type="url" className={inpClass()} placeholder="https://meet.google.com/…" />
             </div>
             <AdminCfImageInput label="Ảnh lớp" name="avatar" defaultValue="" />
           </div>

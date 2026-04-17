@@ -56,6 +56,7 @@ export function AdminCfImageInput({
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const id = useId();
+  const fileInputId = `${id}-file`;
 
   const url = isControlled ? controlledValue : internal;
 
@@ -124,33 +125,35 @@ export function AdminCfImageInput({
         </div>
       )}
 
-      {name && !isControlled ? <input type="hidden" name={name} value={url} readOnly aria-hidden /> : null}
+      {name ? <input type="hidden" name={name} value={url} readOnly aria-hidden /> : null}
 
-      <div
-        tabIndex={0}
-        role="button"
+      <input
+        ref={fileRef}
+        id={fileInputId}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        disabled={busy}
+        onChange={(e) => void onFile(e.target.files)}
         aria-labelledby={id}
+      />
+
+      <label
+        htmlFor={fileInputId}
+        id={id}
+        tabIndex={busy ? -1 : 0}
         onPaste={onPaste}
-        onClick={() => {
-          if (!busy) fileRef.current?.click();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            if (!busy) fileRef.current?.click();
-          }
-        }}
         className={cn(
-          "relative cursor-pointer overflow-hidden border-[1.5px] border-dashed border-[#EAEAEA] bg-[#fafafa] outline-none transition",
-          "focus:border-[#BC8AF9] focus:ring-[3px] focus:ring-[#BC8AF9]/15",
+          "relative block cursor-pointer overflow-hidden border-[1.5px] border-dashed border-[#EAEAEA] bg-[#fafafa] outline-none transition",
+          "focus-within:border-[#BC8AF9] focus-within:ring-[3px] focus-within:ring-[#BC8AF9]/15",
+          "focus-visible:border-[#BC8AF9] focus-visible:ring-[3px] focus-visible:ring-[#BC8AF9]/15",
+          busy && "pointer-events-none cursor-wait opacity-70",
           preview === "avatar"
             ? "aspect-square w-full max-w-[168px] rounded-2xl"
             : "aspect-[16/9] w-full rounded-[10px]"
         )}
       >
-        <span id={id} className="sr-only">
-          {label} — vùng dán ảnh
-        </span>
+        <span className="sr-only">{label} — chọn hoặc dán ảnh</span>
         {url ? (
           // eslint-disable-next-line @next/next/no-img-element -- URL Cloudflare động
           <img
@@ -179,18 +182,19 @@ export function AdminCfImageInput({
             <Loader2 className="animate-spin text-[#BC8AF9]" size={28} />
           </div>
         ) : null}
-      </div>
+      </label>
 
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => fileRef.current?.click()}
-          className="inline-flex items-center gap-1.5 rounded-[10px] border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] font-semibold text-[#555] hover:bg-[#fafafa] disabled:opacity-50"
+        <label
+          htmlFor={fileInputId}
+          className={cn(
+            "inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] font-semibold text-[#555] hover:bg-[#fafafa]",
+            busy && "pointer-events-none cursor-wait opacity-50"
+          )}
         >
           <Upload size={14} />
           Chọn từ máy tính
-        </button>
+        </label>
         {url ? (
           <button
             type="button"
@@ -206,14 +210,6 @@ export function AdminCfImageInput({
           </button>
         ) : null}
       </div>
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="sr-only"
-        onChange={(e) => void onFile(e.target.files)}
-      />
 
       {err ? <p className="m-0 text-[11px] font-semibold text-red-600">{err}</p> : null}
     </div>

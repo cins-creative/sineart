@@ -570,6 +570,9 @@
   color: rgba(255, 255, 255, 0.88);
   margin: 0 0 10px;
   animation: fadeUp 0.5s 0.05s ease both;
+  text-shadow:
+    0 1px 2px rgba(12, 8, 8, 0.55),
+    0 2px 14px rgba(12, 8, 8, 0.4);
 }
 
 .hero-headline {
@@ -580,6 +583,9 @@
   color: #fff;
   margin: 0 0 14px;
   animation: fadeUp 0.5s 0.12s ease both;
+  text-shadow:
+    0 1px 2px rgba(12, 8, 8, 0.58),
+    0 2px 22px rgba(12, 8, 8, 0.45);
 }
 .hero-headline em {
   font-style: normal;
@@ -587,6 +593,8 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  /* Chữ gradient: drop-shadow đọc rõ hơn text-shadow khi fill trong suốt */
+  filter: drop-shadow(0 1px 2px rgba(12, 8, 8, 0.5)) drop-shadow(0 3px 18px rgba(12, 8, 8, 0.42));
 }
 
 .hero-lead {
@@ -599,6 +607,9 @@
   max-width: 36rem;
   text-wrap: balance;
   animation: fadeUp 0.5s 0.18s ease both;
+  text-shadow:
+    0 1px 2px rgba(12, 8, 8, 0.52),
+    0 2px 16px rgba(12, 8, 8, 0.38);
 }
 
 .hero-actions { display:flex; gap:8px; animation:fadeUp .5s .24s ease both; }

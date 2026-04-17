@@ -370,7 +370,7 @@ export default function AdminShell({
       ) : null}
 
       <div className="min-w-0 max-w-full md:pl-[260px]">
-        <header className="sticky top-0 z-[9] flex h-14 w-full min-w-0 items-center justify-between gap-3 border-b border-black/[0.06] bg-white/90 px-4 backdrop-blur md:px-[24px]">
+        <header className="sticky top-0 z-[9] flex h-14 w-full min-w-0 items-center justify-between gap-3 border-b border-black/[0.06] bg-white/90 pl-3 pr-4 backdrop-blur md:pl-4 md:pr-6">
           <div className="flex min-w-0 shrink-0 items-center gap-2">
             <button
               type="button"

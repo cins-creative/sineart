@@ -37,6 +37,8 @@ export type AdminBaiHocVienRow = {
   lop_name: string;
   bai_tap_name: string;
   ten_mon_hoc: string;
+  /** ISO từ `hv_bai_hoc_vien.created_at` — sort mặc định mới nhất trước. */
+  created_at: string | null;
 };
 
 export type AdminBhvHocVienOpt = { id: number; full_name: string };
@@ -76,7 +78,7 @@ async function selectHvBaiHocVienRows(
       let q = supabase
         .from("hv_bai_hoc_vien")
         .select(cols)
-        .order("score", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false, nullsFirst: false })
         .order("id", { ascending: false });
       if (tab === "cho") q = q.or("status.eq.Chờ xác nhận,status.is.null");
       else if (tab === "hoan") q = q.eq("status", "Hoàn thiện");
@@ -188,6 +190,7 @@ export async function fetchAdminQuanLyBaiHocVienBundle(
     const sc = r.score;
     const scoreNum =
       sc != null && sc !== "" && String(sc).trim() !== "" && Number.isFinite(Number(sc)) ? Number(sc) : null;
+    const ca = r.created_at != null ? String(r.created_at).trim() : "";
     rows.push({
       id,
       photo: typeof r.photo === "string" && r.photo.trim() ? r.photo.trim() : null,
@@ -202,13 +205,16 @@ export async function fetchAdminQuanLyBaiHocVienBundle(
       lop_name: lid != null ? lopName.get(lid) ?? `Lớp #${lid}` : "—",
       bai_tap_name: bt?.ten ?? "—",
       ten_mon_hoc: bt?.mon ?? "",
+      created_at: ca || null,
     });
   }
 
   rows.sort((a, b) => {
-    const sa = a.score ?? -1e18;
-    const sb = b.score ?? -1e18;
-    if (sb !== sa) return sb - sa;
+    const ta = a.created_at ? Date.parse(a.created_at) : NaN;
+    const tb = b.created_at ? Date.parse(b.created_at) : NaN;
+    if (Number.isFinite(tb) && Number.isFinite(ta) && tb !== ta) return tb - ta;
+    if (Number.isFinite(tb) && !Number.isFinite(ta)) return -1;
+    if (!Number.isFinite(tb) && Number.isFinite(ta)) return 1;
     return b.id - a.id;
   });
 

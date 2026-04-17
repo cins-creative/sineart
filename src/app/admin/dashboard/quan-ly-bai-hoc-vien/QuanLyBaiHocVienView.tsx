@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardPaste,
+  Copy,
   ImageIcon,
   Images,
   LayoutGrid,
@@ -15,6 +16,8 @@ import {
   Loader2,
   Search,
   Trash2,
+  Upload,
+  X,
 } from "lucide-react";
 
 import {
@@ -38,6 +41,8 @@ const STATUS_OPTS = ["Chờ xác nhận", "Hoàn thiện", "Không đủ chất 
 const PAGE_SIZE = 20;
 const BHV_LAYOUT_STORAGE_KEY = "admin-quan-ly-bai-hoc-vien-layout";
 type BhvLayout = "table" | "grid";
+/** null = thứ tự mặc định (mới tạo trước, từ server). */
+type BhvScoreSort = null | "desc" | "asc";
 
 type Props = {
   bundle: AdminQuanLyBaiHocVienBundle;
@@ -396,6 +401,8 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
   const [saveBusy, setSaveBusy] = useState(false);
   const [uploadRowId, setUploadRowId] = useState<number | null>(null);
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<number>>(() => new Set());
+  const [filterMonHoc, setFilterMonHoc] = useState("");
+  const [scoreSort, setScoreSort] = useState<BhvScoreSort>(null);
   const bulkAnchorIndexRef = useRef<number | null>(null);
   const bulkSelectedIdsRef = useRef(bulkSelectedIds);
   bulkSelectedIdsRef.current = bulkSelectedIds;
@@ -429,13 +436,55 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
     }
   }, []);
 
-  const totalRows = bundle.rows.length;
+  const monOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of bundle.rows) {
+      const m = (r.ten_mon_hoc ?? "").trim();
+      if (m) s.add(m);
+    }
+    return [...s].sort((a, b) => a.localeCompare(b, "vi"));
+  }, [bundle.rows]);
+
+  const rowsAfterMon = useMemo(() => {
+    const f = filterMonHoc.trim();
+    if (!f) return bundle.rows;
+    return bundle.rows.filter((r) => (r.ten_mon_hoc ?? "").trim() === f);
+  }, [bundle.rows, filterMonHoc]);
+
+  const rowsSorted = useMemo(() => {
+    if (scoreSort == null) return rowsAfterMon;
+    const list = [...rowsAfterMon];
+    list.sort((a, b) => {
+      const fa = a.score != null && Number.isFinite(a.score);
+      const fb = b.score != null && Number.isFinite(b.score);
+      if (scoreSort === "desc") {
+        if (fa && fb && b.score! !== a.score!) return b.score! - a.score!;
+        if (fa && !fb) return -1;
+        if (!fa && fb) return 1;
+      } else {
+        if (fa && fb && a.score! !== b.score!) return a.score! - b.score!;
+        if (fa && !fb) return -1;
+        if (!fa && fb) return 1;
+      }
+      const ta = a.created_at ? Date.parse(a.created_at) : 0;
+      const tb = b.created_at ? Date.parse(b.created_at) : 0;
+      if (tb !== ta) return tb - ta;
+      return b.id - a.id;
+    });
+    return list;
+  }, [rowsAfterMon, scoreSort]);
+
+  const totalRows = rowsSorted.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
 
   const pagedRows = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
-    return bundle.rows.slice(start, start + PAGE_SIZE);
-  }, [bundle.rows, page]);
+    return rowsSorted.slice(start, start + PAGE_SIZE);
+  }, [rowsSorted, page]);
+
+  const cycleScoreSort = useCallback(() => {
+    setScoreSort((s) => (s == null ? "desc" : s === "desc" ? "asc" : null));
+  }, []);
 
   const clearBulkSelection = useCallback(() => {
     setBulkSelectedIds(new Set());
@@ -456,7 +505,12 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
         setBulkSelectedIds(new Set(pagedRows.slice(lo, hi + 1).map((r) => r.id)));
       } else {
         bulkAnchorIndexRef.current = indexInPage;
-        setBulkSelectedIds(new Set([rowId]));
+        setBulkSelectedIds((prev) => {
+          const n = new Set(prev);
+          if (n.has(rowId)) n.delete(rowId);
+          else n.add(rowId);
+          return n;
+        });
       }
     },
     [pagedRows],
@@ -464,7 +518,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
 
   useEffect(() => {
     clearBulkSelection();
-  }, [page, activeTab, layout, clearBulkSelection]);
+  }, [page, activeTab, layout, filterMonHoc, scoreSort, clearBulkSelection]);
 
   useEffect(() => {
     if (layout !== "table") return;
@@ -482,6 +536,8 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
 
   useEffect(() => {
     setPage(1);
+    setFilterMonHoc("");
+    setScoreSort(null);
   }, [activeTab]);
 
   useEffect(() => {
@@ -709,6 +765,36 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                   </button>
                 </div>
               </div>
+              <div className="flex flex-wrap items-end gap-3 border-t border-[#f0f0f0] pt-2">
+                <div className="min-w-0 flex-1 basis-[11rem]">
+                  <label
+                    htmlFor="bhv-filter-mon"
+                    className="mb-0.5 block text-[9px] font-bold uppercase tracking-wide text-black/40"
+                  >
+                    Môn học
+                  </label>
+                  <select
+                    id="bhv-filter-mon"
+                    className="w-full rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-[12px] outline-none focus:border-[#BC8AF9]"
+                    value={filterMonHoc}
+                    onChange={(e) => {
+                      setFilterMonHoc(e.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="">Tất cả môn</option>
+                    {monOptions.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="pb-1 text-[10px] text-black/40">
+                  Sắp xếp điểm: bấm tiêu đề cột <span className="font-semibold text-black/55">ĐIỂM</span> (cao → thấp →
+                  thấp → cao → mặc định).
+                </p>
+              </div>
             </div>
 
             {layout === "table" ? (
@@ -717,8 +803,8 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                   <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#EAEAEA] bg-[#BC8AF9]/10 px-4 py-2 text-[12px] text-[#323232]">
                     <span className="text-black/80">
                       Đã chọn <span className="font-semibold text-[#1a1a2e]">{bulkSelectedIds.size}</span> dòng trên
-                      trang này · Shift+click ô chọn để chọn dải · chỉnh một ô để áp dụng nháp cho cả nhóm · Esc để bỏ
-                      chọn
+                      trang này · click từng ô để bật/tắt nhiều dòng · Shift+click để chọn cả dải · chỉnh một ô để áp
+                      dụng nháp cho cả nhóm · Esc để bỏ chọn
                     </span>
                     <button
                       type="button"
@@ -735,7 +821,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                     <tr className="border-b border-[#EAEAEA] bg-[#fafafa] text-[11px] font-semibold uppercase tracking-wide text-black/45">
                       <th
                         className="w-9 px-1 py-2.5 text-center font-normal normal-case tracking-normal"
-                        title="Click chọn dòng · Shift+click để chọn cả dải"
+                        title="Click bật/tắt từng dòng · Shift+click để chọn cả dải"
                       >
                         <span className="sr-only">Chọn nhiều dòng</span>
                         <span className="text-[10px] text-black/35" aria-hidden>
@@ -746,7 +832,34 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                       <th className="px-3 py-2.5">Học viên</th>
                       <th className="px-3 py-2.5">Lớp</th>
                       <th className="px-3 py-2.5">Bài / môn</th>
-                      <th className="px-3 py-2.5">Điểm</th>
+                      <th className="px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => cycleScoreSort()}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-left font-semibold uppercase tracking-wide outline-none transition-colors hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-[#BC8AF9]/50",
+                            scoreSort != null && "text-[#BC8AF9]",
+                          )}
+                          title={
+                            scoreSort == null
+                              ? "Điểm: mặc định (mới tạo trước). Bấm để sắp cao → thấp."
+                              : scoreSort === "desc"
+                                ? "Đang: điểm cao → thấp. Bấm: thấp → cao."
+                                : "Đang: điểm thấp → cao. Bấm: tắt sắp (mới tạo trước)."
+                          }
+                        >
+                          Điểm
+                          {scoreSort === "desc" ? (
+                            <span className="text-[10px] font-bold normal-case" aria-hidden>
+                              ↓
+                            </span>
+                          ) : scoreSort === "asc" ? (
+                            <span className="text-[10px] font-bold normal-case" aria-hidden>
+                              ↑
+                            </span>
+                          ) : null}
+                        </button>
+                      </th>
                       <th className="px-3 py-2.5">Trạng thái</th>
                       <th className="px-3 py-2.5">Mẫu</th>
                       <th className="px-6 py-2.5 text-right">Thao tác</th>
@@ -757,6 +870,12 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                       <tr>
                         <td colSpan={9} className="px-6 py-12 text-center text-sm text-[#888]">
                           Không có bản ghi trong tab này.
+                        </td>
+                      </tr>
+                    ) : totalRows === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="px-6 py-12 text-center text-sm text-[#888]">
+                          Không có bản ghi khớp môn đã chọn.
                         </td>
                       </tr>
                     ) : (
@@ -794,6 +913,8 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
               <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-2">
                 {bundle.rows.length === 0 ? (
                   <div className="py-12 text-center text-sm text-[#888]">Không có bản ghi trong tab này.</div>
+                ) : totalRows === 0 ? (
+                  <div className="py-12 text-center text-sm text-[#888]">Không có bản ghi khớp môn đã chọn.</div>
                 ) : (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {pagedRows.map((base) => (
@@ -911,8 +1032,17 @@ function RowEditor({
   const fileRef = useRef<HTMLInputElement>(null);
   const photoWrapRef = useRef<HTMLDivElement>(null);
   const [scoreLocal, setScoreLocal] = useState(row.score != null ? String(Math.round(row.score)) : "");
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const disabled = rowBusy || saveBusy;
+
+  useEffect(() => {
+    setPreviewOpen(false);
+  }, [row.id]);
+
+  useEffect(() => {
+    if (!row.photo) setPreviewOpen(false);
+  }, [row.photo]);
 
   useEffect(() => {
     setScoreLocal(row.score != null ? String(Math.round(row.score)) : "");
@@ -988,6 +1118,23 @@ function RowEditor({
     }
   };
 
+  const copyPhotoToClipboard = useCallback(async () => {
+    if (!row.photo) return;
+    try {
+      const res = await fetch(row.photo, { mode: "cors" });
+      if (!res.ok) throw new Error("fetch");
+      const blob = await res.blob();
+      const mime = blob.type?.startsWith("image/") ? blob.type : "image/png";
+      if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
+        window.alert("Trình duyệt không hỗ trợ copy ảnh vào clipboard.");
+        return;
+      }
+      await navigator.clipboard.write([new ClipboardItem({ [mime]: blob })]);
+    } catch {
+      window.alert("Không copy được ảnh (CORS, HTTPS hoặc quyền clipboard).");
+    }
+  }, [row.photo]);
+
   const pasteImageFromClipboard = async () => {
     photoWrapRef.current?.focus();
     if (typeof navigator === "undefined" || !navigator.clipboard || !("read" in navigator.clipboard)) return;
@@ -1025,31 +1172,68 @@ function RowEditor({
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center text-black/25">
           <ImageIcon className={layout === "grid" ? "h-10 w-10" : "h-6 w-6"} aria-hidden />
-          {layout === "table" ? <span className="text-[9px] leading-tight">Click · Ctrl+V</span> : null}
+          {layout === "table" ? <span className="text-[9px] leading-tight">Xem / chọn · Ctrl+V</span> : null}
         </div>
       )}
     </>
   );
 
+  const photoLightbox =
+    previewOpen && row.photo ? (
+      <div
+        className="fixed inset-0 z-[400] flex items-center justify-center bg-black/75 p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Xem ảnh lớn"
+        onClick={() => setPreviewOpen(false)}
+      >
+        <button
+          type="button"
+          className="absolute right-4 top-4 rounded-full border border-white/30 bg-black/50 p-2 text-white outline-none transition-colors hover:bg-black/70 focus-visible:ring-2 focus-visible:ring-white/80"
+          onClick={() => setPreviewOpen(false)}
+          aria-label="Đóng"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={row.photo}
+          alt=""
+          className="max-h-[92vh] max-w-[min(96vw,1200px)] object-contain shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+    ) : null;
+
   if (layout === "grid") {
     return (
-      <div
-        className={cn(
-          "flex flex-col overflow-hidden rounded-xl border border-[#EAEAEA] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-shadow [content-visibility:auto] [contain-intrinsic-size:auto_420px]",
-          (rowBusy || uploadBusy) && "ring-2 ring-[#BC8AF9]/40",
-        )}
-      >
+      <>
+        {photoLightbox}
+        <div
+          className={cn(
+            "flex flex-col overflow-hidden rounded-xl border border-[#EAEAEA] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-shadow [content-visibility:auto] [contain-intrinsic-size:auto_420px]",
+            (rowBusy || uploadBusy) && "ring-2 ring-[#BC8AF9]/40",
+          )}
+        >
         <div
           ref={photoWrapRef}
           tabIndex={0}
           role="button"
-          aria-label="Ảnh bài — click để chọn ảnh hoặc dán từ clipboard"
+          aria-label={
+            row.photo
+              ? "Ảnh bài — click để xem lớn; Ctrl+V để dán ảnh"
+              : "Ảnh bài — click để chọn ảnh từ máy; Ctrl+V để dán"
+          }
           onPaste={onPhotoPaste}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => {
+            if (row.photo) setPreviewOpen(true);
+            else fileRef.current?.click();
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              fileRef.current?.click();
+              if (row.photo) setPreviewOpen(true);
+              else fileRef.current?.click();
             }
           }}
           className={cn(
@@ -1064,23 +1248,51 @@ function RowEditor({
             </div>
           ) : null}
           {!uploadBusy ? (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={(e) => {
-                e.stopPropagation();
-                void pasteImageFromClipboard();
-              }}
-              className="absolute bottom-1.5 right-1.5 rounded-md border border-black/10 bg-white/95 p-1.5 text-black/55 shadow-sm hover:bg-white hover:text-black/80 disabled:opacity-40"
-              title="Dán ảnh từ clipboard (hoặc Ctrl+V khi đang focus vùng ảnh)"
-            >
-              <ClipboardPaste className="h-3.5 w-3.5" aria-hidden />
-              <span className="sr-only">Dán ảnh</span>
-            </button>
+            <div className="absolute bottom-1.5 right-1.5 flex gap-1">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void pasteImageFromClipboard();
+                }}
+                className="rounded-md border border-black/10 bg-white/95 p-1.5 text-black/55 shadow-sm hover:bg-white hover:text-black/80 disabled:opacity-40"
+                title="Dán ảnh từ clipboard (hoặc Ctrl+V khi đang focus vùng ảnh)"
+              >
+                <ClipboardPaste className="h-3.5 w-3.5" aria-hidden />
+                <span className="sr-only">Dán ảnh</span>
+              </button>
+              <button
+                type="button"
+                disabled={disabled || !row.photo}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void copyPhotoToClipboard();
+                }}
+                className="rounded-md border border-black/10 bg-white/95 p-1.5 text-black/55 shadow-sm hover:bg-white hover:text-black/80 disabled:opacity-40"
+                title="Copy ảnh hiện tại vào clipboard"
+              >
+                <Copy className="h-3.5 w-3.5" aria-hidden />
+                <span className="sr-only">Copy ảnh</span>
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileRef.current?.click();
+                }}
+                className="rounded-md border border-black/10 bg-white/95 p-1.5 text-black/55 shadow-sm hover:bg-white hover:text-black/80 disabled:opacity-40"
+                title="Chọn ảnh từ máy"
+              >
+                <Upload className="h-3.5 w-3.5" aria-hidden />
+                <span className="sr-only">Chọn ảnh</span>
+              </button>
+            </div>
           ) : null}
         </div>
         <p className="border-b border-[#f0f0f0] px-3 py-1.5 text-center text-[10px] text-black/40">
-          Ảnh: click vùng ảnh hoặc Ctrl+V để dán từ clipboard
+          Ảnh: click để xem lớn (nếu đã có) hoặc chọn từ máy; Ctrl+V để dán
         </p>
         <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
           <div>
@@ -1178,12 +1390,15 @@ function RowEditor({
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </>
     );
   }
 
   return (
-    <tr
+    <>
+      {photoLightbox}
+      <tr
       className={cn(
         "border-b border-[#f0f0f0] last:border-0 hover:bg-black/[0.015] [content-visibility:auto] [contain-intrinsic-size:auto_88px]",
         tableBulk?.selected && "bg-[#BC8AF9]/08",
@@ -1199,7 +1414,7 @@ function RowEditor({
             data-bhv-row-id={row.id}
             onMouseDown={tableBulk.onMouseDown}
             className="h-3.5 w-3.5 cursor-pointer rounded border-[#ccc] accent-[#BC8AF9]"
-            aria-label="Chọn dòng (Shift+click để chọn dải)"
+            aria-label="Chọn dòng (click bật/tắt; Shift+click để chọn dải)"
           />
         </td>
       ) : null}
@@ -1210,13 +1425,21 @@ function RowEditor({
             ref={photoWrapRef}
             tabIndex={0}
             role="button"
-            aria-label="Ảnh — click hoặc Ctrl+V để dán ảnh"
+            aria-label={
+              row.photo
+                ? "Ảnh — click để xem lớn; Ctrl+V để dán ảnh"
+                : "Ảnh — click để chọn từ máy; Ctrl+V để dán ảnh"
+            }
             onPaste={onPhotoPaste}
-            onClick={() => fileRef.current?.click()}
+            onClick={() => {
+              if (row.photo) setPreviewOpen(true);
+              else fileRef.current?.click();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                fileRef.current?.click();
+                if (row.photo) setPreviewOpen(true);
+                else fileRef.current?.click();
               }
             }}
             className={cn(
@@ -1231,19 +1454,47 @@ function RowEditor({
               </div>
             ) : null}
           </div>
-          <button
-            type="button"
-            disabled={disabled || uploadBusy}
-            onClick={(e) => {
-              e.stopPropagation();
-              void pasteImageFromClipboard();
-            }}
-            className="shrink-0 rounded-lg border border-[#EAEAEA] p-1.5 text-black/55 hover:bg-black/[0.04] disabled:opacity-40"
-            title="Dán ảnh từ clipboard (cần quyền trình duyệt). Hoặc focus ô ảnh rồi Ctrl+V."
-          >
-            <ClipboardPaste className="h-4 w-4" aria-hidden />
-            <span className="sr-only">Dán ảnh</span>
-          </button>
+          <div className="flex shrink-0 flex-col gap-0.5">
+            <button
+              type="button"
+              disabled={disabled || uploadBusy}
+              onClick={(e) => {
+                e.stopPropagation();
+                void pasteImageFromClipboard();
+              }}
+              className="rounded-lg border border-[#EAEAEA] p-1.5 text-black/55 hover:bg-black/[0.04] disabled:opacity-40"
+              title="Dán ảnh từ clipboard (cần quyền trình duyệt). Hoặc focus ô ảnh rồi Ctrl+V."
+            >
+              <ClipboardPaste className="h-4 w-4" aria-hidden />
+              <span className="sr-only">Dán ảnh</span>
+            </button>
+            <button
+              type="button"
+              disabled={disabled || uploadBusy || !row.photo}
+              onClick={(e) => {
+                e.stopPropagation();
+                void copyPhotoToClipboard();
+              }}
+              className="rounded-lg border border-[#EAEAEA] p-1.5 text-black/55 hover:bg-black/[0.04] disabled:opacity-40"
+              title="Copy ảnh hiện tại vào clipboard"
+            >
+              <Copy className="h-4 w-4" aria-hidden />
+              <span className="sr-only">Copy ảnh</span>
+            </button>
+            <button
+              type="button"
+              disabled={disabled || uploadBusy}
+              onClick={(e) => {
+                e.stopPropagation();
+                fileRef.current?.click();
+              }}
+              className="rounded-lg border border-[#EAEAEA] p-1.5 text-black/55 hover:bg-black/[0.04] disabled:opacity-40"
+              title="Chọn ảnh từ máy"
+            >
+              <Upload className="h-4 w-4" aria-hidden />
+              <span className="sr-only">Chọn ảnh</span>
+            </button>
+          </div>
         </div>
       </td>
       <td className="min-w-[200px] max-w-[280px] px-3 py-2 align-middle">
@@ -1337,5 +1588,6 @@ function RowEditor({
         </div>
       </td>
     </tr>
+    </>
   );
 }

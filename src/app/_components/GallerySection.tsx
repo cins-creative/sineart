@@ -7,8 +7,9 @@ import type {
 } from "@/types/homepage";
 import { compareGalleryByScoreDesc } from "@/lib/gallery-display-sort";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import GalleryJustifiedRows from "./GalleryJustifiedRows";
 
 export type GalleryLayoutVariant = "masonry" | "justified";
@@ -20,14 +21,43 @@ function itemMatchesWorkKind(item: GalleryDisplayItem, kind: WorkKindFilter): bo
   return kind === "bai_mau" ? item.baiMau : !item.baiMau;
 }
 
+function galleryMotionReduced(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 function GalleryCard({
   item,
   onOpen,
+  index,
 }: {
   item: GalleryDisplayItem;
   onOpen: (item: GalleryDisplayItem) => void;
+  /** Masonry: trễ fly-in theo thứ tự (CSS `--gallery-mi-delay`). */
+  index?: number;
 }) {
   const cls = `mi mi-${item.mi}`;
+  const staggerStyle: CSSProperties | undefined =
+    index != null && index >= 0
+      ? { ["--gallery-mi-delay" as string]: `${Math.min(index, 48) * 0.034 + 0.02}s` }
+      : undefined;
+
+  const onMiPointerMove = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    if (galleryMotionReduced()) return;
+    const el = e.currentTarget;
+    const r = el.getBoundingClientRect();
+    const w = r.width || 1;
+    const nx = ((e.clientX - r.left) / w - 0.5) * 2;
+    el.style.setProperty("--mi-tilt", (nx * 5.5).toFixed(2));
+    el.style.setProperty("--mi-pan", `${(nx * 12).toFixed(1)}px`);
+  }, []);
+
+  const onMiPointerLeave = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    const el = e.currentTarget;
+    el.style.setProperty("--mi-tilt", "0");
+    el.style.setProperty("--mi-pan", "0px");
+  }, []);
+
   const inner = (
     <div className="mi-ph">
       {item.photo ? (
@@ -59,8 +89,11 @@ function GalleryCard({
       <button
         type="button"
         className={cls}
+        style={staggerStyle}
         data-ten-mon-hoc={catAttr}
         onClick={() => onOpen(item)}
+        onMouseMove={onMiPointerMove}
+        onMouseLeave={onMiPointerLeave}
         aria-label={`Xem ảnh — ${item.studentName}`}
       >
         {inner}
@@ -69,7 +102,7 @@ function GalleryCard({
   }
 
   return (
-    <div className={cls} data-ten-mon-hoc={catAttr}>
+    <div className={cls} style={staggerStyle} data-ten-mon-hoc={catAttr}>
       {inner}
     </div>
   );
@@ -259,8 +292,8 @@ export default function GallerySection({
           />
         ) : (
           <div className="masonry">
-            {visibleItemsSorted.map((item) => (
-              <GalleryCard key={item.id} item={item} onOpen={setLightbox} />
+            {visibleItemsSorted.map((item, i) => (
+              <GalleryCard key={item.id} item={item} index={i} onOpen={setLightbox} />
             ))}
           </div>
         )}
@@ -274,9 +307,14 @@ export default function GallerySection({
             Xem thêm tác phẩm →
           </button>
         ) : showFooterCta && layoutVariant !== "justified" ? (
-          <button type="button" className="gallery-more">
+          <Link
+            href="/gallery"
+            className="gallery-more"
+            prefetch={false}
+            aria-label="Mở trang Gallery — xem thêm tác phẩm"
+          >
             Xem thêm tác phẩm →
-          </button>
+          </Link>
         ) : null}
       </div>
 

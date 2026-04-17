@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -112,6 +113,9 @@ export async function deleteChiNhanh(id: number): Promise<BranchFormState> {
 
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delOk.ok) return { ok: false, error: delOk.error };
 
   const lop = await supabase
     .from("ql_lop_hoc")

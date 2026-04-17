@@ -58,9 +58,11 @@ import { classroomGalleryEmoji, fetchClassroomGalleryForLop } from "@/lib/phong-
 import ClassroomSignInOverlay from "@/app/_components/ClassroomSignInOverlay";
 import StudentAvatarMenu from "@/components/StudentAvatarMenu";
 import Link from "next/link";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Be_Vietnam_Pro, Quicksand } from "next/font/google";
 import type { DailyCall } from "@daily-co/daily-js";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import {
   useCallback,
   useEffect,
@@ -78,6 +80,9 @@ import StudentManageModal from "./StudentManageModal";
 function cx(...parts: Array<string | false | undefined | null>): string {
   return parts.filter(Boolean).join(" ");
 }
+
+const PHC_SIDEBAR_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+const PHC_SIDEBAR_TWEEN = { type: "tween" as const, duration: 0.48, ease: PHC_SIDEBAR_EASE };
 
 const HV_CHAT_INITIAL = 30;
 const HV_CHAT_LOAD_MORE = 20;
@@ -1716,41 +1721,67 @@ export default function ClassroomClient({ classSlug }: ClassroomClientProps = {}
       </header>
 
       <div className="main">
-        <div className="canvas-wrap">
-          {meetingRoomUrl ? (
-            <div className="canvas-ph canvas-ph--meet">
-              {isDailyRoomUrl(meetingRoomUrl) ? (
-                <div ref={dailyMeetContainerRef} className="daily-meet-frame-root" />
-              ) : (
-                <iframe
-                  src={meetingRoomUrl}
-                  title="Phòng họp — meeting_room"
-                  allow="camera; microphone; fullscreen; display-capture; autoplay"
-                  allowFullScreen
-                />
-              )}
-            </div>
-          ) : (
-            <div className="canvas-ph">
-              <span className="ico">🎨</span>
-              <p>Phòng học trực tuyến</p>
-              <small>
-                Chưa có liên kết phòng họp trên hệ thống. Admin cập nhật cột{" "}
-                <code>ql_lop_hoc.meeting_room</code> (URL Meet / Daily / …).
-              </small>
-            </div>
-          )}
-        </div>
+        <LayoutGroup id="phc-main-layout">
+          <motion.div layout className="canvas-wrap" transition={PHC_SIDEBAR_TWEEN}>
+            {meetingRoomUrl ? (
+              <motion.div
+                layout
+                className="canvas-ph canvas-ph--meet"
+                transition={PHC_SIDEBAR_TWEEN}
+              >
+                {isDailyRoomUrl(meetingRoomUrl) ? (
+                  <div ref={dailyMeetContainerRef} className="daily-meet-frame-root" />
+                ) : (
+                  <iframe
+                    src={meetingRoomUrl}
+                    title="Phòng họp — meeting_room"
+                    allow="camera; microphone; fullscreen; display-capture; autoplay"
+                    allowFullScreen
+                  />
+                )}
+              </motion.div>
+            ) : (
+              <motion.div layout className="canvas-ph" transition={PHC_SIDEBAR_TWEEN}>
+                <span className="ico">🎨</span>
+                <p>Phòng học trực tuyến</p>
+                <small>
+                  Chưa có liên kết phòng họp trên hệ thống. Admin cập nhật cột{" "}
+                  <code>ql_lop_hoc.meeting_room</code> (URL Meet / Daily / …).
+                </small>
+              </motion.div>
+            )}
+          </motion.div>
 
-        <aside className={cx("sb", !sidebarOpen && "col")}>
+          <motion.aside
+          layout
+          className={cx("sb", !sidebarOpen && "col")}
+          transition={PHC_SIDEBAR_TWEEN}
+        >
           <button
             type="button"
             className="sbtog"
             onClick={() => setSidebarOpen((o) => !o)}
             aria-expanded={sidebarOpen}
+            aria-label={sidebarOpen ? "Thu gọn bảng điều khiển" : "Mở bảng điều khiển"}
           >
             <span className="tog-lbl">BẢNG ĐIỀU KHIỂN</span>
-            <span aria-hidden>{sidebarOpen ? "◀" : "▶"}</span>
+            <AnimatePresence initial={false} mode="wait">
+              <motion.span
+                key={sidebarOpen ? "sidebar-expanded" : "sidebar-collapsed"}
+                className="sbtog-ico"
+                aria-hidden
+                initial={{ opacity: 0, scale: 0.88 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.88 }}
+                transition={{ duration: 0.28, ease: PHC_SIDEBAR_EASE }}
+              >
+                {sidebarOpen ? (
+                  <PanelRightClose size={18} strokeWidth={2} />
+                ) : (
+                  <PanelRightOpen size={18} strokeWidth={2} />
+                )}
+              </motion.span>
+            </AnimatePresence>
           </button>
 
           <div className="tab-row" role="tablist">
@@ -2556,7 +2587,8 @@ export default function ClassroomClient({ classSlug }: ClassroomClientProps = {}
               )}
             </div>
           )}
-        </aside>
+          </motion.aside>
+        </LayoutGroup>
       </div>
 
       <div className={cx("adb", adDismissal !== "banner" && "hid")}>

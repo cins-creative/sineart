@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import {
   deleteBaiHocVien,
   updateBaiHocVien,
@@ -828,7 +829,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                           ☐
                         </span>
                       </th>
-                      <th className="px-6 py-2.5">Ảnh</th>
+                      <th className="px-3 py-2.5">Ảnh</th>
                       <th className="px-3 py-2.5">Học viên</th>
                       <th className="px-3 py-2.5">Lớp</th>
                       <th className="px-3 py-2.5">Bài / môn</th>
@@ -1029,6 +1030,7 @@ function RowEditor({
   onUploadEnd: () => void;
   onDelete: () => void;
 }) {
+  const { canDelete } = useAdminDashboardAbilities();
   const fileRef = useRef<HTMLInputElement>(null);
   const photoWrapRef = useRef<HTMLDivElement>(null);
   const [scoreLocal, setScoreLocal] = useState(row.score != null ? String(Math.round(row.score)) : "");
@@ -1378,15 +1380,17 @@ function RowEditor({
             </label>
             <div className="flex gap-1">
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => void onDelete()}
-                className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50 disabled:opacity-40"
-                title="Xóa"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {canDelete ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => void onDelete()}
+                  className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50 disabled:opacity-40"
+                  title="Xóa"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1418,9 +1422,9 @@ function RowEditor({
           />
         </td>
       ) : null}
-      <td className="px-6 py-2 align-middle">
+      <td className="w-[1%] whitespace-nowrap px-3 py-2 align-middle">
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <div
             ref={photoWrapRef}
             tabIndex={0}
@@ -1443,7 +1447,7 @@ function RowEditor({
               }
             }}
             className={cn(
-              "relative h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-[#EAEAEA] bg-[#f5f5f5] outline-none focus-visible:ring-2 focus-visible:ring-[#BC8AF9]/50",
+              "relative h-12 w-12 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-[#EAEAEA] bg-[#f5f5f5] outline-none focus-visible:ring-2 focus-visible:ring-[#BC8AF9]/50",
               uploadBusy && "pointer-events-none opacity-60",
             )}
           >
@@ -1454,7 +1458,11 @@ function RowEditor({
               </div>
             ) : null}
           </div>
-          <div className="flex shrink-0 flex-col gap-0.5">
+          <div
+            className="inline-flex shrink-0 items-center gap-px rounded-lg border border-[#EAEAEA] bg-[#fafafa] p-px shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]"
+            role="group"
+            aria-label="Dán, copy, chọn ảnh"
+          >
             <button
               type="button"
               disabled={disabled || uploadBusy}
@@ -1462,10 +1470,10 @@ function RowEditor({
                 e.stopPropagation();
                 void pasteImageFromClipboard();
               }}
-              className="rounded-lg border border-[#EAEAEA] p-1.5 text-black/55 hover:bg-black/[0.04] disabled:opacity-40"
-              title="Dán ảnh từ clipboard (cần quyền trình duyệt). Hoặc focus ô ảnh rồi Ctrl+V."
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-black/45 transition-colors hover:bg-white hover:text-black/70 disabled:pointer-events-none disabled:opacity-35"
+              title="Dán ảnh (clipboard). Hoặc focus ô ảnh rồi Ctrl+V."
             >
-              <ClipboardPaste className="h-4 w-4" aria-hidden />
+              <ClipboardPaste className="h-3.5 w-3.5" aria-hidden />
               <span className="sr-only">Dán ảnh</span>
             </button>
             <button
@@ -1475,10 +1483,10 @@ function RowEditor({
                 e.stopPropagation();
                 void copyPhotoToClipboard();
               }}
-              className="rounded-lg border border-[#EAEAEA] p-1.5 text-black/55 hover:bg-black/[0.04] disabled:opacity-40"
-              title="Copy ảnh hiện tại vào clipboard"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-black/45 transition-colors hover:bg-white hover:text-black/70 disabled:pointer-events-none disabled:opacity-35"
+              title="Copy ảnh vào clipboard"
             >
-              <Copy className="h-4 w-4" aria-hidden />
+              <Copy className="h-3.5 w-3.5" aria-hidden />
               <span className="sr-only">Copy ảnh</span>
             </button>
             <button
@@ -1488,10 +1496,10 @@ function RowEditor({
                 e.stopPropagation();
                 fileRef.current?.click();
               }}
-              className="rounded-lg border border-[#EAEAEA] p-1.5 text-black/55 hover:bg-black/[0.04] disabled:opacity-40"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-black/45 transition-colors hover:bg-white hover:text-black/70 disabled:pointer-events-none disabled:opacity-35"
               title="Chọn ảnh từ máy"
             >
-              <Upload className="h-4 w-4" aria-hidden />
+              <Upload className="h-3.5 w-3.5" aria-hidden />
               <span className="sr-only">Chọn ảnh</span>
             </button>
           </div>
@@ -1576,15 +1584,17 @@ function RowEditor({
       </td>
       <td className="px-6 py-2 align-middle text-right">
         <div className="flex justify-end gap-1">
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => void onDelete()}
-            className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50 disabled:opacity-40"
-            title="Xóa"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {canDelete ? (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => void onDelete()}
+              className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50 disabled:opacity-40"
+              title="Xóa"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          ) : null}
         </div>
       </td>
     </tr>

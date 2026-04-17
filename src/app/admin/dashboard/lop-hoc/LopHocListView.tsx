@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Calendar, ChevronLeft, ChevronRight, Pencil, Plus, School, Search, X } from "lucide-react";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import type { LopHocFormState } from "@/app/admin/dashboard/lop-hoc/actions";
 import { createLopHoc, deleteLopHoc, updateLopHoc } from "@/app/admin/dashboard/lop-hoc/actions";
 import { cn } from "@/lib/utils";
@@ -284,6 +285,7 @@ function LopDetailPanel({
   hvStats: HvStats | null;
   onClose: () => void;
 }) {
+  const { canDelete } = useAdminDashboardAbilities();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<DetailForm>(() => rowToForm(item));
@@ -611,7 +613,7 @@ function LopDetailPanel({
           </div>
         ) : null}
 
-        {!editing ? (
+        {!editing && canDelete ? (
           <div className="pt-1">
             {confirmDel ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-[13px]">

@@ -7,7 +7,9 @@ import { BookOpen, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 
 import type { KhoaHocFormState } from "@/app/admin/dashboard/khoa-hoc/actions";
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { createKhoaHoc, deleteKhoaHoc, updateKhoaHoc } from "@/app/admin/dashboard/khoa-hoc/actions";
+import { cn } from "@/lib/utils";
 
 /** Dòng `ql_mon_hoc` cho danh sách + panel sửa (đủ field gửi `updateKhoaHoc`). */
 export type AdminMonRow = {
@@ -84,10 +86,12 @@ function MonHocCard({
   item,
   onEdit,
   onAskDelete,
+  canDelete,
 }: {
   item: AdminMonRow;
   onEdit: () => void;
   onAskDelete: () => void;
+  canDelete: boolean;
 }) {
   const loaiCfg = loaiBadgeColors(item.loai_khoa_hoc);
   const [imgErr, setImgErr] = useState(false);
@@ -139,19 +143,24 @@ function MonHocCard({
         <button
           type="button"
           onClick={onEdit}
-          className="flex flex-1 items-center justify-center gap-1.5 border-r border-[#F5F7F7] py-2.5 text-xs font-semibold text-[#888] transition hover:bg-[#BC8AF9]/10 hover:text-[#BC8AF9]"
+          className={cn(
+            "flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-[#888] transition hover:bg-[#BC8AF9]/10 hover:text-[#BC8AF9]",
+            canDelete ? "flex-1 border-r border-[#F5F7F7]" : "flex-1",
+          )}
         >
           <Pencil size={14} strokeWidth={2} />
           Sửa
         </button>
-        <button
-          type="button"
-          onClick={onAskDelete}
-          className="px-3.5 py-2.5 text-[#AAAAAA] transition hover:text-red-500"
-          aria-label="Xóa"
-        >
-          <Trash2 size={16} strokeWidth={2} />
-        </button>
+        {canDelete ? (
+          <button
+            type="button"
+            onClick={onAskDelete}
+            className="px-3.5 py-2.5 text-[#AAAAAA] transition hover:text-red-500"
+            aria-label="Xóa"
+          >
+            <Trash2 size={16} strokeWidth={2} />
+          </button>
+        ) : null}
       </div>
     </motion.div>
   );
@@ -412,6 +421,7 @@ export default function KhoaHocListView({
   dbEmpty = false,
   searchHadNoMatch = false,
 }: Props) {
+  const { canDelete } = useAdminDashboardAbilities();
   const router = useRouter();
   const [panel, setPanel] = useState<"none" | "create" | "edit">("none");
   const [editing, setEditing] = useState<AdminMonRow | null>(null);
@@ -497,6 +507,7 @@ export default function KhoaHocListView({
                 >
                   <MonHocCard
                     item={item}
+                    canDelete={canDelete}
                     onEdit={() => {
                       setEditing(item);
                       setPanel("edit");
@@ -522,7 +533,7 @@ export default function KhoaHocListView({
       />
 
       <AnimatePresence>
-        {deleteTarget ? (
+        {deleteTarget && canDelete ? (
           <>
             <motion.button
               type="button"

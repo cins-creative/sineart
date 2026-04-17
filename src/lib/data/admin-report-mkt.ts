@@ -6,7 +6,6 @@ export const MK_INPUT_COLS = [
   { key: "chi_phi_chay_ads", label: "Chi phí chạy Ads", group: "ads" },
   { key: "fb_tin_nhan_ads", label: "Tin nhắn Ads", group: "ads" },
   { key: "fb_tin_nhan_tu_nhien", label: "Tin nhắn tự nhiên", group: "ads" },
-  { key: "ti_le_chuyen_doi_tin_nhan", label: "Tỉ lệ CĐ tin nhắn", group: "ads", isPct: true },
   { key: "ti_le_chuyen_doi_sang_hoc_vien", label: "Tỉ lệ CĐ → Học viên", group: "ads", isPct: true },
   { key: "chi_phi_trung_binh_mot_tin_nhan", label: "Chi phí TB / tin nhắn", group: "ads" },
   { key: "fb_hoc_vien_moi", label: "Học viên mới", group: "hocvien" },
@@ -29,9 +28,6 @@ export const MK_INPUT_COLS = [
   { key: "group_st_noi_dung_moi", label: "Nội dung mới (ST)", group: "group" },
   { key: "group_hv_yeu_cau_tham_gia", label: "Yêu cầu tham gia (HV)", group: "group" },
   { key: "group_st_yeu_cau_tham_gia", label: "Yêu cầu tham gia (ST)", group: "group" },
-  { key: "be_project_views", label: "Behance Project Views", group: "behance" },
-  { key: "be_appreciations", label: "Behance Appreciations", group: "behance" },
-  { key: "be_followers", label: "Behance Followers", group: "behance" },
 ] as const;
 
 export type MkInputCol = (typeof MK_INPUT_COLS)[number];
@@ -44,7 +40,6 @@ export const MK_GROUP_META: { key: MkGroupKey; label: string; color: string; row
   { key: "fanpage", label: "Fanpage", color: "#4A7EC4", rowBg: "rgba(74, 126, 196, 0.08)" },
   { key: "web", label: "Web", color: "#C4923A", rowBg: "rgba(196, 146, 58, 0.08)" },
   { key: "group", label: "Group", color: "#3A9E72", rowBg: "rgba(58, 158, 114, 0.08)" },
-  { key: "behance", label: "Behance", color: "#5A3D48", rowBg: "rgba(90, 61, 72, 0.08)" },
 ];
 
 export type MkDataAnalysisRow = {

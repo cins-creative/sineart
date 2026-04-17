@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import {
   createNhanSu,
@@ -1366,6 +1367,7 @@ function StaffDetailPanel({
   onStaffUpdated: (patch: Partial<AdminNhanSuRow>) => void;
 }) {
   const router = useRouter();
+  const { canDelete: staffMayDeleteRecords } = useAdminDashboardAbilities();
   const infoTabRef = useRef<StaffDetailInfoTabHandle>(null);
   const [taoLuongOpen, setTaoLuongOpen] = useState(false);
   const [taoLuongKey, setTaoLuongKey] = useState(0);
@@ -1421,6 +1423,10 @@ function StaffDetailPanel({
   }, [row.id]);
 
   useEffect(() => {
+    if (!staffMayDeleteRecords) setPayrollDeleteTarget(null);
+  }, [staffMayDeleteRecords]);
+
+  useEffect(() => {
     if (payrollSlipBangId == null) return;
     if (!bangLuongRows.some((b) => b.id === payrollSlipBangId)) {
       setPayrollSlipBangId(null);
@@ -1462,7 +1468,7 @@ function StaffDetailPanel({
 
   const confirmPayrollBangDelete = useCallback(async () => {
     const bl = payrollDeleteTarget;
-    if (!bl || !canEdit) return;
+    if (!bl || !canEdit || !staffMayDeleteRecords) return;
     setPayrollDeletingId(bl.id);
     try {
       const r = await deleteHrBangTinhLuongFull(bl.id);
@@ -1476,7 +1482,7 @@ function StaffDetailPanel({
     } finally {
       setPayrollDeletingId(null);
     }
-  }, [canEdit, payrollDeleteTarget, router]);
+  }, [canEdit, payrollDeleteTarget, router, staffMayDeleteRecords]);
 
   const copyPayrollPayslipImage = useCallback(async () => {
     const el = payslipCardRef.current;
@@ -2016,19 +2022,21 @@ function StaffDetailPanel({
                                   {bl.so_buoi_lam_viec != null ? String(bl.so_buoi_lam_viec) : "—"}
                                 </td>
                                 <td className="w-12 px-1 py-1 text-right align-middle" onClick={(e) => e.stopPropagation()}>
-                                  <button
-                                    type="button"
-                                    disabled={!canEdit || payrollDeletingId != null}
-                                    title="Xóa bảng lương và lịch điểm danh"
-                                    aria-label={`Xóa bảng lương #${bl.id}`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setPayrollDeleteTarget(bl);
-                                    }}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50/90 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                  >
-                                    <Trash2 size={14} aria-hidden />
-                                  </button>
+                                  {staffMayDeleteRecords ? (
+                                    <button
+                                      type="button"
+                                      disabled={!canEdit || payrollDeletingId != null}
+                                      title="Xóa bảng lương và lịch điểm danh"
+                                      aria-label={`Xóa bảng lương #${bl.id}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPayrollDeleteTarget(bl);
+                                      }}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50/90 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                      <Trash2 size={14} aria-hidden />
+                                    </button>
+                                  ) : null}
                                 </td>
                               </tr>
                             );
@@ -2137,7 +2145,7 @@ function StaffDetailPanel({
         ) : null}
       </AnimatePresence>
       <AnimatePresence>
-        {payrollDeleteTarget != null ? (
+        {staffMayDeleteRecords && payrollDeleteTarget != null ? (
           <motion.div
             key="payroll-delete-confirm"
             initial={{ opacity: 0 }}

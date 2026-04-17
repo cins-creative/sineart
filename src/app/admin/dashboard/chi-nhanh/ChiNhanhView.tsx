@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import type { AdminChiNhanhRow } from "@/lib/data/admin-chi-nhanh";
 import type { BranchFormState } from "@/app/admin/dashboard/chi-nhanh/actions";
 import { deleteChiNhanh, saveChiNhanh } from "@/app/admin/dashboard/chi-nhanh/actions";
@@ -78,6 +79,7 @@ function BranchModal({
   isNew: boolean;
   onClose: () => void;
 }) {
+  const { canDelete } = useAdminDashboardAbilities();
   const router = useRouter();
   const [form, setForm] = useState({
     ten: row?.ten ?? "",
@@ -241,7 +243,7 @@ function BranchModal({
           ) : null}
 
           <div className="flex flex-wrap justify-end gap-2 pt-1">
-            {!isNew && row ? (
+            {!isNew && row && canDelete ? (
               <>
                 <button
                   type="button"

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
+import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -80,6 +81,9 @@ export async function deleteHpDonThu(donId: number): Promise<HoaDonActionState> 
 
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delOk.ok) return { ok: false, error: delOk.error };
 
   const { error: cErr } = await supabase.from("hp_thu_hp_chi_tiet").delete().eq("don_thu", donId);
   if (cErr) return { ok: false, error: cErr.message || "Không xóa được chi tiết đơn." };

@@ -78,6 +78,18 @@
 
 @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
 @keyframes popIn  { from{opacity:0;transform:scale(.94)} to{opacity:1;transform:scale(1)} }
+@keyframes galleryMiFlyIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 26px, 0) scale(0.93);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
 @keyframes blink  { 0%,100%{opacity:1} 50%{opacity:0} }
 
 /* ─────────────────────────────
@@ -532,6 +544,7 @@
 .hero-cover {
   position: absolute;
   inset: 0;
+  z-index: 0;
   background-color: #1a1414;
   background-image: var(--hero-cover-img);
   background-size: cover;
@@ -540,8 +553,12 @@
 }
 
 .hero-ov {
-  position:absolute; inset:0;
-  background:linear-gradient(to top, rgba(20,10,10,.92) 38%, rgba(20,10,10,.2) 100%);
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.6;
+  background: linear-gradient(to top, rgba(20, 10, 10, 0.92) 38%, rgba(20, 10, 10, 0.2) 100%);
+  pointer-events: none;
 }
 .hero-body { position:relative; z-index:2; max-width: 38rem; }
 
@@ -637,32 +654,94 @@
 ───────────────────────────── */
 .courses-wrap { padding:0 12px; margin-bottom:0; }
 
-/* 4 block loại khóa — ảnh: gán `background-image` trên .courses-block-thumb--* */
+/* 4 block loại khóa — bố cục bento: 1 ô lớn (Luyện thi ĐH) + 3 ô nhỏ; ảnh: `.courses-block-thumb--*` */
 .courses-blocks {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--gap);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
   margin-top: 4px;
+  align-items: stretch;
+}
+
+/* Nổi bật: mobile full width; desktop cột trái cao full 3 hàng */
+.courses-block--featured {
+  grid-column: 1 / -1;
+}
+
+/* Mobile: ba ô nhỏ — ảnh cao hơn ~×1.2 so với 4/3 (10/9 ≈ 1.2× chiều cao) */
+@media (max-width: 719px) {
+  .courses-blocks > .courses-block:not(.courses-block--featured) .courses-block-thumb {
+    aspect-ratio: 10 / 9;
+  }
 }
 
 @media (min-width: 720px) {
+  /* ~70% feature / ~30% cột 3 ô — tránh cột phải bị dẹt */
   .courses-blocks {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+    grid-template-rows: repeat(3, minmax(106px, 1fr));
+  }
+
+  .courses-block--featured {
+    grid-column: 1;
+    grid-row: 1 / -1;
   }
 }
 
 .courses-block {
   display: flex;
   flex-direction: column;
+  position: relative;
+  min-height: 0;
+  height: 100%;
   border-radius: var(--r);
   overflow: hidden;
   text-decoration: none;
   color: inherit;
   background: #fff;
-  border: 1.5px solid rgba(45, 32, 32, 0.08);
+  border: 2px solid rgba(45, 32, 32, 0.08);
   box-shadow: 0 4px 18px rgba(45, 32, 32, 0.06);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Viền gradient chạy — blend “add” (plus-lighter) với nội dung bên dưới */
+.courses-block::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  box-sizing: border-box;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    105deg,
+    #f8a668 0%,
+    #ee5b9f 18%,
+    #bb89f8 38%,
+    #7f77dd 55%,
+    #1d9e75 72%,
+    #f8a668 88%,
+    #ee5b9f 100%
+  );
+  background-size: 320% 320%;
+  background-position: 0% 40%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  mix-blend-mode: screen;
+  transition: opacity 0.22s ease;
+}
+
+@supports (mix-blend-mode: plus-lighter) {
+  .courses-block::before {
+    mix-blend-mode: plus-lighter;
+  }
 }
 
 .courses-block:visited {
@@ -674,7 +753,30 @@
 }
 
 .courses-block:hover {
-  box-shadow: 0 8px 28px rgba(45, 32, 32, 0.1);
+  border-color: transparent;
+  box-shadow: 0 10px 32px rgba(45, 32, 32, 0.12);
+}
+
+.courses-block:hover::before {
+  opacity: 1;
+  animation: courses-border-flow 3.5s linear infinite;
+}
+
+@keyframes courses-border-flow {
+  0% {
+    background-position: 0% 40%;
+  }
+  100% {
+    background-position: 100% 60%;
+  }
+}
+
+
+.courses-block.courses-block--featured {
+  border-color: rgba(248, 166, 104, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(127, 119, 221, 0.2),
+    0 10px 36px rgba(127, 119, 221, 0.18);
 }
 
 .courses-block-thumb {
@@ -688,17 +790,62 @@
   overflow: hidden;
 }
 
-.courses-block--featured {
-  border-color: rgba(248, 166, 104, 0.45);
-  box-shadow:
-    0 0 0 1px rgba(127, 119, 221, 0.2),
-    0 10px 36px rgba(127, 119, 221, 0.18);
+/* Ô nổi bật: ảnh cao hơn trên mobile */
+.courses-block--featured .courses-block-thumb {
+  aspect-ratio: 16 / 9;
+  min-height: 187px;
 }
 
-.courses-block--featured:hover {
+@media (min-width: 720px) {
+  .courses-block--featured .courses-block-thumb {
+    aspect-ratio: unset;
+    flex: 1 1 auto;
+    min-height: 240px;
+  }
+
+  .courses-blocks > .courses-block:not(.courses-block--featured) .courses-block-thumb {
+    aspect-ratio: unset;
+    flex: 1 1 auto;
+    min-height: 77px;
+  }
+
+  .courses-block--featured .courses-block-cap {
+    padding: 14px 16px 16px;
+  }
+
+  .courses-block--featured .courses-block-title {
+    font-size: clamp(15px, 1.35vw, 18px);
+  }
+
+  .courses-blocks > .courses-block:not(.courses-block--featured) .courses-block-title {
+    font-size: 13px;
+  }
+}
+
+.courses-block.courses-block--featured:hover {
   box-shadow:
-    0 0 0 1px rgba(248, 166, 104, 0.35),
-    0 14px 40px rgba(127, 119, 221, 0.22);
+    0 0 0 1px rgba(248, 166, 104, 0.28),
+    0 0 28px rgba(238, 92, 162, 0.22),
+    0 0 40px rgba(127, 119, 221, 0.2),
+    0 16px 44px rgba(45, 32, 32, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .courses-block:hover::before {
+    animation: none;
+    opacity: 0;
+  }
+
+  .courses-block:hover {
+    border-color: rgba(248, 166, 104, 0.55);
+    box-shadow: 0 8px 24px rgba(45, 32, 32, 0.1);
+  }
+
+  .courses-block.courses-block--featured:hover {
+    box-shadow:
+      0 0 0 1px rgba(248, 166, 104, 0.35),
+      0 12px 32px rgba(127, 119, 221, 0.18);
+  }
 }
 
 .courses-block-badge {
@@ -959,7 +1106,8 @@ a.cf-mini:visited { color: inherit; }
   box-sizing: border-box;
   background: #fff;
   border: 1.5px solid rgba(45, 32, 32, 0.08);
-  animation: popIn 0.35s ease both;
+  animation: galleryMiFlyIn 0.58s cubic-bezier(0.22, 1, 0.32, 1) both;
+  animation-delay: var(--gallery-mi-delay, 0s);
   -webkit-tap-highlight-color: transparent;
 }
 .mi:active { transform:scale(.97); }
@@ -968,23 +1116,16 @@ button.mi {
   /* margin:0 ghi đè margin-bottom của .mi → masonry dọc bị sát; giữ khoảng dưới */
   width:100%; margin:0; margin-bottom: var(--gallery-gap); padding:0; text-align:left; cursor:pointer;
 }
-.mi:nth-child(1){animation-delay:.02s} .mi:nth-child(2){animation-delay:.06s}
-.mi:nth-child(3){animation-delay:.10s} .mi:nth-child(4){animation-delay:.14s}
-.mi:nth-child(5){animation-delay:.18s} .mi:nth-child(6){animation-delay:.22s}
-.mi:nth-child(7){animation-delay:.26s} .mi:nth-child(8){animation-delay:.30s}
-.mi:nth-child(9){animation-delay:.34s} .mi:nth-child(10){animation-delay:.38s}
-.mi:nth-child(11){animation-delay:.42s} .mi:nth-child(12){animation-delay:.46s}
-.mi:nth-child(13){animation-delay:.50s} .mi:nth-child(14){animation-delay:.54s}
-.mi:nth-child(15){animation-delay:.58s} .mi:nth-child(16){animation-delay:.62s}
 
 /* Khung ô ảnh: full width cột, giữ tỉ lệ — không crop (object-fit contain) */
 .mi-ph {
   width: 100%;
   display: block;
   position: relative;
-  overflow: visible;
+  overflow: hidden;
   background: #f4f4f5;
   line-height: 0;
+  perspective: 640px;
 }
 .mi-ph-img {
   display: block;
@@ -993,6 +1134,21 @@ button.mi {
   height: auto;
   object-fit: contain;
   vertical-align: top;
+  transform: translate3d(var(--mi-pan, 0px), 0, 0) rotateY(calc(var(--mi-tilt, 0) * 1deg)) scale(1.06);
+  transform-origin: center center;
+  will-change: transform;
+  transition: transform 0.22s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mi-ph-img {
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
+  .mi {
+    animation: popIn 0.35s ease both;
+    animation-delay: var(--gallery-mi-delay, 0s);
+  }
 }
 .mi-sh { position:absolute; border-radius:50%; background:rgba(255,255,255,.32); }
 .mi-ph:has(> .mi-sh) { min-height:140px; }
@@ -1015,15 +1171,31 @@ button.mi {
 .video-panel.active { display:block; }
 
 .gallery-more {
-  display:block; width:100%; text-align:center; padding:16px 14px;
-  border:1.5px dashed rgba(45,32,32,.15); border-radius:var(--r);
-  font-family:var(--font); font-weight:700; font-size:14px;
-  color:var(--ink2); cursor:pointer; background:none;
-  margin-top:10px;
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 16px 14px;
+  border: none;
+  border-radius: var(--r);
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink2);
+  cursor: pointer;
+  background: rgba(45, 32, 32, 0.045);
+  margin-top: 10px;
   margin-bottom: 4px;
-  transition:opacity .2s;
+  text-decoration: none;
+  transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.gallery-more:active { opacity:.6; }
+.gallery-more:hover {
+  background: rgba(45, 32, 32, 0.08);
+  color: var(--ink);
+}
+.gallery-more:active {
+  opacity: 0.65;
+}
 
 /* Lightbox — xem full ảnh (contain: vừa khung, hiện trọn ảnh) */
 .gallery-lightbox {

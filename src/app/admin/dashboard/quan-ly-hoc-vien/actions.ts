@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { isValidStudentEmail, STUDENT_EMAIL_REQUIREMENT_VI } from "@/lib/donghocphi/profile-step1";
 import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
@@ -378,6 +379,9 @@ export async function deleteHocVien(studentId: number): Promise<QlhvActionState>
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
 
+  const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delOk.ok) return { ok: false, error: delOk.error };
+
   const ql = await supabase
     .from("ql_quan_ly_hoc_vien")
     .select("id", { count: "exact", head: true })
@@ -400,6 +404,9 @@ export async function deleteEnrollment(enrollmentId: number): Promise<QlhvAction
 
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const delEnOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delEnOk.ok) return { ok: false, error: delEnOk.error };
 
   const hp = await supabase
     .from("hp_thu_hp_chi_tiet")

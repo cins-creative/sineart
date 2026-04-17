@@ -152,15 +152,11 @@
   color: #c8692a;
 }
 
-/* Avatar học viên + dropdown (scoped — sineart-home chỉ bật nav-user-* từ 900px) */
+/* Avatar học viên + dropdown — không khung vuông ngoài; viền gradient hồng–cam quanh ảnh */
 .phc .phc-topbar-avatar {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  padding: 4px 8px;
-  border-radius: var(--phc-r-sm);
-  background: var(--phc-surface2);
-  border: 1px solid var(--phc-line);
 }
 
 .phc .phc-topbar-avatar .nav-user-avatar-wrap {
@@ -176,8 +172,8 @@
   justify-content: center;
   flex-shrink: 0;
   box-sizing: border-box;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   padding: 2px;
   border: none;
   border-radius: 50%;
@@ -190,7 +186,7 @@
 
 .phc .phc-topbar-avatar .nav-user-avatar:hover {
   transform: scale(1.04);
-  box-shadow: 0 4px 14px rgba(238, 91, 159, 0.3);
+  box-shadow: 0 4px 14px rgba(238, 91, 159, 0.32);
 }
 
 .phc .phc-topbar-avatar .nav-user-avatar:focus-visible {
@@ -400,6 +396,7 @@
 
 /* ── Main grid ── */
 .phc .main {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -624,7 +621,23 @@
 }
 
 .phc .sb.col {
-  width: 44px;
+  position: absolute;
+  top: auto;
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  left: auto;
+  transform: none;
+  width: 52px;
+  height: 52px;
+  min-height: 0;
+  max-height: none;
+  z-index: 12;
+  align-self: auto;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow:
+    0 8px 28px rgba(26, 26, 46, 0.14),
+    0 2px 10px rgba(238, 91, 159, 0.16);
 }
 
 .phc .sb.col .tab-row,
@@ -657,11 +670,31 @@
 }
 
 .phc .sb.col .sbtog {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
   justify-content: center;
+  align-items: center;
+  border-bottom: none;
+  border-radius: 0;
 }
 
 .phc .sb.col .tog-lbl {
   display: none;
+}
+
+.phc .sbtog-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.phc .sbtog-ico svg {
+  display: block;
 }
 
 .phc .tab-row {
@@ -2838,6 +2871,62 @@
   }
 }
 
+/* Điện thoại xoay ngang: tối đa không gian cho meeting, ẩn topbar */
+@media (max-width: 900px) and (orientation: landscape) {
+  .phc .topbar {
+    display: none;
+  }
+
+  .phc .main {
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    padding: max(6px, env(safe-area-inset-left, 0px)) max(8px, env(safe-area-inset-right, 0px))
+      max(6px, env(safe-area-inset-bottom, 0px));
+    gap: 10px;
+  }
+
+  .phc .canvas-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    /* Ưu tiên chiều cao cho iframe / Daily */
+    max-height: 100%;
+  }
+
+  .phc .sb:not(.col) {
+    flex: 0 0 auto;
+    width: min(var(--phc-sw), 42vw);
+    max-width: min(100%, var(--phc-sw));
+    min-height: 0;
+  }
+
+  .phc .canvas-ph:not(.canvas-ph--meet) {
+    padding: 14px 18px;
+    gap: 8px;
+  }
+
+  .phc .canvas-ph:not(.canvas-ph--meet) .ico {
+    font-size: clamp(26px, 7vw, 40px);
+  }
+
+  .phc .canvas-ph--meet iframe,
+  .phc .daily-meet-frame-root {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 420px) {
+  .phc .canvas-ph:not(.canvas-ph--meet) p {
+    font-size: 14px;
+  }
+
+  .phc .canvas-ph:not(.canvas-ph--meet) small {
+    font-size: 11px;
+    max-width: 48ch;
+  }
+}
+
 /* Theme tối sâu (.phc--dark): nền gần đen; quảng cáo (.adb / .adpw) override riêng nền sáng */
 .phc.phc--dark {
   --phc-ink: #e8e8ea;
@@ -2865,6 +2954,10 @@
   background: var(--phc-surface);
   border-color: var(--phc-line);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.phc.phc--dark .phc-topbar-avatar .nav-user-avatar-ring {
+  background: var(--phc-surface2);
 }
 
 .phc.phc--dark .topbar-home:hover {
@@ -2917,6 +3010,16 @@
   background: var(--phc-surface);
   border-color: var(--phc-line);
   box-shadow: 0 4px 32px rgba(0, 0, 0, 0.55);
+}
+
+.phc.phc--dark .sb.col {
+  box-shadow:
+    0 10px 32px rgba(0, 0, 0, 0.45),
+    0 2px 12px rgba(238, 91, 159, 0.12);
+}
+
+.phc.phc--dark .sb.col .sbtog {
+  border-bottom: none;
 }
 
 .phc.phc--dark .sb .sbtog {

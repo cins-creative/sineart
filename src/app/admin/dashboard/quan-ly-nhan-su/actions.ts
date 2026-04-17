@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { HR_NHAN_SU_SELECT_MIN, mapHrNhanSuRow, type AdminNhanSuRow } from "@/lib/data/admin-quan-ly-nhan-su";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -496,6 +497,9 @@ export async function deleteHrBangTinhLuongFull(bang_tinh_luong_id: number): Pro
   if (!supabase) {
     return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
   }
+
+  const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delOk.ok) return { ok: false, error: delOk.error };
 
   const { error: delDdErr } = await supabase.from("hr_lich_diem_danh").delete().eq("bang_tinh_luong", id);
   if (delDdErr) {

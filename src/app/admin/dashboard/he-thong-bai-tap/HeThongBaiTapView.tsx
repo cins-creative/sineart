@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BookOpen, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { createHeThongBaiTap, deleteHeThongBaiTap, updateHeThongBaiTap } from "@/app/admin/dashboard/he-thong-bai-tap/actions";
 import type { AdminBaiTapRow, AdminHeThongBaiTapBundle, AdminMonHocOpt } from "@/lib/data/admin-he-thong-bai-tap";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ function primaryBaiTapUrl(item: AdminBaiTapRow): string | null {
 type Props = { bundle: AdminHeThongBaiTapBundle };
 
 export default function HeThongBaiTapView({ bundle }: Props) {
+  const { canDelete } = useAdminDashboardAbilities();
   const router = useRouter();
   const [filterMon, setFilterMon] = useState<number | "">("");
   const [panel, setPanel] = useState<"none" | "create" | "edit">("none");
@@ -203,18 +205,23 @@ export default function HeThongBaiTapView({ bundle }: Props) {
                       setDrawerKey((k) => k + 1);
                       setPanel("edit");
                     }}
-                    className="flex flex-1 items-center justify-center gap-1.5 border-r border-[#F5F7F7] py-2.5 text-xs font-semibold text-[#888] hover:bg-[#BC8AF9]/10 hover:text-[#BC8AF9]"
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-[#888] hover:bg-[#BC8AF9]/10 hover:text-[#BC8AF9]",
+                      canDelete ? "flex-1 border-r border-[#F5F7F7]" : "flex-1",
+                    )}
                   >
                     <Pencil size={14} /> Sửa
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setDelTarget(item)}
-                    className="px-3.5 py-2.5 text-[#AAAAAA] hover:text-red-500"
-                    aria-label="Xóa"
-                  >
-                    <Trash2 size={16} strokeWidth={2} />
-                  </button>
+                  {canDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => setDelTarget(item)}
+                      className="px-3.5 py-2.5 text-[#AAAAAA] hover:text-red-500"
+                      aria-label="Xóa"
+                    >
+                      <Trash2 size={16} strokeWidth={2} />
+                    </button>
+                  ) : null}
                 </div>
               </motion.div>
             ))}
@@ -246,7 +253,7 @@ export default function HeThongBaiTapView({ bundle }: Props) {
       </AnimatePresence>
 
       <AnimatePresence>
-        {delTarget ? (
+        {delTarget && canDelete ? (
           <>
             <motion.button
               type="button"

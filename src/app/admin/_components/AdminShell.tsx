@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { AdminDashboardAbilitiesProvider } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
 import {
   DASHBOARD_OVERVIEW_HREF,
@@ -404,7 +405,9 @@ export default function AdminShell({
             </button>
           </div>
         </header>
-        <main className="relative min-w-0 w-full max-w-full p-4 md:p-6">{children}</main>
+        <main className="relative min-w-0 w-full max-w-full p-4 md:p-6">
+          <AdminDashboardAbilitiesProvider staffRole={staffRole}>{children}</AdminDashboardAbilitiesProvider>
+        </main>
       </div>
       <div
         id={ADMIN_MODAL_ROOT_ELEMENT_ID}

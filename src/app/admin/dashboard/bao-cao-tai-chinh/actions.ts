@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { buildSupabasePayload, type ColData } from "@/lib/data/bao-cao-tai-chinh-config";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -63,6 +64,9 @@ export async function deleteBaoCaoTaiChinhRow(recordId: number): Promise<BaoCaoT
 
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delOk.ok) return { ok: false, error: delOk.error };
 
   const { error } = await supabase.from("tc_bao_cao_tai_chinh").delete().eq("id", recordId);
   if (error) return { ok: false, error: error.message || "Không xóa được kỳ báo cáo." };

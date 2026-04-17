@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -145,6 +146,9 @@ export async function deleteKhoaHoc(id: number): Promise<KhoaHocFormState> {
   if (!supabase) {
     return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
   }
+
+  const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delOk.ok) return { ok: false, error: delOk.error };
 
   const { error } = await supabase.from("ql_mon_hoc").delete().eq("id", id);
   if (error) {

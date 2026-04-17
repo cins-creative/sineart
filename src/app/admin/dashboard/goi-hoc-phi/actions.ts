@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
+import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -151,6 +152,9 @@ export async function deleteHpComboMon(comboId: number): Promise<DeleteComboResu
 
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delOk.ok) return { ok: false, error: delOk.error };
 
   const { error } = await supabase.from("hp_combo_mon").delete().eq("id", comboId);
   if (error) {

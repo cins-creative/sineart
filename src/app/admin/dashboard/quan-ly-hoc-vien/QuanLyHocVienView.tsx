@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import AdminDongHocPhiModal from "@/app/admin/dashboard/quan-ly-hoc-vien/AdminDongHocPhiModal";
 import type {
   AdminQlhvBaiTapBrief,
@@ -281,82 +282,6 @@ function HocVienMauBadge({ small }: { small?: boolean }) {
   );
 }
 
-function ClassFilterDropdown({
-  classes,
-  active,
-  onSelect,
-}: {
-  classes: string[];
-  active: string;
-  onSelect: (c: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-400"
-        style={{ color: active ? "#BC8AF9" : undefined }}
-      >
-        Lớp học
-        <ChevronDown size={10} className={cn("transition-transform", open && "rotate-180")} />
-        {active ? (
-          <span className="ml-0.5 rounded bg-[#BC8AF9] px-1.5 py-px text-[9px] font-extrabold text-white">{active}</span>
-        ) : null}
-      </button>
-      <AnimatePresence>
-        {open ? (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            className="absolute left-0 top-[calc(100%+6px)] z-[200] max-h-60 min-w-[160px] overflow-y-auto rounded-[10px] border border-[#EAEAEA] bg-white shadow-lg"
-          >
-            <button
-              type="button"
-              className="block w-full border-b border-slate-100 px-3.5 py-2 text-left text-xs hover:bg-slate-50"
-              style={{ fontWeight: active ? 500 : 700, color: active ? "#64748b" : "#BC8AF9" }}
-              onClick={() => {
-                onSelect("");
-                setOpen(false);
-              }}
-            >
-              Tất cả lớp
-            </button>
-            {classes.map((c) => (
-              <button
-                key={c}
-                type="button"
-                className="block w-full px-3.5 py-2 text-left text-xs hover:bg-slate-50"
-                style={{
-                  fontWeight: active === c ? 700 : 400,
-                  color: active === c ? "#BC8AF9" : "#1e293b",
-                  background: active === c ? "rgba(188,138,249,0.08)" : undefined,
-                }}
-                onClick={() => {
-                  onSelect(c);
-                  setOpen(false);
-                }}
-              >
-                {c}
-              </button>
-            ))}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 function SortableHeader({
   label,
   active,
@@ -437,6 +362,7 @@ function EnrollmentCard({
   baiTapById: Record<string, AdminQlhvBaiTapBrief>;
   onRefresh: () => void;
 }) {
+  const { canDelete: staffMayDeleteEnrollment } = useAdminDashboardAbilities();
   const [expanded, setExpanded] = useState(false);
   const [ghiChu, setGhiChu] = useState(kh.ghi_chu || "");
   const [editGc, setEditGc] = useState(false);
@@ -469,7 +395,8 @@ function EnrollmentCard({
   const tinhTrangKy = deriveEnrollmentStatus(kh);
   const lopName = lopDisplayName(kh.lop);
   const daysPersisted = daysLeft(kh.ngay_cuoi_ky ?? null);
-  const canDelete = kh.ngay_cuoi_ky === null || daysPersisted <= 0;
+  const kyAllowsDeleteEnrollment = kh.ngay_cuoi_ky === null || daysPersisted <= 0;
+  const mayDeleteEnrollment = kyAllowsDeleteEnrollment && staffMayDeleteEnrollment;
   const daysKyPreview = daysLeft(editKy ? (ngayCuoiKy.trim() || null) : kh.ngay_cuoi_ky ?? null);
   const cfg = TT_COLOR[tinhTrangKy] ?? { bg: "#f3f4f6", text: "#6b7280" };
 
@@ -515,7 +442,7 @@ function EnrollmentCard({
   }
 
   async function remove() {
-    if (!canDelete) return;
+    if (!mayDeleteEnrollment) return;
     if (!window.confirm(`Xóa khoá học «${lopName}» khỏi học viên?`)) return;
     setDelBusy(true);
     const t0 = performance.now();
@@ -569,7 +496,7 @@ function EnrollmentCard({
           ) : (
             <DaysLabel days={daysPersisted} />
           )}
-          {canDelete ? (
+          {mayDeleteEnrollment ? (
             <button
               type="button"
               title={
@@ -603,6 +530,13 @@ function EnrollmentCard({
                 <Trash2 size={11} />
               )}
             </button>
+          ) : kyAllowsDeleteEnrollment && !staffMayDeleteEnrollment ? (
+            <div
+              title="Bạn không có quyền xóa ghi danh."
+              className="flex h-6 w-6 cursor-not-allowed items-center justify-center rounded-md border border-[#EAEAEA] opacity-40"
+            >
+              <Trash2 size={11} className="text-slate-400" />
+            </div>
           ) : (
             <div title="Còn ngày học, không thể xóa" className="flex h-6 w-6 cursor-not-allowed items-center justify-center rounded-md border border-[#EAEAEA] opacity-40">
               <Trash2 size={11} className="text-slate-400" />
@@ -1770,63 +1704,10 @@ function AddKhoaModal({
   );
 }
 
-type QlhvStatCardTone = "slate" | "emerald" | "amber" | "rose" | "violet" | "sky";
-
-function QlhvStatCard({
-  label,
-  value,
-  tone = "slate",
-  title,
-  active,
-  onClick,
-}: {
-  label: string;
-  value: number | string;
-  tone?: QlhvStatCardTone;
-  /** Tooltip — mô tả thêm khi cần. */
-  title?: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  const toneCls =
-    tone === "emerald"
-      ? "border-emerald-200/90 bg-emerald-50/50"
-      : tone === "amber"
-        ? "border-amber-200/90 bg-amber-50/45"
-        : tone === "rose"
-          ? "border-rose-200/90 bg-rose-50/45"
-          : tone === "violet"
-            ? "border-violet-200/90 bg-violet-50/40"
-            : tone === "sky"
-              ? "border-sky-200/90 bg-sky-50/45"
-              : "border-slate-200/90 bg-white";
-  const ring = active ? "ring-2 ring-[#BC8AF9] ring-offset-1 ring-offset-white" : "";
-  const base = cn(
-    "flex min-h-[3.25rem] w-full min-w-0 flex-col justify-center rounded-lg border px-2 py-1.5 text-left shadow-sm sm:min-h-[3.5rem]",
-    onClick ? "cursor-pointer transition hover:brightness-[0.97] active:brightness-95" : "cursor-default",
-    toneCls,
-    ring
-  );
-  const tip = title ?? label;
-  const inner = (
-    <>
-      <p className="line-clamp-2 text-[10px] font-semibold leading-snug text-slate-600">{label}</p>
-      <p className="mt-1 text-base font-extrabold tabular-nums leading-none text-slate-900 sm:text-lg">{value}</p>
-    </>
-  );
-  if (onClick) {
-    return (
-      <button type="button" className={base} onClick={onClick} title={tip}>
-        {inner}
-      </button>
-    );
-  }
-  return (
-    <div className={base} title={tip}>
-      {inner}
-    </div>
-  );
-}
+const QLHV_HDR_SELECT = cn(
+  "h-9 min-h-9 w-full min-w-0 rounded-lg border border-[#EAEAEA] bg-white px-2 py-0 text-[11px] font-semibold text-[#323232] shadow-sm outline-none",
+  "focus:border-[#BC8AF9] focus:ring-2 focus:ring-[#BC8AF9]/20",
+);
 
 export default function QuanLyHocVienView({
   students,
@@ -1838,6 +1719,7 @@ export default function QuanLyHocVienView({
   adminStaffId,
 }: Props) {
   const router = useRouter();
+  const { canDelete: staffMayDeleteHocVien } = useAdminDashboardAbilities();
   const containerRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(1200);
   const [query, setQuery] = useState("");
@@ -1904,6 +1786,20 @@ export default function QuanLyHocVienView({
       if (n && n !== "—") s.add(n);
     }
     return [...s].sort((a, b) => a.localeCompare(b, "vi"));
+  }, [enrollments]);
+
+  /** Sĩ số: số học viên khác nhau có ít nhất một ghi danh theo tên lớp hiển thị. */
+  const hvCountByClassName = useMemo(() => {
+    const m = new Map<string, Set<number>>();
+    for (const e of enrollments) {
+      const name = lopDisplayName(e.lop);
+      if (!name || name === "—") continue;
+      if (!m.has(name)) m.set(name, new Set());
+      m.get(name)!.add(e.hoc_vien_id);
+    }
+    const out = new Map<string, number>();
+    for (const [k, set] of m) out.set(k, set.size);
+    return out;
   }, [enrollments]);
 
   const filtered = useMemo(() => {
@@ -1999,6 +1895,43 @@ export default function QuanLyHocVienView({
 
   const mauCount = useMemo(() => students.filter((h) => h.is_hoc_vien_mau).length, [students]);
 
+  const bulkFilterSelectValue = useMemo(() => {
+    if (filterDangKhoaBucket === "1") return "bucket_1";
+    if (filterDangKhoaBucket === "2") return "bucket_2";
+    if (filterDangKhoaBucket === "3+") return "bucket_3p";
+    if (filterMau) return "mau";
+    if (filterStatus === "Đang học") return "status_dang";
+    if (filterStatus === "Chưa học") return "status_chua";
+    if (filterStatus === "Nghỉ") return "status_nghi";
+    return "all";
+  }, [filterDangKhoaBucket, filterMau, filterStatus]);
+
+  const onBulkFilterSelect = useCallback((v: string) => {
+    setFilterMau(false);
+    setFilterDangKhoaBucket(null);
+    setFilterStatus("all");
+    if (v === "all") return;
+    if (v === "mau") {
+      setFilterMau(true);
+      return;
+    }
+    if (v === "bucket_1") {
+      setFilterDangKhoaBucket("1");
+      return;
+    }
+    if (v === "bucket_2") {
+      setFilterDangKhoaBucket("2");
+      return;
+    }
+    if (v === "bucket_3p") {
+      setFilterDangKhoaBucket("3+");
+      return;
+    }
+    if (v === "status_dang") setFilterStatus("Đang học");
+    else if (v === "status_chua") setFilterStatus("Chưa học");
+    else if (v === "status_nghi") setFilterStatus("Nghỉ");
+  }, []);
+
   const extractRow = useCallback(
     (hv: AdminQlhvStudent) => {
       const khs = byHv.get(hv.id) ?? [];
@@ -2030,7 +1963,7 @@ export default function QuanLyHocVienView({
   }
 
   async function onDeleteHocVien() {
-    if (!selected) return;
+    if (!selected || !staffMayDeleteHocVien) return;
     const khs = byHv.get(selected.id) ?? [];
     if (khs.length > 0) {
       window.alert("Học viên còn khoá học — xóa ghi danh trước hoặc dùng xóa khoá từng lớp.");
@@ -2096,111 +2029,45 @@ export default function QuanLyHocVienView({
               Thêm học viên
             </button>
           </div>
-          <p className="m-0 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Chạm thẻ để lọc (trừ «Khoá đang học»)</p>
-          <div className="grid grid-cols-5 grid-rows-2 gap-1.5 overflow-visible">
-            <QlhvStatCard
-              label="Tổng học viên"
-              value={students.length}
-              tone="slate"
-              title="Xoá lọc tình trạng / số lớp / mẫu — giữ tìm kiếm và lọc theo tên lớp"
-              active={filterStatus === "all" && !filterMau && !filterDangKhoaBucket}
-              onClick={() => {
-                setFilterStatus("all");
-                setFilterMau(false);
-                setFilterDangKhoaBucket(null);
-              }}
-            />
-            <QlhvStatCard
-              label="Đang học"
-              value={counts["Đang học"]}
-              tone="emerald"
-              title="Lọc theo tình trạng tổng: đang học (bấm lại để bỏ lọc)"
-              active={filterStatus === "Đang học" && !filterMau && !filterDangKhoaBucket}
-              onClick={() => {
-                setFilterMau(false);
-                setFilterDangKhoaBucket(null);
-                setFilterStatus((s) => (s === "Đang học" ? "all" : "Đang học"));
-              }}
-            />
-            <QlhvStatCard
-              label="Chưa học"
-              value={counts["Chưa học"]}
-              tone="amber"
-              title="Lọc theo tình trạng tổng: chưa có kỳ học phí đủ trên mọi lớp"
-              active={filterStatus === "Chưa học" && !filterMau && !filterDangKhoaBucket}
-              onClick={() => {
-                setFilterMau(false);
-                setFilterDangKhoaBucket(null);
-                setFilterStatus((s) => (s === "Chưa học" ? "all" : "Chưa học"));
-              }}
-            />
-            <QlhvStatCard
-              label="Nghỉ"
-              value={counts["Nghỉ"]}
-              tone="rose"
-              title="Lọc theo tình trạng tổng: đã hết hạn mọi khoá"
-              active={filterStatus === "Nghỉ" && !filterMau && !filterDangKhoaBucket}
-              onClick={() => {
-                setFilterMau(false);
-                setFilterDangKhoaBucket(null);
-                setFilterStatus((s) => (s === "Nghỉ" ? "all" : "Nghỉ"));
-              }}
-            />
-            <QlhvStatCard
-              label="Khoá đang học"
-              value={activeLopEnrollmentCount}
-              tone="violet"
+          <p className="m-0 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+            Lọc nhanh — dropdown (sĩ số lớp = số HV có ghi danh ít nhất một khoá tên lớp đó)
+          </p>
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-stretch">
+            <select
+              className={cn(QLHV_HDR_SELECT, "sm:max-w-[min(100%,24rem)] sm:flex-[1.1]")}
+              aria-label="Lọc theo tình trạng hoặc số khoá đang còn hạn"
+              value={bulkFilterSelectValue}
+              onChange={(e) => onBulkFilterSelect(e.target.value)}
+            >
+              <option value="all">{`Tất cả học viên (${students.length})`}</option>
+              <option value="status_dang">{`Đang học — tổng (${counts["Đang học"]})`}</option>
+              <option value="status_chua">{`Chưa học (${counts["Chưa học"]})`}</option>
+              <option value="status_nghi">{`Nghỉ (${counts["Nghỉ"]})`}</option>
+              <option value="bucket_1">{`Một lớp còn hạn (${hvDangHocLopBuckets.oneLop})`}</option>
+              <option value="bucket_2">{`Hai lớp còn hạn (${hvDangHocLopBuckets.twoLop})`}</option>
+              <option value="bucket_3p">{`Ba lớp trở lên (${hvDangHocLopBuckets.threePlusLop})`}</option>
+              <option value="mau">{`Học viên mẫu (${mauCount})`}</option>
+            </select>
+            <select
+              className={cn(QLHV_HDR_SELECT, "sm:max-w-[min(100%,24rem)] sm:flex-1")}
+              aria-label="Lọc theo lớp (kèm sĩ số)"
+              value={allClasses.includes(filterClass) ? filterClass : ""}
+              onChange={(e) => setFilterClass(e.target.value)}
+            >
+              <option value="">Tất cả lớp</option>
+              {allClasses.map((c) => (
+                <option key={c} value={c}>
+                  {c} ({hvCountByClassName.get(c) ?? 0} HV)
+                </option>
+              ))}
+            </select>
+            <div
+              className="flex h-9 min-h-9 shrink-0 items-center justify-center rounded-lg border border-violet-200/90 bg-violet-50/50 px-2.5 text-center text-[10px] font-semibold leading-tight text-violet-900 shadow-sm"
               title="Tổng số ghi danh còn trong kỳ học phí (chỉ xem, không lọc)"
-            />
-            <QlhvStatCard
-              label="Một lớp còn hạn"
-              value={hvDangHocLopBuckets.oneLop}
-              tone="sky"
-              title="Học viên có đúng một khoá đang còn hạn"
-              active={filterDangKhoaBucket === "1"}
-              onClick={() => {
-                setFilterMau(false);
-                setFilterStatus("all");
-                setFilterDangKhoaBucket((b) => (b === "1" ? null : "1"));
-              }}
-            />
-            <QlhvStatCard
-              label="Hai lớp còn hạn"
-              value={hvDangHocLopBuckets.twoLop}
-              tone="sky"
-              title="Học viên có đúng hai khoá đang còn hạn"
-              active={filterDangKhoaBucket === "2"}
-              onClick={() => {
-                setFilterMau(false);
-                setFilterStatus("all");
-                setFilterDangKhoaBucket((b) => (b === "2" ? null : "2"));
-              }}
-            />
-            <QlhvStatCard
-              label="Ba lớp trở lên"
-              value={hvDangHocLopBuckets.threePlusLop}
-              tone="sky"
-              title="Học viên có từ ba khoá đang còn hạn trở lên"
-              active={filterDangKhoaBucket === "3+"}
-              onClick={() => {
-                setFilterMau(false);
-                setFilterStatus("all");
-                setFilterDangKhoaBucket((b) => (b === "3+" ? null : "3+"));
-              }}
-            />
-            <QlhvStatCard
-              label="Học viên mẫu"
-              value={mauCount}
-              tone="amber"
-              title="Chỉ hiện học viên được gắn sao mẫu"
-              active={filterMau && !filterDangKhoaBucket}
-              onClick={() => {
-                setFilterDangKhoaBucket(null);
-                setFilterStatus("all");
-                setFilterMau((m) => !m);
-              }}
-            />
-            <div className="min-h-[3.25rem] min-w-0 rounded-lg border border-transparent sm:min-h-[3.5rem]" aria-hidden />
+            >
+              Ghi danh còn hạn:{" "}
+              <span className="ml-0.5 tabular-nums text-[12px] font-extrabold">{activeLopEnrollmentCount}</span>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 overflow-visible pt-0.5">
             <div className="relative min-h-[36px] min-w-0 flex-1 basis-[min(100%,18rem)]">
@@ -2221,9 +2088,6 @@ export default function QuanLyHocVienView({
                   <X size={14} />
                 </button>
               ) : null}
-            </div>
-            <div className="flex shrink-0 items-center rounded-lg border border-[#EAEAEA] bg-slate-50/80 px-2 py-1">
-              <ClassFilterDropdown classes={allClasses} active={filterClass} onSelect={setFilterClass} />
             </div>
           </div>
         </div>
@@ -2489,15 +2353,17 @@ export default function QuanLyHocVienView({
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-black/[0.06] bg-[#fafafa] px-0 py-2.5">
-                <button
-                  type="button"
-                  disabled={deleteBusy || (byHv.get(selected.id) ?? []).length > 0}
-                  onClick={() => void onDeleteHocVien()}
-                  title={(byHv.get(selected.id) ?? []).length > 0 ? "Còn khoá học — không xóa được học viên." : undefined}
-                  className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {deleteBusy ? "Đang xóa…" : "Xóa HV"}
-                </button>
+                {staffMayDeleteHocVien ? (
+                  <button
+                    type="button"
+                    disabled={deleteBusy || (byHv.get(selected.id) ?? []).length > 0}
+                    onClick={() => void onDeleteHocVien()}
+                    title={(byHv.get(selected.id) ?? []).length > 0 ? "Còn khoá học — không xóa được học viên." : undefined}
+                    className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {deleteBusy ? "Đang xóa…" : "Xóa HV"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   disabled={mauBusy}
@@ -2593,14 +2459,16 @@ export default function QuanLyHocVienView({
                   {selected.is_hoc_vien_mau ? <HocVienMauBadge /> : null}
                 </div>
                 <TinhTrangBadge value={computeOverallStatus(byHv.get(selected.id) ?? [])} />
-                <button
-                  type="button"
-                  disabled={deleteBusy || (byHv.get(selected.id) ?? []).length > 0}
-                  onClick={() => void onDeleteHocVien()}
-                  className="mt-2 w-full max-w-[200px] rounded-lg border border-red-200 bg-white py-1.5 text-[11px] font-bold text-red-600 disabled:opacity-40"
-                >
-                  {deleteBusy ? "Đang xóa…" : "Xóa HV"}
-                </button>
+                {staffMayDeleteHocVien ? (
+                  <button
+                    type="button"
+                    disabled={deleteBusy || (byHv.get(selected.id) ?? []).length > 0}
+                    onClick={() => void onDeleteHocVien()}
+                    className="mt-2 w-full max-w-[200px] rounded-lg border border-red-200 bg-white py-1.5 text-[11px] font-bold text-red-600 disabled:opacity-40"
+                  >
+                    {deleteBusy ? "Đang xóa…" : "Xóa HV"}
+                  </button>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">

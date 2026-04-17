@@ -11,7 +11,7 @@ const GROUP_DOT: Record<CourseGroupId, string> = {
 };
 
 /**
- * Trang chủ: 4 block theo loại khóa (lưới 2×2 / 4 cột desktop).
+ * Trang chủ: 4 block theo loại khóa — bento 1 lớn (Luyện thi ĐH) + 3 nhỏ (CSS `.courses-blocks`).
  * Ảnh placeholder — thay sau trong CSS.
  */
 export default function CoursesSection() {

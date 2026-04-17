@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import {
   createHpComboMon,
   deleteHpComboMon,
@@ -292,6 +293,7 @@ function GoiModal({
   onComboCreated: (c: AdminComboOption) => void;
   onClose: () => void;
 }) {
+  const { canDelete: roleMayDeleteCombo } = useAdminDashboardAbilities();
   const comboPickList = allComboOptions.length > 0;
   const router = useRouter();
   const [deletePending, startDeleteTransition] = useTransition();
@@ -531,15 +533,17 @@ function GoiModal({
                   <Pencil size={14} />
                   Sửa combo này
                 </button>
-                <button
-                  type="button"
-                  disabled={deletePending}
-                  onClick={() => setDeleteComboWarningOpen(true)}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50/80 px-3 py-2 text-[13px] font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 sm:flex-initial"
-                >
-                  <Trash2 size={14} />
-                  Xóa combo
-                </button>
+                {roleMayDeleteCombo ? (
+                  <button
+                    type="button"
+                    disabled={deletePending}
+                    onClick={() => setDeleteComboWarningOpen(true)}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50/80 px-3 py-2 text-[13px] font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 sm:flex-initial"
+                  >
+                    <Trash2 size={14} />
+                    Xóa combo
+                  </button>
+                ) : null}
               </div>
             ) : null}
             <button
@@ -621,7 +625,7 @@ function GoiModal({
     </motion.div>
 
     <AnimatePresence>
-      {deleteComboWarningOpen && selectedCombo ? (
+      {roleMayDeleteCombo && deleteComboWarningOpen && selectedCombo ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import {
   deleteHpDonThu,
   updateHpChiTietLine,
@@ -697,6 +698,7 @@ function DonDetailPanel({
   onClose: () => void;
   onRefresh: () => void;
 }) {
+  const { canDelete: roleMayDeleteDon } = useAdminDashboardAbilities();
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -928,40 +930,42 @@ function DonDetailPanel({
         </div>
 
         <div className="border-t border-black/[0.06] pt-3">
-          {!confirmDelete ? (
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 py-2 text-[12px] font-bold text-red-700 hover:bg-red-100"
-            >
-              <Trash2 size={14} />
-              Xoá đơn…
-            </button>
-          ) : (
-            <div className="rounded-xl border border-red-200 bg-red-50/80 p-3">
-              <p className="m-0 text-[12px] font-semibold text-red-800">
-                Xoá toàn bộ chi tiết và đơn này. Thao tác không hoàn tác.
-              </p>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  disabled={deleting}
-                  onClick={() => void del()}
-                  className="flex-1 rounded-lg bg-red-600 py-2 text-[12px] font-bold text-white disabled:opacity-50"
-                >
-                  {deleting ? "Đang xoá…" : "Xác nhận xoá"}
-                </button>
-                <button
-                  type="button"
-                  disabled={deleting}
-                  onClick={() => setConfirmDelete(false)}
-                  className="rounded-lg border border-black/10 bg-white px-3 py-2 text-[12px] font-semibold text-black/70"
-                >
-                  Huỷ
-                </button>
+          {roleMayDeleteDon ? (
+            !confirmDelete ? (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 py-2 text-[12px] font-bold text-red-700 hover:bg-red-100"
+              >
+                <Trash2 size={14} />
+                Xoá đơn…
+              </button>
+            ) : (
+              <div className="rounded-xl border border-red-200 bg-red-50/80 p-3">
+                <p className="m-0 text-[12px] font-semibold text-red-800">
+                  Xoá toàn bộ chi tiết và đơn này. Thao tác không hoàn tác.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => void del()}
+                    className="flex-1 rounded-lg bg-red-600 py-2 text-[12px] font-bold text-white disabled:opacity-50"
+                  >
+                    {deleting ? "Đang xoá…" : "Xác nhận xoá"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => setConfirmDelete(false)}
+                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-[12px] font-semibold text-black/70"
+                  >
+                    Huỷ
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )
+          ) : null}
         </div>
       </div>
     </div>

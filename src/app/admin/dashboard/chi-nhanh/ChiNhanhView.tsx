@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -22,11 +23,16 @@ import type { BranchFormState } from "@/app/admin/dashboard/chi-nhanh/actions";
 import { deleteChiNhanh, saveChiNhanh, toggleChiNhanhActive } from "@/app/admin/dashboard/chi-nhanh/actions";
 import { cn } from "@/lib/utils";
 
+export type ChiNhanhListStatus = "all" | "active" | "inactive";
+
 type Props = {
   rows: AdminChiNhanhRow[];
   loadError: string | null;
   /** Chỉ select được `id, ten` trên `ql_chi_nhanh` — thiếu cột mở rộng */
   usedMinimalSelect: boolean;
+  /** Khi có — tab + danh sách theo URL (phân trang server). */
+  listStatus?: ChiNhanhListStatus;
+  tabCounts?: { all: number; active: number; inactive: number };
 };
 
 function fmtDate(iso: string | null): string {
@@ -441,27 +447,52 @@ function BranchCard({
   );
 }
 
-export default function ChiNhanhView({ rows, loadError, usedMinimalSelect }: Props) {
+export default function ChiNhanhView({
+  rows,
+  loadError,
+  usedMinimalSelect,
+  listStatus,
+  tabCounts,
+}: Props) {
   const router = useRouter();
-  const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
+  const urlSearch = useSearchParams();
+  const [filterActive, setFilterActive] = useState<ChiNhanhListStatus>("all");
   const [bannerError, setBannerError] = useState(loadError ?? "");
   const [selected, setSelected] = useState<AdminChiNhanhRow | null>(null);
   const [isNew, setIsNew] = useState(false);
+
+  const urlMode = tabCounts != null && listStatus != null;
+
+  const tabHref = (status: ChiNhanhListStatus) => {
+    const sp = new URLSearchParams();
+    const qKeep = (urlSearch.get("q") ?? "").trim();
+    if (qKeep) sp.set("q", qKeep);
+    sp.set("page", "1");
+    if (status !== "all") sp.set("status", status);
+    const qs = sp.toString();
+    return qs ? `/admin/dashboard/chi-nhanh?${qs}` : "/admin/dashboard/chi-nhanh";
+  };
 
   useEffect(() => {
     setBannerError(loadError ?? "");
   }, [loadError]);
 
-  const activeCount = useMemo(() => rows.filter((c) => c.is_active).length, [rows]);
-  const inactiveCount = useMemo(() => rows.filter((c) => !c.is_active).length, [rows]);
+  const activeCountRows = useMemo(() => rows.filter((c) => c.is_active).length, [rows]);
+  const inactiveCountRows = useMemo(() => rows.filter((c) => !c.is_active).length, [rows]);
+  const activeCount = tabCounts?.active ?? activeCountRows;
+  const inactiveCount = tabCounts?.inactive ?? inactiveCountRows;
+  const totalAll = tabCounts?.all ?? rows.length;
 
   const filtered = useMemo(() => {
+    if (urlMode) {
+      return [...rows].sort((a, b) => a.id - b.id);
+    }
     const f = rows.filter(
       (c) =>
-        filterActive === "all" || (filterActive === "active" ? c.is_active : !c.is_active)
+        filterActive === "all" || (filterActive === "active" ? c.is_active : !c.is_active),
     );
     return [...f].sort((a, b) => a.id - b.id);
-  }, [rows, filterActive]);
+  }, [rows, filterActive, urlMode]);
 
   return (
     <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
@@ -473,7 +504,7 @@ export default function ChiNhanhView({ rows, loadError, usedMinimalSelect }: Pro
           <div>
             <div className="text-[17px] font-bold tracking-tight text-[#323232]">Quản lý chi nhánh</div>
             <div className="text-xs text-[#AAAAAA]">
-              {rows.length} chi nhánh · {activeCount} đang hoạt động
+              {totalAll} chi nhánh · {activeCount} đang hoạt động
               {inactiveCount > 0 ? ` · ${inactiveCount} tạm dừng` : ""}
             </div>
           </div>
@@ -518,25 +549,41 @@ export default function ChiNhanhView({ rows, loadError, usedMinimalSelect }: Pro
               <div className="flex flex-wrap gap-1">
                 {(
                   [
-                    { key: "all" as const, label: `Tất cả (${rows.length})` },
+                    { key: "all" as const, label: `Tất cả (${totalAll})` },
                     { key: "active" as const, label: `Hoạt động (${activeCount})` },
                     { key: "inactive" as const, label: `Tạm dừng (${inactiveCount})` },
                   ] as const
-                ).map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setFilterActive(tab.key)}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                      filterActive === tab.key
-                        ? "border-[#BC8AF9] bg-[#BC8AF9]/15 text-[#BC8AF9]"
-                        : "border-[#EAEAEA] text-black/50"
-                    )}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+                ).map((tab) =>
+                  urlMode ? (
+                    <Link
+                      key={tab.key}
+                      href={tabHref(tab.key)}
+                      scroll={false}
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                        listStatus === tab.key
+                          ? "border-[#BC8AF9] bg-[#BC8AF9]/15 text-[#BC8AF9]"
+                          : "border-[#EAEAEA] text-black/50 hover:border-black/15",
+                      )}
+                    >
+                      {tab.label}
+                    </Link>
+                  ) : (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setFilterActive(tab.key)}
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                        filterActive === tab.key
+                          ? "border-[#BC8AF9] bg-[#BC8AF9]/15 text-[#BC8AF9]"
+                          : "border-[#EAEAEA] text-black/50",
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  ),
+                )}
               </div>
             </div>
 

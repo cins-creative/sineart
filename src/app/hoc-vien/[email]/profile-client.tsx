@@ -185,6 +185,10 @@ function invoiceTitleFromDon(don: PaidInvoiceDetailPayload["don"]): string {
   return `Đơn #${don.id}`;
 }
 
+/** Tooltip: số ngày hồ sơ / phòng học chỉ theo kỳ đã thanh toán — khác «Tổng buổi sau gia hạn» khi cộng gói chưa TT ở bước 3. */
+const HVP_DAYS_REMAINING_PAID_ONLY_TITLE =
+  "Theo các đơn học phí đã thanh toán (cộng dồn buổi). Ở bước thanh toán trên trang Đóng học phí, số buổi có thể cộng thêm gói bạn đang chọn nhưng chưa thanh toán.";
+
 /** Badge «Còn N ngày» cùng token với `dhp-oc-badge` (bước chọn lớp đóng học phí). */
 function daysRemainingDhpBadge(days: number | null): { className: string; label: string } {
   if (days === null) {
@@ -1102,7 +1106,10 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
                                     <span className="dhp-oc-badge-dot" aria-hidden />
                                     Kết kỳ học phí · {formatDateVi(row.ngay_ket_thuc)}
                                   </span>
-                                  <span className={rowDaysBadge.className}>
+                                  <span
+                                    className={rowDaysBadge.className}
+                                    title={HVP_DAYS_REMAINING_PAID_ONLY_TITLE}
+                                  >
                                     <span className="dhp-oc-badge-dot" aria-hidden />
                                     {rowDaysBadge.label}
                                   </span>

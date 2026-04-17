@@ -84,7 +84,7 @@ type Props = {
 
 type SortDir = "asc" | "desc" | null;
 
-const HV_PAGE_SIZE = 30;
+const HV_PAGE_SIZE = 10;
 
 function s2l(v: unknown): string {
   return String(v ?? "").toLowerCase();

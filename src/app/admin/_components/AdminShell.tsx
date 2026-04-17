@@ -3,7 +3,7 @@
 import { Home } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
 import {
@@ -94,6 +94,21 @@ export default function AdminShell({
   );
 
   const showOrderMedia = canAccessDashboardHref(allowed, ORDER_MEDIA_HREF);
+
+  const prefetchTargets = useMemo(() => {
+    const out: string[] = [DASHBOARD_OVERVIEW_HREF];
+    if (showOrderMedia) out.push(ORDER_MEDIA_HREF);
+    for (const i of navMainVisible) out.push(i.href);
+    for (const i of navHrVisible) out.push(i.href);
+    for (const i of navMarketingVisible) out.push(i.href);
+    return [...new Set(out)];
+  }, [showOrderMedia, navMainVisible, navHrVisible, navMarketingVisible]);
+
+  useEffect(() => {
+    for (const href of prefetchTargets) {
+      router.prefetch(href);
+    }
+  }, [router, prefetchTargets]);
 
   async function logout() {
     setBusy(true);

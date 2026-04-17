@@ -1,3 +1,5 @@
+import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
+import { calendarDaysRemainingInclusive } from "@/lib/utils";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -6,28 +8,8 @@ export const runtime = "nodejs";
 
 function calcDaysRemaining(d: string | null): number | null {
   if (!d) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const end = new Date(d);
-  end.setHours(0, 0, 0, 0);
-  return Math.floor((end.getTime() - today.getTime()) / 86400000);
-}
-
-function hpDonStatus(emb: unknown): string | null {
-  if (emb == null) return null;
-  if (Array.isArray(emb)) {
-    const x = emb[0];
-    if (x && typeof x === "object" && "status" in x) {
-      const s = (x as { status: unknown }).status;
-      return s != null ? String(s) : null;
-    }
-    return null;
-  }
-  if (typeof emb === "object" && "status" in emb) {
-    const s = (emb as { status: unknown }).status;
-    return s != null ? String(s) : null;
-  }
-  return null;
+  const s = String(d).trim().slice(0, 10);
+  return calendarDaysRemainingInclusive(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null);
 }
 
 async function ngayKetThucHocPhiForEnrollment(
@@ -36,25 +18,8 @@ async function ngayKetThucHocPhiForEnrollment(
 ): Promise<string | null> {
   let ngayKetThuc: string | null = null;
   try {
-    const { data: hpRowsRaw, error: hpErr } = await sb
-      .from("hp_thu_hp_chi_tiet")
-      .select("ngay_cuoi_ky, hp_don_thu_hoc_phi(status)")
-      .eq("khoa_hoc_vien", enrollmentId)
-      .order("ngay_cuoi_ky", { ascending: false });
-
-    if (!hpErr && hpRowsRaw?.length) {
-      const hpRows = hpRowsRaw as { ngay_cuoi_ky: string | null; hp_don_thu_hoc_phi: unknown }[];
-      const paidRow = hpRows.find((hp) => hpDonStatus(hp.hp_don_thu_hoc_phi) === "Đã thanh toán");
-      ngayKetThuc = paidRow?.ngay_cuoi_ky ?? hpRows[0]?.ngay_cuoi_ky ?? null;
-    } else {
-      const { data: simpleHp } = await sb
-        .from("hp_thu_hp_chi_tiet")
-        .select("ngay_cuoi_ky")
-        .eq("khoa_hoc_vien", enrollmentId)
-        .order("ngay_cuoi_ky", { ascending: false })
-        .limit(1);
-      ngayKetThuc = (simpleHp?.[0] as { ngay_cuoi_ky?: string } | undefined)?.ngay_cuoi_ky ?? null;
-    }
+    const m = await fetchKyByKhoaHocVienIds(sb, [enrollmentId]);
+    ngayKetThuc = m.get(enrollmentId)?.ngay_cuoi_ky ?? null;
   } catch {
     ngayKetThuc = null;
   }

@@ -1,5 +1,35 @@
 import { cn } from "@/lib/utils";
 
+/** Skeleton khu vực bảng / danh sách admin — Suspense + loading.tsx trong từng route admin */
+export function AdminDashboardTableSkeleton({
+  rows = 8,
+  className,
+}: {
+  rows?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn("space-y-3 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm", className)}
+      aria-busy="true"
+      aria-label="Đang tải dữ liệu"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="h-10 max-w-md flex-1 animate-pulse rounded-lg bg-zinc-200/80" />
+        <div className="flex gap-2">
+          <div className="h-9 w-16 animate-pulse rounded-lg bg-zinc-200/70" />
+          <div className="h-9 w-16 animate-pulse rounded-lg bg-zinc-200/70" />
+        </div>
+      </div>
+      <div className="space-y-2">
+        {Array.from({ length: rows }, (_, i) => (
+          <div key={i} className="h-11 animate-pulse rounded-lg bg-zinc-100" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Skeleton trang /khoa-hoc — dùng cho Suspense + `loading.tsx` */
 export function KhoaHocPageSkeleton({ className }: { className?: string }) {
   return (

@@ -7,6 +7,7 @@ export const NAV_MAIN: { label: string; href: string; disabled?: boolean }[] = [
   { label: "Chi nhánh", href: "/admin/dashboard/chi-nhanh" },
   { label: "Khóa học", href: "/admin/dashboard/khoa-hoc" },
   { label: "Lớp học", href: "/admin/dashboard/lop-hoc" },
+  { label: "Gói học phí", href: "/admin/dashboard/goi-hoc-phi" },
   { label: "Quản lý hóa đơn", href: "/admin/dashboard/quan-ly-hoa-don" },
   { label: "Quản lý học viên", href: "/admin/dashboard/quan-ly-hoc-vien" },
   { label: "Thu chi khác", href: "/admin/dashboard/thu-chi-khac" },

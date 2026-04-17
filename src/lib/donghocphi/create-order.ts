@@ -471,8 +471,8 @@ export async function createDongHocPhiOrder(
           v.soBuoi > 0 ? addDaysIso(ngayDau, v.soBuoi) : ngayDau;
         /**
          * Kỳ học (`ngay_dau_ky` / `ngay_cuoi_ky`) được ghi **ngay khi tạo đơn**, cùng lúc `status` = «Chờ thanh toán».
-         * SePay (hoặc đồng bộ tay) chỉ đổi trạng thái đơn/chi tiết sang «Đã thanh toán» — không chờ webhook mới tính ngày.
-         * UI đóng học phí (`fetchKyByKhoaHocVienIds`): nếu chưa có đơn đã TT thì vẫn lấy chi tiết mới nhất → HV thấy kỳ đã gia hạn dù chưa có trigger SePay.
+         * SePay (hoặc đồng bộ tay) đổi đơn + dòng chi tiết sang «Đã thanh toán».
+         * UI (`fetchKyByKhoaHocVienIds`) chỉ tính ngày học khi `hp_thu_hp_chi_tiet.status` = «Đã thanh toán» — chưa TT thì không dùng kỳ đó.
          */
         // goi_hoc_phi FK trên DB phải trỏ cùng bảng với hpGoiHocPhiTableName() (vd. hp_goi_hoc_phi_new).
         const { error: ctErr } = await supabase.from("hp_thu_hp_chi_tiet").insert({

@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Calendar, ChevronLeft, Pencil, Plus, School, Search, X } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Pencil, Plus, School, Search, X } from "lucide-react";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import type { LopHocFormState } from "@/app/admin/dashboard/lop-hoc/actions";
@@ -51,6 +51,8 @@ type Props = {
 };
 
 type HvStats = { dang_hoc: number; da_nghi: number };
+
+const LOP_LIST_PAGE_SIZE = 10;
 
 function getAccent(tenMon: string | null): string {
   if (!tenMon) return DS.teacher;
@@ -796,6 +798,7 @@ export default function LopHocListView({
   const [w, setW] = useState(960);
   const [lopSearch, setLopSearch] = useState("");
   const [filterMon, setFilterMon] = useState<number | "">("");
+  const [lopListPage, setLopListPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
@@ -822,6 +825,24 @@ export default function LopHocListView({
       return (nameHit || gvHit) && monOk;
     });
   }, [rows, lopSearch, filterMon, nhanSuList]);
+
+  useEffect(() => {
+    setLopListPage(1);
+  }, [lopSearch, filterMon]);
+
+  const lopTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredLop.length / LOP_LIST_PAGE_SIZE)),
+    [filteredLop.length],
+  );
+
+  useEffect(() => {
+    setLopListPage((p) => Math.min(Math.max(1, p), lopTotalPages));
+  }, [lopTotalPages]);
+
+  const pagedFilteredLop = useMemo(() => {
+    const start = (lopListPage - 1) * LOP_LIST_PAGE_SIZE;
+    return filteredLop.slice(start, start + LOP_LIST_PAGE_SIZE);
+  }, [filteredLop, lopListPage]);
 
   const { tongDangHoc, tongDaNghi } = useMemo(() => {
     let d = 0;
@@ -924,7 +945,7 @@ export default function LopHocListView({
               </div>
             ) : (
               <div className={cn("grid gap-3.5 pb-2 pt-1", isMobile ? "grid-cols-1" : "grid-cols-[repeat(auto-fill,minmax(220px,1fr))]")}>
-                {filteredLop.map((item) => {
+                {pagedFilteredLop.map((item) => {
                   const st = statsByLopId[String(item.id)];
                   return (
                     <LopHocCard
@@ -940,6 +961,37 @@ export default function LopHocListView({
                 })}
               </div>
             )}
+            {filteredLop.length > LOP_LIST_PAGE_SIZE ? (
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[#EAEAEA] bg-slate-50/90 px-4 py-2 text-[11px] text-slate-600">
+                <span className="tabular-nums">
+                  {(lopListPage - 1) * LOP_LIST_PAGE_SIZE + 1}–
+                  {Math.min(lopListPage * LOP_LIST_PAGE_SIZE, filteredLop.length)} / {filteredLop.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={lopListPage <= 1}
+                    onClick={() => setLopListPage((p) => Math.max(1, p - 1))}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Trang trước"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className="min-w-[4.75rem] text-center text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Trang <span className="text-slate-800">{lopListPage}</span> / {lopTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={lopListPage >= lopTotalPages}
+                    onClick={() => setLopListPage((p) => Math.min(lopTotalPages, p + 1))}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Trang sau"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
           </div>
         </div>

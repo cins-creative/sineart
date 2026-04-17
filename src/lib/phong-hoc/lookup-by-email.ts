@@ -1,3 +1,5 @@
+import { fetchKyByKhoaHocVienIds, type HpResolvedKy } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
+import { calendarDaysRemainingInclusive } from "@/lib/utils";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClassroomSessionRecord, ClassroomStudentSessionData } from "./classroom-session";
@@ -54,11 +56,8 @@ async function teacherNamesFromLopTeacherColumn(
 
 function calcDaysRemaining(d: string | null): number | null {
   if (!d) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const end = new Date(d);
-  end.setHours(0, 0, 0, 0);
-  return Math.floor((end.getTime() - today.getTime()) / 86400000);
+  const s = String(d).trim().slice(0, 10);
+  return calendarDaysRemainingInclusive(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null);
 }
 
 /**
@@ -155,23 +154,6 @@ async function fetchTienDoBaiTapLabel(
   return Number.isFinite(so) ? `Bài ${so}` : null;
 }
 
-function hpDonStatus(emb: unknown): string | null {
-  if (emb == null) return null;
-  if (Array.isArray(emb)) {
-    const x = emb[0];
-    if (x && typeof x === "object" && "status" in x) {
-      const s = (x as { status: unknown }).status;
-      return s != null ? String(s) : null;
-    }
-    return null;
-  }
-  if (typeof emb === "object" && "status" in emb) {
-    const s = (emb as { status: unknown }).status;
-    return s != null ? String(s) : null;
-  }
-  return null;
-}
-
 /** Chuẩn hoá PK bigint từ PostgREST (number | string) */
 function asHvPk(v: unknown): string {
   if (v === null || v === undefined) return "";
@@ -243,7 +225,8 @@ async function classroomStudentDataForEnrollment(
   supabase: SupabaseClient,
   s: HvRow,
   en: NonNullable<ReturnType<typeof normalizeEnrollment>>,
-  emailFallback: string
+  emailFallback: string,
+  kyMap?: Map<number, HpResolvedKy>
 ): Promise<ClassroomStudentSessionData | null> {
   const { data: clsRows } = await supabase
     .from("ql_lop_hoc")
@@ -258,25 +241,10 @@ async function classroomStudentDataForEnrollment(
 
   let ngayKetThuc: string | null = null;
   try {
-    const { data: hpRowsRaw, error: hpErr } = await supabase
-      .from("hp_thu_hp_chi_tiet")
-      .select("ngay_cuoi_ky, hp_don_thu_hoc_phi(status)")
-      .eq("khoa_hoc_vien", en.enrollmentId)
-      .order("ngay_cuoi_ky", { ascending: false });
-
-    if (!hpErr && hpRowsRaw?.length) {
-      const hpRows = hpRowsRaw as { ngay_cuoi_ky: string | null; hp_don_thu_hoc_phi: unknown }[];
-      const paidRow = hpRows.find((hp) => hpDonStatus(hp.hp_don_thu_hoc_phi) === "Đã thanh toán");
-      ngayKetThuc = paidRow?.ngay_cuoi_ky ?? hpRows[0]?.ngay_cuoi_ky ?? null;
-    } else {
-      const { data: simpleHp } = await supabase
-        .from("hp_thu_hp_chi_tiet")
-        .select("ngay_cuoi_ky")
-        .eq("khoa_hoc_vien", en.enrollmentId)
-        .order("ngay_cuoi_ky", { ascending: false })
-        .limit(1);
-      ngayKetThuc = (simpleHp?.[0] as { ngay_cuoi_ky?: string } | undefined)?.ngay_cuoi_ky ?? null;
-    }
+    const resolved =
+      kyMap?.get(en.enrollmentId) ??
+      (await fetchKyByKhoaHocVienIds(supabase, [en.enrollmentId])).get(en.enrollmentId);
+    ngayKetThuc = resolved?.ngay_cuoi_ky ?? null;
   } catch {
     ngayKetThuc = null;
   }
@@ -378,10 +346,14 @@ export async function fetchAllClassSessionsForStudentHv(
 
   const emailFb = String(s.email ?? "").trim().toLowerCase();
 
+  const qlhvIds = enrollments.filter((e) => e.hocVienPk === pk).map((e) => e.enrollmentId);
+  const kyMap =
+    qlhvIds.length > 0 ? await fetchKyByKhoaHocVienIds(supabase, qlhvIds) : new Map<number, HpResolvedKy>();
+
   const list: ClassroomStudentSessionData[] = [];
   for (const en of enrollments) {
     if (en.hocVienPk !== pk) continue;
-    const data = await classroomStudentDataForEnrollment(supabase, s, en, emailFb);
+    const data = await classroomStudentDataForEnrollment(supabase, s, en, emailFb, kyMap);
     if (data) list.push(data);
   }
 
@@ -466,11 +438,17 @@ export async function lookupClassroomByEmail(
         studentProfileWithoutEnrollment = true;
       }
 
+      const qlhvIdsLookup = enrollments.map((e) => e.enrollmentId);
+      const kyMapLookup =
+        qlhvIdsLookup.length > 0
+          ? await fetchKyByKhoaHocVienIds(supabase, qlhvIdsLookup)
+          : new Map<number, HpResolvedKy>();
+
       for (const en of enrollments) {
         const s = studentByHvId.get(en.hocVienPk);
         if (!s) continue;
 
-        const data = await classroomStudentDataForEnrollment(supabase, s, en, clean);
+        const data = await classroomStudentDataForEnrollment(supabase, s, en, clean, kyMapLookup);
         if (data) {
           results.push({ userType: "Student", data });
         }

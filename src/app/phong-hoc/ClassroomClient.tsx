@@ -1920,10 +1920,14 @@ export default function ClassroomClient({ classSlug }: ClassroomClientProps = {}
                       <div className="ss-stu-stats">
                         <div className="ss-stu-stat">
                           <span className="ss-stu-stat-lbl">Ngày còn lại</span>
-                          <span className="ss-stu-stat-num ss-days-big" style={{ color: daysColor }}>
+                          <span
+                            className="ss-stu-stat-num ss-days-big"
+                            style={{ color: daysColor }}
+                            title="Theo kỳ học phí đã thanh toán — chưa cộng buổi từ gói đang chọn ở bước Đóng học phí (chưa thanh toán)."
+                          >
                             {daysRemaining === null ? "—" : daysRemaining}
                           </span>
-                          <span className="ss-stu-stat-hint">trong kỳ học</span>
+                          <span className="ss-stu-stat-hint">đã thanh toán</span>
                         </div>
                         <div className="ss-stu-stat">
                           <span className="ss-stu-stat-lbl">Năm thi</span>

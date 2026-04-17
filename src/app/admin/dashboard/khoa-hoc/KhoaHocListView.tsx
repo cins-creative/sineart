@@ -41,6 +41,10 @@ const DS = {
 
 type Props = {
   rows: AdminMonRow[];
+  /** Khi phân trang — thống kê trên toàn bộ kết quả sau lọc. */
+  listStats?: { total: number; featured: number };
+  dbEmpty?: boolean;
+  searchHadNoMatch?: boolean;
 };
 
 function loaiBadgeColors(loai: string | null): { bg: string; text: string } | null {
@@ -402,7 +406,12 @@ function MonSidePanel({
   );
 }
 
-export default function KhoaHocListView({ rows }: Props) {
+export default function KhoaHocListView({
+  rows,
+  listStats,
+  dbEmpty = false,
+  searchHadNoMatch = false,
+}: Props) {
   const router = useRouter();
   const [panel, setPanel] = useState<"none" | "create" | "edit">("none");
   const [editing, setEditing] = useState<AdminMonRow | null>(null);
@@ -410,7 +419,9 @@ export default function KhoaHocListView({ rows }: Props) {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
-  const featuredCount = useMemo(() => rows.filter((r) => r.is_featured).length, [rows]);
+  const featuredFromRows = useMemo(() => rows.filter((r) => r.is_featured).length, [rows]);
+  const featuredCount = listStats?.featured ?? featuredFromRows;
+  const totalLabel = listStats?.total ?? rows.length;
 
   function notify(msg: string, ok: boolean) {
     setToast({ msg, ok });
@@ -444,7 +455,7 @@ export default function KhoaHocListView({ rows }: Props) {
           <div>
             <div className="text-[17px] font-bold tracking-tight text-[#323232]">Quản lý khóa học</div>
             <div className="text-xs text-[#AAAAAA]">
-              {rows.length} khóa học · {featuredCount} nổi bật
+              {totalLabel} khóa học · {featuredCount} nổi bật
             </div>
           </div>
         </div>
@@ -466,8 +477,14 @@ export default function KhoaHocListView({ rows }: Props) {
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
           {rows.length === 0 ? (
             <div className="flex flex-col items-center gap-2 pt-16 text-center">
-              <span className="text-4xl">📭</span>
-              <p className="m-0 text-sm text-[#888]">Chưa có môn học nào. Nhấn «Môn học mới».</p>
+              <span className="text-4xl">{searchHadNoMatch ? "🔍" : "📭"}</span>
+              <p className="m-0 text-sm text-[#888]">
+                {searchHadNoMatch
+                  ? "Không có môn học khớp tìm kiếm. Thử từ khóa khác."
+                  : dbEmpty
+                    ? "Chưa có môn học nào. Nhấn «Môn học mới»."
+                    : "Không có môn trên trang này."}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3.5 pb-4 pt-2">

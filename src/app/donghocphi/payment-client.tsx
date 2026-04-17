@@ -2345,7 +2345,8 @@ export default function DongHocPhiClient({
                                     <span className="dhp-tn">{tongBuoi}</span>
                                     <span className="dhp-tn-unit">buổi</span>
                                     <span className="dhp-tn-hint">
-                                      ({buoiConLaiRow} + {themBuoi})
+                                      (đã thanh toán: {buoiConLaiRow}
+                                      {themBuoi > 0 ? ` + gói đang chọn: ${themBuoi}` : ""})
                                     </span>
                                   </div>
                                 </div>

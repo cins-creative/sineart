@@ -378,7 +378,11 @@ export default function ClassroomSignInOverlay({ open, onClose }: Props) {
                             </div>
                             {!isTeacher ? (
                               <div className="cso-row-foot">
-                                <span className="cso-days" style={{ color: daysColor(d) }}>
+                                <span
+                                  className="cso-days"
+                                  style={{ color: daysColor(d) }}
+                                  title="Theo kỳ học phí đã thanh toán — chưa cộng buổi từ gói đang chọn ở bước Đóng học phí (chưa thanh toán)."
+                                >
                                   {daysLabel(d)}
                                 </span>
                                 <Link

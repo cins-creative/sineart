@@ -44,7 +44,6 @@ export default async function OrderMediaPageData() {
 
   const staffRes = await fetchHrNhanSuStaffOptions(supabase);
   const staffOptions = staffRes.ok ? staffRes.rows : [];
-  const staffLoadError = staffRes.ok ? null : staffRes.error;
   const creatorRow = staffOptions.find((r) => r.id === session.staffId);
   const creatorName = creatorRow?.full_name ?? session.name;
   const creatorLabel = `${creatorName} (#${session.staffId})`;
@@ -53,12 +52,6 @@ export default async function OrderMediaPageData() {
   const defaultEndYmd = addDaysYmd(defaultStartYmd, 7);
 
   return (
-    <OrderMediaView
-      staffOptions={staffOptions}
-      staffLoadError={staffLoadError}
-      creatorLabel={creatorLabel}
-      defaultStartYmd={defaultStartYmd}
-      defaultEndYmd={defaultEndYmd}
-    />
+    <OrderMediaView creatorLabel={creatorLabel} defaultStartYmd={defaultStartYmd} defaultEndYmd={defaultEndYmd} />
   );
 }

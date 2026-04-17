@@ -1,18 +1,19 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   Building2,
+  ChevronLeft,
+  ChevronRight,
   MapPin,
   Phone,
   Plus,
   Save,
-  ToggleLeft,
-  ToggleRight,
+  Search,
   Trash2,
   Users,
   X,
@@ -20,17 +21,19 @@ import {
 
 import type { AdminChiNhanhRow } from "@/lib/data/admin-chi-nhanh";
 import type { BranchFormState } from "@/app/admin/dashboard/chi-nhanh/actions";
-import { deleteChiNhanh, saveChiNhanh, toggleChiNhanhActive } from "@/app/admin/dashboard/chi-nhanh/actions";
+import { deleteChiNhanh, saveChiNhanh } from "@/app/admin/dashboard/chi-nhanh/actions";
 import { cn } from "@/lib/utils";
 
 export type ChiNhanhListStatus = "all" | "active" | "inactive";
+
+const BRANCH_LIST_PAGE_SIZE = 10;
 
 type Props = {
   rows: AdminChiNhanhRow[];
   loadError: string | null;
   /** Chỉ select được `id, ten` trên `ql_chi_nhanh` — thiếu cột mở rộng */
   usedMinimalSelect: boolean;
-  /** Khi có — tab + danh sách theo URL (phân trang server). */
+  /** Khi có — tab theo URL (`?status=`). */
   listStatus?: ChiNhanhListStatus;
   tabCounts?: { all: number; active: number; inactive: number };
 };
@@ -195,28 +198,22 @@ function BranchModal({
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 rounded-[14px] border-[1.5px] border-[#EAEAEA] bg-[#F9FAFB] px-4 py-3.5">
-            <div>
-              <div className="text-[13px] font-semibold text-[#323232]">Trạng thái hoạt động</div>
-              <div className="mt-0.5 text-[11px] text-[#AAAAAA]">
-                Chi nhánh ngừng hoạt động sẽ không hiển thị khi chọn
-              </div>
-            </div>
-            <label className="cursor-pointer border-0 bg-transparent p-0">
-              <input
-                type="checkbox"
-                name="is_active"
-                value="true"
-                defaultChecked={form.is_active}
-                className="peer sr-only appearance-none"
-              />
-              <span className="peer-checked:hidden">
-                <ToggleLeft size={36} className="text-[#CCCCCC]" />
-              </span>
-              <span className="hidden peer-checked:block">
-                <ToggleRight size={36} className="text-[#EE5CA2]" />
-              </span>
+          <div className="rounded-[14px] border-[1.5px] border-[#EAEAEA] bg-[#F9FAFB] px-4 py-3.5">
+            <label htmlFor="m-is-active" className="text-[13px] font-semibold text-[#323232]">
+              Trạng thái hoạt động
             </label>
+            <div className="mt-0.5 text-[11px] text-[#AAAAAA]">
+              Chi nhánh ngừng hoạt động sẽ không hiển thị khi chọn
+            </div>
+            <select
+              id="m-is-active"
+              name="is_active"
+              defaultValue={form.is_active ? "true" : "false"}
+              className="mt-2.5 w-full rounded-xl border-[1.5px] border-[#EAEAEA] bg-white px-3.5 py-2.5 text-sm text-[#323232] outline-none transition focus:border-[#EE5CA2]"
+            >
+              <option value="true">Đang hoạt động</option>
+              <option value="false">Ngừng hoạt động</option>
+            </select>
           </div>
 
           {!isNew && row && (row.so_nhan_su > 0 || row.so_lop_hoc > 0) ? (
@@ -330,26 +327,7 @@ function BranchModal({
   );
 }
 
-function BranchCard({
-  cn,
-  onEdit,
-  onToggled,
-}: {
-  cn: AdminChiNhanhRow;
-  onEdit: () => void;
-  onToggled: (err: string | null) => void;
-}) {
-  const [busy, setBusy] = useState(false);
-
-  async function handleToggle(e: React.MouseEvent) {
-    e.stopPropagation();
-    setBusy(true);
-    const res = await toggleChiNhanhActive(cn.id, !cn.is_active);
-    setBusy(false);
-    if (!res.ok) onToggled(res.error);
-    else onToggled(null);
-  }
-
+function BranchCard({ cn, onEdit }: { cn: AdminChiNhanhRow; onEdit: () => void }) {
   return (
     <motion.div
       layout
@@ -368,8 +346,8 @@ function BranchCard({
         }`}
       />
       <div className="pl-2">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
+        <div className="mb-3 flex items-start gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <div
               className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
                 cn.is_active ? "bg-[#FFF0F6]" : "bg-[#F5F7F7]"
@@ -388,19 +366,6 @@ function BranchCard({
               <div className="mt-0.5 line-clamp-2 text-[11px] text-[#AAAAAA]">{cardMetaLine(cn)}</div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleToggle}
-            disabled={busy}
-            className="shrink-0 border-0 bg-transparent p-0 disabled:opacity-50"
-            aria-label="Bật tắt"
-          >
-            {cn.is_active ? (
-              <ToggleRight size={28} className="text-[#EE5CA2]" />
-            ) : (
-              <ToggleLeft size={28} className="text-[#CCCCCC]" />
-            )}
-          </button>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -438,12 +403,22 @@ function BranchCard({
             <span
               className={`text-[11px] font-bold ${cn.is_active ? "text-[#EE5CA2]" : "text-[#AAAAAA]"}`}
             >
-              {cn.is_active ? "Đang hoạt động" : "Tạm dừng"}
+              {cn.is_active ? "Đang hoạt động" : "Ngừng hoạt động"}
             </span>
           </div>
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function branchMatchesQuery(row: AdminChiNhanhRow, qLower: string): boolean {
+  if (!qLower) return true;
+  return (
+    row.ten.toLowerCase().includes(qLower) ||
+    String(row.id).includes(qLower) ||
+    (row.dia_chi?.toLowerCase().includes(qLower) ?? false) ||
+    (row.sdt?.toLowerCase().includes(qLower) ?? false)
   );
 }
 
@@ -455,19 +430,29 @@ export default function ChiNhanhView({
   tabCounts,
 }: Props) {
   const router = useRouter();
-  const urlSearch = useSearchParams();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(960);
+  const [branchSearch, setBranchSearch] = useState("");
+  const [branchListPage, setBranchListPage] = useState(1);
   const [filterActive, setFilterActive] = useState<ChiNhanhListStatus>("all");
   const [bannerError, setBannerError] = useState(loadError ?? "");
   const [selected, setSelected] = useState<AdminChiNhanhRow | null>(null);
   const [isNew, setIsNew] = useState(false);
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const isMobile = w < 580;
+
   const urlMode = tabCounts != null && listStatus != null;
 
   const tabHref = (status: ChiNhanhListStatus) => {
     const sp = new URLSearchParams();
-    const qKeep = (urlSearch.get("q") ?? "").trim();
-    if (qKeep) sp.set("q", qKeep);
-    sp.set("page", "1");
     if (status !== "all") sp.set("status", status);
     const qs = sp.toString();
     return qs ? `/admin/dashboard/chi-nhanh?${qs}` : "/admin/dashboard/chi-nhanh";
@@ -484,18 +469,43 @@ export default function ChiNhanhView({
   const totalAll = tabCounts?.all ?? rows.length;
 
   const filtered = useMemo(() => {
+    let base: AdminChiNhanhRow[];
     if (urlMode) {
-      return [...rows].sort((a, b) => a.id - b.id);
+      base = [...rows].sort((a, b) => a.id - b.id);
+    } else {
+      const f = rows.filter(
+        (c) =>
+          filterActive === "all" || (filterActive === "active" ? c.is_active : !c.is_active),
+      );
+      base = [...f].sort((a, b) => a.id - b.id);
     }
-    const f = rows.filter(
-      (c) =>
-        filterActive === "all" || (filterActive === "active" ? c.is_active : !c.is_active),
-    );
-    return [...f].sort((a, b) => a.id - b.id);
-  }, [rows, filterActive, urlMode]);
+    const q = branchSearch.toLowerCase().trim();
+    return q ? base.filter((r) => branchMatchesQuery(r, q)) : base;
+  }, [rows, filterActive, urlMode, branchSearch]);
+
+  useEffect(() => {
+    setBranchListPage(1);
+  }, [branchSearch, listStatus, filterActive]);
+
+  const branchTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(filtered.length / BRANCH_LIST_PAGE_SIZE)),
+    [filtered.length],
+  );
+
+  useEffect(() => {
+    setBranchListPage((p) => Math.min(Math.max(1, p), branchTotalPages));
+  }, [branchTotalPages]);
+
+  const pagedFiltered = useMemo(() => {
+    const start = (branchListPage - 1) * BRANCH_LIST_PAGE_SIZE;
+    return filtered.slice(start, start + BRANCH_LIST_PAGE_SIZE);
+  }, [filtered, branchListPage]);
 
   return (
-    <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
+    <div
+      ref={containerRef}
+      className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#F8A568] to-[#EE5CA2]">
@@ -525,33 +535,57 @@ export default function ChiNhanhView({
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
-          {usedMinimalSelect ? (
-            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
-              Bảng <code className="rounded bg-amber-100/80 px-1">ql_chi_nhanh</code> hiện chỉ đủ cột{" "}
-              <code className="rounded bg-amber-100/80 px-1">id, ten</code>. Thêm cột{" "}
-              <code className="rounded bg-amber-100/80 px-1">dia_chi, sdt, is_active, created_at</code> trên Supabase để
-              form đầy đủ.
-            </div>
-          ) : null}
-
-          {bannerError ? (
-            <div className="mb-3 flex items-center gap-2 rounded-xl border border-[#FFCDD2] bg-[#FFF0F3] px-4 py-2.5 text-sm text-[#C0244E]">
-              <AlertTriangle size={14} />
-              <span className="flex-1">{bannerError}</span>
-              <button type="button" className="border-0 bg-transparent text-[#C0244E]" onClick={() => setBannerError("")}>
-                <X size={12} />
-              </button>
-            </div>
-          ) : null}
-
           <div className="mx-auto flex min-h-[min(64vh,560px)] w-full max-w-[1200px] flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
             <div className="shrink-0 space-y-2 border-b border-[#EAEAEA] bg-white px-6 py-3">
+              {usedMinimalSelect ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                  Bảng <code className="rounded bg-amber-100/80 px-1">ql_chi_nhanh</code> hiện chỉ đủ cột{" "}
+                  <code className="rounded bg-amber-100/80 px-1">id, ten</code>. Thêm cột{" "}
+                  <code className="rounded bg-amber-100/80 px-1">dia_chi, sdt, is_active, created_at</code> trên Supabase
+                  để form đầy đủ.
+                </div>
+              ) : null}
+
+              {bannerError ? (
+                <div className="flex items-center gap-2 rounded-lg border border-[#FFCDD2] bg-[#FFF0F3] px-3 py-2 text-[12px] text-[#C0244E]">
+                  <AlertTriangle size={14} className="shrink-0" />
+                  <span className="min-w-0 flex-1">{bannerError}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 border-0 bg-transparent text-[#C0244E]"
+                    onClick={() => setBannerError("")}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
+                <input
+                  value={branchSearch}
+                  onChange={(e) => setBranchSearch(e.target.value)}
+                  placeholder="Tìm tên chi nhánh, địa chỉ, SĐT…"
+                  className="h-9 w-full rounded-lg border border-[#EAEAEA] bg-white pl-9 pr-9 text-xs text-[#1a1a2e] outline-none focus:border-[#BC8AF9]"
+                />
+                {branchSearch ? (
+                  <button
+                    type="button"
+                    aria-label="Xóa tìm"
+                    onClick={() => setBranchSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-black/35 hover:text-black/60"
+                  >
+                    <X size={16} />
+                  </button>
+                ) : null}
+              </div>
+
               <div className="flex flex-wrap gap-1">
                 {(
                   [
-                    { key: "all" as const, label: `Tất cả (${totalAll})` },
-                    { key: "active" as const, label: `Hoạt động (${activeCount})` },
-                    { key: "inactive" as const, label: `Tạm dừng (${inactiveCount})` },
+                    { key: "all" as const, label: "Tất cả" },
+                    { key: "active" as const, label: "Hoạt động" },
+                    { key: "inactive" as const, label: "Tạm dừng" },
                   ] as const
                 ).map((tab) =>
                   urlMode ? (
@@ -589,39 +623,82 @@ export default function ChiNhanhView({
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
               {filtered.length === 0 ? (
-                <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 text-[#AAAAAA]">
-                  <Building2 size={40} className="text-[#DDDDDD]" />
-                  <div className="text-sm">Chưa có chi nhánh nào</div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelected(null);
-                      setIsNew(true);
-                    }}
-                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-4 py-2.5 text-[13px] font-semibold text-white"
-                  >
-                    <Plus size={14} /> Thêm chi nhánh đầu tiên
-                  </button>
+                <div className="flex flex-col items-center gap-2 pt-12 text-center">
+                  <span className="text-4xl" aria-hidden>
+                    🏢
+                  </span>
+                  <p className="m-0 text-sm text-[#888]">
+                    {branchSearch
+                      ? "Không tìm thấy chi nhánh phù hợp"
+                      : "Chưa có chi nhánh nào. Nhấn «Thêm chi nhánh»."}
+                  </p>
+                  {!branchSearch ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelected(null);
+                        setIsNew(true);
+                      }}
+                      className="mt-1 flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-4 py-2.5 text-[13px] font-semibold text-white"
+                    >
+                      <Plus size={14} /> Thêm chi nhánh đầu tiên
+                    </button>
+                  ) : null}
                 </div>
               ) : (
-                <motion.div layout className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3.5 pb-2 pt-1">
-                  <AnimatePresence>
-                    {filtered.map((cn) => (
-                      <BranchCard
-                        key={cn.id}
-                        cn={cn}
-                        onEdit={() => {
-                          setSelected(cn);
-                          setIsNew(false);
-                        }}
-                        onToggled={(err) => {
-                          if (err) setBannerError(err);
-                          else router.refresh();
-                        }}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
+                <>
+                  <motion.div
+                    layout
+                    className={cn(
+                      "grid gap-3.5 pb-2 pt-1",
+                      isMobile ? "grid-cols-1" : "grid-cols-[repeat(auto-fill,minmax(220px,1fr))]",
+                    )}
+                  >
+                    <AnimatePresence>
+                      {pagedFiltered.map((cn) => (
+                        <BranchCard
+                          key={cn.id}
+                          cn={cn}
+                          onEdit={() => {
+                            setSelected(cn);
+                            setIsNew(false);
+                          }}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </motion.div>
+                  {filtered.length > BRANCH_LIST_PAGE_SIZE ? (
+                    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[#EAEAEA] bg-slate-50/90 px-4 py-2 text-[11px] text-slate-600">
+                      <span className="tabular-nums">
+                        {(branchListPage - 1) * BRANCH_LIST_PAGE_SIZE + 1}–
+                        {Math.min(branchListPage * BRANCH_LIST_PAGE_SIZE, filtered.length)} / {filtered.length}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={branchListPage <= 1}
+                          onClick={() => setBranchListPage((p) => Math.max(1, p - 1))}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Trang trước"
+                        >
+                          <ChevronLeft size={14} />
+                        </button>
+                        <span className="min-w-[4.75rem] text-center text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                          Trang <span className="text-slate-800">{branchListPage}</span> / {branchTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={branchListPage >= branchTotalPages}
+                          onClick={() => setBranchListPage((p) => Math.min(branchTotalPages, p + 1))}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Trang sau"
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
           </div>

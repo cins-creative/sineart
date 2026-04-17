@@ -3,12 +3,19 @@
 import { Clapperboard } from "lucide-react";
 
 import MediaTimeline from "@/app/admin/dashboard/quan-ly-media/MediaTimeline";
-import type { HrNhanSuStaffOption, MktMediaProjectRow, StaffNameById } from "@/lib/data/admin-quan-ly-media";
+import type {
+  HrNhanSuStaffOption,
+  MktMediaProjectRow,
+  StaffAvatarById,
+  StaffNameById,
+} from "@/lib/data/admin-quan-ly-media";
 
 type Props = {
   initialProjects: MktMediaProjectRow[];
   /** `hr_nhan_su` — hiển thị tên thay cho ID trong modal chi tiết. */
   staffNameById?: StaffNameById;
+  /** `hr_nhan_su.avatar` — avatar người làm / người tạo trong modal. */
+  staffAvatarById?: StaffAvatarById;
   /** Nhân sự ban Marketing / Media — chọn người làm trong modal. */
   mediaTeamStaff?: HrNhanSuStaffOption[];
   /** Nhân sự ban Media — filter timeline theo người làm. */
@@ -23,6 +30,7 @@ type Props = {
 export default function QuanLyMediaView({
   initialProjects,
   staffNameById = {},
+  staffAvatarById = {},
   mediaTeamStaff = [],
   mediaBanStaffFilter = [],
   loadError,
@@ -32,7 +40,7 @@ export default function QuanLyMediaView({
   const blocked = Boolean(missingServiceRole) || Boolean(loadError);
 
   return (
-    <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
+    <div className="-m-4 flex h-[calc(100dvh-5.5rem)] max-h-[calc(100dvh-5.5rem)] min-h-0 flex-col overflow-hidden bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#F8A568] to-[#EE5CA2]">
@@ -48,7 +56,7 @@ export default function QuanLyMediaView({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col px-[10px] pb-6 pt-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-[10px] pb-6 pt-4">
         <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col">
           {missingServiceRole ? (
             <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-950">
@@ -84,6 +92,7 @@ export default function QuanLyMediaView({
             <MediaTimeline
               initialProjects={initialProjects}
               staffNameById={staffNameById}
+              staffAvatarById={staffAvatarById}
               mediaTeamStaff={mediaTeamStaff}
               mediaBanStaffFilter={mediaBanStaffFilter}
             />

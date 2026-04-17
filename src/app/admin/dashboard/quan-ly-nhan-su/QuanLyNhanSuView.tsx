@@ -2464,15 +2464,15 @@ export default function QuanLyNhanSuView({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-3 sm:px-6 [-webkit-overflow-scrolling:touch]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-6 pt-3 sm:px-6">
         {usedMinimalSelect ? (
-          <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+          <div className="mb-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
             Chỉ tải được các cột tối thiểu — kiểm tra quyền service role hoặc schema <code className="rounded bg-amber-100/80 px-1">hr_nhan_su</code>.
           </div>
         ) : null}
 
-        <div className="mx-auto w-full max-w-[1600px] overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-          <div className="overflow-x-auto overscroll-x-contain">
+        <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+          <div className="min-h-0 flex-1 overflow-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
             {filtered.length === 0 ? (
               <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 px-6 py-12 text-[#AAA]">
                 <User size={40} className="text-[#DDDDDD]" />

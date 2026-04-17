@@ -67,6 +67,31 @@ function navItemClass(href: string, pathname: string | null, searchParams: URLSe
   return base;
 }
 
+function AdminNavSection({
+  sectionId,
+  title,
+  children,
+}: {
+  sectionId: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-labelledby={sectionId}
+      className="rounded-xl border border-black/[0.08] bg-gradient-to-b from-white to-[#f6f6f7] p-2 shadow-[0_1px_3px_rgba(0,0,0,0.05)] ring-1 ring-black/[0.03]"
+    >
+      <h2
+        id={sectionId}
+        className="mb-1.5 border-l-2 border-[#BC8AF9] pl-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-black/50"
+      >
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
 function AdminDashboardNavPanel({
   staffName,
   staffRole,
@@ -121,26 +146,23 @@ function AdminDashboardNavPanel({
         </div>
         {profileTrailing ? <div className="flex shrink-0 items-center">{profileTrailing}</div> : null}
       </div>
-      <nav className="flex-1 overflow-y-auto px-3 py-4 text-[13px]">
-        <Link href={DASHBOARD_OVERVIEW_HREF} className={overviewNavClass(pathname)} onClick={onNavigate}>
-          Tổng quan
-        </Link>
-        {showOrderMedia ? (
-          <Link
-            href={ORDER_MEDIA_HREF}
-            className={`mb-3 mt-1 ${navItemClass(ORDER_MEDIA_HREF, pathname, searchParams)}`}
-            onClick={onNavigate}
-          >
-            Order nội dung media
+      <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-4 text-[13px]">
+        <div className="space-y-1">
+          <Link href={DASHBOARD_OVERVIEW_HREF} className={overviewNavClass(pathname)} onClick={onNavigate}>
+            Tổng quan
           </Link>
-        ) : (
-          <div className="mb-3 mt-1" aria-hidden />
-        )}
+          {showOrderMedia ? (
+            <Link
+              href={ORDER_MEDIA_HREF}
+              className={`mt-1 ${navItemClass(ORDER_MEDIA_HREF, pathname, searchParams)}`}
+              onClick={onNavigate}
+            >
+              Order nội dung media
+            </Link>
+          ) : null}
+        </div>
         {navMainVisible.length > 0 ? (
-          <>
-            <p className="mb-2 mt-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
-              Điều hành
-            </p>
+          <AdminNavSection sectionId="admin-nav-dieu-hanh" title="Điều hành">
             <ul className="space-y-0.5">
               {navMainVisible.map((item) => (
                 <li key={item.label}>
@@ -160,13 +182,10 @@ function AdminDashboardNavPanel({
                 </li>
               ))}
             </ul>
-          </>
+          </AdminNavSection>
         ) : null}
         {navHrVisible.length > 0 ? (
-          <>
-            <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
-              Nhân sự & TC
-            </p>
+          <AdminNavSection sectionId="admin-nav-nhan-su-tc" title="Nhân sự & TC">
             <ul className="space-y-0.5">
               {navHrVisible.map((item) => (
                 <li key={item.label}>
@@ -186,13 +205,10 @@ function AdminDashboardNavPanel({
                 </li>
               ))}
             </ul>
-          </>
+          </AdminNavSection>
         ) : null}
         {navMarketingVisible.length > 0 ? (
-          <>
-            <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
-              Marketing
-            </p>
+          <AdminNavSection sectionId="admin-nav-marketing" title="Marketing">
             <ul className="space-y-0.5">
               {navMarketingVisible.map((item) => (
                 <li key={item.label}>
@@ -212,7 +228,7 @@ function AdminDashboardNavPanel({
                 </li>
               ))}
             </ul>
-          </>
+          </AdminNavSection>
         ) : null}
       </nav>
     </>

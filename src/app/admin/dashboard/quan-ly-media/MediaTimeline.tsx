@@ -8,12 +8,14 @@ import { htmlToPlainText, sanitizeAdminRichHtml } from "@/lib/admin/sanitize-adm
 import type {
   HrNhanSuStaffOption,
   MktMediaProjectRow as Project,
+  StaffAvatarById,
   StaffNameById,
 } from "@/lib/data/admin-quan-ly-media";
 
 type MediaTimelineProps = {
   initialProjects: Project[];
   staffNameById?: StaffNameById;
+  staffAvatarById?: StaffAvatarById;
   mediaTeamStaff?: HrNhanSuStaffOption[];
   /** Nhân sự ban Media — lọc timeline theo người làm. */
   mediaBanStaffFilter?: HrNhanSuStaffOption[];
@@ -322,27 +324,69 @@ function resolveStaffRich(id: number | null, staffNameById: StaffNameById): Reac
   );
 }
 
-function resolveStaffIdsRich(ids: number[] | null | undefined, staffNameById: StaffNameById): ReactNode {
+function staffInitialFromName(name: string): string {
+  const t = name.trim();
+  return t ? t.charAt(0).toUpperCase() : "?";
+}
+
+/** Một dòng người làm: avatar + tên (không hiển thị #id). */
+function StaffAssigneeFace({
+  staffId,
+  staffNameById,
+  staffAvatarById,
+}: {
+  staffId: number;
+  staffNameById: StaffNameById;
+  staffAvatarById: StaffAvatarById;
+}) {
+  const name = staffNameById[String(staffId)] ?? "";
+  const label = name.replace(/\s*#\d+\s*$/u, "").trim() || name || "Nhân sự";
+  const url = (staffAvatarById[String(staffId)] ?? "").trim() || null;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+      <span
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          overflow: "hidden",
+          flexShrink: 0,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: `1px solid ${BORDER}`,
+          background: url ? "#fff" : "linear-gradient(135deg, #f8a668, #ee5b9f)",
+          fontSize: 11,
+          fontWeight: 800,
+          color: "#fff",
+        }}
+      >
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element -- URL Cloudflare động
+          <img src={url} alt="" width={28} height={28} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span aria-hidden>{staffInitialFromName(label)}</span>
+        )}
+      </span>
+      <span style={{ fontWeight: 600, fontSize: 12, color: TEXT, lineHeight: 1.4 }}>{label}</span>
+    </span>
+  );
+}
+
+function resolveStaffIdsRich(
+  ids: number[] | null | undefined,
+  staffNameById: StaffNameById,
+  staffAvatarById: StaffAvatarById,
+): ReactNode {
   if (!ids?.length) return "—";
   return (
-    <>
-      {ids.map((id, i) => {
-        const name = staffNameById[String(id)];
-        return (
-          <span key={id} style={{ display: "inline" }}>
-            {i > 0 ? <span style={{ color: TEXT_MUTED }}>, </span> : null}
-            {name ? (
-              <>
-                <span style={{ fontWeight: 600 }}>{name}</span>
-                <span style={{ color: TEXT_MUTED, fontWeight: 500, fontSize: 11, marginLeft: 3 }}>#{id}</span>
-              </>
-            ) : (
-              <span style={{ fontWeight: 600 }}>ID {id}</span>
-            )}
-          </span>
-        );
-      })}
-    </>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {ids.map((id) => (
+        <div key={id} style={{ display: "flex", alignItems: "center" }}>
+          <StaffAssigneeFace staffId={id} staffNameById={staffNameById} staffAvatarById={staffAvatarById} />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -422,12 +466,14 @@ const DATE_IN: React.CSSProperties = {
 function ProjectDetailModal({
   project,
   staffNameById,
+  staffAvatarById,
   mediaTeamStaff,
   onClose,
   onSaved,
 }: {
   project: Project;
   staffNameById: StaffNameById;
+  staffAvatarById: StaffAvatarById;
   mediaTeamStaff: HrNhanSuStaffOption[];
   onClose: () => void;
   onSaved: (p: Project) => void;
@@ -562,42 +608,69 @@ function ProjectDetailModal({
           style={{
             position: "relative",
             flexShrink: 0,
-            padding: "12px 42px 12px 14px",
+            padding: "12px 108px 12px 14px",
             background: "linear-gradient(180deg, #eceeee 0%, #f5f6f6 38%, #fafbfb 100%)",
             borderBottom: `1px solid ${BORDER}`,
             color: TEXT,
           }}
         >
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Đóng"
+          <div
             style={{
               position: "absolute",
               top: 10,
               right: 10,
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              border: `1px solid ${BORDER}`,
-              background: "#fff",
-              color: TEXT_MUTED,
-              fontSize: 18,
-              lineHeight: 1,
-              cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "#f3f3f3";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "#fff";
+              gap: 8,
             }}
           >
-            ×
-          </button>
+            {!editing ? (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 8,
+                  border: "none",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  color: "#fff",
+                  background: "linear-gradient(135deg, #f8a668, #ee5ca2)",
+                  boxShadow: "0 2px 8px rgba(238,92,162,0.25)",
+                }}
+              >
+                Sửa
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Đóng"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                border: `1px solid ${BORDER}`,
+                background: "#fff",
+                color: TEXT_MUTED,
+                fontSize: 18,
+                lineHeight: 1,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "#f3f3f3";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "#fff";
+              }}
+            >
+              ×
+            </button>
+          </div>
           <p
             id="media-detail-title"
             style={{
@@ -792,10 +865,11 @@ function ProjectDetailModal({
                                 style={{
                                   display: "flex",
                                   alignItems: "center",
-                                  gap: 8,
+                                  gap: 10,
                                   cursor: "pointer",
                                   fontSize: 12,
                                   color: TEXT,
+                                  minWidth: 0,
                                 }}
                               >
                                 <input
@@ -804,8 +878,14 @@ function ProjectDetailModal({
                                   onChange={() => toggleLam(s.id)}
                                   style={{ width: 14, height: 14, flexShrink: 0 }}
                                 />
-                                <span style={{ fontWeight: 600 }}>{s.full_name}</span>
-                                <span style={{ fontSize: 11, color: TEXT_MUTED }}>#{s.id}</span>
+                                <StaffAssigneeFace
+                                  staffId={s.id}
+                                  staffNameById={{
+                                    ...staffNameById,
+                                    [String(s.id)]: s.full_name,
+                                  }}
+                                  staffAvatarById={staffAvatarById}
+                                />
                               </label>
                             </li>
                           ))}
@@ -815,7 +895,7 @@ function ProjectDetailModal({
                   </>
                 ) : (
                   <div style={{ fontSize: 12, color: TEXT, lineHeight: 1.5 }}>
-                    {resolveStaffIdsRich(project.nguoi_lam, staffNameById)}
+                    {resolveStaffIdsRich(project.nguoi_lam, staffNameById, staffAvatarById)}
                   </div>
                 )}
               </div>
@@ -916,84 +996,52 @@ function ProjectDetailModal({
             </div>
           ) : null}
 
-          <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
-            {editing ? (
-              <>
-                <button
-                  type="button"
-                  disabled={savePending}
-                  onClick={onSave}
-                  style={{
-                    padding: "7px 16px",
-                    borderRadius: 8,
-                    border: "none",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: savePending ? "wait" : "pointer",
-                    color: "#fff",
-                    background: "linear-gradient(135deg, #f8a668, #ee5ca2)",
-                    opacity: savePending ? 0.75 : 1,
-                  }}
-                >
-                  {savePending ? "Đang lưu…" : "Lưu thay đổi"}
-                </button>
-                <button
-                  type="button"
-                  disabled={savePending}
-                  onClick={cancelEdit}
-                  style={{
-                    ...BTN,
-                    padding: "7px 16px",
-                    fontWeight: 700,
-                  }}
-                >
-                  Hủy
-                </button>
-                <button
-                  type="button"
-                  disabled={savePending}
-                  onClick={onClose}
-                  style={{
-                    ...BTN,
-                    padding: "7px 16px",
-                    fontWeight: 700,
-                  }}
-                >
-                  Đóng
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  style={{
-                    padding: "7px 16px",
-                    borderRadius: 8,
-                    border: "none",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    color: "#fff",
-                    background: "linear-gradient(135deg, #f8a668, #ee5ca2)",
-                  }}
-                >
-                  Sửa
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  style={{
-                    ...BTN,
-                    padding: "7px 16px",
-                    fontWeight: 700,
-                  }}
-                >
-                  Đóng
-                </button>
-              </>
-            )}
-          </div>
+          {editing ? (
+            <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                type="button"
+                disabled={savePending}
+                onClick={onSave}
+                style={{
+                  padding: "7px 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: savePending ? "wait" : "pointer",
+                  color: "#fff",
+                  background: "linear-gradient(135deg, #f8a668, #ee5ca2)",
+                  opacity: savePending ? 0.75 : 1,
+                }}
+              >
+                {savePending ? "Đang lưu…" : "Lưu thay đổi"}
+              </button>
+              <button
+                type="button"
+                disabled={savePending}
+                onClick={cancelEdit}
+                style={{
+                  ...BTN,
+                  padding: "7px 16px",
+                  fontWeight: 700,
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={savePending}
+                onClick={onClose}
+                style={{
+                  ...BTN,
+                  padding: "7px 16px",
+                  fontWeight: 700,
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -1119,6 +1167,7 @@ const SCROLL_HIDE =
 export default function MediaTimeline({
   initialProjects,
   staffNameById = {},
+  staffAvatarById = {},
   mediaTeamStaff = [],
   mediaBanStaffFilter = [],
 }: MediaTimelineProps) {
@@ -1827,6 +1876,7 @@ export default function MediaTimeline({
         <ProjectDetailModal
           project={detailProject}
           staffNameById={staffNameById}
+          staffAvatarById={staffAvatarById}
           mediaTeamStaff={mediaTeamStaff}
           onClose={() => setDetailProject(null)}
           onSaved={(p) => {

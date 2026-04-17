@@ -605,7 +605,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
   );
 
   return (
-    <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
+    <div className="-m-4 flex h-[calc(100dvh-5.5rem)] max-h-[calc(100dvh-5.5rem)] min-h-0 flex-col overflow-hidden bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#F8A568] to-[#EE5CA2]">
@@ -645,8 +645,8 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
-          <div className="mx-auto flex min-h-[min(56vh,480px)] w-full max-w-[1200px] flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-6 pt-3">
+          <div className="mx-auto flex min-h-0 w-full max-w-[1200px] flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
             <div className="shrink-0 space-y-2 border-b border-[#EAEAEA] bg-white px-6 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-1">
@@ -729,7 +729,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                     </button>
                   </div>
                 ) : null}
-                <div className="min-h-0 flex-1 overflow-x-auto">
+                <div className="min-h-0 flex-1 overflow-auto">
                   <table className="w-full min-w-[1000px] border-collapse text-left text-[13px]">
                   <thead>
                     <tr className="border-b border-[#EAEAEA] bg-[#fafafa] text-[11px] font-semibold uppercase tracking-wide text-black/45">

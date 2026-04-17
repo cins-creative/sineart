@@ -25,12 +25,14 @@ export default async function QuanLyMediaPageData() {
   }
 
   const staffNameById = staffRes.ok ? staffRes.map : {};
+  const staffAvatarById = staffRes.ok ? staffRes.avatarById : {};
   const mediaTeamStaff = mediaTeamRes.ok ? mediaTeamRes.rows : [];
   const mediaBanStaffFilter = mediaBanFilterRes.ok ? mediaBanFilterRes.rows : [];
   return (
     <QuanLyMediaView
       initialProjects={res.rows}
       staffNameById={staffNameById}
+      staffAvatarById={staffAvatarById}
       mediaTeamStaff={mediaTeamStaff}
       mediaBanStaffFilter={mediaBanStaffFilter}
     />

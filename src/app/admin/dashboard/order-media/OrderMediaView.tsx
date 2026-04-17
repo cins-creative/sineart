@@ -17,16 +17,12 @@ import {
 } from "lucide-react";
 
 import { createMktMediaOrder } from "@/app/admin/dashboard/quan-ly-media/actions";
-import type { HrNhanSuStaffOption } from "@/lib/data/admin-quan-ly-media";
 import { MKT_MEDIA_TYPE_OPTIONS } from "@/lib/data/mkt-media-form";
 import { htmlToPlainText, sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import { cn } from "@/lib/utils";
 
 type Props = {
-  staffOptions: HrNhanSuStaffOption[];
-  /** Lỗi tải `hr_nhan_su` — form vẫn gửi được, chỉ mất danh sách tick người làm. */
-  staffLoadError?: string | null;
   creatorLabel: string;
   defaultStartYmd: string;
   defaultEndYmd: string;
@@ -72,13 +68,7 @@ function execBriefCmd(el: HTMLDivElement | null, command: string, value?: string
 
 const BRIEF_MAX_PLAIN = 12000;
 
-export default function OrderMediaView({
-  staffOptions,
-  staffLoadError,
-  creatorLabel,
-  defaultStartYmd,
-  defaultEndYmd,
-}: Props) {
+export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultEndYmd }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -90,7 +80,6 @@ export default function OrderMediaView({
   const [endDate, setEndDate] = useState(defaultEndYmd);
   const briefRef = useRef<HTMLDivElement>(null);
   const [minhHoa, setMinhHoa] = useState<MinhHoaSlot[]>([]);
-  const [lamSet, setLamSet] = useState<Set<number>>(() => new Set());
   const fileRef = useRef<HTMLInputElement>(null);
 
   const inputCls = useMemo(
@@ -98,15 +87,6 @@ export default function OrderMediaView({
       "w-full rounded-xl border border-[#EAEAEA] bg-white px-3 py-2.5 text-[13px] text-[#323232] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] outline-none transition focus:border-[#f8a668] focus:ring-2 focus:ring-[#f8a668]/25",
     [],
   );
-
-  const toggleLam = useCallback((id: number) => {
-    setLamSet((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
 
   const uploadSlots = useCallback((files: File[]) => {
     for (const file of files) {
@@ -179,7 +159,7 @@ export default function OrderMediaView({
         end_date: endDate,
         brief: safeBrief || null,
         minh_hoa: urls,
-        nguoi_lam_ids: [...lamSet],
+        nguoi_lam_ids: [],
       });
       if (!res.ok) {
         setErr(res.error);
@@ -188,7 +168,7 @@ export default function OrderMediaView({
       router.push("/admin/dashboard/quan-ly-media");
       router.refresh();
     });
-  }, [projectName, projectType, type, startDate, endDate, minhHoa, lamSet, router]);
+  }, [projectName, projectType, type, startDate, endDate, minhHoa, router]);
 
   const tbBtn =
     "rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-[12px] font-semibold text-[#555] hover:bg-[#fafafa]";
@@ -219,11 +199,6 @@ export default function OrderMediaView({
 
       <div className="mx-auto w-full max-w-[720px] flex-1 px-[10px] py-5">
         <div className="rounded-2xl border border-[#EAEAEA] bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)] md:p-6">
-          {staffLoadError ? (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-950">
-              Không tải danh sách nhân sự: {staffLoadError}
-            </div>
-          ) : null}
           <div className="mb-5 rounded-xl border border-[#EAEAEA] bg-[#fafafa] px-4 py-3 text-[13px] text-[#555]">
             <span className="font-semibold text-[#323232]">Người tạo order:</span> {creatorLabel}
           </div>
@@ -336,10 +311,6 @@ export default function OrderMediaView({
                   )}
                 />
               </div>
-              <p className="mt-1 text-[11px] leading-snug text-[#888]">
-                Rich text cơ bản (in đậm, danh sách…). Nội dung được lưu dạng HTML — tối đa khoảng {BRIEF_MAX_PLAIN}{" "}
-                ký tự chữ. Nhấp vào ô rồi soạn hoặc dán nội dung.
-              </p>
             </div>
 
             <div>
@@ -353,10 +324,6 @@ export default function OrderMediaView({
                 onDrop={onDropMinhHoa}
                 className="rounded-xl border border-dashed border-[#EAEAEA] bg-[#fafafa] px-3 py-3 outline-none transition focus:border-[#f8a668] focus:ring-2 focus:ring-[#f8a668]/25"
               >
-                <p className="mb-2 text-[12px] leading-snug text-[#666]">
-                  Dán <strong>Ctrl+V</strong> nhiều ảnh từ clipboard, kéo thả file, hoặc chọn từ máy — ảnh tự tải lên
-                  Cloudflare Images; URL lưu ngầm khi gửi order.
-                </p>
                 <div className="mb-3 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -418,32 +385,6 @@ export default function OrderMediaView({
                         >
                           <Trash2 size={14} />
                         </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            <div>
-              {fieldLabel("Người làm (team media)")}
-              <div className="max-h-[200px] overflow-auto rounded-xl border border-[#EAEAEA] bg-[#fafafa] p-3">
-                {staffOptions.length === 0 ? (
-                  <p className="text-[13px] text-[#888]">Chưa tải được danh sách nhân sự.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {staffOptions.map((s) => (
-                      <li key={s.id}>
-                        <label className="flex cursor-pointer items-center gap-2 text-[13px]">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-[#ccc] text-[#ee5ca2] focus:ring-[#f8a668]/40"
-                            checked={lamSet.has(s.id)}
-                            onChange={() => toggleLam(s.id)}
-                          />
-                          <span className="font-medium text-[#323232]">{s.full_name}</span>
-                          <span className="text-[11px] text-[#aaa]">#{s.id}</span>
-                        </label>
                       </li>
                     ))}
                   </ul>

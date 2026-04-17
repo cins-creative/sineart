@@ -5,15 +5,11 @@ import { AdminDashboardTableSkeleton } from "@/components/skeletons";
 
 import KhoaHocPageData from "./KhoaHocPageData";
 
-export default async function KhoaHocSessionAndData({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function KhoaHocSessionAndData() {
   return (
     <AdminSessionGate>
       <Suspense fallback={<AdminDashboardTableSkeleton />}>
-        <KhoaHocPageData searchParams={searchParams} />
+        <KhoaHocPageData />
       </Suspense>
     </AdminSessionGate>
   );

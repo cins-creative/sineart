@@ -20,6 +20,9 @@ export type MktMediaProjectRow = {
 /** `hr_nhan_su.id` → `full_name` — key dạng chuỗi để serialize props client an toàn. */
 export type StaffNameById = Record<string, string>;
 
+/** `hr_nhan_su.id` → `avatar` (URL), null nếu không có. */
+export type StaffAvatarById = Record<string, string | null>;
+
 const SELECT =
   "id, project_name, project_type, type, status, start_date, end_date, brief, minh_hoa, nguoi_tao, nguoi_lam";
 
@@ -38,15 +41,19 @@ export async function fetchMktQuanLyMediaRows(
 /** Danh bạ nhân sự tối thiểu — join `nguoi_tao` / `nguoi_lam` với `hr_nhan_su`. */
 export async function fetchHrNhanSuStaffNameById(
   supabase: SupabaseClient,
-): Promise<{ ok: true; map: StaffNameById } | { ok: false; error: string }> {
-  const { data, error } = await supabase.from("hr_nhan_su").select("id, full_name");
+): Promise<{ ok: true; map: StaffNameById; avatarById: StaffAvatarById } | { ok: false; error: string }> {
+  const { data, error } = await supabase.from("hr_nhan_su").select("id, full_name, avatar");
   if (error) return { ok: false, error: error.message };
   const map: StaffNameById = {};
-  for (const row of (data as { id: number; full_name: string | null }[]) ?? []) {
+  const avatarById: StaffAvatarById = {};
+  for (const row of (data as { id: number; full_name: string | null; avatar?: string | null }[]) ?? []) {
     const name = row.full_name?.trim();
     map[String(row.id)] = name && name.length > 0 ? name : `Nhân sự #${row.id}`;
+    const av = row.avatar;
+    avatarById[String(row.id)] =
+      typeof av === "string" && av.trim().length > 0 ? av.trim() : null;
   }
-  return { ok: true, map };
+  return { ok: true, map, avatarById };
 }
 
 export type HrNhanSuStaffOption = { id: number; full_name: string };

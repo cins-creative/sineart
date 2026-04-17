@@ -812,7 +812,7 @@ function HvInfoRow({
 }: {
   label: string;
   value: ReactNode;
-  valueProps?: ComponentPropsWithoutRef<"div">;
+  valueProps?: ComponentPropsWithoutRef<"div"> & Record<string, string | undefined>;
 }) {
   return (
     <div className="flex min-w-0 items-start gap-2 border-b border-[#f0f0f0] py-1 last:border-0">

@@ -1,9 +1,9 @@
 "use client";
 
-import { Home } from "lucide-react";
+import { Home, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
 import {
@@ -27,6 +27,8 @@ type Props = {
   dashboardNav: DashboardNavAccess;
   children: React.ReactNode;
 };
+
+type NavItem = { label: string; href: string; disabled?: boolean };
 
 function staffInitial(name: string): string {
   const t = name.trim();
@@ -65,6 +67,158 @@ function navItemClass(href: string, pathname: string | null, searchParams: URLSe
   return base;
 }
 
+function AdminDashboardNavPanel({
+  staffName,
+  staffRole,
+  staffAvatarUrl,
+  pathname,
+  searchParams,
+  showOrderMedia,
+  navMainVisible,
+  navHrVisible,
+  navMarketingVisible,
+  onNavigate,
+  profileTrailing,
+}: {
+  staffName: string;
+  staffRole: string | null;
+  staffAvatarUrl?: string | null;
+  pathname: string | null;
+  searchParams: URLSearchParams;
+  showOrderMedia: boolean;
+  navMainVisible: NavItem[];
+  navHrVisible: NavItem[];
+  navMarketingVisible: NavItem[];
+  onNavigate?: () => void;
+  profileTrailing?: ReactNode;
+}) {
+  return (
+    <>
+      <div className="flex h-14 min-w-0 items-center gap-2 border-b border-black/[0.06] px-5">
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-black/[0.06] bg-black/[0.04]">
+          {staffAvatarUrl?.trim() ? (
+            <img
+              src={staffAvatarUrl.trim()}
+              alt={staffName.trim() ? `Ảnh đại diện ${staffName.trim()}` : "Ảnh đại diện"}
+              width={36}
+              height={36}
+              className="h-full w-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div
+              className="flex h-full w-full items-center justify-center text-sm font-bold text-white"
+              style={{ background: "linear-gradient(135deg, #f8a668, #ee5b9f)" }}
+              aria-hidden
+            >
+              {staffInitial(staffName)}
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="truncate text-sm font-semibold">{staffName || "—"}</div>
+          <div className="truncate text-[11px] text-black/45">{staffRole ?? "—"}</div>
+        </div>
+        {profileTrailing ? <div className="flex shrink-0 items-center">{profileTrailing}</div> : null}
+      </div>
+      <nav className="flex-1 overflow-y-auto px-3 py-4 text-[13px]">
+        <Link href={DASHBOARD_OVERVIEW_HREF} className={overviewNavClass(pathname)} onClick={onNavigate}>
+          Tổng quan
+        </Link>
+        {showOrderMedia ? (
+          <Link
+            href={ORDER_MEDIA_HREF}
+            className={`mb-3 mt-1 ${navItemClass(ORDER_MEDIA_HREF, pathname, searchParams)}`}
+            onClick={onNavigate}
+          >
+            Order nội dung media
+          </Link>
+        ) : (
+          <div className="mb-3 mt-1" aria-hidden />
+        )}
+        {navMainVisible.length > 0 ? (
+          <>
+            <p className="mb-2 mt-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
+              Điều hành
+            </p>
+            <ul className="space-y-0.5">
+              {navMainVisible.map((item) => (
+                <li key={item.label}>
+                  {item.disabled ? (
+                    <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
+                      {item.label}
+                    </span>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      className={navItemClass(item.href, pathname, searchParams)}
+                      onClick={onNavigate}
+                    >
+                      {item.label}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        {navHrVisible.length > 0 ? (
+          <>
+            <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
+              Nhân sự & TC
+            </p>
+            <ul className="space-y-0.5">
+              {navHrVisible.map((item) => (
+                <li key={item.label}>
+                  {item.disabled ? (
+                    <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
+                      {item.label}
+                    </span>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      className={navItemClass(item.href, pathname, searchParams)}
+                      onClick={onNavigate}
+                    >
+                      {item.label}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        {navMarketingVisible.length > 0 ? (
+          <>
+            <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
+              Marketing
+            </p>
+            <ul className="space-y-0.5">
+              {navMarketingVisible.map((item) => (
+                <li key={item.label}>
+                  {item.disabled ? (
+                    <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
+                      {item.label}
+                    </span>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      className={navItemClass(item.href, pathname, searchParams)}
+                      onClick={onNavigate}
+                    >
+                      {item.label}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </nav>
+    </>
+  );
+}
+
 export default function AdminShell({
   staffName,
   staffEmail,
@@ -76,7 +230,9 @@ export default function AdminShell({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
   const [busy, setBusy] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const allowed = dashboardNav.allowedHrefs;
 
@@ -110,6 +266,28 @@ export default function AdminShell({
     }
   }, [router, prefetchTargets]);
 
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname, searchKey]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
+
   async function logout() {
     setBusy(true);
     try {
@@ -121,131 +299,81 @@ export default function AdminShell({
     }
   }
 
+  const navPanelProps = {
+    staffName,
+    staffRole,
+    staffAvatarUrl,
+    pathname,
+    searchParams,
+    showOrderMedia,
+    navMainVisible,
+    navHrVisible,
+    navMarketingVisible,
+  };
+
   return (
     <div
       className="min-h-screen text-[#1a1a1a] [font-family:ui-sans-serif,system-ui,sans-serif]"
       style={{ background: "#F5F4F2" }}
     >
       <aside className="fixed left-0 top-0 z-[8] hidden h-full w-[260px] flex-col border-r border-black/[0.06] bg-white md:flex">
-        <div className="flex h-14 min-w-0 items-center gap-2 border-b border-black/[0.06] px-5">
-          <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-black/[0.06] bg-black/[0.04]">
-            {staffAvatarUrl?.trim() ? (
-              <img
-                src={staffAvatarUrl.trim()}
-                alt={staffName.trim() ? `Ảnh đại diện ${staffName.trim()}` : "Ảnh đại diện"}
-                width={36}
-                height={36}
-                className="h-full w-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div
-                className="flex h-full w-full items-center justify-center text-sm font-bold text-white"
-                style={{ background: "linear-gradient(135deg, #f8a668, #ee5b9f)" }}
-                aria-hidden
-              >
-                {staffInitial(staffName)}
-              </div>
-            )}
-          </div>
-          <div className="min-w-0 leading-tight">
-            <div className="truncate text-sm font-semibold">{staffName || "—"}</div>
-            <div className="truncate text-[11px] text-black/45">{staffRole ?? "—"}</div>
-          </div>
-        </div>
-        <nav className="flex-1 overflow-y-auto px-3 py-4 text-[13px]">
-          <Link href={DASHBOARD_OVERVIEW_HREF} className={overviewNavClass(pathname)}>
-            Tổng quan
-          </Link>
-          {showOrderMedia ? (
-            <Link
-              href={ORDER_MEDIA_HREF}
-              className={`mb-3 mt-1 ${navItemClass(ORDER_MEDIA_HREF, pathname, searchParams)}`}
-            >
-              Order nội dung media
-            </Link>
-          ) : (
-            <div className="mb-3 mt-1" aria-hidden />
-          )}
-          {navMainVisible.length > 0 ? (
-            <>
-              <p className="mb-2 mt-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
-                Điều hành
-              </p>
-              <ul className="space-y-0.5">
-                {navMainVisible.map((item) => (
-                  <li key={item.label}>
-                    {item.disabled ? (
-                      <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
-                        {item.label}
-                      </span>
-                    ) : (
-                      <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
-                        {item.label}
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          {navHrVisible.length > 0 ? (
-            <>
-              <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
-                Nhân sự & TC
-              </p>
-              <ul className="space-y-0.5">
-                {navHrVisible.map((item) => (
-                  <li key={item.label}>
-                    {item.disabled ? (
-                      <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
-                        {item.label}
-                      </span>
-                    ) : (
-                      <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
-                        {item.label}
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          {navMarketingVisible.length > 0 ? (
-            <>
-              <p className="mb-2 mt-6 px-2 text-[11px] font-semibold uppercase tracking-wide text-black/40">
-                Marketing
-              </p>
-              <ul className="space-y-0.5">
-                {navMarketingVisible.map((item) => (
-                  <li key={item.label}>
-                    {item.disabled ? (
-                      <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
-                        {item.label}
-                      </span>
-                    ) : (
-                      <Link href={item.href} className={navItemClass(item.href, pathname, searchParams)}>
-                        {item.label}
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-        </nav>
+        <AdminDashboardNavPanel {...navPanelProps} />
       </aside>
+
+      {mobileNavOpen ? (
+        <>
+          <div
+            role="presentation"
+            className="fixed inset-0 z-[30] bg-black/45 md:hidden"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <aside
+            id="admin-dashboard-nav-drawer"
+            className="fixed left-0 top-0 z-[31] flex h-full w-[min(280px,88vw)] max-w-full flex-col border-r border-black/[0.06] bg-white shadow-[4px_0_24px_rgba(0,0,0,0.12)] md:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu quản trị dashboard"
+          >
+            <AdminDashboardNavPanel
+              {...navPanelProps}
+              onNavigate={() => setMobileNavOpen(false)}
+              profileTrailing={
+                <button
+                  type="button"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-black/10 bg-white text-black/65 transition hover:bg-black/[0.04] hover:text-black"
+                  aria-label="Đóng menu"
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  <X className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden />
+                </button>
+              }
+            />
+          </aside>
+        </>
+      ) : null}
 
       <div className="min-w-0 max-w-full md:pl-[260px]">
         <header className="sticky top-0 z-[9] flex h-14 w-full min-w-0 items-center justify-between gap-3 border-b border-black/[0.06] bg-white/90 px-4 backdrop-blur md:px-[24px]">
-          <Link
-            href="/"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white text-black/70 transition hover:bg-black/[0.04] hover:text-black"
-            aria-label="Về trang chủ"
-            title="Trang chủ"
-          >
-            <Home className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden />
-          </Link>
+          <div className="flex min-w-0 shrink-0 items-center gap-2">
+            <button
+              type="button"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white text-black/70 transition hover:bg-black/[0.04] hover:text-black md:hidden"
+              aria-label="Mở menu quản trị"
+              aria-expanded={mobileNavOpen}
+              aria-controls="admin-dashboard-nav-drawer"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <Menu className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden />
+            </button>
+            <Link
+              href="/"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white text-black/70 transition hover:bg-black/[0.04] hover:text-black"
+              aria-label="Về trang chủ"
+              title="Trang chủ"
+            >
+              <Home className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden />
+            </Link>
+          </div>
           <div className="flex min-w-0 max-w-full flex-1 items-center justify-end gap-3 text-end">
             <span className="hidden max-w-[min(320px,45vw)] truncate text-xs text-black/45 sm:inline">
               {staffEmail}

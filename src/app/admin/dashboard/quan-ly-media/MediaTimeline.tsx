@@ -57,7 +57,7 @@ const DEFAULT_PX_PER_DAY = 8;
 const MIN_TRACK_W = 640;
 
 /** Số dự án tối đa vẽ trên timeline (giảm tải DOM). */
-const MAX_TIMELINE_PROJECTS = 10;
+const MAX_TIMELINE_PROJECTS = 20;
 
 type PersistShape = {
   labelWidth?: number;
@@ -68,6 +68,12 @@ type PersistShape = {
 
 function parseDate(s: string | null): Date | null {
   if (!s) return null;
+  const t = s.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+    const [y, mo, da] = t.split("-").map(Number);
+    const d = new Date(y, mo - 1, da);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d;
 }
@@ -106,7 +112,25 @@ function barFlatColor(project: Project): string {
 }
 
 /** Khoảng thời gian hiển thị: dữ liệu + padding; theo chế độ tuần/tháng/năm; mở rộng khi zoom (px/ngày nhỏ). */
-function computeBounds(projects: Project[], viewMode: ViewMode, pixelsPerDay: number) {
+function computeBounds(
+  projects: Project[],
+  viewMode: ViewMode,
+  pixelsPerDay: number,
+  /** Hai ngày hợp lệ → đầu/cuối timeline đúng theo người dùng (bỏ qua min span / zoom padding). */
+  rangeOverride?: { start: Date; end: Date } | null,
+) {
+  if (rangeOverride) {
+    let ts = startOfLocalDay(rangeOverride.start);
+    let te = startOfLocalDay(rangeOverride.end);
+    if (ts.getTime() > te.getTime()) {
+      const x = ts;
+      ts = te;
+      te = x;
+    }
+    const totalDays = Math.max(1, daysBetween(ts, te));
+    return { timelineStart: ts, timelineEnd: te, totalDays };
+  }
+
   const today = startOfLocalDay(new Date());
   const dates = projects
     .flatMap((p) => [parseDate(p.start_date), parseDate(p.end_date)])
@@ -1100,8 +1124,11 @@ export default function MediaTimeline({
 }: MediaTimelineProps) {
   const [localProjects, setLocalProjects] = useState<Project[]>(initialProjects);
   const [filterLamId, setFilterLamId] = useState<number | "">("");
-  /** Lọc theo `project.status`; rỗng = tất cả (kết hợp với lọc người làm). */
-  const [filterStatus, setFilterStatus] = useState<string>("");
+  /** Lọc theo `project.status` (nhiều mục: giữ Shift + bấm); rỗng = tất cả. */
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
+  /** `YYYY-MM-DD` — cả hai hợp lệ thì timeline scale theo khoảng này. */
+  const [rangeStartStr, setRangeStartStr] = useState("");
+  const [rangeEndStr, setRangeEndStr] = useState("");
   const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_W);
   const [pixelsPerDay, setPixelsPerDay] = useState(DEFAULT_PX_PER_DAY);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -1138,8 +1165,9 @@ export default function MediaTimeline({
 
   const visibleProjects = useMemo(() => {
     let list = poolAfterAssignee;
-    if (filterStatus !== "" && STATUS_ORDER.includes(filterStatus)) {
-      list = list.filter((p) => p.status === filterStatus);
+    if (filterStatuses.length > 0) {
+      const want = new Set(filterStatuses.filter((s) => STATUS_ORDER.includes(s)));
+      if (want.size > 0) list = list.filter((p) => want.has(p.status ?? ""));
     }
     const sorted = [...list].sort((a, b) => {
       const da = parseDate(a.start_date)?.getTime() ?? 0;
@@ -1148,7 +1176,14 @@ export default function MediaTimeline({
       return a.id - b.id;
     });
     return sorted.slice(0, MAX_TIMELINE_PROJECTS);
-  }, [poolAfterAssignee, filterStatus]);
+  }, [poolAfterAssignee, filterStatuses]);
+
+  const customTimelineRange = useMemo(() => {
+    const a = parseDate(rangeStartStr.trim() || null);
+    const b = parseDate(rangeEndStr.trim() || null);
+    if (!a || !b) return null;
+    return { start: a, end: b };
+  }, [rangeStartStr, rangeEndStr]);
 
   useEffect(() => {
     try {
@@ -1211,8 +1246,8 @@ export default function MediaTimeline({
   }, []);
 
   const bounds = useMemo(
-    () => computeBounds(visibleProjects, viewMode, pixelsPerDay),
-    [visibleProjects, viewMode, pixelsPerDay],
+    () => computeBounds(visibleProjects, viewMode, pixelsPerDay, customTimelineRange),
+    [visibleProjects, viewMode, pixelsPerDay, customTimelineRange],
   );
   const { timelineStart, timelineEnd, totalDays } = bounds;
   const trackPx = Math.max(MIN_TRACK_W, Math.round(totalDays * pixelsPerDay));
@@ -1239,14 +1274,14 @@ export default function MediaTimeline({
     zoomFromWheelRef.current = false;
     const sc = trackScrollRef.current;
     if (!sc) return;
-    const b = computeBounds(visibleProjects, viewMode, pixelsPerDay);
+    const b = computeBounds(visibleProjects, viewMode, pixelsPerDay, customTimelineRange);
     const tp = Math.max(MIN_TRACK_W, b.totalDays * pixelsPerDay);
     const off = Math.max(0, Math.min(b.totalDays, daysBetween(b.timelineStart, startOfLocalDay(new Date()))));
     const todayX = b.totalDays > 0 ? (off / b.totalDays) * tp : 0;
     const newScroll = todayX - wheelViewportAnchorRef.current;
     const maxScroll = Math.max(0, sc.scrollWidth - sc.clientWidth);
     sc.scrollLeft = Math.max(0, Math.min(newScroll, maxScroll));
-  }, [pixelsPerDay, viewMode, visibleProjects]);
+  }, [pixelsPerDay, viewMode, visibleProjects, customTimelineRange]);
 
   useEffect(() => {
     const el = trackScrollRef.current;
@@ -1263,7 +1298,7 @@ export default function MediaTimeline({
       const newPpd = Math.min(MAX_PX_PER_DAY, Math.max(MIN_PX_PER_DAY, oldPpd + dir * step));
       if (newPpd === oldPpd) return;
 
-      const bOld = computeBounds(visibleProjects, viewMode, oldPpd);
+      const bOld = computeBounds(visibleProjects, viewMode, oldPpd, customTimelineRange);
       const oldTrackPx = Math.max(MIN_TRACK_W, bOld.totalDays * oldPpd);
       const offOld = Math.max(0, Math.min(bOld.totalDays, daysBetween(bOld.timelineStart, startOfLocalDay(new Date()))));
       const oldTodayX = bOld.totalDays > 0 ? (offOld / bOld.totalDays) * oldTrackPx : 0;
@@ -1273,19 +1308,19 @@ export default function MediaTimeline({
     };
     el.addEventListener("wheel", fn, { passive: false });
     return () => el.removeEventListener("wheel", fn);
-  }, [pixelsPerDay, viewMode, visibleProjects]);
+  }, [pixelsPerDay, viewMode, visibleProjects, customTimelineRange]);
 
   const scrollTodayCenter = useCallback(() => {
     const sc = trackScrollRef.current;
     if (!sc) return;
-    const b = computeBounds(visibleProjects, viewMode, pixelsPerDay);
+    const b = computeBounds(visibleProjects, viewMode, pixelsPerDay, customTimelineRange);
     const tp = Math.max(MIN_TRACK_W, b.totalDays * pixelsPerDay);
     const off = Math.max(0, Math.min(b.totalDays, daysBetween(b.timelineStart, startOfLocalDay(new Date()))));
     const todayX = b.totalDays > 0 ? (off / b.totalDays) * tp : 0;
     const vw = sc.clientWidth;
     const maxScroll = Math.max(0, sc.scrollWidth - sc.clientWidth);
     sc.scrollLeft = Math.max(0, Math.min(todayX - vw / 2, maxScroll));
-  }, [visibleProjects, viewMode, pixelsPerDay]);
+  }, [visibleProjects, viewMode, pixelsPerDay, customTimelineRange]);
 
   const onLabelScrollSync = useCallback(() => {
     const label = labelScrollRef.current;
@@ -1338,6 +1373,7 @@ export default function MediaTimeline({
 
   return (
     <div
+      className="flex min-h-0 flex-1 flex-col"
       style={{
         fontFamily: "ui-sans-serif, system-ui, sans-serif",
         background: "#fff",
@@ -1345,7 +1381,7 @@ export default function MediaTimeline({
         borderRadius: 16,
         overflow: "visible",
         border: `1px solid ${BORDER}`,
-        minHeight: 400,
+        minHeight: "max(360px, calc(100dvh - 10.5rem))",
         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
       }}
     >
@@ -1425,20 +1461,92 @@ export default function MediaTimeline({
             >
               Hôm nay
             </button>
+            <span
+              style={{
+                marginLeft: 6,
+                fontSize: 11,
+                color: TEXT_MUTED,
+                whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                flexWrap: "wrap",
+              }}
+            >
+              Từ
+              <input
+                type="date"
+                value={rangeStartStr}
+                onChange={(e) => setRangeStartStr(e.target.value)}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: TEXT,
+                  padding: "4px 6px",
+                  borderRadius: 8,
+                  border: `1px solid ${BORDER}`,
+                  background: "#fff",
+                }}
+              />
+              đến
+              <input
+                type="date"
+                value={rangeEndStr}
+                onChange={(e) => setRangeEndStr(e.target.value)}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: TEXT,
+                  padding: "4px 6px",
+                  borderRadius: 8,
+                  border: `1px solid ${BORDER}`,
+                  background: "#fff",
+                }}
+              />
+              {(rangeStartStr || rangeEndStr) && (
+                <button
+                  type="button"
+                  style={{ ...BTN, fontSize: 11, padding: "4px 8px" }}
+                  onClick={() => {
+                    setRangeStartStr("");
+                    setRangeEndStr("");
+                  }}
+                >
+                  Theo dữ liệu
+                </button>
+              )}
+            </span>
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 11, color: TEXT_MUTED, fontWeight: 600 }}>Trạng thái:</span>
+          <span style={{ fontSize: 10, color: "#aaa", fontWeight: 500 }}>(Shift + bấm: chọn nhiều)</span>
           {STATUS_ORDER.map((s) => {
             const m = STATUS_META[s];
             const count = statusCounts[s] ?? 0;
-            const active = filterStatus === s;
+            const active = filterStatuses.includes(s);
             return (
               <button
                 key={s}
                 type="button"
-                onClick={() => setFilterStatus((prev) => (prev === s ? "" : s))}
-                title={active ? "Bấm lần nữa để bỏ lọc" : "Lọc timeline theo trạng thái"}
+                onClick={(e) => {
+                  if (e.shiftKey) {
+                    setFilterStatuses((prev) => {
+                      if (prev.includes(s)) return prev.filter((x) => x !== s);
+                      return [...prev, s];
+                    });
+                  } else {
+                    setFilterStatuses((prev) => {
+                      if (prev.length === 1 && prev[0] === s) return [];
+                      return [s];
+                    });
+                  }
+                }}
+                title={
+                  active
+                    ? "Bấm: chỉ còn mục này rồi bỏ lọc · Shift+bấm: bật/tắt thêm mục"
+                    : "Bấm: lọc một trạng thái · Shift+bấm: thêm vào lọc nhiều trạng thái"
+                }
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1476,7 +1584,7 @@ export default function MediaTimeline({
         </div>
       ) : null}
 
-      <div style={{ display: "flex", overflow: "hidden", maxHeight: "min(78vh, calc(100dvh - 12rem))" }}>
+      <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
         <div
           ref={labelScrollRef}
           onScroll={onLabelScrollSync}

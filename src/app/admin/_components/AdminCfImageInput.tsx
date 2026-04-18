@@ -39,6 +39,26 @@ function pickFileFromClipboard(items: DataTransferItemList): File | null {
   return null;
 }
 
+/** Một số trình duyệt/OS chỉ đưa ảnh qua Clipboard API, không có file trong `paste`. */
+async function tryReadImageFromClipboardApi(): Promise<{ blob: Blob; name: string } | null> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.read) return null;
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith("image/")) {
+          const blob = await item.getType(type);
+          const ext = type.split("/")[1]?.split("+")[0] ?? "png";
+          return { blob, name: `paste.${ext}` };
+        }
+      }
+    }
+  } catch {
+    /* Quyền clipboard hoặc không hỗ trợ */
+  }
+  return null;
+}
+
 export function AdminCfImageInput({
   label,
   name,
@@ -55,6 +75,9 @@ export function AdminCfImageInput({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  /** Chuột đang trên widget — cho phép Ctrl+V khi không focus ô nhập liệu khác. */
+  const pointerInsideRef = useRef(false);
   const id = useId();
   const fileInputId = `${id}-file`;
 
@@ -77,18 +100,21 @@ export function AdminCfImageInput({
     setInternal((defaultValue ?? "").trim());
   }, [defaultValue, syncKey, isControlled]);
 
-  const runUpload = async (blob: Blob, filename: string) => {
-    setErr(null);
-    setBusy(true);
-    try {
-      const u = await uploadAdminCfImage(blob, filename);
-      setUrl(u);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Lỗi tải ảnh.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const runUpload = useCallback(
+    async (blob: Blob, filename: string) => {
+      setErr(null);
+      setBusy(true);
+      try {
+        const u = await uploadAdminCfImage(blob, filename);
+        setUrl(u);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Lỗi tải ảnh.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [setUrl]
+  );
 
   const onFile = async (files: FileList | null) => {
     const f = files?.[0];
@@ -100,27 +126,72 @@ export function AdminCfImageInput({
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const onPaste = (e: React.ClipboardEvent) => {
-    const file = pickFileFromClipboard(e.clipboardData.items);
-    if (file) {
-      e.preventDefault();
-      void runUpload(file, file.name || "paste.png");
-      return;
-    }
-    const text = e.clipboardData.getData("text/plain").trim();
-    if (/^https?:\/\//i.test(text)) {
-      e.preventDefault();
-      setErr("Chỉ dán ảnh (sao chép hình), không dán đường link.");
-    }
-  };
+  const handlePasteEvent = useCallback(
+    async (e: ClipboardEvent) => {
+      if (busy) return;
+      const dt = e.clipboardData;
+      const file = dt ? pickFileFromClipboard(dt.items) : null;
+      if (file) {
+        e.preventDefault();
+        e.stopPropagation();
+        await runUpload(file, file.name || "paste.png");
+        return;
+      }
+      const fromApi = await tryReadImageFromClipboardApi();
+      if (fromApi) {
+        e.preventDefault();
+        e.stopPropagation();
+        await runUpload(fromApi.blob, fromApi.name);
+        return;
+      }
+      const text = dt?.getData("text/plain").trim() ?? "";
+      if (/^https?:\/\//i.test(text)) {
+        e.preventDefault();
+        setErr("Chỉ dán ảnh (sao chép hình), không dán đường link.");
+      }
+    },
+    [busy, runUpload]
+  );
+
+  useEffect(() => {
+    if (busy) return;
+    const onWindowPaste = (e: ClipboardEvent) => {
+      const root = rootRef.current;
+      if (!root) return;
+      const a = document.activeElement;
+      const focusInWidget = !!(a && root.contains(a));
+      if (!focusInWidget && !pointerInsideRef.current) return;
+      if (!focusInWidget) {
+        const tag = a?.tagName?.toLowerCase();
+        const typingElsewhere =
+          tag === "input" ||
+          tag === "textarea" ||
+          tag === "select" ||
+          (a instanceof HTMLElement && a.isContentEditable);
+        if (typingElsewhere) return;
+      }
+      void handlePasteEvent(e);
+    };
+    window.addEventListener("paste", onWindowPaste, true);
+    return () => window.removeEventListener("paste", onWindowPaste, true);
+  }, [busy, handlePasteEvent]);
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div
+      ref={rootRef}
+      className={cn("space-y-2", className)}
+      onMouseEnter={() => {
+        pointerInsideRef.current = true;
+      }}
+      onMouseLeave={() => {
+        pointerInsideRef.current = false;
+      }}
+    >
       {compact ? null : (
         <div>
           <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-[#AAAAAA]">{label}</div>
           <p className="m-0 text-[11px] leading-snug text-[#888]">
-            Nhấn vào khung ảnh hoặc «Chọn từ máy tính», hoặc nhấn vào khung rồi dán ảnh đã sao chép (Ctrl+V). Ảnh tải lên tự động — không cần dán link.
+            Chọn file, hoặc đặt chuột trong vùng này (hoặc tab vào khung ảnh) rồi <strong className="font-semibold text-[#666]">Ctrl+V</strong> để dán ảnh từ bộ nhớ tạm. Ảnh tải lên tự động — không dán link.
           </p>
         </div>
       )}
@@ -142,7 +213,6 @@ export function AdminCfImageInput({
         htmlFor={fileInputId}
         id={id}
         tabIndex={busy ? -1 : 0}
-        onPaste={onPaste}
         className={cn(
           "relative block cursor-pointer overflow-hidden border-[1.5px] border-dashed border-[#EAEAEA] bg-[#fafafa] outline-none transition",
           "focus-within:border-[#BC8AF9] focus-within:ring-[3px] focus-within:ring-[#BC8AF9]/15",

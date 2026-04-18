@@ -28,6 +28,8 @@ export type AdminGoiHocPhiRow = {
   combo_id: number | null;
   /** `hp_goi_hoc_phi_new.special` — null nếu bảng legacy không có cột. */
   special: string | null;
+  /** `hp_goi_hoc_phi_new.note` — ghi chú / nội dung bổ sung (null nếu bảng legacy). */
+  note: string | null;
   so_buoi: number | null;
 };
 
@@ -52,12 +54,13 @@ const GOI_SELECT_BASE =
 
 function goiSelectForTable(tableName: string): string {
   if (tableName === "hp_goi_hoc_phi") return GOI_SELECT_BASE;
-  return `${GOI_SELECT_BASE}, special`;
+  return `${GOI_SELECT_BASE}, special, note`;
 }
 
 function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
   const numRaw = raw.number ?? raw["number"];
   const specialRaw = raw.special;
+  const noteRaw = raw.note;
   return {
     id: Number(raw.id),
     created_at: String(raw.created_at ?? ""),
@@ -71,6 +74,10 @@ function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
       specialRaw == null || specialRaw === ""
         ? null
         : String(specialRaw).trim() || null,
+    note:
+      noteRaw == null || noteRaw === ""
+        ? null
+        : String(noteRaw).trim() || null,
     so_buoi: parseNumericNullable(raw.so_buoi),
   };
 }

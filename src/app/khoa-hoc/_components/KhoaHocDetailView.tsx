@@ -637,11 +637,6 @@ export default function KhoaHocDetailView({
                       <div className="kd-oc-face kd-oc-face--front">
                         <h3 className="kd-oc-card-title">{c.title}</h3>
                         <p className="kd-oc-gv">GV: {c.gvNames}</p>
-                        {c.branchLabel ? (
-                          <div className="kd-oc-tags">
-                            <span className="kd-oc-tag">{c.branchLabel}</span>
-                          </div>
-                        ) : null}
                         <span className={meta.className}>
                           <span className="kd-oc-badge-dot" aria-hidden />
                           {meta.label}

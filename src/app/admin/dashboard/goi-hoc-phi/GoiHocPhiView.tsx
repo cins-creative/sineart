@@ -80,6 +80,7 @@ type EditableGoiDraft = {
   discount: string;
   combo_id: string;
   special: string;
+  note: string;
   so_buoi: string;
 };
 
@@ -93,6 +94,7 @@ function rowToDraft(r: AdminGoiHocPhiRow): EditableGoiDraft {
     discount: r.discount != null ? String(r.discount) : "",
     combo_id: r.combo_id != null ? String(r.combo_id) : "",
     special: r.special ?? "",
+    note: r.note ?? "",
     so_buoi: r.so_buoi != null ? String(r.so_buoi) : "",
   };
 }
@@ -125,6 +127,10 @@ function draftToBulkInput(
   if (specialTrim.length > 500) {
     return { ok: false, error: `Gói #${d.id}: Gói đặc biệt quá dài (tối đa 500 ký tự).` };
   }
+  const noteTrim = d.note.trim();
+  if (noteTrim.length > 4000) {
+    return { ok: false, error: `Gói #${d.id}: Ghi chú quá dài (tối đa 4000 ký tự).` };
+  }
   return {
     ok: true,
     row: {
@@ -137,6 +143,7 @@ function draftToBulkInput(
       combo_id,
       so_buoi: parseClientNumNullable(d.so_buoi),
       special: specialTrim === "" ? null : specialTrim,
+      note: noteTrim === "" ? null : noteTrim,
     },
   };
 }
@@ -390,6 +397,7 @@ function GoiModal({
     discount: row?.discount != null ? String(row.discount) : "",
     combo_id: row?.combo_id != null ? String(row.combo_id) : "",
     special: row?.special ?? "",
+    note: row?.note ?? "",
     so_buoi: row?.so_buoi != null ? String(row.so_buoi) : "",
   });
 
@@ -435,6 +443,7 @@ function GoiModal({
       discount: row?.discount != null ? String(row.discount) : "",
       combo_id: row?.combo_id != null ? String(row.combo_id) : "",
       special: row?.special ?? "",
+      note: row?.note ?? "",
       so_buoi: row?.so_buoi != null ? String(row.so_buoi) : "",
     });
     setModalError("");
@@ -666,6 +675,26 @@ function GoiModal({
             </label>
           ) : null}
 
+          {supportsSpecial ? (
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
+                Ghi chú <span className="font-normal normal-case text-black/40">(note)</span>
+              </span>
+              <textarea
+                name="note"
+                value={form.note}
+                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                maxLength={4000}
+                rows={4}
+                className="min-h-[88px] w-full resize-y rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm leading-relaxed outline-none ring-[#BC8AF9] focus:ring-2"
+                placeholder="Nội dung hiển thị hoặc mô tả bổ sung cho gói…"
+              />
+              <p className="mt-1 text-[11px] leading-snug text-black/45">
+                Tối đa 4000 ký tự — lưu trong cột <code className="rounded bg-black/[0.04] px-0.5">note</code>.
+              </p>
+            </label>
+          ) : null}
+
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">Số buổi</span>
             <input
@@ -849,6 +878,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
   }, [bundle.comboOptions, extraComboOptions]);
 
   const comboPickList = allComboOptions.length > 0;
+  const isNewGoiTable = bundle.tableName !== "hp_goi_hoc_phi";
 
   const filteredRows = useMemo(() => {
     let list = sorted;
@@ -866,6 +896,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
         const gn = fmtNum(r.goiNumber).toLowerCase();
         const sb = fmtNum(r.so_buoi).toLowerCase();
         const sp = (r.special ?? "").toLowerCase();
+        const nt = (r.note ?? "").toLowerCase();
         return (
           String(r.id).includes(s) ||
           monName.includes(s) ||
@@ -873,7 +904,8 @@ export default function GoiHocPhiView({ bundle }: Props) {
           dv.includes(s) ||
           gn.includes(s) ||
           sb.includes(s) ||
-          sp.includes(s)
+          sp.includes(s) ||
+          nt.includes(s)
         );
       });
     }
@@ -1084,7 +1116,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
               <input
                 value={rowSearch}
                 onChange={(e) => setRowSearch(e.target.value)}
-                placeholder="Tìm ID, môn, combo, gói đặc biệt, đơn vị, số buổi…"
+                placeholder="Tìm ID, môn, combo, gói đặc biệt, ghi chú, đơn vị, số buổi…"
                 className="h-10 w-full rounded-xl border border-[#EAEAEA] bg-white pl-10 pr-9 text-sm outline-none focus:ring-2 focus:ring-[#BC8AF9]"
                 aria-label="Tìm trong danh sách gói"
               />
@@ -1150,7 +1182,15 @@ export default function GoiHocPhiView({ bundle }: Props) {
               </datalist>
             ) : null}
             <table
-              className={`w-full border-collapse text-left text-sm ${tableEditMode ? "min-w-[1180px]" : "min-w-[1020px]"}`}
+              className={`w-full border-collapse text-left text-sm ${
+                isNewGoiTable
+                  ? tableEditMode
+                    ? "min-w-[1380px]"
+                    : "min-w-[1220px]"
+                  : tableEditMode
+                    ? "min-w-[1180px]"
+                    : "min-w-[1020px]"
+              }`}
             >
               <thead>
                 <tr className="border-b border-[#EAEAEA] bg-[#FAFAFA] text-[11px] font-bold uppercase tracking-wide text-black/45">
@@ -1164,6 +1204,9 @@ export default function GoiHocPhiView({ bundle }: Props) {
                   {bundle.tableName !== "hp_goi_hoc_phi" ? (
                     <th className="px-4 py-3">Gói đặc biệt</th>
                   ) : null}
+                  {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                    <th className="min-w-[200px] px-4 py-3">Ghi chú</th>
+                  ) : null}
                   <th className="px-4 py-3">Số buổi</th>
                   <th className="px-4 py-3">Tạo</th>
                 </tr>
@@ -1172,7 +1215,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
                 {sorted.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={bundle.tableName !== "hp_goi_hoc_phi" ? 10 : 9}
+                      colSpan={bundle.tableName !== "hp_goi_hoc_phi" ? 11 : 9}
                       className="px-4 py-16 text-center text-[#AAAAAA]"
                     >
                       Chưa có gói nào. Nhấn &quot;Thêm gói&quot; để tạo.
@@ -1181,7 +1224,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
                 ) : filteredRows.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={bundle.tableName !== "hp_goi_hoc_phi" ? 10 : 9}
+                      colSpan={bundle.tableName !== "hp_goi_hoc_phi" ? 11 : 9}
                       className="px-4 py-16 text-center text-[#AAAAAA]"
                     >
                       Không có gói nào khớp bộ lọc môn. Đổi &quot;Lọc theo môn&quot; hoặc thêm gói cho môn này.
@@ -1289,6 +1332,18 @@ export default function GoiHocPhiView({ bundle }: Props) {
                                 />
                               </td>
                             ) : null}
+                            {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                              <td className="max-w-[280px] min-w-[200px] px-4 py-2 align-top">
+                                <textarea
+                                  value={draft.note}
+                                  onChange={(e) => patchEditDraft(r.id, { note: e.target.value })}
+                                  maxLength={4000}
+                                  rows={3}
+                                  className="min-h-[72px] w-full max-w-[280px] resize-y rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-xs leading-snug outline-none ring-[#BC8AF9] focus:ring-1"
+                                  aria-label={`Ghi chú gói #${r.id}`}
+                                />
+                              </td>
+                            ) : null}
                             <td className="px-4 py-2">
                               <input
                                 value={draft.so_buoi}
@@ -1314,6 +1369,18 @@ export default function GoiHocPhiView({ bundle }: Props) {
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
                               <td className="max-w-[160px] truncate px-4 py-3 text-xs text-black/70">
                                 {(r.special ?? "").trim() || "—"}
+                              </td>
+                            ) : null}
+                            {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                              <td
+                                className="max-w-[280px] px-4 py-3 align-top text-xs leading-snug text-black/75"
+                                title={(r.note ?? "").trim() || undefined}
+                              >
+                                {(r.note ?? "").trim() ? (
+                                  <span className="line-clamp-4 whitespace-pre-wrap break-words">{r.note}</span>
+                                ) : (
+                                  "—"
+                                )}
                               </td>
                             ) : null}
                             <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.so_buoi)}</td>

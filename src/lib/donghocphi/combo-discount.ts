@@ -32,6 +32,11 @@ export function rawToHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
     sp == null || sp === ""
       ? null
       : String(sp).trim() || null;
+  const nt = row.note;
+  const note =
+    nt == null || nt === ""
+      ? null
+      : String(nt).trim() || null;
 
   return {
     id: Number(row.id),
@@ -43,6 +48,7 @@ export function rawToHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
     combo_id: comboNum != null && Number.isFinite(comboNum) ? comboNum : null,
     so_buoi,
     special,
+    note,
   };
 }
 

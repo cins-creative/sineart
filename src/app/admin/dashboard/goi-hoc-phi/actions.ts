@@ -214,6 +214,12 @@ export async function saveGoiHocPhi(
     return { ok: false, error: "Gói đặc biệt quá dài (tối đa 500 ký tự)." };
   }
 
+  const noteRaw = String(formData.get("note") ?? "").trim();
+  const note = noteRaw === "" ? null : noteRaw;
+  if (!isLegacyGoiTable && note != null && note.length > 4000) {
+    return { ok: false, error: "Ghi chú quá dài (tối đa 4000 ký tự)." };
+  }
+
   const payload: Record<string, unknown> = {
     mon_hoc,
     number: goiNumber,
@@ -225,6 +231,7 @@ export async function saveGoiHocPhi(
   };
   if (!isLegacyGoiTable) {
     payload.special = special;
+    payload.note = note;
   }
 
   if (!Number.isFinite(id) || id <= 0) {
@@ -258,6 +265,7 @@ export type GoiHocPhiBulkRowInput = {
   combo_id: number | null;
   so_buoi: number | null;
   special?: string | null;
+  note?: string | null;
 };
 
 export type GoiHocPhiBulkResult =
@@ -317,6 +325,12 @@ export async function saveGoiHocPhiBulk(rows: GoiHocPhiBulkRowInput[]): Promise<
       return { ok: false, error: `Gói #${id}: Gói đặc biệt quá dài (tối đa 500 ký tự).` };
     }
 
+    const noteTrim = String(row.note ?? "").trim();
+    const note = noteTrim === "" ? null : noteTrim;
+    if (!isLegacyGoiTable && note != null && note.length > 4000) {
+      return { ok: false, error: `Gói #${id}: Ghi chú quá dài (tối đa 4000 ký tự).` };
+    }
+
     const payload: Record<string, unknown> = {
       mon_hoc,
       number: goiNumber,
@@ -328,6 +342,7 @@ export async function saveGoiHocPhiBulk(rows: GoiHocPhiBulkRowInput[]): Promise<
     };
     if (!isLegacyGoiTable) {
       payload.special = special;
+      payload.note = note;
     }
 
     const { error } = await supabase.from(tbl).update(payload).eq("id", id);

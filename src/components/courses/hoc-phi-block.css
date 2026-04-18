@@ -98,6 +98,42 @@
   margin-bottom: 16px;
 }
 
+/* Ghi chú gói (`hp_goi_hoc_phi_new.note`) — chỉ khi có nội dung */
+.hpb-note-highlight {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: -8px 0 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(248, 166, 104, 0.55);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 251, 245, 0.98) 0%,
+    rgba(255, 240, 248, 0.92) 50%,
+    rgba(238, 232, 255, 0.55) 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.65) inset,
+    0 4px 18px rgba(238, 91, 159, 0.12);
+}
+
+.hpb-note-highlight-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #e91e8c;
+  filter: drop-shadow(0 1px 2px rgba(233, 30, 140, 0.25));
+}
+
+.hpb-note-highlight-text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.55;
+  color: #3d3a36;
+  white-space: pre-wrap;
+}
+
 .hpb-price-main {
   font-size: 28px;
   font-weight: 700;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Flame } from "lucide-react";
+import { Flame, Sparkles } from "lucide-react";
 import Link from "next/link";
 import type {
   HocPhiBlockData,
@@ -220,6 +220,13 @@ export default function HocPhiBlock({
   const mainName =
     monMap[monHocId]?.trim() || `Môn ${monHocId}`;
 
+  const selGoiNoteText = useMemo(() => {
+    const raw = selGoi?.note;
+    if (raw == null || typeof raw !== "string") return null;
+    const t = raw.trim();
+    return t.length > 0 ? t : null;
+  }, [selGoi]);
+
   if (!mon1Pills.length) {
     return (
       <section className="hpb-wrap kd-goi-widget" aria-label="Bảng học phí">
@@ -257,6 +264,13 @@ export default function HocPhiBlock({
           </span>
         ) : null}
       </div>
+
+      {selGoiNoteText ? (
+        <div className="hpb-note-highlight" role="note">
+          <Sparkles className="hpb-note-highlight-icon" size={16} strokeWidth={2} aria-hidden />
+          <p className="hpb-note-highlight-text">{selGoiNoteText}</p>
+        </div>
+      ) : null}
 
       <div className="hpb-row">
         <span className="hpb-row-label">Chỉ học {mainName}:</span>

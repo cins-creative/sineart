@@ -40,6 +40,7 @@ import type {
   AdminQlhvStudent,
   AdminQlhvTruongNganhItem,
 } from "@/lib/data/admin-quan-ly-hoc-vien";
+import { computeOverallStatus, deriveEnrollmentStatus } from "@/lib/data/admin-qlhv-tinh-trang";
 import {
   adminReplaceQlHvTruongNganhRows,
   createEnrollment,
@@ -156,37 +157,6 @@ function isoDateInput(d: string | null): string {
   if (!d) return "";
   const s = d.trim().slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
-}
-
-const ISO_YMD = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Đã có kỳ học phí trên `hp_thu_hp_chi_tiet` (đủ ngày đầu + cuối kỳ). */
-function hasHpTuitionKy(k: AdminQlhvEnrollment): boolean {
-  const dau = (k.ngay_dau_ky ?? "").trim().slice(0, 10);
-  const cuoi = (k.ngay_cuoi_ky ?? "").trim().slice(0, 10);
-  return ISO_YMD.test(dau) && ISO_YMD.test(cuoi);
-}
-
-/** Tình trạng khoá từ kỳ HP (`hp_thu_hp_chi_tiet`); chưa có kỳ → «Chưa học». */
-function deriveEnrollmentStatus(k: AdminQlhvEnrollment): "Chưa học" | "Đang học" | "Nghỉ" {
-  if (!hasHpTuitionKy(k)) return "Chưa học";
-  try {
-    const e = new Date((k.ngay_cuoi_ky ?? "").trim().slice(0, 10));
-    e.setHours(0, 0, 0, 0);
-    const t = new Date();
-    t.setHours(0, 0, 0, 0);
-    return e.getTime() >= t.getTime() ? "Đang học" : "Nghỉ";
-  } catch {
-    return "Chưa học";
-  }
-}
-
-function computeOverallStatus(khs: AdminQlhvEnrollment[]): string {
-  if (!khs?.length) return "Nghỉ";
-  const statuses = khs.map(deriveEnrollmentStatus);
-  if (statuses.includes("Đang học")) return "Đang học";
-  if (statuses.includes("Chưa học")) return "Chưa học";
-  return "Nghỉ";
 }
 
 /** Lấy phần ngày YYYY-MM-DD từ `timestamptz` / chuỗi ISO. */

@@ -120,3 +120,7 @@ table.bcc-fin-table tbody td.bcc-num-cell {
 table.bcc-fin-table tbody tr:hover td.bcc-num-cell {
   background: #ececed !important;
 }
+
+table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
+  background: #dfe6ff !important;
+}

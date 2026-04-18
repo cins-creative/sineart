@@ -367,6 +367,37 @@ export const ROWS: RowDef[] = [
   },
 ];
 
+/** Chỉ tiêu tab «BCTC tổng quan» (dashboard) — tổng hợp & KQKD, không chi tiết từng dòng nhập. */
+export const BCTC_SUMMARY_ROW_KEYS = [
+  "__sec_tonghop",
+  "_dtHinhHoa",
+  "_dtTTM",
+  "_dtBCM",
+  "_dtOnline",
+  "_dtOffline",
+  "__sec_giamtru",
+  "_tongDT",
+  "_dtThuan",
+  "__sec_luong",
+  "_tongLuong",
+  "__sec_thue",
+  "_tongThue",
+  "__sec_tongcp",
+  "_cpHoTroKD",
+  "_cpCoDinh",
+  "_tongCP",
+  "__sec_kq",
+  "_lnTruocThue",
+  "_lnSauThue",
+] as const;
+
+/** Bản đầy đủ như trang Báo cáo tài chính hoặc bản rút gọn cho toàn nhân viên. */
+export function rowsForBctcVariant(variant: "full" | "summary"): RowDef[] {
+  if (variant === "full") return ROWS;
+  const allowed = new Set<string>(BCTC_SUMMARY_ROW_KEYS);
+  return ROWS.filter((r) => allowed.has(r.key));
+}
+
 export const INPUT_KEYS = ROWS.filter((r) => r.type === "input").map((r) => r.key);
 
 export const THANG_SHORT_TO_FULL: Record<string, string> = {

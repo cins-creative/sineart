@@ -1,6 +1,6 @@
 /** Các route sidebar dashboard admin — dùng chung cho UI + phân quyền theo phòng. */
 
-export const DASHBOARD_OVERVIEW_HREF = "/admin/dashboard";
+export const DASHBOARD_OVERVIEW_HREF = "/admin/dashboard/overview";
 export const ORDER_MEDIA_HREF = "/admin/dashboard/order-media";
 
 export const NAV_MAIN: { label: string; href: string; disabled?: boolean }[] = [
@@ -18,6 +18,7 @@ export const NAV_MAIN: { label: string; href: string; disabled?: boolean }[] = [
 export const NAV_HR: { label: string; href: string; disabled?: boolean }[] = [
   { label: "Nhân sự", href: "/admin/dashboard/quan-ly-nhan-su" },
   { label: "Báo cáo tài chính", href: "/admin/dashboard/bao-cao-tai-chinh" },
+  { label: "Giá trị tài sản", href: "/admin/dashboard/gia-tri-tai-san" },
   { label: "Thống kê thu chi", href: "/admin/dashboard/thong-ke-thu-chi" },
   { label: "Upload sao kê", href: "/admin/dashboard/sao-ke" },
 ];

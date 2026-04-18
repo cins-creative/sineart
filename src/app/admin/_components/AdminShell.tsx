@@ -37,9 +37,9 @@ function staffInitial(name: string): string {
   return t.charAt(0).toUpperCase();
 }
 
-/** Trang tổng quan — chỉ highlight khi đúng `/admin/dashboard`, không gồm route con. */
+/** Trang tổng quan — chỉ highlight khi đúng `/admin/dashboard/overview`. */
 function overviewNavClass(pathname: string | null): string {
-  const active = pathname === DASHBOARD_OVERVIEW_HREF;
+  const active = pathname === DASHBOARD_OVERVIEW_HREF || pathname === "/admin/dashboard";
   const base =
     "mb-1 block rounded-xl px-3 py-2.5 text-[13px] font-bold tracking-tight transition";
   if (active) {
@@ -369,8 +369,8 @@ export default function AdminShell({
         </>
       ) : null}
 
-      <div className="min-w-0 max-w-full md:pl-[260px]">
-        <header className="sticky top-0 z-[9] flex h-14 w-full min-w-0 items-center justify-between gap-3 border-b border-black/[0.06] bg-white/90 pl-3 pr-4 backdrop-blur md:pl-4 md:pr-6">
+      <div className="flex min-h-screen min-w-0 max-w-full flex-col md:pl-[260px]">
+        <header className="sticky top-0 z-[9] flex h-14 w-full shrink-0 min-w-0 items-center justify-between gap-3 border-b border-black/[0.06] bg-white/90 pl-3 pr-4 backdrop-blur md:pl-4 md:pr-6">
           <div className="flex min-w-0 shrink-0 items-center gap-2">
             <button
               type="button"
@@ -405,7 +405,7 @@ export default function AdminShell({
             </button>
           </div>
         </header>
-        <main className="relative min-w-0 w-full max-w-full p-4 md:p-6">
+        <main className="relative flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col p-4 md:p-6">
           <AdminDashboardAbilitiesProvider staffRole={staffRole}>{children}</AdminDashboardAbilitiesProvider>
         </main>
       </div>

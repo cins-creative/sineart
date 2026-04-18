@@ -65,6 +65,7 @@ function hrefsForPhongRule(rule: PhongRule): Set<string> {
       break;
     case "ke_toan":
       s.add("/admin/dashboard/bao-cao-tai-chinh");
+      s.add("/admin/dashboard/gia-tri-tai-san");
       s.add("/admin/dashboard/thong-ke-thu-chi");
       s.add("/admin/dashboard/sao-ke");
       break;

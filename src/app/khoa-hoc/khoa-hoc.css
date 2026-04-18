@@ -18,9 +18,10 @@
   margin-right: auto;
 }
 
-/* Trang mục lục /khoa-hoc — căn giữa, không rộng quá trên desktop */
+/* Trang mục lục /khoa-hoc — căn giữa; rộng tối đa 900px, fill 100% khung cha */
 .sa-root.khoa-hoc-page.khoa-hoc-catalog {
-  max-width: 700px;
+  width: 100%;
+  max-width: 900px;
 }
 
 .sa-root.khoa-hoc-page::after {

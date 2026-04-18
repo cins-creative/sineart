@@ -8,7 +8,8 @@ export default function HeroSection() {
       <div className="hero-body">
         <p className="hero-eyebrow">Giáo trình khoa học</p>
         <h1 className="hero-headline">
-          Dành cho <em>Họa sỹ công nghệ</em>
+          <span className="hero-headline-plain">Dành cho </span>
+          <em>Họa sỹ công nghệ</em>
         </h1>
         <p className="hero-lead">
           Sứ mệnh của Sine Art xây dựng Kiến thức Mỹ thuật một cách bài bản và khoa học, giúp các

@@ -18,3 +18,14 @@ export function adminStaffCanDeleteRecords(vaiTro: string | null | undefined): b
   const v = normalizeStaffVaiTro(vaiTro);
   return v === "admin" || v === "quan_ly";
 }
+
+/** Tab «BCTC chi tiết» trên dashboard tổng quan — chỉ admin & quản lý. */
+export function adminStaffCanViewBctcDetailCharts(vaiTro: string | null | undefined): boolean {
+  const v = normalizeStaffVaiTro(vaiTro);
+  return v === "admin" || v === "quan_ly";
+}
+
+/** Tab Overview «Giá trị tài sản» — chỉ admin. */
+export function adminStaffCanViewGiaTriTaiSanOverviewTab(vaiTro: string | null | undefined): boolean {
+  return normalizeStaffVaiTro(vaiTro) === "admin";
+}

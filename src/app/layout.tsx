@@ -26,8 +26,8 @@ export default function RootLayout({
       className={`${quicksand.variable} ${quicksand.className} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col overflow-x-clip" suppressHydrationWarning>
-        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      <body className="min-h-full flex w-full min-w-0 flex-col overflow-x-clip" suppressHydrationWarning>
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
         <ConditionalCta />
       </body>
     </html>

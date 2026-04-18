@@ -40,6 +40,9 @@ function mktFieldClass(): string {
   );
 }
 
+/** Viền phải cột nhãn — đồng bộ `BaoCaoTaiChinhView`. */
+const LABEL_COL_BORDER_RIGHT = "2px solid #aeb2ba";
+
 export default function ReportMktView({ initialRows }: Props) {
   const { canDelete: roleMayDeleteWeek } = useAdminDashboardAbilities();
   const router = useRouter();
@@ -247,7 +250,7 @@ export default function ReportMktView({ initialRows }: Props) {
   }, [newDate, notify, router]);
 
   return (
-    <div className="-m-4 flex h-[calc(100dvh-5.5rem)] max-h-[calc(100dvh-5.5rem)] min-h-0 flex-col overflow-hidden bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
+    <div className="-m-4 flex h-[calc(100dvh-5.5rem)] max-h-[calc(100dvh-5.5rem)] min-h-0 w-[calc(100%+2rem)] max-w-none min-w-0 flex-col overflow-hidden bg-[#F5F7F7] font-sans text-[#323232] md:-m-6 md:w-[calc(100%+3rem)]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#F8A568] to-[#EE5CA2]">
@@ -255,10 +258,6 @@ export default function ReportMktView({ initialRows }: Props) {
           </div>
           <div className="min-w-0">
             <div className="text-[17px] font-bold tracking-tight text-[#323232]">Marketing analytics</div>
-            <div className="text-xs text-[#AAAAAA]">
-              {sortedRows.length} kỳ · nhập liệu <code className="rounded bg-black/[0.04] px-1 text-[11px]">mk_data_analysis</code>
-              {" · "}% hiển thị dạng 12,5 → lưu 0,125
-            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -276,18 +275,13 @@ export default function ReportMktView({ initialRows }: Props) {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-6 pt-3">
-          <div className="mx-auto flex min-h-0 w-full max-w-[1200px] flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-            <div className="shrink-0 border-b border-[#EAEAEA] bg-white px-6 py-3">
-              <p className="m-0 text-[12px] leading-relaxed text-black/55">
-                Click ô số để sửa · cột ngày: <span className="font-semibold text-[#1a1a2e]">MM-DD</span> phía trên, năm
-                phía dưới · đưa chuột vào đầu cột ngày để hiện nút đổi ngày / xóa kỳ · kéo cạnh phải ô &quot;Chỉ
-                tiêu&quot; để chỉnh độ rộng cột nhãn.
-              </p>
-            </div>
-
-            <div ref={tableRef} className="min-h-0 flex-1 overflow-auto">
+      <div className="flex min-h-0 w-full max-w-full min-w-0 flex-1 flex-col">
+        <div className="flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col px-[10px] pb-6 pt-3">
+          <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+            <div
+              ref={tableRef}
+              className="bcc-fin-scroll min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain"
+            >
               {sortedRows.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
                   <span className="text-4xl" aria-hidden>
@@ -296,30 +290,31 @@ export default function ReportMktView({ initialRows }: Props) {
                   <p className="m-0 text-sm text-[#888]">Chưa có kỳ nào. Nhấn «Thêm kỳ» để tạo dòng theo ngày.</p>
                 </div>
               ) : (
-                <table className="w-full min-w-[960px] border-separate border-spacing-0 text-left text-[13px]">
+                <table className="bcc-fin-table w-max min-w-full border-separate border-spacing-0 text-left text-[13px]">
                   <thead>
                     <tr className="border-b border-[#EAEAEA] bg-[#fafafa] text-[11px] font-semibold uppercase tracking-wide text-black/45">
                       <th
-                        className="sticky left-0 z-[30] border-b border-r border-[#EAEAEA] bg-[#fafafa] py-2.5 pl-4 pr-2 text-left"
-                        style={{ width: labelW, minWidth: labelW }}
+                        className="bcc-fin-label-cell sticky left-0 top-0 border-b border-[#EAEAEA] bg-[#fafafa] p-0 text-left shadow-[2px_0_8px_rgba(0,0,0,0.06)]"
+                        style={{ width: labelW, minWidth: labelW, borderRight: LABEL_COL_BORDER_RIGHT }}
                       >
-                        <div className="relative pr-2">
-                          <span>Chỉ tiêu</span>
-                          <button
-                            type="button"
+                        <div className="relative px-4 py-3">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#5c5c5c]">Chỉ tiêu</span>
+                          <div
+                            role="separator"
+                            aria-orientation="vertical"
                             aria-label="Kéo để chỉnh độ rộng cột nhãn"
                             onMouseDown={(e) => {
                               e.preventDefault();
                               dragging.current = { startX: e.clientX, startW: labelW };
                             }}
-                            className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize rounded-sm border-r-2 border-[#EAEAEA] hover:border-[#BC8AF9]/60"
+                            className="absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize select-none hover:border-r-2 hover:border-r-[#BC8AF9]/35"
                           />
                         </div>
                       </th>
                       {sortedRows.map((row) => (
                         <th
                           key={row.id}
-                          className="group border-b border-r border-[#EAEAEA] bg-[#fafafa] px-2 py-2.5 text-center align-top font-normal normal-case tracking-normal"
+                          className="group sticky top-0 border-b border-r border-[#EAEAEA] bg-[#fafafa] px-2 py-2.5 text-center align-top font-normal normal-case tracking-normal"
                           style={{ width: 140, minWidth: 140 }}
                         >
                           <div className="text-[13px] font-bold text-[#1a1a2e]">{row.ngay_thang_nhap?.slice(5)}</div>
@@ -353,31 +348,34 @@ export default function ReportMktView({ initialRows }: Props) {
                               </button>
                             ) : null}
                           </div>
-                          <div className="mt-1.5 min-h-[26px]">
-                            {row._dirty ? (
-                              <button
-                                type="button"
-                                onClick={() => void saveRow(row.id)}
-                                disabled={savingId === row.id}
-                                className={cn(
-                                  "inline-flex items-center justify-center rounded-lg px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-50",
-                                  savedFlashId === row.id
-                                    ? "bg-emerald-600"
-                                    : "bg-gradient-to-r from-[#F8A568] to-[#EE5CA2]",
-                                )}
-                              >
-                                {savingId === row.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                                ) : savedFlashId === row.id ? (
-                                  "Đã lưu"
-                                ) : (
-                                  "Lưu"
-                                )}
-                              </button>
-                            ) : savedFlashId === row.id ? (
-                              <span className="text-[11px] font-semibold text-emerald-600">Đã lưu</span>
-                            ) : null}
-                          </div>
+                          {row._dirty || savedFlashId === row.id ? (
+                            <div className="mt-1.5 flex justify-center gap-1">
+                              {row._dirty ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void saveRow(row.id)}
+                                  disabled={savingId === row.id}
+                                  className={cn(
+                                    "inline-flex items-center justify-center rounded-md border-0 px-2 py-0.5 text-[9px] font-extrabold text-white disabled:opacity-50",
+                                    savedFlashId === row.id ? "bg-emerald-500" : "",
+                                  )}
+                                  style={
+                                    savedFlashId === row.id ? undefined : { background: "linear-gradient(135deg,#F8A568,#EE5CA2)" }
+                                  }
+                                >
+                                  {savingId === row.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                                  ) : savedFlashId === row.id ? (
+                                    "Đã lưu"
+                                  ) : (
+                                    "Lưu"
+                                  )}
+                                </button>
+                              ) : savedFlashId === row.id ? (
+                                <span className="text-[9px] font-bold text-emerald-600">✓</span>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </th>
                       ))}
                     </tr>
@@ -653,7 +651,7 @@ function FragmentRows({
     <>
       <tr>
         <td
-          className="sticky left-0 z-[5] border-y border-r border-[#EAEAEA] bg-[#fafafa] py-2 pl-3.5 pr-3 text-xs font-bold text-[#323232]"
+          className="border-y border-r border-[#EAEAEA] bg-[#fafafa] py-2 pl-3.5 pr-3 text-xs font-bold text-[#323232]"
           style={{ borderLeftWidth: 4, borderLeftColor: grp.color }}
           colSpan={sortedRows.length + 1}
         >
@@ -667,10 +665,10 @@ function FragmentRows({
         >
           <td
             className={cn(
-              "sticky left-0 z-10 border-b border-r border-[#EAEAEA] py-2 pl-5 pr-3 text-[13px] text-[#323232] whitespace-nowrap",
+              "bcc-fin-label-cell border-b border-r border-[#EAEAEA] py-2 pl-5 pr-3 text-[13px] font-bold text-[#323232] whitespace-nowrap shadow-[4px_0_12px_rgba(0,0,0,0.04)]",
               ridx % 2 === 0 ? "bg-white" : "bg-[#fafafa]",
             )}
-            style={{ width: labelW, minWidth: labelW }}
+            style={{ width: labelW, minWidth: labelW, borderRight: LABEL_COL_BORDER_RIGHT }}
           >
             {col.label}
             {colIsPct(col) ? <span className="ml-1 text-[11px] font-normal text-black/40">%</span> : null}
@@ -688,7 +686,7 @@ function FragmentRows({
               <td
                 key={row.id}
                 className={cn(
-                  "cursor-text border-b border-r border-[#f0f0f0] px-2.5 py-2 text-right text-[13px] tabular-nums transition-colors",
+                  "bcc-num-cell cursor-text border-b border-r border-[#f0f0f0] px-2.5 py-2 text-right text-[13px] tabular-nums transition-colors",
                   isEditing ? "bg-[#BC8AF9]/10 ring-1 ring-inset ring-[#BC8AF9]/25" : ridx % 2 === 0 ? "bg-white" : "bg-[#fafafa]",
                   rawVal == null && !isEditing ? "text-[#AAAAAA]" : "text-[#323232]",
                 )}

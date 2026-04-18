@@ -9,6 +9,7 @@ const BAI_TAP_SELECT = `
   bai_so,
   thumbnail,
   noi_dung_liet_ke,
+  mo_ta_bai_tap,
   video_bai_giang,
   is_visible,
   so_buoi,
@@ -62,6 +63,10 @@ function mapRow(row: Record<string, unknown>): BaiTap {
       row.noi_dung_liet_ke == null
         ? null
         : String(row.noi_dung_liet_ke),
+    mo_ta_bai_tap:
+      row.mo_ta_bai_tap == null || String(row.mo_ta_bai_tap).trim() === ""
+        ? null
+        : String(row.mo_ta_bai_tap),
     video_bai_giang:
       row.video_bai_giang == null
         ? null
@@ -93,6 +98,7 @@ async function getBaiTapListForMonFallback(
         ? null
         : String(row.thumbnail).trim(),
     noi_dung_liet_ke: null,
+    mo_ta_bai_tap: null,
     video_bai_giang: null,
     is_visible: false,
     so_buoi: 1,
@@ -125,7 +131,8 @@ export async function getBaiTapListForMon(monId: number): Promise<BaiTap[]> {
 
 /**
  * Trang công khai `/he-thong-bai-tap/[slug]` — khớp `bai_so` + `slugify(ten_bai_tap)`.
- * Trùng khóa (hai môn cùng số bài + cùng slug tên): ưu tiên bản `is_visible`.
+ * Không lọc `is_visible` (danh sách bài & trang chi tiết dùng mọi bản ghi hợp lệ).
+ * Nếu trùng slug tên: ưu tiên bản `is_visible` khi có.
  */
 export async function getBaiTapByHeThongSlug(slugPath: string): Promise<BaiTap | null> {
   const parsed = parseHeThongBaiTapSlug(slugPath);
@@ -137,8 +144,7 @@ export async function getBaiTapByHeThongSlug(slugPath: string): Promise<BaiTap |
   const { data, error } = await supabase
     .from("hv_he_thong_bai_tap")
     .select(BAI_TAP_SELECT)
-    .eq("bai_so", parsed.baiSo)
-    .eq("is_visible", true);
+    .eq("bai_so", parsed.baiSo);
 
   if (error || !data?.length) {
     if (process.env.NODE_ENV === "development" && error) {
@@ -150,5 +156,6 @@ export async function getBaiTapByHeThongSlug(slugPath: string): Promise<BaiTap |
   const rows = (data as Record<string, unknown>[]).map(mapRow);
   const match = rows.filter((r) => slugifyTenBaiTap(r.ten_bai_tap) === parsed.titleSlug);
   if (match.length === 0) return null;
-  return match[0] ?? null;
+  const published = match.find((r) => r.is_visible);
+  return published ?? match[0] ?? null;
 }

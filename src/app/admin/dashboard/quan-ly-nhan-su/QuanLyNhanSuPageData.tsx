@@ -38,6 +38,7 @@ export default async function QuanLyNhanSuPageData() {
       phongToBanId={bundle.phongToBanId}
       banIdsByStaffId={bundle.banIdsByStaffId}
       bangTinhLuongByStaffId={bundle.bangTinhLuongByStaffId}
+      lopGiangByTeacherId={bundle.lopGiangByTeacherId}
       usedMinimalSelect={bundle.usedMinimalSelect}
     />
   );

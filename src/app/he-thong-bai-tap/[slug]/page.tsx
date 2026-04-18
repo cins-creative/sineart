@@ -52,9 +52,7 @@ export default async function HeThongBaiTapSlugPage({
     getGalleryItemsForBaiTapExercise(bai.id),
   ]);
   const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
-  const siblingsSorted = siblingsAll
-    .filter((x) => x.is_visible)
-    .sort((a, b) => a.bai_so - b.bai_so);
+  const siblingsSorted = [...siblingsAll].sort((a, b) => a.bai_so - b.bai_so);
 
   const access = await getHeThongBaiTapAccess(bai.mon_hoc.id, siblingsSorted);
   const currentAscIndex = exerciseIndexInSortedAsc(siblingsSorted, bai.id);

@@ -327,6 +327,29 @@
   margin: 24px 0;
 }
 
+.kd-intro-video {
+  margin-top: 4px;
+}
+
+.kd-video-16x9 {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f0f12;
+  box-sizing: border-box;
+}
+
+.kd-video-16x9 iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
 .kd-sec {
   font-size: 16px;
   font-weight: 700;
@@ -434,6 +457,104 @@
   font-size: 11px;
   color: var(--kd-ink2);
   line-height: 1.6;
+}
+
+/* `ql_mon_hoc.gioi_thieu_mon_hoc` — HTML do admin nhập (thường kèm inline từ editor) */
+.kd-mon-html {
+  min-width: 0;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--kd-ink2);
+  letter-spacing: normal;
+}
+
+/* Bỏ khung/nền/max-width kiểu “trang riêng” trên wrapper dán từ CMS */
+.kd-mon-html > [style] {
+  font-family: inherit !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  max-width: none !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  color: inherit !important;
+}
+
+.kd-mon-html :where(p) {
+  margin: 0 0 10px;
+  font-size: 14px !important;
+  line-height: 1.7 !important;
+  color: var(--kd-ink2) !important;
+  font-family: inherit !important;
+}
+
+.kd-mon-html :where(p):last-child {
+  margin-bottom: 0;
+}
+
+.kd-mon-html :where(ul, ol) {
+  margin: 0 0 10px;
+  padding-left: 1.25rem;
+  font-size: 14px !important;
+  color: var(--kd-ink2) !important;
+}
+
+.kd-mon-html :where(li) {
+  margin-bottom: 4px;
+  line-height: 1.65 !important;
+  color: var(--kd-ink2) !important;
+}
+
+.kd-mon-html :where(a) {
+  color: var(--kd-purple-soft) !important;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.kd-mon-html :where(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+
+.kd-mon-html :where(h1) {
+  font-size: clamp(20px, 3vw, 24px) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.25 !important;
+  margin: 0 0 10px !important;
+  color: var(--kd-ink) !important;
+}
+
+.kd-mon-html :where(h2) {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  margin: 18px 0 8px !important;
+  color: var(--kd-ink) !important;
+}
+
+.kd-mon-html :where(h3, h4) {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  margin: 14px 0 6px !important;
+  color: var(--kd-ink) !important;
+}
+
+.kd-mon-html :where(strong, b) {
+  color: var(--kd-ink) !important;
+  font-weight: 700 !important;
+}
+
+/* Ẩn tiêu đề h2 do CMS (vd. «Hình hoạ») — khớp wrapper > div > div:nth-child(2) > h2 */
+.kd-mon-html > div > div:nth-child(2) > h2 {
+  display: none !important;
 }
 
 /* Curriculum */
@@ -578,6 +699,18 @@
   color: var(--kd-ink2);
   min-width: 36px;
   text-align: right;
+}
+
+/* Teachers — lọc portfolio theo môn */
+.kd-teacher-filter {
+  margin: 0 0 16px;
+}
+
+.kd-teacher-filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--kd-ink2);
+  margin: 0 0 8px;
 }
 
 /* Teachers */

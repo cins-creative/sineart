@@ -110,6 +110,8 @@ export type HocPhiBlockData = {
   gois: HocPhiGoiRow[];
   combos: HocPhiComboRow[];
   monMap: Record<number, string>;
+  /** `ql_mon_hoc.id` → slug route — liên kết từ nhãn môn phụ */
+  monSlugMap: Record<number, string>;
 };
 
 /** Chi tiết trang /khoa-hoc/[slug] */
@@ -128,4 +130,8 @@ export type KhoaHocDetailData = {
   /** Giáo viên từ `hr_nhan_su` */
   teachers: KhoaHocTeacher[];
   hinhThucTag: HinhThucHocTag;
+  /** Raw từ `ql_mon_hoc.video_gioi_thieu` — YouTube watch/short/embed */
+  videoGioiThieu: string | null;
+  /** HTML từ `ql_mon_hoc.gioi_thieu_mon_hoc` — «Nội dung môn học» */
+  gioiThieuMonHocHtml: string | null;
 };

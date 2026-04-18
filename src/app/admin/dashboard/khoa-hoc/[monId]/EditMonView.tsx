@@ -16,6 +16,8 @@ export type EditMonRow = {
   is_featured: boolean;
   hinh_thuc: string | null;
   si_so: number | null;
+  video_gioi_thieu: string | null;
+  gioi_thieu_mon_hoc: string | null;
 };
 
 type Props = { row: EditMonRow };
@@ -106,6 +108,35 @@ export default function EditMonView({ row }: Props) {
             defaultValue={row.si_so != null ? String(row.si_so) : ""}
             placeholder="VD: 24"
             className="w-full rounded-xl border border-black/10 bg-[#fafafa] px-3 py-2 text-sm outline-none focus:border-[#f8a668]/80"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-black/50" htmlFor="video_gioi_thieu">
+            Video giới thiệu môn (YouTube)
+          </label>
+          <input
+            id="video_gioi_thieu"
+            name="video_gioi_thieu"
+            type="url"
+            maxLength={2000}
+            defaultValue={row.video_gioi_thieu ?? ""}
+            placeholder="https://youtu.be/… hoặc watch?v=…"
+            className="w-full rounded-xl border border-black/10 bg-[#fafafa] px-3 py-2 text-sm outline-none focus:border-[#f8a668]/80"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-black/50" htmlFor="gioi_thieu_mon_hoc">
+            Nội dung môn học (HTML)
+          </label>
+          <textarea
+            id="gioi_thieu_mon_hoc"
+            name="gioi_thieu_mon_hoc"
+            rows={12}
+            defaultValue={row.gioi_thieu_mon_hoc ?? ""}
+            placeholder="Để trống = 3 thẻ mặc định trên trang khóa học"
+            className="min-h-[180px] w-full rounded-xl border border-black/10 bg-[#fafafa] px-3 py-2 font-mono text-xs outline-none focus:border-[#f8a668]/80"
           />
         </div>
 

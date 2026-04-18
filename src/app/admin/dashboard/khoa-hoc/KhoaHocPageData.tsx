@@ -14,7 +14,7 @@ export default async function KhoaHocPageData() {
   }
 
   const selectMon =
-    "id, ten_mon_hoc, thumbnail, loai_khoa_hoc, thu_tu_hien_thi, is_featured, hinh_thuc, si_so";
+    "id, ten_mon_hoc, thumbnail, loai_khoa_hoc, thu_tu_hien_thi, is_featured, hinh_thuc, si_so, video_gioi_thieu, gioi_thieu_mon_hoc";
 
   const monRes = await supabase
     .from("ql_mon_hoc")
@@ -45,6 +45,8 @@ export default async function KhoaHocPageData() {
       is_featured?: unknown;
       hinh_thuc?: unknown;
       si_so?: unknown;
+      video_gioi_thieu?: unknown;
+      gioi_thieu_mon_hoc?: unknown;
     };
     const id = Number(r.id);
     const siRaw = r.si_so;
@@ -60,6 +62,14 @@ export default async function KhoaHocPageData() {
       is_featured: Boolean(r.is_featured),
       hinh_thuc: r.hinh_thuc != null ? String(r.hinh_thuc).trim() || null : null,
       si_so: siRaw != null && Number.isFinite(siNum) ? siNum : null,
+      video_gioi_thieu:
+        r.video_gioi_thieu != null && String(r.video_gioi_thieu).trim()
+          ? String(r.video_gioi_thieu).trim()
+          : null,
+      gioi_thieu_mon_hoc:
+        r.gioi_thieu_mon_hoc != null && String(r.gioi_thieu_mon_hoc).trim()
+          ? String(r.gioi_thieu_mon_hoc).trim()
+          : null,
       so_lop_hoc: c.soLop,
       so_hoc_vien: c.soHocVien,
     };

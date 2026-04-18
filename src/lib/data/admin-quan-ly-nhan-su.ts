@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { normalizePortfolioToUrls } from "@/lib/data/courses-page";
+import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 
 /** Một dòng `hr_nhan_su` (không gồm `password`). */
 export type AdminNhanSuRow = {
@@ -161,6 +162,15 @@ export type AdminBangTinhLuongListItem = {
 
 export type AdminPhongOption = { id: number; ten: string };
 
+/** Một lớp gắn `ql_lop_hoc.teacher` = `hr_nhan_su.id` (chỉ đọc). */
+export type AdminLopGiangDay = {
+  id: number;
+  class_name: string;
+  class_full_name: string | null;
+  mon_hoc_id: number | null;
+  ten_mon_hoc: string | null;
+};
+
 export async function fetchAdminQuanLyNhanSuBundle(supabase: SupabaseClient): Promise<{
   staff: AdminNhanSuRow[];
   chiNhanhById: Record<number, string>;
@@ -176,6 +186,8 @@ export async function fetchAdminQuanLyNhanSuBundle(supabase: SupabaseClient): Pr
   /** Ban hiển thị: hợp nhất `hr_nhan_su.ban` + ban suy ra từ các phòng đã gán. */
   banIdsByStaffId: Record<number, number[]>;
   bangTinhLuongByStaffId: Record<number, AdminBangTinhLuongListItem[]>;
+  /** `hr_nhan_su.id` → lớp đang làm giáo viên chính (`ql_lop_hoc.teacher`). */
+  lopGiangByTeacherId: Record<number, AdminLopGiangDay[]>;
   error: string | null;
   usedMinimalSelect: boolean;
 }> {
@@ -191,6 +203,7 @@ export async function fetchAdminQuanLyNhanSuBundle(supabase: SupabaseClient): Pr
       phongToBanId: {},
       banIdsByStaffId: {},
       bangTinhLuongByStaffId: {},
+      lopGiangByTeacherId: {},
       error,
       usedMinimalSelect,
     };
@@ -323,6 +336,76 @@ export async function fetchAdminQuanLyNhanSuBundle(supabase: SupabaseClient): Pr
 
   const bangTinhLuongByStaffId = await fetchBangTinhLuongByStaffId(supabase, staffIds);
 
+  const monRes = await supabase
+    .from("ql_mon_hoc")
+    .select("id, ten_mon_hoc")
+    .order("ten_mon_hoc", { ascending: true });
+  const monLabelById: Record<number, string> = {};
+  if (!monRes.error && monRes.data) {
+    for (const r of monRes.data as unknown as Record<string, unknown>[]) {
+      const id = Number(r.id);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      const ten = String(r.ten_mon_hoc ?? "").trim() || `Môn #${id}`;
+      monLabelById[id] = ten;
+    }
+  }
+
+  /** `ql_lop_hoc.teacher` có thể là một id hoặc mảng id — `.in("teacher", …)` chỉ khớp scalar. */
+  const lopGiangByTeacherId: Record<number, AdminLopGiangDay[]> = {};
+  if (staffIds.length > 0) {
+    const staffSet = new Set(staffIds);
+    const selectCols = "id, class_name, class_full_name, teacher, mon_hoc";
+
+    const rawToItem = (raw: Record<string, unknown>): AdminLopGiangDay | null => {
+      const lid = Number(raw.id);
+      const monId = raw.mon_hoc != null && Number.isFinite(Number(raw.mon_hoc)) ? Number(raw.mon_hoc) : null;
+      const item: AdminLopGiangDay = {
+        id: Number.isFinite(lid) && lid > 0 ? lid : 0,
+        class_name: String(raw.class_name ?? "").trim() || `Lớp #${lid}`,
+        class_full_name: raw.class_full_name != null ? String(raw.class_full_name).trim() || null : null,
+        mon_hoc_id: monId && monId > 0 ? monId : null,
+        ten_mon_hoc: monId && monId > 0 ? (monLabelById[monId] ?? null) : null,
+      };
+      return item.id > 0 ? item : null;
+    };
+
+    const pushClassForTeachers = (raw: Record<string, unknown>) => {
+      const item = rawToItem(raw);
+      if (!item) return;
+      for (const tid of parseTeacherIds(raw.teacher)) {
+        if (!staffSet.has(tid)) continue;
+        const cur = lopGiangByTeacherId[tid] ?? [];
+        if (cur.some((x) => x.id === item.id)) continue;
+        cur.push(item);
+        lopGiangByTeacherId[tid] = cur;
+      }
+    };
+
+    const lopScalar = await supabase.from("ql_lop_hoc").select(selectCols).in("teacher", staffIds);
+    if (!lopScalar.error && lopScalar.data) {
+      for (const raw of lopScalar.data as unknown as Record<string, unknown>[]) {
+        pushClassForTeachers(raw);
+      }
+    }
+
+    await Promise.all(
+      staffIds.map(async (sid) => {
+        const { data, error } = await supabase.from("ql_lop_hoc").select(selectCols).contains("teacher", [sid]);
+        if (error || !data) return;
+        for (const raw of data as unknown as Record<string, unknown>[]) {
+          pushClassForTeachers(raw);
+        }
+      })
+    );
+
+    for (const tid of Object.keys(lopGiangByTeacherId)) {
+      const k = Number(tid);
+      lopGiangByTeacherId[k] = (lopGiangByTeacherId[k] ?? []).sort((a, b) =>
+        a.class_name.localeCompare(b.class_name, "vi")
+      );
+    }
+  }
+
   return {
     staff: rows,
     chiNhanhById,
@@ -333,6 +416,7 @@ export async function fetchAdminQuanLyNhanSuBundle(supabase: SupabaseClient): Pr
     phongToBanId,
     banIdsByStaffId,
     bangTinhLuongByStaffId,
+    lopGiangByTeacherId,
     error: null,
     usedMinimalSelect,
   };

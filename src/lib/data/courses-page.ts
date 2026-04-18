@@ -24,7 +24,7 @@ type EnrollRow = { lop_hoc: number | null };
 
 /** Cột tối thiểu cho danh sách / aggregate — tránh `select('*')`. */
 const MON_HOC_CARD_SELECT =
-  "id, ten_mon_hoc, loai_khoa_hoc, thumbnail, is_featured, hinh_thuc, thu_tu_hien_thi, si_so";
+  "id, ten_mon_hoc, loai_khoa_hoc, thumbnail, is_featured, hinh_thuc, thu_tu_hien_thi, si_so, video_gioi_thieu, gioi_thieu_mon_hoc";
 
 function normalizeClassSlug(urlClass: string | null | undefined): string {
   const raw = String(urlClass ?? "").trim();
@@ -269,6 +269,14 @@ function mapMonToDetail(
     goiHocPhi,
     teachers,
     hinhThucTag: tag,
+    videoGioiThieu:
+      row.video_gioi_thieu != null && String(row.video_gioi_thieu).trim()
+        ? String(row.video_gioi_thieu).trim()
+        : null,
+    gioiThieuMonHocHtml:
+      row.gioi_thieu_mon_hoc != null && String(row.gioi_thieu_mon_hoc).trim()
+        ? String(row.gioi_thieu_mon_hoc).trim()
+        : null,
   };
 }
 
@@ -923,6 +931,29 @@ function mapHocPhiComboRow(row: Record<string, unknown>): HocPhiComboRow {
   };
 }
 
+async function buildMonSlugMap(
+  supabase: SupabaseClient,
+  monIds: number[]
+): Promise<Record<number, string>> {
+  const uniq = [
+    ...new Set(monIds.filter((id) => Number.isFinite(id) && id > 0)),
+  ];
+  if (!uniq.length) return {};
+  const { data: allMonsRows } = await supabase
+    .from("ql_mon_hoc")
+    .select("id, ten_mon_hoc")
+    .order("id", { ascending: true });
+  const allMons = (allMonsRows ?? []) as MonHoc[];
+  if (!allMons.length) return {};
+  const { idToSlug } = buildCourseSlugIndex(allMons);
+  const out: Record<number, string> = {};
+  for (const id of uniq) {
+    const s = idToSlug.get(id);
+    if (s) out[id] = s;
+  }
+  return out;
+}
+
 /**
  * Gói học phí + combo cho `HocPhiBlock` (theo brief hoc-phi-block).
  * Lấy gói môn chính + các gói cùng `combo_id` để tính partner.
@@ -932,7 +963,7 @@ export async function getHocPhiBlockData(
 ): Promise<HocPhiBlockData> {
   const supabase = await createClient();
   if (!supabase) {
-    return { gois: [], combos: [], monMap: {} };
+    return { gois: [], combos: [], monMap: {}, monSlugMap: {} };
   }
 
   const goiTable = hpGoiHocPhiTableName();
@@ -958,7 +989,11 @@ export async function getHocPhiBlockData(
       monMap[monId] =
         String(row.ten_mon_hoc ?? "").trim() || `Môn ${monId}`;
     }
-    return { gois: [], combos: [], monMap };
+    const monSlugMap = await buildMonSlugMap(
+      supabase,
+      Object.keys(monMap).map(Number)
+    );
+    return { gois: [], combos: [], monMap, monSlugMap };
   }
 
   const main = (mainRows ?? []) as unknown as Record<string, unknown>[];
@@ -1032,5 +1067,10 @@ export async function getHocPhiBlockData(
       String(row.ten_mon_hoc ?? "").trim() || `Môn ${monId}`;
   }
 
-  return { gois, combos, monMap };
+  const monSlugMap = await buildMonSlugMap(
+    supabase,
+    Object.keys(monMap).map(Number)
+  );
+
+  return { gois, combos, monMap, monSlugMap };
 }

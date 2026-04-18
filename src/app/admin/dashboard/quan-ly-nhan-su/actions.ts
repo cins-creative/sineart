@@ -343,6 +343,48 @@ export async function updateNhanSuLuongVaLienHe(
   return { ok: true };
 }
 
+export type UpdateNhanSuGiaoVienMetaResult = { ok: true } | { ok: false; error: string };
+
+/** Portfolio / bio — ban Đào tạo (`hr_nhan_su`). */
+export async function updateNhanSuGiaoVienMeta(payload: {
+  id: number;
+  portfolio: string[];
+  bio: string | null;
+  nam_kinh_nghiem: number | null;
+}): Promise<UpdateNhanSuGiaoVienMetaResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) {
+    return { ok: false, error: "Phiên đăng nhập không hợp lệ. Đăng nhập lại." };
+  }
+
+  const id = Number(payload.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    return { ok: false, error: "ID nhân sự không hợp lệ." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) {
+    return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
+  }
+
+  const portfolio = payload.portfolio.map((u) => String(u).trim()).filter(Boolean);
+
+  const body: Record<string, unknown> = {
+    portfolio,
+    bio: payload.bio != null && String(payload.bio).trim() !== "" ? String(payload.bio).trim() : null,
+    nam_kinh_nghiem: payload.nam_kinh_nghiem,
+  };
+
+  const { error } = await supabase.from("hr_nhan_su").update(body).eq("id", id);
+  if (error) {
+    return { ok: false, error: error.message || "Không cập nhật được hồ sơ giáo viên." };
+  }
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath("/");
+  return { ok: true };
+}
+
 export type CreateBangTinhLuongResult =
   | { ok: true; id: number }
   | { ok: false; error: string };

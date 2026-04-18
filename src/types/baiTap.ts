@@ -7,6 +7,8 @@ export type BaiTap = {
   /** Ảnh minh hoạ bài — `hv_he_thong_bai_tap.thumbnail` (URL Cloudflare hoặc khác) */
   thumbnail: string | null;
   noi_dung_liet_ke: string | null;
+  /** Hướng dẫn / mô tả chi tiết — `hv_he_thong_bai_tap.mo_ta_bai_tap` */
+  mo_ta_bai_tap: string | null;
   video_bai_giang: string | null;
   is_visible: boolean;
   so_buoi: number;

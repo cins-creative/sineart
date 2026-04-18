@@ -1,6 +1,7 @@
 "use client";
 
 import { Flame } from "lucide-react";
+import Link from "next/link";
 import type {
   HocPhiBlockData,
   HocPhiComboRow,
@@ -50,7 +51,7 @@ export default function HocPhiBlock({
   data: HocPhiBlockData;
   allowCapTocToggle?: boolean;
 }) {
-  const { gois: goisAll, combos, monMap } = data;
+  const { gois: goisAll, combos, monMap, monSlugMap } = data;
 
   const hasExpressPackages = useMemo(
     () => goisAll.some((r) => isHocPhiCapTocSpecial(r.special)),
@@ -286,9 +287,20 @@ export default function HocPhiBlock({
         const isSelected = selPartners.has(monId);
         const partnerLabel =
           monMap[monId]?.trim() || `Môn ${monId}`;
+        const partnerSlug = monSlugMap[monId]?.trim();
         return (
           <div key={monId} className="hpb-row">
-            <span className="hpb-row-label">+ {partnerLabel}:</span>
+            {partnerSlug ? (
+              <Link
+                href={`/khoa-hoc/${partnerSlug}`}
+                className="hpb-row-label hpb-row-label--link"
+                title={`Xem trang khóa «${partnerLabel}»`}
+              >
+                + {partnerLabel}:
+              </Link>
+            ) : (
+              <span className="hpb-row-label">+ {partnerLabel}:</span>
+            )}
             <div className="hpb-pills" role="group" aria-label={`Gói ${partnerLabel}`}>
               {mon1Pills.map((goi) => {
                 const hasPartner = hasPartnerPackageAtDuration(

@@ -21,6 +21,7 @@ import {
   KD_THREE_SUBJECTS,
 } from "../_data/khoa-hoc-detail-static";
 import DongHocPhiEmailGateModal from "./DongHocPhiEmailGateModal";
+import { toEmbedUrl } from "@/lib/utils/youtube";
 
 const GROUP_CRUMB: Record<KhoaHocDetailData["group"], string> = {
   lthi: "Luyện thi & bổ trợ",
@@ -219,9 +220,16 @@ export default function KhoaHocDetailView({
 
   const bullets = useMemo(() => learnBullets(d?.tinhChat ?? null), [d?.tinhChat]);
 
+  const introVideoEmbedSrc = useMemo(
+    () => toEmbedUrl(d?.videoGioiThieu ?? null),
+    [d?.videoGioiThieu]
+  );
+
   const [hvGalIdx, setHvGalIdx] = useState(0);
   const [faqOpen, setFaqOpen] = useState<number | null>(0);
   const [dhpEmailModalOpen, setDhpEmailModalOpen] = useState(false);
+  /** null = dùng tab gợi ý theo môn đang xem; có giá trị = người dùng chọn pill lọc GV */
+  const [teacherMonFilter, setTeacherMonFilter] = useState<string | null>(null);
 
   useEffect(() => {
     setHvGalIdx((i) => {
@@ -260,7 +268,17 @@ export default function KhoaHocDetailView({
     );
   }, [teacherMonTabs, title]);
 
-  const effectiveTeacherMonTab = preferredTeacherMonTab ?? "Tất cả";
+  useEffect(() => {
+    setTeacherMonFilter(null);
+  }, [d?.id, hocPhiMonId]);
+
+  const effectiveTeacherMonTab = useMemo(() => {
+    const userPick =
+      teacherMonFilter != null && teacherMonTabs.includes(teacherMonFilter)
+        ? teacherMonFilter
+        : null;
+    return userPick ?? preferredTeacherMonTab ?? "Tất cả";
+  }, [teacherMonFilter, teacherMonTabs, preferredTeacherMonTab]);
 
   const visibleTeacherSlides = useMemo(() => {
     if (effectiveTeacherMonTab === "Tất cả") {
@@ -514,24 +532,53 @@ export default function KhoaHocDetailView({
             ))}
           </ul>
 
-          <div className="kd-div" />
+          <div className="kd-div" aria-hidden />
 
-          <h2 className="kd-sec">Nội dung môn học</h2>
-          <div className="kd-mon-grid">
-            {KD_THREE_SUBJECTS.map((m) => (
-              <div key={m.name} className="kd-mon-card">
-                <div className="kd-mon-icon" aria-hidden>
-                  {m.icon}
+          {d?.gioiThieuMonHocHtml?.trim() ? (
+            <div
+              className="kd-mon-html"
+              dangerouslySetInnerHTML={{
+                __html: d.gioiThieuMonHocHtml.trim(),
+              }}
+            />
+          ) : (
+            <div className="kd-mon-grid">
+              {KD_THREE_SUBJECTS.map((m) => (
+                <div key={m.name} className="kd-mon-card">
+                  <div className="kd-mon-icon" aria-hidden>
+                    {m.icon}
+                  </div>
+                  <div className="kd-mon-name">{m.name}</div>
+                  <p className="kd-mon-desc">{m.desc}</p>
                 </div>
-                <div className="kd-mon-name">{m.name}</div>
-                <p className="kd-mon-desc">{m.desc}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
+          {introVideoEmbedSrc ? (
+            <>
+              <div className="kd-div" aria-hidden />
+              <section
+                className="kd-intro-video"
+                aria-labelledby="kd-intro-video-title"
+              >
+                <h2 id="kd-intro-video-title" className="kd-sec">
+                  Video giới thiệu môn «{title}»
+                </h2>
+                <div className="kd-video-16x9">
+                  <iframe
+                    src={introVideoEmbedSrc}
+                    title={`Video giới thiệu môn «${title}»`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                </div>
+              </section>
+            </>
+          ) : null}
           <div className="kd-div" />
 
-          <h2 className="kd-sec">Chương trình đào tạo</h2>
+          <h2 className="kd-sec">Chương trình đào tạo môn «{title}»</h2>
           <BaiTapList
             monHocId={hocPhiMonId ?? undefined}
             initialData={baiTapList}
@@ -541,6 +588,31 @@ export default function KhoaHocDetailView({
           <div className="kd-div" />
 
           <h2 className="kd-sec">Giáo viên giảng dạy</h2>
+          {teacherMonTabs.length > 1 ? (
+            <div
+              className="kd-teacher-filter"
+              role="group"
+              aria-label="Lọc portfolio giáo viên theo môn học"
+            >
+              <p className="kd-teacher-filter-label">Theo môn học</p>
+              <div className="kd-goi-pill-row">
+                {teacherMonTabs.map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    className={`kd-goi-pill${
+                      effectiveTeacherMonTab === tab
+                        ? " kd-goi-pill--active"
+                        : ""
+                    }`}
+                    onClick={() => setTeacherMonFilter(tab)}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <TeachersSection slides={visibleTeacherSlides} />
 
           <div className="kd-div" />

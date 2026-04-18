@@ -44,6 +44,12 @@
     grid-template-columns: 56% 44%;
     min-height: 520px;
   }
+
+  /* Grid: cho cột phải co theo ô (tránh masonry tràn ngang) */
+  .htbt-split > .htbt-right-panel {
+    min-height: 0;
+    min-width: 0;
+  }
 }
 
 .htbt-left-panel {
@@ -202,9 +208,6 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 320px;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 .htbt-bai-item {
@@ -271,22 +274,33 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 
 .htbt-right-scroll {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  max-height: 780px;
+  /* Full chiều cao vùng cuộn cột phải — không cắt masonry bằng trần cố định */
+  max-height: none;
 }
 
 .htbt-r-section {
   padding: 22px 22px;
   border-bottom: 1px solid var(--htbt-line);
+  min-width: 0;
 }
 
 .htbt-r-section:last-child {
   border-bottom: none;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .htbt-r-title {
@@ -296,6 +310,22 @@
   color: var(--htbt-muted);
   text-transform: uppercase;
   margin-bottom: 14px;
+}
+
+/* Nội dung hv_he_thong_bai_tap.mo_ta_bai_tap — giữ xuống dòng từ CMS */
+.htbt-r-mo-ta {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--htbt-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.htbt-r-mo-ta-kw {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--htbt-pink-deep);
 }
 
 .htbt-bullet {
@@ -347,14 +377,30 @@
   font-weight: 700;
 }
 
-/* Masonry trang bài tập — cột hẹp, nền đồng bộ panel */
+/* Masonry trang bài tập — vừa khít cột phải (không tràn ~600px), chiều cao theo nội dung */
 .htbt-work-gallery.home-gallery {
   --gallery-gap: 7px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  box-sizing: border-box;
 }
 
 .htbt-work-gallery .gallery-wrap {
   padding: 0;
   margin: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  box-sizing: border-box;
 }
 
 .htbt-work-gallery .gtabs {
@@ -366,10 +412,20 @@
   border-bottom: 1px solid var(--htbt-line);
   padding: 0 0 12px;
   margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .htbt-work-gallery .masonry {
   columns: 2;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.htbt-work-gallery .mi {
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .htbt-work-gallery .gallery-inline-empty {

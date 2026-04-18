@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Fragment } from "react";
+
 import GallerySection from "@/app/_components/GallerySection";
 import type { HeThongBaiTapAccess } from "@/lib/data/hoc-vien-bai-tap-access";
 import type { GalleryDisplayItem } from "@/types/homepage";
@@ -16,13 +18,35 @@ function LockIconSmall() {
   );
 }
 
-function parseLietKeBullets(raw: string | null): string[] {
-  if (!raw?.trim()) return [];
-  return raw
-    .split(/\r?\n/)
-    .flatMap((line) => line.split("•"))
-    .map((s) => s.trim())
-    .filter(Boolean);
+/** Làm nổi «Mô tả», «Mục đích» đầu dòng (thường có dấu • và «:» sau đó). */
+function renderMoTaHighlighted(text: string) {
+  const lines = text.split(/\r?\n/);
+  /** Nhóm 1: indent + bullet; 2: từ khóa; 3: «:» và khoảng trắng; 4: phần còn lại */
+  const labelRe =
+    /^(\s*(?:[•\-\*\u2022]\s+)?)(Mô tả|Mục đích)(\s*[:：]\s*)?(.*)$/u;
+
+  return lines.map((line, lineIdx) => {
+    const m = line.match(labelRe);
+    const tailNl = lineIdx < lines.length - 1 ? "\n" : null;
+
+    if (!m) {
+      return (
+        <Fragment key={lineIdx}>
+          {line}
+          {tailNl}
+        </Fragment>
+      );
+    }
+
+    return (
+      <Fragment key={lineIdx}>
+        {m[1]}
+        <span className="htbt-r-mo-ta-kw">{m[2]}{m[3] ?? ""}</span>
+        {m[4]}
+        {tailNl}
+      </Fragment>
+    );
+  });
 }
 
 function mucDoShort(m: BaiTap["muc_do_quan_trong"]): string {
@@ -47,8 +71,8 @@ export default function HeThongBaiTapView({
   access: HeThongBaiTapAccess;
   workGalleryItems: GalleryDisplayItem[];
 }) {
-  const bullets = parseLietKeBullets(bai.noi_dung_liet_ke);
   const maxI = access.maxAccessibleIndex;
+  const huongDan = bai.mo_ta_bai_tap?.trim() ?? "";
 
   return (
     <article className="htbt-shell">
@@ -142,16 +166,12 @@ export default function HeThongBaiTapView({
           <div className="htbt-right-scroll">
             <div className="htbt-r-section">
               <div className="htbt-r-title">Hướng dẫn bài tập</div>
-              {bullets.length ? (
-                bullets.map((line, i) => (
-                  <div key={i} className="htbt-bullet">
-                    <span>{line}</span>
-                  </div>
-                ))
+              {huongDan ? (
+                <div className="htbt-r-mo-ta">{renderMoTaHighlighted(huongDan)}</div>
               ) : (
                 <p className="htbt-placeholder">
-                  Nội dung hướng dẫn map từ cột <code>noi_dung_liet_ke</code> — brief chi tiết ở
-                  bước sau.
+                  Chưa có hướng dẫn — nhập mô tả tại <code>mo_ta_bai_tap</code> (quản trị / Hệ thống bài
+                  tập).
                 </p>
               )}
             </div>

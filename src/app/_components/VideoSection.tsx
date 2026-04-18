@@ -6,8 +6,8 @@ const tabs = [
   {
     id: "online" as const,
     label: "📡 Lớp Online",
-    desc: "📡 Học online qua Zoom · Tương tác trực tiếp",
-    youtubeId: "U1e5S6RpXoQ",
+    desc: "📡 Học qua website chính thức của Sine Art hoặc Google Meet",
+    youtubeId: "6LKT_E8XGu0",
   },
   {
     id: "offline" as const,

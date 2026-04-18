@@ -21,6 +21,9 @@ export type AdminMonRow = {
   is_featured: boolean;
   hinh_thuc: string | null;
   si_so: number | null;
+  video_gioi_thieu: string | null;
+  /** HTML — khối «Nội dung môn học» trên /khoa-hoc/[slug] */
+  gioi_thieu_mon_hoc: string | null;
   /** Số lớp `ql_lop_hoc` gắn `mon_hoc` = id môn */
   so_lop_hoc: number;
   /** Số học viên distinct (ghi danh hoạt động trên các lớp của môn) */
@@ -290,6 +293,25 @@ function MonSidePanel({
                       className="w-full rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
                     />
                   </div>
+                  <div>
+                    <FieldLabel>Video giới thiệu môn (YouTube)</FieldLabel>
+                    <input
+                      name="video_gioi_thieu"
+                      type="url"
+                      maxLength={2000}
+                      placeholder="https://youtu.be/… hoặc https://www.youtube.com/watch?v=…"
+                      className="w-full rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Nội dung môn học (HTML)</FieldLabel>
+                    <textarea
+                      name="gioi_thieu_mon_hoc"
+                      rows={8}
+                      placeholder={'VD: <div class="kd-mon-grid">…</div> — hiển thị thay 3 thẻ mặc định'}
+                      className="min-h-[140px] w-full rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-[#BC8AF9]"
+                    />
+                  </div>
                   {state?.ok === false ? (
                     <div className="rounded-[10px] border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-semibold text-red-700">
                       {state.error}
@@ -380,6 +402,27 @@ function MonSidePanel({
                       defaultValue={row.si_so != null ? String(row.si_so) : ""}
                       placeholder="VD: 24"
                       className="w-full rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Video giới thiệu môn (YouTube)</FieldLabel>
+                    <input
+                      name="video_gioi_thieu"
+                      type="url"
+                      maxLength={2000}
+                      defaultValue={row.video_gioi_thieu ?? ""}
+                      placeholder="https://youtu.be/… hoặc https://www.youtube.com/watch?v=…"
+                      className="w-full rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Nội dung môn học (HTML)</FieldLabel>
+                    <textarea
+                      name="gioi_thieu_mon_hoc"
+                      rows={10}
+                      defaultValue={row.gioi_thieu_mon_hoc ?? ""}
+                      placeholder="Để trống = dùng 3 thẻ mặc định trên web"
+                      className="min-h-[160px] w-full rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-[#BC8AF9]"
                     />
                   </div>
                   {state?.ok === false ? (

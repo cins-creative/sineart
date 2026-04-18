@@ -32,7 +32,9 @@ export default async function KhoaHocEditPageData({ params }: Props) {
 
   const { data, error } = await supabase
     .from("ql_mon_hoc")
-    .select("id, ten_mon_hoc, thumbnail, loai_khoa_hoc, thu_tu_hien_thi, is_featured, hinh_thuc, si_so")
+    .select(
+      "id, ten_mon_hoc, thumbnail, loai_khoa_hoc, thu_tu_hien_thi, is_featured, hinh_thuc, si_so, video_gioi_thieu, gioi_thieu_mon_hoc"
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -56,6 +58,8 @@ export default async function KhoaHocEditPageData({ params }: Props) {
     is_featured?: unknown;
     hinh_thuc?: unknown;
     si_so?: unknown;
+    video_gioi_thieu?: unknown;
+    gioi_thieu_mon_hoc?: unknown;
   };
 
   const siRaw = r.si_so;
@@ -70,6 +74,14 @@ export default async function KhoaHocEditPageData({ params }: Props) {
     is_featured: Boolean(r.is_featured),
     hinh_thuc: r.hinh_thuc != null ? String(r.hinh_thuc).trim() || null : null,
     si_so: siRaw != null && Number.isFinite(siNum) ? siNum : null,
+    video_gioi_thieu:
+      r.video_gioi_thieu != null && String(r.video_gioi_thieu).trim()
+        ? String(r.video_gioi_thieu).trim()
+        : null,
+    gioi_thieu_mon_hoc:
+      r.gioi_thieu_mon_hoc != null && String(r.gioi_thieu_mon_hoc).trim()
+        ? String(r.gioi_thieu_mon_hoc).trim()
+        : null,
   };
 
   if (!row.ten_mon_hoc) {

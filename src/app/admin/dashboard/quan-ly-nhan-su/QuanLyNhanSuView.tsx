@@ -5,9 +5,11 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useId,
   useMemo,
   useRef,
   useState,
+  type ClipboardEvent,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
@@ -20,6 +22,8 @@ import {
   ChevronUp,
   ClipboardCopy,
   ExternalLink,
+  ImagePlus,
+  Loader2,
   Mail,
   MapPin,
   Pencil,
@@ -29,10 +33,12 @@ import {
   Search,
   Settings,
   Trash2,
+  Upload,
   User,
   Users,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
@@ -42,6 +48,7 @@ import {
   deleteHrBangTinhLuongFull,
   syncHrNhanSuPhong,
   updateNhanSuAvatar,
+  updateNhanSuGiaoVienMeta,
   updateNhanSuLuongVaLienHe,
   updateNhanSuThongTin,
 } from "@/app/admin/dashboard/quan-ly-nhan-su/actions";
@@ -49,12 +56,14 @@ import { bangHasLichDiemDanh, PayrollPayslipCard } from "@/app/admin/dashboard/q
 import { TaoBangTinhLuongModal } from "@/app/admin/dashboard/quan-ly-nhan-su/TaoBangTinhLuongModal";
 import type {
   AdminBangTinhLuongListItem,
+  AdminLopGiangDay,
   AdminNhanSuRow,
   AdminPhongOption,
 } from "@/lib/data/admin-quan-ly-nhan-su";
 import { normalizeHrStaffStatusDisplayLabel } from "@/lib/admin/staff-employment-status";
 import { copyDomAsPngToClipboard } from "@/lib/copy-dom-png-clipboard";
 import { cn } from "@/lib/utils";
+import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 
 type Props = {
   staff: AdminNhanSuRow[];
@@ -68,6 +77,7 @@ type Props = {
   /** Ban hiển thị theo nhân sự: `hr_nhan_su.ban` + ban từ các phòng đã gán. */
   banIdsByStaffId: Record<number, number[]>;
   bangTinhLuongByStaffId: Record<number, AdminBangTinhLuongListItem[]>;
+  lopGiangByTeacherId: Record<number, AdminLopGiangDay[]>;
   usedMinimalSelect: boolean;
 };
 
@@ -248,6 +258,198 @@ function BanPill({ label }: { label: string }) {
   );
 }
 
+/** «đ» / «Đ» (U+0111 / U+0110) không phải dấu kết hợp — bỏ dấu NFD vẫn còn «đ», phải xử lý riêng. */
+function banLabelMatchesDaoTao(rawLabel: string): boolean {
+  const s = rawLabel.trim();
+  if (!s) return false;
+  try {
+    const vi = s.toLocaleLowerCase("vi-VN");
+    if (vi.includes("đào tạo")) return true;
+  } catch {
+    /* ignore */
+  }
+  const ascii = s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/\u0111/g, "d")
+    .replace(/\u0110/g, "d")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  if (ascii.includes("dao tao")) return true;
+  if (
+    ascii.includes("giang day") ||
+    ascii.includes("giao duc") ||
+    ascii.includes("giang vien") ||
+    ascii.includes("training")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Khớp ban giảng dạy / Đào tạo (tên trong `hr_ban.ten_ban`). */
+function staffBelongsToBanDaoTao(banIds: number[], banById: Record<number, string>): boolean {
+  for (const id of banIds) {
+    if (banLabelMatchesDaoTao(banById[id] ?? "")) return true;
+  }
+  return false;
+}
+
+/**
+ * Thuộc ban Đào tạo theo dữ liệu đã lưu:
+ * `hr_nhan_su.ban` + các `hr_phong.ban` suy ra từ `hr_nhan_su_phong` (qua `phongIds` đã hydrate từ bundle).
+ */
+function isNhanSuThuocBanDaoTaoFromPhongTable(args: {
+  nhanSuBan: number | null;
+  phongIds: number[];
+  phongToBanId: Record<number, number>;
+  banById: Record<number, string>;
+}): boolean {
+  const ids = new Set<number>();
+  if (args.nhanSuBan != null && args.nhanSuBan > 0) ids.add(args.nhanSuBan);
+  for (const pid of args.phongIds) {
+    const b = args.phongToBanId[pid];
+    if (b != null && b > 0) ids.add(b);
+  }
+  return staffBelongsToBanDaoTao([...ids], args.banById);
+}
+
+function pickPortfolioFileFromClipboard(items: DataTransferItemList): File | null {
+  for (let i = 0; i < items.length; i += 1) {
+    const it = items[i];
+    if (it.kind === "file") {
+      const f = it.getAsFile();
+      if (f && f.type.startsWith("image/")) return f;
+    }
+  }
+  return null;
+}
+
+function PortfolioUrlsEditor({
+  urls,
+  readOnly,
+  setUrls,
+}: {
+  urls: string[];
+  readOnly: boolean;
+  setUrls: Dispatch<SetStateAction<string[]>>;
+}) {
+  const id = useId();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const fileInputId = `${id}-portfolio-file`;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  /** Cùng luồng `AdminCfImageInput`: upload Cloudflare qua `/admin/api/upload-cf-image`. */
+  const runUpload = async (blob: Blob, filename: string) => {
+    setErr(null);
+    setBusy(true);
+    try {
+      const u = await uploadAdminCfImage(blob, filename);
+      setUrls((prev) => [...prev, u]);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Lỗi tải ảnh.");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const onFile = async (files: FileList | null) => {
+    const f = files?.[0];
+    if (!f || !f.type.startsWith("image/")) {
+      setErr("Vui lòng chọn file ảnh (JPG, PNG…).");
+      return;
+    }
+    await runUpload(f, f.name || "tac-pham.jpg");
+  };
+
+  const onPaste = (e: ClipboardEvent<HTMLDivElement>) => {
+    const file = pickPortfolioFileFromClipboard(e.clipboardData.items);
+    if (file) {
+      e.preventDefault();
+      void runUpload(file, file.name || "paste.png");
+      return;
+    }
+    const text = e.clipboardData.getData("text/plain").trim();
+    if (/^https?:\/\//i.test(text)) {
+      e.preventDefault();
+      setErr("Chỉ dán ảnh (sao chép hình), không dán đường link.");
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {urls.map((u, i) => (
+          <div
+            key={`${i}-${u.slice(-24)}`}
+            className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-[#EAEAEA] bg-[#fafafa]"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={u} alt="" className="h-full w-full object-cover" />
+            {!readOnly ? (
+              <button
+                type="button"
+                title="Gỡ ảnh"
+                aria-label="Gỡ ảnh khỏi portfolio"
+                onClick={() => setUrls((prev) => prev.filter((_, j) => j !== i))}
+                className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white/95 text-red-600 shadow-sm opacity-0 transition hover:bg-red-50 group-hover:opacity-100"
+              >
+                <X size={16} aria-hidden />
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {!readOnly ? (
+        <div className="space-y-2">
+          <p className="m-0 text-[11px] leading-snug text-[#888]">
+            Chọn ảnh từ máy hoặc nhấn vào vùng bên dưới rồi dán ảnh (Ctrl+V). Ảnh tải lên tự động — không cần dán link.
+          </p>
+          <input
+            ref={fileRef}
+            id={fileInputId}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={busy}
+            onChange={(e) => void onFile(e.target.files)}
+            aria-labelledby={`${id}-portfolio-label`}
+          />
+          <div
+            id={`${id}-portfolio-label`}
+            tabIndex={busy ? -1 : 0}
+            onPaste={onPaste}
+            className={cn(
+              "rounded-xl border-[1.5px] border-dashed border-[#EAEAEA] bg-[#fafafa] px-3 py-3 outline-none transition",
+              "focus-visible:border-[#BC8AF9] focus-visible:ring-[3px] focus-visible:ring-[#BC8AF9]/15",
+              busy && "pointer-events-none cursor-wait opacity-70"
+            )}
+          >
+            <span className="sr-only">Thêm ảnh portfolio — chọn hoặc dán ảnh</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <label
+                htmlFor={fileInputId}
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] font-semibold text-[#555] hover:bg-[#fafafa]",
+                  busy && "pointer-events-none cursor-wait opacity-50"
+                )}
+              >
+                {busy ? <Loader2 size={14} className="animate-spin text-[#BC8AF9]" aria-hidden /> : <Upload size={14} aria-hidden />}
+                {busy ? "Đang tải…" : "Chọn từ máy tính"}
+              </label>
+              <span className="text-[11px] text-[#999]">Thêm nhiều ảnh; có thể dán (Ctrl+V) khi vùng này đang được focus.</span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {err ? <p className="m-0 text-[11px] font-semibold text-red-600">{err}</p> : null}
+    </div>
+  );
+}
+
 function BansCell({ ids, banById }: { ids: number[]; banById: Record<number, string> }) {
   if (!ids.length) return <span className="text-[12px] text-[#AAA]">—</span>;
   return (
@@ -376,7 +578,7 @@ function LinkXem({ href, label = "Xem" }: { href: string | null | undefined; lab
   );
 }
 
-type StaffDetailTab = "info" | "salary" | "contact" | "payroll";
+type StaffDetailTab = "info" | "salary" | "contact" | "payroll" | "portfolio";
 
 function SectionTitle({ children }: { children: string }) {
   return (
@@ -1331,6 +1533,9 @@ function StaffDetailPanel({
   allPhongOptions,
   usedMinimalSelect,
   bangLuongRows,
+  lopGiangByTeacherId,
+  /** Cùng `banIdsByStaffId` trên bảng — `hr_nhan_su.ban` + ban suy ra từ `hr_nhan_su_phong` → `hr_phong.ban`. */
+  savedBanIdsFromBundle,
   onClose,
   onAvatarSaved,
   onStaffUpdated,
@@ -1343,6 +1548,8 @@ function StaffDetailPanel({
   allPhongOptions: AdminPhongOption[];
   usedMinimalSelect: boolean;
   bangLuongRows: AdminBangTinhLuongListItem[];
+  lopGiangByTeacherId: Record<number, AdminLopGiangDay[]>;
+  savedBanIdsFromBundle: number[];
   onClose: () => void;
   onAvatarSaved: (avatar: string | null) => void;
   onStaffUpdated: (patch: Partial<AdminNhanSuRow>) => void;
@@ -1372,6 +1579,11 @@ function StaffDetailPanel({
   const [payrollCopyBusy, setPayrollCopyBusy] = useState(false);
   const [payrollCopyNotice, setPayrollCopyNotice] = useState<string | null>(null);
 
+  const [gvPortfolioUrls, setGvPortfolioUrls] = useState<string[]>(() => [...row.portfolio]);
+  const [gvBio, setGvBio] = useState(() => row.bio ?? "");
+  const [gvNamKinh, setGvNamKinh] = useState(() =>
+    row.nam_kinh_nghiem != null ? String(row.nam_kinh_nghiem) : ""
+  );
   const displayBanIds = useMemo(() => {
     const set = new Set<number>();
     if (row.ban != null && row.ban > 0) set.add(row.ban);
@@ -1381,6 +1593,21 @@ function StaffDetailPanel({
     }
     return [...set].sort((a, b) => a - b);
   }, [row.ban, phongDraftIds, phongToBanId]);
+
+  /** Đã lưu: bundle `banIdsByStaffId` + suy ra từ `hr_nhan_su_phong`. Draft phòng trong modal: `displayBanIds`. */
+  const isDaoTaoStaff = useMemo(() => {
+    const fromPhongTable = isNhanSuThuocBanDaoTaoFromPhongTable({
+      nhanSuBan: row.ban,
+      phongIds: phongIdsForStaff,
+      phongToBanId,
+      banById,
+    });
+    const mergedBanIds = [...new Set([...displayBanIds, ...savedBanIdsFromBundle])];
+    const fromBanLabels = staffBelongsToBanDaoTao(mergedBanIds, banById);
+    return fromPhongTable || fromBanLabels;
+  }, [banById, displayBanIds, phongIdsForStaff, phongToBanId, row.ban, savedBanIdsFromBundle]);
+
+  const gvLopRows = lopGiangByTeacherId[row.id] ?? [];
 
   const branch =
     row.chi_nhanh_id != null ? chiNhanhById[row.chi_nhanh_id] ?? `ID #${row.chi_nhanh_id}` : "—";
@@ -1401,6 +1628,7 @@ function StaffDetailPanel({
     setPanelSaveErr(null);
     setPayrollSlipBangId(null);
     setPayrollDeleteTarget(null);
+    setTab("info");
   }, [row.id]);
 
   useEffect(() => {
@@ -1436,6 +1664,13 @@ function StaffDetailPanel({
     setContactDraft(buildContactDraft(row));
   }, [row, editing]);
 
+  useEffect(() => {
+    if (editing) return;
+    setGvPortfolioUrls([...row.portfolio]);
+    setGvBio(row.bio ?? "");
+    setGvNamKinh(row.nam_kinh_nghiem != null ? String(row.nam_kinh_nghiem) : "");
+  }, [row, editing]);
+
   const cancelEditing = useCallback(() => {
     setEditing(false);
     setDraftResetKey((k) => k + 1);
@@ -1444,6 +1679,9 @@ function StaffDetailPanel({
     setPhongDraftIds(
       phongSortedKey === "" ? [] : phongSortedKey.split(",").map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
     );
+    setGvPortfolioUrls([...row.portfolio]);
+    setGvBio(row.bio ?? "");
+    setGvNamKinh(row.nam_kinh_nghiem != null ? String(row.nam_kinh_nghiem) : "");
     setPanelSaveErr(null);
   }, [row, phongSortedKey]);
 
@@ -1563,19 +1801,64 @@ function StaffDetailPanel({
         stk_nhan_luong: contactDraft.stk_nhan_luong.trim() || null,
         hop_dong_lao_dong: contactDraft.hop_dong_lao_dong.trim() || null,
       });
+
+      if (isDaoTaoStaff) {
+        const nkRaw = gvNamKinh.trim();
+        let nam_kinh_nghiem: number | null = null;
+        if (nkRaw !== "") {
+          const n = Number.parseInt(nkRaw, 10);
+          if (!Number.isFinite(n) || n < 0) {
+            setPanelSaveErr("Năm kinh nghiệm không hợp lệ (số nguyên ≥ 0).");
+            return;
+          }
+          nam_kinh_nghiem = Math.trunc(n);
+        }
+        const rGv = await updateNhanSuGiaoVienMeta({
+          id: row.id,
+          portfolio: gvPortfolioUrls,
+          bio: gvBio.trim() || null,
+          nam_kinh_nghiem,
+        });
+        if (!rGv.ok) {
+          setPanelSaveErr(rGv.error);
+          return;
+        }
+        onStaffUpdated({
+          portfolio: [...gvPortfolioUrls],
+          bio: gvBio.trim() || null,
+          nam_kinh_nghiem,
+        });
+      }
+
       setEditing(false);
       router.refresh();
     } finally {
       setSaveAllBusy(false);
     }
-  }, [contactDraft, editing, onStaffUpdated, phongDraftIds, router, row.id, salaryDraft]);
+  }, [
+    contactDraft,
+    editing,
+    gvBio,
+    gvNamKinh,
+    gvPortfolioUrls,
+    isDaoTaoStaff,
+    onStaffUpdated,
+    phongDraftIds,
+    router,
+    row,
+    salaryDraft,
+  ]);
 
-  const tabs: { id: StaffDetailTab; label: string }[] = [
-    { id: "info", label: "Thông tin" },
-    { id: "salary", label: "Lương & Hệ số" },
-    { id: "contact", label: "Liên hệ & HĐ" },
-    { id: "payroll", label: "Bảng lương" },
-  ];
+  const tabs = useMemo(() => {
+    const base: { id: StaffDetailTab; label: string }[] = [
+      { id: "info", label: "Thông tin" },
+      { id: "salary", label: "Lương & Hệ số" },
+      { id: "contact", label: "Liên hệ & HĐ" },
+      { id: "payroll", label: "Bảng lương" },
+    ];
+    if (isDaoTaoStaff) base.push({ id: "portfolio", label: "Portfolio & lớp" });
+    return base;
+  }, [isDaoTaoStaff]);
 
   const minimalHint = usedMinimalSelect ? (
     <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900">
@@ -1673,14 +1956,14 @@ function StaffDetailPanel({
           </div>
         </div>
 
-        <div className="flex shrink-0 gap-0 border-b border-black/[0.06] px-2">
+        <div className="flex shrink-0 gap-0 overflow-x-auto overflow-y-hidden border-b border-black/[0.06] px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                "relative min-w-0 flex-1 px-2 py-3 text-center text-[12px] font-bold transition-colors",
+                "relative shrink-0 whitespace-nowrap px-3 py-3 text-center text-[12px] font-bold transition-colors",
                 tab === t.id ? "text-[#E91E8C]" : "text-[#888] hover:text-[#555]"
               )}
             >
@@ -2084,6 +2367,78 @@ function StaffDetailPanel({
               </motion.div>
             </div>
           ) : null}
+
+          {tab === "portfolio" && isDaoTaoStaff ? (
+            <div className="space-y-5">
+              <SectionTitle>Đang là giáo viên các lớp</SectionTitle>
+              {gvLopRows.length === 0 ? (
+                <p className="m-0 rounded-xl border border-dashed border-[#EAEAEA] bg-[#fafafa] px-3 py-4 text-center text-[12px] font-medium leading-snug text-[#888]">
+                  Chưa có lớp nào ghi nhận nhân sự này là giáo viên. Hãy mở lớp tương ứng và gán giáo viên (một hoặc nhiều người trên
+                  lớp) trong{" "}
+                  <Link href="/admin/dashboard/lop-hoc" className="font-semibold text-[#E91E8C] underline-offset-2 hover:underline">
+                    Quản lý lớp học
+                  </Link>
+                  .
+                </p>
+              ) : (
+                <ul className="m-0 list-none space-y-2 p-0">
+                  {gvLopRows.map((lop) => (
+                    <li
+                      key={lop.id}
+                      className="rounded-xl border border-[#EAEAEA] bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                    >
+                      <div className="font-bold text-[#1a1a2e]">{lop.class_name}</div>
+                      {lop.class_full_name ? (
+                        <div className="mt-0.5 text-[12px] text-[#666]">{lop.class_full_name}</div>
+                      ) : null}
+                      <div className="mt-1 text-[11px] font-semibold text-[#888]">
+                        Môn: {lop.ten_mon_hoc ?? (lop.mon_hoc_id != null ? `ID ${lop.mon_hoc_id}` : "—")}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <SectionTitle>Giới thiệu & kinh nghiệm</SectionTitle>
+              <FieldRow label="Giới thiệu (website)" hint={editing ? "Hiển thị trang chủ / khóa học" : undefined}>
+                {editing ? (
+                  <textarea
+                    className={cn(inpEdit, "min-h-[88px] resize-y bg-white")}
+                    rows={4}
+                    value={gvBio}
+                    onChange={(e) => setGvBio(e.target.value)}
+                    placeholder="Phong cách giảng dạy, sở trường…"
+                  />
+                ) : (
+                  <ReadField value={gvBio.trim() || row.bio?.trim() || ""} multiline />
+                )}
+              </FieldRow>
+              <FieldRow label="Năm kinh nghiệm">
+                {editing ? (
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className={cn(inpEdit, "bg-white tabular-nums")}
+                    value={gvNamKinh}
+                    onChange={(e) => setGvNamKinh(e.target.value)}
+                    placeholder="VD: 5"
+                  />
+                ) : (
+                  <ReadField
+                    value={
+                      row.nam_kinh_nghiem != null && Number.isFinite(Number(row.nam_kinh_nghiem))
+                        ? `${row.nam_kinh_nghiem} năm`
+                        : "—"
+                    }
+                  />
+                )}
+              </FieldRow>
+
+              <SectionTitle>Tác phẩm / Portfolio</SectionTitle>
+              <PortfolioUrlsEditor urls={gvPortfolioUrls} readOnly={!editing} setUrls={setGvPortfolioUrls} />
+            </div>
+          ) : null}
         </div>
 
         <div className="shrink-0 border-t border-black/[0.06] bg-[#fafafa] px-5 py-3">
@@ -2210,11 +2565,13 @@ export default function QuanLyNhanSuView({
   phongToBanId,
   banIdsByStaffId,
   bangTinhLuongByStaffId,
+  lopGiangByTeacherId,
   usedMinimalSelect,
 }: Props) {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilterKey>("all");
   const [branchId, setBranchId] = useState<number | "all">("all");
+  const [banFilterId, setBanFilterId] = useState<number | "all">("all");
   const [selected, setSelected] = useState<AdminNhanSuRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const router = useRouter();
@@ -2266,6 +2623,19 @@ export default function QuanLyNhanSuView({
       .sort((a, b) => a.ten.localeCompare(b.ten, "vi"));
   }, [chiNhanhById]);
 
+  /** Ban có ít nhất một nhân sự (theo `banIdsByStaffId`). */
+  const banFilterOptions = useMemo(() => {
+    const seen = new Set<number>();
+    for (const r of staff) {
+      for (const bid of banIdsByStaffId[r.id] ?? []) {
+        if (Number.isFinite(bid) && bid > 0) seen.add(bid);
+      }
+    }
+    return [...seen]
+      .map((id) => ({ id, ten: banById[id]?.trim() || `Ban #${id}` }))
+      .sort((a, b) => a.ten.localeCompare(b.ten, "vi"));
+  }, [staff, banIdsByStaffId, banById]);
+
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
     let list = staff;
@@ -2304,8 +2674,21 @@ export default function QuanLyNhanSuView({
     if (branchId !== "all") {
       list = list.filter((r) => r.chi_nhanh_id === branchId);
     }
+    if (banFilterId !== "all") {
+      list = list.filter((r) => (banIdsByStaffId[r.id] ?? []).includes(banFilterId));
+    }
     return list;
-  }, [staff, q, chiNhanhById, banById, banIdsByStaffId, phongBanByStaffId, statusFilter, branchId]);
+  }, [
+    staff,
+    q,
+    chiNhanhById,
+    banById,
+    banIdsByStaffId,
+    phongBanByStaffId,
+    statusFilter,
+    branchId,
+    banFilterId,
+  ]);
 
   const staffListTotalPages = Math.max(1, Math.ceil(filtered.length / STAFF_LIST_PAGE_SIZE));
   const staffListPageSafe = Math.min(staffListPage, staffListTotalPages);
@@ -2351,6 +2734,26 @@ export default function QuanLyNhanSuView({
             >
               <option value="all">Tất cả chi nhánh</option>
               {branchOptions.map((b) => (
+                <option key={b.id} value={String(b.id)}>
+                  {b.ten}
+                </option>
+              ))}
+            </select>
+            <label className="sr-only" htmlFor="qlns-ban">
+              Ban
+            </label>
+            <select
+              id="qlns-ban"
+              value={banFilterId === "all" ? "all" : String(banFilterId)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setBanFilterId(v === "all" ? "all" : Number(v));
+                setStaffListPage(1);
+              }}
+              className="h-9 min-w-0 max-w-full flex-1 rounded-lg border border-[#EAEAEA] bg-[#fafafa] px-2.5 text-[12px] font-semibold text-[#444] outline-none transition focus:border-[#BC8AF9] focus:bg-white sm:max-w-[200px] sm:flex-none"
+            >
+              <option value="all">Tất cả ban</option>
+              {banFilterOptions.map((b) => (
                 <option key={b.id} value={String(b.id)}>
                   {b.ten}
                 </option>
@@ -2730,6 +3133,8 @@ export default function QuanLyNhanSuView({
             allPhongOptions={allPhongOptions}
             usedMinimalSelect={usedMinimalSelect}
             bangLuongRows={bangTinhLuongByStaffId[selected.id] ?? []}
+            lopGiangByTeacherId={lopGiangByTeacherId}
+            savedBanIdsFromBundle={banIdsByStaffId[selected.id] ?? []}
             onClose={() => setSelected(null)}
             onAvatarSaved={(avatar) => {
               setSelected((s) => (s ? { ...s, avatar } : null));

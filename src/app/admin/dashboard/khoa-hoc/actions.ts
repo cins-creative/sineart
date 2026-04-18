@@ -50,6 +50,8 @@ type MonPayload = {
   is_featured: boolean;
   hinh_thuc: string | null;
   si_so: number | null;
+  video_gioi_thieu: string | null;
+  gioi_thieu_mon_hoc: string | null;
 };
 
 function readMonPayload(fd: FormData): { ok: true; data: MonPayload } | { ok: false; error: string } {
@@ -61,6 +63,22 @@ function readMonPayload(fd: FormData): { ok: true; data: MonPayload } | { ok: fa
     return { ok: false, error: "Tên môn quá dài." };
   }
 
+  const video_gioi_thieu_raw = String(fd.get("video_gioi_thieu") ?? "").trim();
+  if (video_gioi_thieu_raw.length > 2000) {
+    return { ok: false, error: "Link video giới thiệu quá dài (tối đa 2000 ký tự)." };
+  }
+  const video_gioi_thieu = video_gioi_thieu_raw === "" ? null : video_gioi_thieu_raw;
+
+  const gioi_thieu_mon_hoc_raw = String(fd.get("gioi_thieu_mon_hoc") ?? "");
+  if (gioi_thieu_mon_hoc_raw.length > 120000) {
+    return {
+      ok: false,
+      error: "Nội dung HTML «Giới thiệu môn học» quá dài (tối đa 120000 ký tự).",
+    };
+  }
+  const gioi_thieu_mon_hoc_trim = gioi_thieu_mon_hoc_raw.trim();
+  const gioi_thieu_mon_hoc = gioi_thieu_mon_hoc_trim === "" ? null : gioi_thieu_mon_hoc_trim;
+
   return {
     ok: true,
     data: {
@@ -71,6 +89,8 @@ function readMonPayload(fd: FormData): { ok: true; data: MonPayload } | { ok: fa
       is_featured: parseFeatured(fd),
       hinh_thuc: optionalText(fd, "hinh_thuc"),
       si_so: parseSiSo(fd),
+      video_gioi_thieu,
+      gioi_thieu_mon_hoc,
     },
   };
 }

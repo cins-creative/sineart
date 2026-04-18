@@ -13,6 +13,10 @@ export interface MonHoc {
   hinh_thuc?: string | null;
   /** Sức chứa hoặc chỉ tiêu sĩ số (numeric trong DB) */
   si_so?: number | string | null;
+  /** URL video giới thiệu môn (YouTube) — trang /khoa-hoc/[slug] */
+  video_gioi_thieu?: string | null;
+  /** HTML — khối «Nội dung môn học» trên trang chi tiết khóa */
+  gioi_thieu_mon_hoc?: string | null;
 }
 
 export interface BaiHocVien {
@@ -37,7 +41,6 @@ export interface NhanSu {
   nam_kinh_nghiem: number;
   /** Text (URL Cloudflare / nhiều URL) hoặc mảng URL tùy schema */
   portfolio: string | string[] | null;
-  mon_day: number[] | null;
 }
 
 /** Một ảnh portfolio (trang chủ — chỉ hiển thị ảnh, không text) */

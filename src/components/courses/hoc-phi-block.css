@@ -145,6 +145,19 @@
   flex-shrink: 0;
 }
 
+a.hpb-row-label--link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+
+a.hpb-row-label--link:hover {
+  color: #c93b6a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .hpb-pills {
   display: flex;
   flex-wrap: wrap;

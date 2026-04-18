@@ -5,7 +5,7 @@ import type { GalleryDisplayItem } from "@/types/homepage";
 import type { BaiTap } from "@/types/baiTap";
 import { buildHeThongBaiTapSlug } from "@/lib/he-thong-bai-tap/slug";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
-import { toEmbedUrl } from "@/lib/utils/youtube";
+import HeThongBaiTapVideoPanel from "./HeThongBaiTapVideoPanel";
 
 function LockIconSmall() {
   return (
@@ -47,7 +47,6 @@ export default function HeThongBaiTapView({
   access: HeThongBaiTapAccess;
   workGalleryItems: GalleryDisplayItem[];
 }) {
-  const embed = toEmbedUrl(bai.video_bai_giang);
   const bullets = parseLietKeBullets(bai.noi_dung_liet_ke);
   const maxI = access.maxAccessibleIndex;
 
@@ -55,20 +54,11 @@ export default function HeThongBaiTapView({
     <article className="htbt-shell">
       <div className="htbt-split">
         <div className="htbt-left-panel">
-          <div className="htbt-video-area">
-            {embed ? (
-              <iframe
-                className="htbt-video-iframe"
-                src={embed}
-                title={`Video bài ${bai.bai_so} — ${bai.ten_bai_tap}`}
-                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            ) : (
-              <div className="htbt-video-placeholder">
-                Video bài giảng sẽ được gắn khi map <code className="htbt-code">video_bai_giang</code>
-              </div>
-            )}
+          <div className="htbt-video-stack">
+            <HeThongBaiTapVideoPanel
+              videoBaiGiang={bai.video_bai_giang}
+              iframeTitle={`Video bài ${bai.bai_so} — ${bai.ten_bai_tap}`}
+            />
           </div>
 
           <div className="htbt-left-bottom">
@@ -76,16 +66,16 @@ export default function HeThongBaiTapView({
               <div className="htbt-left-section-title">Thông tin bài</div>
               <div className="htbt-info-chips">
                 <div className="htbt-chip">
-                  <div className="htbt-chip-val">{bai.so_buoi || "—"}</div>
                   <div className="htbt-chip-label">Số buổi</div>
+                  <div className="htbt-chip-val">{bai.so_buoi || "—"}</div>
                 </div>
                 <div className="htbt-chip" style={{ flex: 1, minWidth: 120 }}>
+                  <div className="htbt-chip-label">Mức độ quan trọng</div>
                   <div className="htbt-chip-val htbt-chip-val--accent">{mucDoShort(bai.muc_do_quan_trong)}</div>
-                  <div className="htbt-chip-label">Mức độ</div>
                 </div>
                 <div className="htbt-chip">
-                  <div className="htbt-chip-val">{bai.bai_so}</div>
                   <div className="htbt-chip-label">Bài số</div>
+                  <div className="htbt-chip-val">{bai.bai_so}</div>
                 </div>
               </div>
             </div>

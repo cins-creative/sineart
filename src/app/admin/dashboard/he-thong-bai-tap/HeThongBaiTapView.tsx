@@ -22,8 +22,15 @@ function urlArrayToLines(arr: string[] | null | undefined): string {
   return (arr ?? []).join("\n");
 }
 
+function firstNonEmptyLine(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  const line = raw.split(/\r?\n/).find((s) => s.trim().length > 0);
+  return line != null ? line.trim() : null;
+}
+
 function primaryBaiTapUrl(item: AdminBaiTapRow): string | null {
-  if (item.video_bai_giang?.trim()) return item.video_bai_giang.trim();
+  const vbg = firstNonEmptyLine(item.video_bai_giang);
+  if (vbg) return vbg;
   const ly = item.video_ly_thuyet?.find((u) => u.trim());
   if (ly) return ly.trim();
   const tk = item.video_tham_khao?.find((u) => u.trim());
@@ -499,11 +506,15 @@ function BaiTapDrawer({
                   <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-[#AAAAAA]">
                     Video bài giảng (URL)
                   </div>
-                  <input
+                  <p className="mb-1.5 text-[11px] leading-snug text-[#AAAAAA]">
+                    Mỗi dòng một URL — dòng đầu có YouTube hợp lệ được dùng làm video chính trên trang bài.
+                  </p>
+                  <textarea
                     value={videoBaiGiang}
                     onChange={(e) => setVideoBaiGiang(e.target.value)}
-                    className="w-full rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
-                    placeholder="https://…"
+                    rows={4}
+                    className="w-full resize-y rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-[#BC8AF9]"
+                    placeholder={"https://…\nhttps://…"}
                   />
                 </div>
                 <div>

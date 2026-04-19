@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Copy, LayoutGrid, LayoutList, Pencil, Plus, School, Search, X, Zap } from "lucide-react";
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Copy, Flame, LayoutGrid, LayoutList, Pencil, Plus, School, Search, X, Zap } from "lucide-react";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
@@ -356,20 +356,30 @@ function LopHocCard({
           onClick();
         }
       }}
-      whileHover={inactive ? {} : { y: -2, borderColor: DS.teacher }}
+      whileHover={inactive ? {} : { y: -2, borderColor: item.special ? "rgba(220,38,38,0.6)" : DS.teacher }}
       transition={{ duration: 0.15 }}
       className={cn(
-        "flex w-full flex-col overflow-hidden rounded-2xl border-[1.5px] bg-white text-left shadow-sm outline-none",
+        "flex w-full flex-col overflow-hidden rounded-2xl border-[1.5px] text-left shadow-sm outline-none",
         inactive
           ? "cursor-not-allowed opacity-55 grayscale-[40%]"
           : "cursor-pointer focus-visible:ring-2 focus-visible:ring-[#BC8AF9]/40",
         isSelected && !inactive && "ring-2 ring-[#BC8AF9]/25",
       )}
       style={{
-        borderColor: inactive ? "#E0E0E0" : isSelected ? DS.teacher : DS.border,
-        boxShadow:
-          inactive
-            ? "none"
+        background: item.special && !inactive
+          ? "linear-gradient(165deg,#fffafa 0%,#fff8f8 60%,#fff5f5 100%)"
+          : "#ffffff",
+        borderColor: inactive
+          ? "#E0E0E0"
+          : item.special
+            ? "rgba(220,38,38,0.18)"
+            : isSelected
+              ? DS.teacher
+              : DS.border,
+        boxShadow: inactive
+          ? "none"
+          : item.special
+            ? "0 2px 14px rgba(220,38,38,0.07),0 1px 4px rgba(0,0,0,.05)"
             : isSelected
               ? "0 6px 20px rgba(188,138,249,0.18)"
               : "0 1px 4px rgba(0,0,0,.06)",
@@ -460,10 +470,19 @@ function LopHocCard({
         <span className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-[#888]">
           {inactive ? "Không hoạt động" : "Chi tiết"}
         </span>
-        {/* Cấp tốc badge — bottom right */}
+        {/* Cấp tốc badge — bottom right, style giống hpb-cap-toc--on */}
         {item.special ? (
-          <span className="mr-2 rounded-full border border-orange-300/60 bg-gradient-to-r from-orange-400 to-red-400 px-2 py-0.5 text-[10px] font-bold text-white">
-            ⚡ Cấp tốc
+          <span
+            className="mr-2 inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-extrabold"
+            style={{
+              borderColor: "rgba(220,38,38,0.55)",
+              color: "#7f1d1d",
+              background: "linear-gradient(165deg,#fff1f2 0%,#fecaca 45%,#fca5a5 100%)",
+              boxShadow: "0 0 0 1px rgba(248,113,113,0.45),0 2px 12px rgba(220,38,38,0.22)",
+            }}
+          >
+            <Flame size={10} strokeWidth={2.2} style={{ color: "#dc2626", filter: "drop-shadow(0 0 4px rgba(248,113,113,0.8))" }} />
+            Cấp tốc
           </span>
         ) : null}
         {item.url_class ? (

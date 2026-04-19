@@ -30,21 +30,32 @@ function parseFk(fd: FormData, key: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/** Đọc nhiều giáo viên từ FormData (fd.append("teacher", id) nhiều lần). */
+function parseTeachersFromFd(fd: FormData): number[] {
+  const vals = fd.getAll("teacher");
+  const ids = vals
+    .map((v) => Number(String(v).trim()))
+    .filter((id) => Number.isFinite(id) && id > 0);
+  return [...new Set(ids)];
+}
+
 type LopPayload = {
   class_name: string | null;
   class_full_name: string | null;
   mon_hoc: number | null;
-  teacher: number | null;
+  /** Mảng ID giáo viên (có thể rỗng nếu chưa gán). */
+  teacher: number[];
   chi_nhanh_id: number | null;
   avatar: string | null;
   lich_hoc: string | null;
   device: string | null;
+  special: boolean;
+  tinh_trang: boolean;
 };
 
-/** DB `ql_lop_hoc.teacher` có thể là `bigint[]` / jsonb mảng — PostgREST báo "expected JSON array" nếu gửi scalar. */
-function teacherForDb(teacherId: number | null): number | number[] | null {
-  if (teacherId == null) return null;
-  return [teacherId];
+/** Gửi mảng GV lên DB — trả về mảng (bigint[]) hoặc null nếu rỗng. */
+function teacherForDb(ids: number[]): number[] | null {
+  return ids.length > 0 ? ids : null;
 }
 
 function readLopPayload(fd: FormData): { ok: true; data: LopPayload } | { ok: false; error: string } {
@@ -60,11 +71,13 @@ function readLopPayload(fd: FormData): { ok: true; data: LopPayload } | { ok: fa
       class_name,
       class_full_name,
       mon_hoc: parseFk(fd, "mon_hoc"),
-      teacher: parseFk(fd, "teacher"),
+      teacher: parseTeachersFromFd(fd),
       chi_nhanh_id: parseFk(fd, "chi_nhanh_id"),
       avatar: optionalText(fd, "avatar"),
       lich_hoc: optionalText(fd, "lich_hoc"),
       device: optionalText(fd, "device"),
+      special: String(fd.get("special") ?? "") === "1",
+      tinh_trang: String(fd.get("tinh_trang") ?? "") !== "0" && String(fd.get("tinh_trang") ?? "") !== "",
     },
   };
 }
@@ -86,29 +99,12 @@ export async function createLopHoc(
     return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
   }
 
-  let payload: Record<string, unknown> = {
+  const payload: Record<string, unknown> = {
     ...parsed.data,
+    special: parsed.data.special ? "Cấp tốc" : null,
     teacher: teacherForDb(parsed.data.teacher),
   };
-  let { error } = await supabase.from("ql_lop_hoc").insert(payload);
-  if (
-    error &&
-    parsed.data.teacher != null &&
-    String(error.message).toLowerCase().includes("teacher")
-  ) {
-    payload = { ...parsed.data, teacher: parsed.data.teacher };
-    ({ error } = await supabase.from("ql_lop_hoc").insert(payload));
-  }
-  if (error && String(error.message).toLowerCase().includes("column")) {
-    const minimal = {
-      class_name: parsed.data.class_name,
-      class_full_name: parsed.data.class_full_name,
-      mon_hoc: parsed.data.mon_hoc,
-      teacher: teacherForDb(parsed.data.teacher),
-      chi_nhanh_id: parsed.data.chi_nhanh_id,
-    };
-    ({ error } = await supabase.from("ql_lop_hoc").insert(minimal));
-  }
+  const { error } = await supabase.from("ql_lop_hoc").insert(payload);
   if (error) {
     return { ok: false, error: error.message || "Không thêm được lớp học." };
   }
@@ -139,25 +135,66 @@ export async function updateLopHoc(
     return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
   }
 
-  let updatePayload: Record<string, unknown> = {
+  const updatePayload: Record<string, unknown> = {
     ...parsed.data,
+    special: parsed.data.special ? "Cấp tốc" : null,
     teacher: teacherForDb(parsed.data.teacher),
   };
-  let { error } = await supabase.from("ql_lop_hoc").update(updatePayload).eq("id", id);
-  if (
-    error &&
-    parsed.data.teacher != null &&
-    String(error.message).toLowerCase().includes("teacher")
-  ) {
-    updatePayload = { ...parsed.data, teacher: parsed.data.teacher };
-    ({ error } = await supabase.from("ql_lop_hoc").update(updatePayload).eq("id", id));
-  }
+  const { error } = await supabase.from("ql_lop_hoc").update(updatePayload).eq("id", id);
   if (error) {
     return { ok: false, error: error.message || "Không cập nhật được." };
   }
 
   revalidateLopHocPublic();
   return { ok: true, message: "Đã lưu thông tin lớp học." };
+}
+
+export async function duplicateLopHoc(id: number): Promise<LopHocFormState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ. Đăng nhập lại." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
+
+  const { data, error: fetchErr } = await supabase
+    .from("ql_lop_hoc")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (fetchErr || !data) {
+    return { ok: false, error: fetchErr?.message || "Không tìm được lớp cần nhân bản." };
+  }
+
+  const raw = data as Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id: _id, created_at: _ca, ...rest } = raw;
+
+  const newRow: Record<string, unknown> = {
+    ...rest,
+    class_name: raw.class_name ? `${raw.class_name} (copy)` : null,
+    class_full_name: raw.class_full_name ? `${raw.class_full_name} (copy)` : null,
+  };
+
+  const { error: insertErr } = await supabase.from("ql_lop_hoc").insert(newRow);
+  if (insertErr) return { ok: false, error: insertErr.message || "Không nhân bản được lớp học." };
+
+  revalidateLopHocPublic();
+  return { ok: true, message: "Đã nhân bản lớp học." };
+}
+
+export async function toggleLopSpecial(id: number, value: boolean): Promise<LopHocFormState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { error } = await supabase.from("ql_lop_hoc").update({ special: value ? "Cấp tốc" : null }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateLopHocPublic();
+  return { ok: true, message: value ? "Đã đánh dấu cấp tốc." : "Đã bỏ cấp tốc." };
 }
 
 export async function deleteLopHoc(id: number): Promise<LopHocFormState> {

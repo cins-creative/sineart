@@ -14,15 +14,16 @@ export default async function LopHocPageData() {
   }
 
   const lopSelectFull =
-    "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, url_google_meet, device";
+    "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, url_google_meet, device, special, tinh_trang";
   const lopSelectMin =
-    "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, device";
+    "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, device, special, tinh_trang";
 
-  const [lopRes0, monRes, nsRes, cnRes] = await Promise.all([
+  const [lopRes0, monRes, nsRes, cnRes, banRes] = await Promise.all([
     supabase.from("ql_lop_hoc").select(lopSelectFull).order("class_full_name", { ascending: true }),
     supabase.from("ql_mon_hoc").select("id, ten_mon_hoc").order("ten_mon_hoc", { ascending: true }),
-    supabase.from("hr_nhan_su").select("id, full_name, avatar").order("full_name", { ascending: true }),
+    supabase.from("hr_nhan_su").select("id, full_name, avatar, ban").order("full_name", { ascending: true }),
     supabase.from("ql_chi_nhanh").select("id, ten").order("id", { ascending: true }),
+    supabase.from("hr_ban").select("id, ten_ban"),
   ]);
 
   let lopData: Record<string, unknown>[] | null = null;
@@ -75,14 +76,37 @@ export default async function LopHocPageData() {
     }))
     .filter((m) => Number.isFinite(m.id) && m.id > 0);
 
-  const nsRows = (nsRes.data ?? []) as { id?: unknown; full_name?: unknown; avatar?: unknown }[];
-  const nhanSuList = nsRows
+  // Tìm ban ID của "Đào tạo" để filter danh sách picker
+  const banRows = (!banRes.error ? banRes.data ?? [] : []) as { id?: unknown; ten_ban?: unknown }[];
+  const daotaoBan = banRows.find((b) =>
+    String(b.ten_ban ?? "")
+      .trim()
+      .toLowerCase()
+      .includes("đào tạo"),
+  );
+  const daotaoBanId =
+    daotaoBan?.id != null && Number.isFinite(Number(daotaoBan.id)) ? Number(daotaoBan.id) : null;
+
+  const nsRows = (nsRes.data ?? []) as { id?: unknown; full_name?: unknown; avatar?: unknown; ban?: unknown }[];
+  const nhanSuListFull = nsRows
     .map((r) => ({
       id: Number(r.id),
       full_name: String(r.full_name ?? "").trim() || "—",
       avatar: r.avatar != null ? String(r.avatar).trim() || null : null,
+      banId: r.ban != null && Number.isFinite(Number(r.ban)) ? Number(r.ban) : null,
     }))
     .filter((n) => Number.isFinite(n.id) && n.id > 0);
+
+  // Full list để hiển thị (card, detail panel)
+  const nhanSuList = nhanSuListFull.map(({ id, full_name, avatar }) => ({ id, full_name, avatar }));
+
+  // Picker list — chỉ giáo viên thuộc ban "Đào tạo"; fallback toàn bộ nếu chưa cấu hình ban
+  const pickerNhanSuList =
+    daotaoBanId != null
+      ? nhanSuListFull
+          .filter((n) => n.banId === daotaoBanId)
+          .map(({ id, full_name, avatar }) => ({ id, full_name, avatar }))
+      : nhanSuList;
 
   const cnRows = !cnRes.error ? ((cnRes.data ?? []) as { id?: unknown; ten?: unknown }[]) : [];
   const chiNhanhList = cnRows
@@ -101,7 +125,7 @@ export default async function LopHocPageData() {
       class_name: raw.class_name != null ? String(raw.class_name).trim() || null : null,
       class_full_name: raw.class_full_name != null ? String(raw.class_full_name).trim() || null : null,
       mon_hoc: raw.mon_hoc != null && Number.isFinite(Number(raw.mon_hoc)) ? Number(raw.mon_hoc) : null,
-      teacher: teacherIds[0] ?? null,
+      teacher: teacherIds,
       chi_nhanh_id:
         raw.chi_nhanh_id != null && Number.isFinite(Number(raw.chi_nhanh_id))
           ? Number(raw.chi_nhanh_id)
@@ -112,6 +136,8 @@ export default async function LopHocPageData() {
       url_google_meet:
         raw.url_google_meet != null ? String(raw.url_google_meet).trim() || null : null,
       device: raw.device != null ? String(raw.device).trim() || null : null,
+      special: raw.special != null && String(raw.special).trim() !== "",
+      tinh_trang: raw.tinh_trang !== false, // default true nếu null/undefined
     };
   });
 
@@ -129,6 +155,7 @@ export default async function LopHocPageData() {
       rows={validRows}
       monList={monList}
       nhanSuList={nhanSuList}
+      pickerNhanSuList={pickerNhanSuList}
       chiNhanhList={chiNhanhList}
       statsByLopId={statsByLopId}
       defaultChiNhanhId={defaultChiNhanhId}

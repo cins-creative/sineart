@@ -3,12 +3,12 @@
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Calendar, ChevronLeft, ChevronRight, Pencil, Plus, School, Search, X } from "lucide-react";
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Copy, LayoutGrid, LayoutList, Pencil, Plus, School, Search, X, Zap } from "lucide-react";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import type { LopHocFormState } from "@/app/admin/dashboard/lop-hoc/actions";
-import { createLopHoc, deleteLopHoc, updateLopHoc } from "@/app/admin/dashboard/lop-hoc/actions";
+import { createLopHoc, deleteLopHoc, duplicateLopHoc, toggleLopSpecial, updateLopHoc } from "@/app/admin/dashboard/lop-hoc/actions";
 import { cn } from "@/lib/utils";
 
 const DS = {
@@ -29,13 +29,18 @@ export type AdminLopRow = {
   class_name: string | null;
   class_full_name: string | null;
   mon_hoc: number | null;
-  teacher: number | null;
+  /** Mảng ID giáo viên (có thể rỗng). */
+  teacher: number[];
   chi_nhanh_id: number | null;
   avatar: string | null;
   lich_hoc: string | null;
   url_class: string | null;
   url_google_meet: string | null;
   device: string | null;
+  /** Lớp cấp tốc — theo cột `special`. */
+  special: boolean;
+  /** Lớp đang hoạt động — theo cột `tinh_trang`. */
+  tinh_trang: boolean;
 };
 
 type MonOpt = { id: number; ten_mon_hoc: string | null };
@@ -46,6 +51,8 @@ type Props = {
   rows: AdminLopRow[];
   monList: MonOpt[];
   nhanSuList: NsOpt[];
+  /** Chỉ nhân sự thuộc ban Đào tạo — dùng trong picker. */
+  pickerNhanSuList: NsOpt[];
   chiNhanhList: ChiOpt[];
   statsByLopId: Record<string, { dang_hoc: number; da_nghi: number }>;
   defaultChiNhanhId: number | null;
@@ -116,6 +123,182 @@ function NsAvatar({ name, src, size = 28 }: { name: string; src?: string | null;
   );
 }
 
+/** Bộ chọn nhiều giáo viên — dropdown + checkbox. */
+function TeacherMultiPicker({
+  nhanSuList,
+  value,
+  onChange,
+}: {
+  nhanSuList: NsOpt[];
+  value: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => searchRef.current?.focus(), 50);
+    } else {
+      setSearch("");
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open]);
+
+  const filtered = useMemo(
+    () =>
+      nhanSuList.filter(
+        (n) => !search || n.full_name.toLowerCase().includes(search.toLowerCase()),
+      ),
+    [nhanSuList, search],
+  );
+
+  const selectedItems = useMemo(
+    () =>
+      value
+        .map((id) => nhanSuList.find((n) => String(n.id) === id))
+        .filter(Boolean) as NsOpt[],
+    [value, nhanSuList],
+  );
+
+  function toggle(id: string) {
+    if (value.includes(id)) onChange(value.filter((v) => v !== id));
+    else onChange([...value, id]);
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Trigger button */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "flex min-h-[38px] w-full items-center rounded-[10px] border border-[#EAEAEA] bg-white px-3 py-1.5 text-left text-[13px] transition",
+          "shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] outline-none",
+          open
+            ? "border-[#BC8AF9] ring-[3px] ring-[#BC8AF9]/15"
+            : "hover:border-black/20 focus:border-[#BC8AF9] focus:ring-[3px] focus:ring-[#BC8AF9]/15",
+        )}
+      >
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          {selectedItems.length === 0 ? (
+            <span className="text-[#AAAAAA]">— Chọn giáo viên —</span>
+          ) : (
+            selectedItems.map((ns) => (
+              <span
+                key={ns.id}
+                className="flex items-center gap-1 rounded-full border border-[#BC8AF9]/25 bg-[#BC8AF9]/10 px-2 py-0.5"
+              >
+                <NsAvatar name={ns.full_name} src={ns.avatar} size={16} />
+                <span className="text-[11px] font-semibold text-[#4a1d96]">{ns.full_name}</span>
+              </span>
+            ))
+          )}
+        </span>
+        <ChevronDown
+          size={15}
+          className={cn(
+            "ml-2 shrink-0 text-[#AAAAAA] transition-transform duration-200",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-[10px] border border-[#EAEAEA] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.12)]">
+          {/* Search */}
+          <div className="border-b border-[#EAEAEA] p-2">
+            <div className="flex items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-[#fafafa] px-2 py-1.5">
+              <Search size={12} className="shrink-0 text-[#AAAAAA]" />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm tên giáo viên…"
+                className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[#BBBBBB]"
+              />
+              {search && (
+                <button type="button" onClick={() => setSearch("")} className="text-[#AAAAAA] hover:text-[#666]">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="max-h-[220px] overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-4 py-3 text-center text-[12px] text-[#BBBBBB]">
+                Không tìm thấy giáo viên phù hợp
+              </div>
+            ) : (
+              filtered.map((n) => {
+                const idStr = String(n.id);
+                const checked = value.includes(idStr);
+                return (
+                  <label
+                    key={n.id}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2.5 px-3 py-2 transition-colors",
+                      checked ? "bg-[#BC8AF9]/08" : "hover:bg-[#fafafa]",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(idStr)}
+                      className="h-3.5 w-3.5 cursor-pointer rounded accent-[#BC8AF9]"
+                    />
+                    <NsAvatar name={n.full_name} src={n.avatar} size={22} />
+                    <span
+                      className={cn(
+                        "flex-1 text-[12px]",
+                        checked ? "font-semibold text-[#1a1a2e]" : "text-[#323232]",
+                      )}
+                    >
+                      {n.full_name}
+                    </span>
+                    {checked && (
+                      <span className="text-[10px] font-bold text-[#BC8AF9]">✓</span>
+                    )}
+                  </label>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between border-t border-[#EAEAEA] bg-[#fafafa] px-3 py-2">
+            <span className="text-[11px] text-[#AAAAAA]">
+              {value.length > 0 ? `${value.length} đã chọn` : "Chưa chọn ai"}
+            </span>
+            {value.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="text-[11px] text-red-400 transition-colors hover:text-red-600"
+              >
+                Xóa tất cả
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LopHocCard({
   item,
   monList,
@@ -132,11 +315,29 @@ function LopHocCard({
   onClick: () => void;
 }) {
   const tenMon = monList.find((m) => m.id === item.mon_hoc)?.ten_mon_hoc ?? null;
-  const gv = nhanSuList.find((n) => n.id === item.teacher) ?? null;
+  const gvList = item.teacher
+    .map((id) => nhanSuList.find((n) => n.id === id))
+    .filter(Boolean) as NsOpt[];
+  const firstGv = gvList[0] ?? null;
+  const extraCount = gvList.length - 1;
   const devCfg = item.device ? DEVICE_CFG[item.device] ?? { bg: "#f3f4f6", text: "#6b7280" } : null;
   const accent = getAccent(tenMon);
   const aText = getAccentText(accent);
   const [imgErr, setImgErr] = useState(false);
+  const [toggling, setToggling] = useState(false);
+
+  const inactive = !item.tinh_trang;
+
+  async function handleSpecialToggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (toggling) return;
+    setToggling(true);
+    try {
+      await toggleLopSpecial(item.id, !item.special);
+    } finally {
+      setToggling(false);
+    }
+  }
 
   const subTitle =
     hvStats != null
@@ -146,26 +347,35 @@ function LopHocCard({
   return (
     <motion.div
       role="button"
-      tabIndex={0}
+      tabIndex={inactive ? -1 : 0}
       layout
-      onClick={onClick}
+      onClick={inactive ? undefined : onClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (!inactive && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onClick();
         }
       }}
-      whileHover={{ y: -2, borderColor: DS.teacher }}
+      whileHover={inactive ? {} : { y: -2, borderColor: DS.teacher }}
       transition={{ duration: 0.15 }}
       className={cn(
-        "flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl border-[1.5px] bg-white text-left shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-[#BC8AF9]/40",
-        isSelected && "ring-2 ring-[#BC8AF9]/25"
+        "flex w-full flex-col overflow-hidden rounded-2xl border-[1.5px] bg-white text-left shadow-sm outline-none",
+        inactive
+          ? "cursor-not-allowed opacity-55 grayscale-[40%]"
+          : "cursor-pointer focus-visible:ring-2 focus-visible:ring-[#BC8AF9]/40",
+        isSelected && !inactive && "ring-2 ring-[#BC8AF9]/25",
       )}
       style={{
-        borderColor: isSelected ? DS.teacher : DS.border,
-        boxShadow: isSelected ? "0 6px 20px rgba(188,138,249,0.18)" : "0 1px 4px rgba(0,0,0,.06)",
+        borderColor: inactive ? "#E0E0E0" : isSelected ? DS.teacher : DS.border,
+        boxShadow:
+          inactive
+            ? "none"
+            : isSelected
+              ? "0 6px 20px rgba(188,138,249,0.18)"
+              : "0 1px 4px rgba(0,0,0,.06)",
       }}
     >
+      {/* ── Image area ─────────────────────────── */}
       <div className="relative aspect-[16/7] w-full bg-[#F5F7F7]">
         {item.avatar && !imgErr ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -178,6 +388,7 @@ function LopHocCard({
         ) : (
           <div className="flex h-full w-full items-center justify-center text-3xl">🏫</div>
         )}
+        {/* Device badge — top left */}
         {devCfg && item.device ? (
           <div
             className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold shadow-sm"
@@ -186,9 +397,25 @@ function LopHocCard({
             {item.device}
           </div>
         ) : null}
+        {/* Cấp tốc quick-toggle — top right */}
+        <button
+          type="button"
+          title={item.special ? "Bỏ cấp tốc" : "Đánh dấu cấp tốc"}
+          disabled={toggling}
+          onClick={handleSpecialToggle}
+          className={cn(
+            "absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border transition-all disabled:opacity-50",
+            item.special
+              ? "border-orange-300/60 bg-gradient-to-br from-orange-400 to-red-400 text-white shadow-sm"
+              : "border-white/60 bg-black/20 text-white/70 backdrop-blur-sm hover:bg-black/35",
+          )}
+        >
+          <Zap size={11} strokeWidth={2.5} fill={item.special ? "currentColor" : "none"} />
+        </button>
+        {/* Môn học badge — bottom right of image */}
         {tenMon ? (
           <div
-            className="absolute right-2 top-2 max-w-[min(100%,12rem)] truncate rounded-full border px-2 py-0.5 text-[10px] font-bold shadow-sm"
+            className="absolute bottom-2 right-2 max-w-[min(100%,12rem)] truncate rounded-full border px-2 py-0.5 text-[10px] font-bold shadow-sm"
             style={{
               background: `${accent}f0`,
               color: aText,
@@ -199,17 +426,24 @@ function LopHocCard({
           </div>
         ) : null}
       </div>
-      <div className="flex flex-1 flex-col px-3.5 pb-3 pt-3">
+
+      {/* ── Card body ──────────────────────────── */}
+      <div className="flex flex-1 flex-col px-3.5 pb-2.5 pt-3">
         <p className="m-0 line-clamp-2 text-sm font-bold text-[#1a1a2e]">
           {item.class_name || item.class_full_name || "—"}
         </p>
         {item.class_full_name && item.class_name ? (
           <p className="mt-0.5 line-clamp-1 text-[11px] text-[#AAAAAA]">{item.class_full_name}</p>
         ) : null}
-        {gv ? (
+        {firstGv ? (
           <div className="mt-2 flex min-w-0 items-center gap-2">
-            <NsAvatar name={gv.full_name} src={gv.avatar} size={22} />
-            <span className="truncate text-[11px] font-semibold text-[#666]">{gv.full_name}</span>
+            <NsAvatar name={firstGv.full_name} src={firstGv.avatar} size={22} />
+            <span className="truncate text-[11px] font-semibold text-[#666]">{firstGv.full_name}</span>
+            {extraCount > 0 ? (
+              <span className="shrink-0 rounded-full border border-[#BC8AF9]/40 bg-[#BC8AF9]/10 px-1.5 py-px text-[10px] font-bold text-[#BC8AF9]">
+                +{extraCount}
+              </span>
+            ) : null}
           </div>
         ) : null}
         {item.lich_hoc ? (
@@ -220,10 +454,18 @@ function LopHocCard({
         ) : null}
         <p className="mt-1 text-[11px] tabular-nums text-[#AAAAAA]">{subTitle}</p>
       </div>
-      <div className="flex border-t border-[#F5F7F7]">
+
+      {/* ── Footer ─────────────────────────────── */}
+      <div className="flex items-center border-t border-[#F5F7F7]">
         <span className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-[#888]">
-          Chi tiết
+          {inactive ? "Không hoạt động" : "Chi tiết"}
         </span>
+        {/* Cấp tốc badge — bottom right */}
+        {item.special ? (
+          <span className="mr-2 rounded-full border border-orange-300/60 bg-gradient-to-r from-orange-400 to-red-400 px-2 py-0.5 text-[10px] font-bold text-white">
+            ⚡ Cấp tốc
+          </span>
+        ) : null}
         {item.url_class ? (
           <a
             href={item.url_class}
@@ -242,15 +484,177 @@ function LopHocCard({
   );
 }
 
+/** Dạng hàng ngang cho list view */
+function LopHocListRow({
+  item,
+  monList,
+  nhanSuList,
+  hvStats,
+  isSelected,
+  onClick,
+}: {
+  item: AdminLopRow;
+  monList: MonOpt[];
+  nhanSuList: NsOpt[];
+  hvStats: HvStats | null;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const tenMon = monList.find((m) => m.id === item.mon_hoc)?.ten_mon_hoc ?? null;
+  const gvList = item.teacher.map((id) => nhanSuList.find((n) => n.id === id)).filter(Boolean) as NsOpt[];
+  const accent = getAccent(tenMon);
+  const aText = getAccentText(accent);
+  const devCfg = item.device ? DEVICE_CFG[item.device] ?? { bg: "#f3f4f6", text: "#6b7280" } : null;
+  const inactive = !item.tinh_trang;
+  const [imgErr, setImgErr] = useState(false);
+  const [toggling, setToggling] = useState(false);
+
+  async function handleSpecialToggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (toggling) return;
+    setToggling(true);
+    try {
+      await toggleLopSpecial(item.id, !item.special);
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={inactive ? -1 : 0}
+      onClick={inactive ? undefined : onClick}
+      onKeyDown={(e) => {
+        if (!inactive && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={cn(
+        "flex items-center gap-3 border-b border-[#F5F7F7] px-4 py-2.5 text-left transition-colors",
+        inactive
+          ? "cursor-not-allowed opacity-50"
+          : "cursor-pointer hover:bg-[#fafafa]",
+        isSelected && !inactive && "bg-[#BC8AF9]/06",
+      )}
+    >
+      {/* Thumbnail */}
+      <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-[#F5F7F7]">
+        {item.avatar && !imgErr ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.avatar}
+            alt=""
+            className="h-full w-full object-cover"
+            onError={() => setImgErr(true)}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-base">🏫</div>
+        )}
+      </div>
+
+      {/* Class name */}
+      <div className="min-w-0 w-[180px] shrink-0">
+        <div className="flex items-center gap-1.5">
+          <p className="m-0 truncate text-[13px] font-bold text-[#1a1a2e]">
+            {item.class_name || item.class_full_name || "—"}
+          </p>
+          {/* Cấp tốc quick-toggle */}
+          <button
+            type="button"
+            title={item.special ? "Bỏ cấp tốc" : "Đánh dấu cấp tốc"}
+            disabled={toggling}
+            onClick={handleSpecialToggle}
+            className={cn(
+              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all disabled:opacity-50",
+              item.special
+                ? "border-orange-300/60 bg-gradient-to-br from-orange-400 to-red-400 text-white"
+                : "border-[#E5E5E5] bg-white text-[#CCCCCC] hover:border-orange-300 hover:text-orange-400",
+            )}
+          >
+            <Zap size={9} strokeWidth={2.5} fill={item.special ? "currentColor" : "none"} />
+          </button>
+        </div>
+        {item.class_full_name && item.class_name ? (
+          <p className="m-0 truncate text-[10px] text-[#AAAAAA]">{item.class_full_name}</p>
+        ) : null}
+      </div>
+
+      {/* Mon */}
+      <div className="w-[120px] shrink-0">
+        {tenMon ? (
+          <span
+            className="inline-block max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+            style={{ background: `${accent}20`, color: aText, borderColor: `${accent}55` }}
+          >
+            {tenMon}
+          </span>
+        ) : <span className="text-[11px] text-[#DDD]">—</span>}
+      </div>
+
+      {/* Teachers */}
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+        {gvList.length === 0 ? (
+          <span className="text-[11px] text-[#CCCCCC]">—</span>
+        ) : gvList.map((gv) => (
+          <span key={gv.id} className="flex items-center gap-1">
+            <NsAvatar name={gv.full_name} src={gv.avatar} size={18} />
+            <span className="max-w-[80px] truncate text-[11px] font-medium text-[#555]">{gv.full_name}</span>
+          </span>
+        ))}
+      </div>
+
+      {/* Lich hoc */}
+      {item.lich_hoc ? (
+        <div className="hidden w-[110px] shrink-0 items-center gap-1 text-[11px] text-[#888] md:flex">
+          <Calendar className="h-3 w-3 shrink-0 text-[#CCCCCC]" />
+          <span className="truncate">{item.lich_hoc}</span>
+        </div>
+      ) : <div className="hidden w-[110px] shrink-0 md:block" />}
+
+      {/* Device */}
+      {devCfg && item.device ? (
+        <span
+          className="hidden shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold sm:inline-block"
+          style={{ background: devCfg.bg, color: devCfg.text }}
+        >
+          {item.device}
+        </span>
+      ) : null}
+
+      {/* Stats */}
+      <div className="w-[56px] shrink-0 text-right text-[11px] tabular-nums text-[#AAAAAA]">
+        {hvStats != null ? (
+          <span>{hvStats.dang_hoc} HV</span>
+        ) : "—"}
+      </div>
+
+      {/* Status */}
+      {inactive ? (
+        <span className="hidden shrink-0 rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[9px] font-semibold text-gray-400 sm:inline-block">
+          Không HĐ
+        </span>
+      ) : null}
+
+      {/* Arrow */}
+      <ChevronRight size={14} className="shrink-0 text-[#CCCCCC]" />
+    </div>
+  );
+}
+
 type DetailForm = {
   class_name: string;
   class_full_name: string;
   mon_hoc: string;
-  teacher: string;
+  /** Mảng string ID giáo viên. */
+  teacher: string[];
   chi_nhanh_id: string;
   device: string;
   lich_hoc: string;
   avatar: string;
+  special: boolean;
+  tinh_trang: boolean;
 };
 
 function rowToForm(r: AdminLopRow): DetailForm {
@@ -258,11 +662,13 @@ function rowToForm(r: AdminLopRow): DetailForm {
     class_name: r.class_name ?? "",
     class_full_name: r.class_full_name ?? "",
     mon_hoc: r.mon_hoc != null ? String(r.mon_hoc) : "",
-    teacher: r.teacher != null ? String(r.teacher) : "",
+    teacher: r.teacher.map(String),
     chi_nhanh_id: r.chi_nhanh_id != null ? String(r.chi_nhanh_id) : "",
     device: r.device ?? "",
     lich_hoc: r.lich_hoc ?? "",
     avatar: r.avatar ?? "",
+    special: r.special,
+    tinh_trang: r.tinh_trang,
   };
 }
 
@@ -270,6 +676,7 @@ function LopDetailPanel({
   item,
   monList,
   nhanSuList,
+  pickerNhanSuList,
   chiNhanhList,
   hvStats,
   onClose,
@@ -277,6 +684,7 @@ function LopDetailPanel({
   item: AdminLopRow;
   monList: MonOpt[];
   nhanSuList: NsOpt[];
+  pickerNhanSuList: NsOpt[];
   chiNhanhList: ChiOpt[];
   hvStats: HvStats | null;
   onClose: () => void;
@@ -289,6 +697,7 @@ function LopDetailPanel({
   const [confirmDel, setConfirmDel] = useState(false);
   const [pending, startTransition] = useTransition();
   const [delBusy, setDelBusy] = useState(false);
+  const [dupBusy, setDupBusy] = useState(false);
 
   useEffect(() => {
     setForm(rowToForm(item));
@@ -298,7 +707,9 @@ function LopDetailPanel({
   }, [item]);
 
   const tenMon = monList.find((m) => m.id === item.mon_hoc)?.ten_mon_hoc ?? null;
-  const gv = nhanSuList.find((n) => n.id === item.teacher) ?? null;
+  const gvList = item.teacher
+    .map((id) => nhanSuList.find((n) => n.id === id))
+    .filter(Boolean) as NsOpt[];
   const devCfg = item.device ? DEVICE_CFG[item.device] ?? { bg: "#f3f4f6", text: "#6b7280" } : null;
 
   function setK<K extends keyof DetailForm>(k: K, v: DetailForm[K]) {
@@ -312,11 +723,13 @@ function LopDetailPanel({
     fd.set("class_name", form.class_name);
     fd.set("class_full_name", form.class_full_name);
     fd.set("mon_hoc", form.mon_hoc);
-    fd.set("teacher", form.teacher);
+    form.teacher.forEach((id) => fd.append("teacher", id));
     fd.set("chi_nhanh_id", form.chi_nhanh_id);
     fd.set("device", form.device);
     fd.set("lich_hoc", form.lich_hoc);
     fd.set("avatar", form.avatar);
+    fd.set("special", form.special ? "1" : "");
+    fd.set("tinh_trang", form.tinh_trang ? "1" : "");
     startTransition(async () => {
       const r = await updateLopHoc(null, fd);
       if (r.ok) {
@@ -341,6 +754,21 @@ function LopDetailPanel({
       }
     } finally {
       setDelBusy(false);
+    }
+  }
+
+  async function duplicate() {
+    setDupBusy(true);
+    setErr(null);
+    try {
+      const r = await duplicateLopHoc(item.id);
+      if (r.ok) {
+        router.refresh();
+      } else {
+        setErr(r.error);
+      }
+    } finally {
+      setDupBusy(false);
     }
   }
 
@@ -389,6 +817,16 @@ function LopDetailPanel({
             {devCfg && item.device ? (
               <span className="rounded-full px-2 py-px text-[10px] font-bold" style={{ background: devCfg.bg, color: devCfg.text }}>
                 {item.device}
+              </span>
+            ) : null}
+            {item.special ? (
+              <span className="rounded-full border border-orange-300/60 bg-gradient-to-r from-orange-400 to-red-400 px-2 py-px text-[10px] font-bold text-white">
+                Cấp tốc
+              </span>
+            ) : null}
+            {!item.tinh_trang ? (
+              <span className="rounded-full border border-gray-300 bg-gray-100 px-2 py-px text-[10px] font-semibold text-gray-500">
+                Không hoạt động
               </span>
             ) : null}
           </div>
@@ -482,14 +920,11 @@ function LopDetailPanel({
               </div>
               <div>
                 <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Giáo viên</div>
-                <select className={inpClass()} value={form.teacher} onChange={(e) => setK("teacher", e.target.value)}>
-                  <option value="">— Chọn —</option>
-                  {nhanSuList.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.full_name}
-                    </option>
-                  ))}
-                </select>
+                <TeacherMultiPicker
+                  nhanSuList={pickerNhanSuList}
+                  value={form.teacher}
+                  onChange={(ids) => setK("teacher", ids)}
+                />
               </div>
               <div>
                 <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Thiết bị</div>
@@ -511,6 +946,41 @@ function LopDetailPanel({
                   placeholder="T2, T4, T6 — 8:00"
                 />
               </div>
+              {/* Toggles */}
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setK("special", !form.special)}
+                  className={cn(
+                    "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
+                    form.special
+                      ? "border-orange-300/60 bg-gradient-to-r from-orange-50 to-red-50 text-orange-700"
+                      : "border-[#EAEAEA] bg-white text-[#888]",
+                  )}
+                >
+                  <span>Cấp tốc</span>
+                  <span className={cn(
+                    "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
+                    form.special ? "border-orange-400 bg-orange-400" : "border-[#CCCCCC] bg-white",
+                  )} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setK("tinh_trang", !form.tinh_trang)}
+                  className={cn(
+                    "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
+                    form.tinh_trang
+                      ? "border-emerald-300/60 bg-emerald-50 text-emerald-700"
+                      : "border-[#EAEAEA] bg-white text-[#888]",
+                  )}
+                >
+                  <span>{form.tinh_trang ? "Hoạt động" : "Không HĐ"}</span>
+                  <span className={cn(
+                    "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
+                    form.tinh_trang ? "border-emerald-500 bg-emerald-500" : "border-[#CCCCCC] bg-white",
+                  )} />
+                </button>
+              </div>
             </div>
           ) : (
             <dl className="m-0 space-y-2 text-[13px]">
@@ -528,14 +998,16 @@ function LopDetailPanel({
                   {tenMon ?? "—"}
                 </dd>
               </div>
-              <div className="flex items-center justify-between gap-2 border-b border-[#f0f0f0] py-1">
-                <dt className="text-[10px] font-bold uppercase text-[#AAA]">Giáo viên</dt>
-                <dd className="m-0">
-                  {gv ? (
-                    <span className="flex items-center gap-2">
-                      <NsAvatar name={gv.full_name} src={gv.avatar} size={28} />
-                      <span className="font-bold text-pink-500">{gv.full_name}</span>
-                    </span>
+              <div className="flex items-start justify-between gap-2 border-b border-[#f0f0f0] py-1">
+                <dt className="shrink-0 text-[10px] font-bold uppercase text-[#AAA]">Giáo viên</dt>
+                <dd className="m-0 flex flex-col items-end gap-1">
+                  {gvList.length > 0 ? (
+                    gvList.map((gv) => (
+                      <span key={gv.id} className="flex items-center gap-2">
+                        <NsAvatar name={gv.full_name} src={gv.avatar} size={28} />
+                        <span className="font-bold text-pink-500">{gv.full_name}</span>
+                      </span>
+                    ))
                   ) : (
                     <span className="text-gray-300">—</span>
                   )}
@@ -548,6 +1020,32 @@ function LopDetailPanel({
               <div className="flex justify-between gap-2 py-1">
                 <dt className="text-[10px] font-bold uppercase text-[#AAA]">Lịch học</dt>
                 <dd className="m-0 font-semibold text-gray-700">{item.lich_hoc ?? "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-2 border-t border-[#f0f0f0] py-1">
+                <dt className="text-[10px] font-bold uppercase text-[#AAA]">Cấp tốc</dt>
+                <dd className="m-0">
+                  {item.special ? (
+                    <span className="rounded-full border border-orange-300/60 bg-gradient-to-r from-orange-400 to-red-400 px-2 py-0.5 text-[10px] font-bold text-white">
+                      Cấp tốc
+                    </span>
+                  ) : (
+                    <span className="text-[12px] text-[#CCCCCC]">Không</span>
+                  )}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2 py-1">
+                <dt className="text-[10px] font-bold uppercase text-[#AAA]">Tình trạng</dt>
+                <dd className="m-0">
+                  {item.tinh_trang ? (
+                    <span className="rounded-full border border-emerald-300/60 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Đang hoạt động
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-gray-300 bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                      Không hoạt động
+                    </span>
+                  )}
+                </dd>
               </div>
             </dl>
           )}
@@ -565,7 +1063,16 @@ function LopDetailPanel({
         ) : null}
 
         {!editing && canDelete ? (
-          <div className="pt-1">
+          <div className="space-y-2 pt-1">
+            <button
+              type="button"
+              disabled={dupBusy}
+              onClick={duplicate}
+              className="flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-[#BC8AF9]/40 bg-[#BC8AF9]/06 py-2 text-xs font-semibold text-[#BC8AF9] transition-colors hover:bg-[#BC8AF9]/12 disabled:opacity-50"
+            >
+              <Copy size={13} />
+              {dupBusy ? "Đang nhân bản…" : "Nhân bản lớp này"}
+            </button>
             {confirmDel ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-[13px]">
                 <p className="m-0 mb-2 font-semibold text-red-800">Xóa «{item.class_full_name || item.class_name || "lớp"}»?</p>
@@ -603,19 +1110,22 @@ function CreateLopModal({
   open,
   onClose,
   monList,
-  nhanSuList,
+  pickerNhanSuList,
   chiNhanhList,
   defaultChiNhanhId,
 }: {
   open: boolean;
   onClose: () => void;
   monList: MonOpt[];
-  nhanSuList: NsOpt[];
+  pickerNhanSuList: NsOpt[];
   chiNhanhList: ChiOpt[];
   defaultChiNhanhId: number | null;
 }) {
   const router = useRouter();
   const [state, action, pending] = useActionState(createLopHoc, null as LopHocFormState | null);
+  const [createTeachers, setCreateTeachers] = useState<string[]>([]);
+  const [createSpecial, setCreateSpecial] = useState(false);
+  const [createTinhTrang, setCreateTinhTrang] = useState(true);
 
   useEffect(() => {
     if (state?.ok) {
@@ -685,14 +1195,14 @@ function CreateLopModal({
             </div>
             <div>
               <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Giáo viên</div>
-              <select name="teacher" className={inpClass()} defaultValue="">
-                <option value="">— Chọn giáo viên —</option>
-                {nhanSuList.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.full_name}
-                  </option>
-                ))}
-              </select>
+              <TeacherMultiPicker
+                nhanSuList={pickerNhanSuList}
+                value={createTeachers}
+                onChange={setCreateTeachers}
+              />
+              {createTeachers.map((id) => (
+                <input key={id} type="hidden" name="teacher" value={id} />
+              ))}
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div>
@@ -712,6 +1222,43 @@ function CreateLopModal({
               </div>
             </div>
             <AdminCfImageInput label="Ảnh lớp" name="avatar" defaultValue="" />
+            {/* Toggles */}
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setCreateSpecial((v) => !v)}
+                className={cn(
+                  "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
+                  createSpecial
+                    ? "border-orange-300/60 bg-gradient-to-r from-orange-50 to-red-50 text-orange-700"
+                    : "border-[#EAEAEA] bg-white text-[#888]",
+                )}
+              >
+                <span>Cấp tốc</span>
+                <span className={cn(
+                  "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
+                  createSpecial ? "border-orange-400 bg-orange-400" : "border-[#CCCCCC] bg-white",
+                )} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateTinhTrang((v) => !v)}
+                className={cn(
+                  "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
+                  createTinhTrang
+                    ? "border-emerald-300/60 bg-emerald-50 text-emerald-700"
+                    : "border-[#EAEAEA] bg-white text-[#888]",
+                )}
+              >
+                <span>{createTinhTrang ? "Hoạt động" : "Không HĐ"}</span>
+                <span className={cn(
+                  "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
+                  createTinhTrang ? "border-emerald-500 bg-emerald-500" : "border-[#CCCCCC] bg-white",
+                )} />
+              </button>
+            </div>
+            <input type="hidden" name="special" value={createSpecial ? "1" : ""} />
+            <input type="hidden" name="tinh_trang" value={createTinhTrang ? "1" : ""} />
           </div>
           <div className="flex shrink-0 justify-end gap-2 border-t border-[#f0f0f0] px-5 py-3">
             <button type="button" onClick={onClose} className="rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2 text-[13px] text-[#666]">
@@ -735,6 +1282,7 @@ export default function LopHocListView({
   rows,
   monList,
   nhanSuList,
+  pickerNhanSuList,
   chiNhanhList,
   statsByLopId,
   defaultChiNhanhId,
@@ -743,9 +1291,12 @@ export default function LopHocListView({
   const [w, setW] = useState(960);
   const [lopSearch, setLopSearch] = useState("");
   const [filterMon, setFilterMon] = useState<number | "">("");
+  const [filterSpecial, setFilterSpecial] = useState(false);
+  const [filterTinhTrang, setFilterTinhTrang] = useState<"" | "active" | "inactive">("");
   const [lopListPage, setLopListPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "row">("grid");
 
   useEffect(() => {
     const el = containerRef.current;
@@ -764,16 +1315,23 @@ export default function LopHocListView({
         !s ||
         (l.class_full_name ?? "").toLowerCase().includes(s) ||
         (l.class_name ?? "").toLowerCase().includes(s);
-      const gv = nhanSuList.find((n) => n.id === l.teacher);
-      const gvHit = gv ? gv.full_name.toLowerCase().includes(s) : false;
+      const gvHit = l.teacher.some((tid) => {
+        const gv = nhanSuList.find((n) => n.id === tid);
+        return gv ? gv.full_name.toLowerCase().includes(s) : false;
+      });
       const monOk = filterMon === "" || l.mon_hoc === filterMon;
-      return (nameHit || gvHit) && monOk;
+      const specialOk = !filterSpecial || l.special === true;
+      const tinhTrangOk =
+        filterTinhTrang === "" ||
+        (filterTinhTrang === "active" && l.tinh_trang) ||
+        (filterTinhTrang === "inactive" && !l.tinh_trang);
+      return (nameHit || gvHit) && monOk && specialOk && tinhTrangOk;
     });
-  }, [rows, lopSearch, filterMon, nhanSuList]);
+  }, [rows, lopSearch, filterMon, filterSpecial, filterTinhTrang, nhanSuList]);
 
   useEffect(() => {
     setLopListPage(1);
-  }, [lopSearch, filterMon]);
+  }, [lopSearch, filterMon, filterSpecial, filterTinhTrang]);
 
   const lopTotalPages = useMemo(
     () => Math.max(1, Math.ceil(filteredLop.length / LOP_LIST_PAGE_SIZE)),
@@ -820,6 +1378,35 @@ export default function LopHocListView({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* View mode toggle */}
+          <div className="flex rounded-lg border border-[#EAEAEA] bg-[#fafafa] p-0.5">
+            <button
+              type="button"
+              title="Dạng lưới"
+              onClick={() => setViewMode("grid")}
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                viewMode === "grid"
+                  ? "bg-white text-[#BC8AF9] shadow-sm"
+                  : "text-[#AAAAAA] hover:text-[#666]",
+              )}
+            >
+              <LayoutGrid size={14} />
+            </button>
+            <button
+              type="button"
+              title="Dạng danh sách"
+              onClick={() => setViewMode("row")}
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                viewMode === "row"
+                  ? "bg-white text-[#BC8AF9] shadow-sm"
+                  : "text-[#AAAAAA] hover:text-[#666]",
+              )}
+            >
+              <LayoutList size={14} />
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => setShowCreate(true)}
@@ -878,6 +1465,68 @@ export default function LopHocListView({
                 </button>
               ))}
             </div>
+            {/* Filter row 2 — cấp tốc + tình trạng */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#CCCCCC]">Lọc:</span>
+              {/* Cấp tốc toggle */}
+              <button
+                type="button"
+                onClick={() => setFilterSpecial((v) => !v)}
+                className={cn(
+                  "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                  filterSpecial
+                    ? "border-orange-300 bg-gradient-to-r from-orange-400/20 to-red-400/20 text-orange-600"
+                    : "border-[#EAEAEA] text-black/50 hover:border-orange-200 hover:text-orange-500",
+                )}
+              >
+                <Zap size={10} strokeWidth={2.5} fill={filterSpecial ? "currentColor" : "none"} />
+                Cấp tốc
+              </button>
+              {/* Tình trạng hoạt động */}
+              <button
+                type="button"
+                onClick={() => setFilterTinhTrang(filterTinhTrang === "active" ? "" : "active")}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                  filterTinhTrang === "active"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                    : "border-[#EAEAEA] text-black/50 hover:border-emerald-200 hover:text-emerald-600",
+                )}
+              >
+                ✓ Đang HĐ
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTinhTrang(filterTinhTrang === "inactive" ? "" : "inactive")}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                  filterTinhTrang === "inactive"
+                    ? "border-gray-400 bg-gray-100 text-gray-600"
+                    : "border-[#EAEAEA] text-black/50 hover:border-gray-300 hover:text-gray-500",
+                )}
+              >
+                Ngừng HĐ
+              </button>
+              {/* Reset tất cả filter */}
+              {(filterSpecial || filterTinhTrang !== "" || filterMon !== "" || lopSearch) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterSpecial(false);
+                    setFilterTinhTrang("");
+                    setFilterMon("");
+                    setLopSearch("");
+                  }}
+                  className="ml-1 flex items-center gap-1 rounded-full border border-[#EAEAEA] px-2 py-1 text-[11px] text-black/40 transition-colors hover:border-red-200 hover:text-red-500"
+                >
+                  <X size={10} /> Xóa tất cả
+                </button>
+              ) : null}
+              {/* Đếm kết quả */}
+              <span className="ml-auto text-[11px] tabular-nums text-[#AAAAAA]">
+                {filteredLop.length} / {rows.length} lớp
+              </span>
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
@@ -885,15 +1534,42 @@ export default function LopHocListView({
               <div className="flex flex-col items-center gap-2 pt-12 text-center">
                 <span className="text-4xl">🏫</span>
                 <p className="m-0 text-sm text-[#888]">
-                  {lopSearch || filterMon !== "" ? "Không tìm thấy lớp phù hợp" : "Chưa có lớp học nào. Nhấn «Lớp học mới»."}
+                  {lopSearch || filterMon !== "" || filterSpecial || filterTinhTrang !== "" ? "Không tìm thấy lớp phù hợp" : "Chưa có lớp học nào. Nhấn «Lớp học mới»."}
                 </p>
               </div>
-            ) : (
+            ) : viewMode === "grid" ? (
               <div className={cn("grid gap-3.5 pb-2 pt-1", isMobile ? "grid-cols-1" : "grid-cols-[repeat(auto-fill,minmax(220px,1fr))]")}>
                 {pagedFilteredLop.map((item) => {
                   const st = statsByLopId[String(item.id)];
                   return (
                     <LopHocCard
+                      key={item.id}
+                      item={item}
+                      monList={monList}
+                      nhanSuList={nhanSuList}
+                      hvStats={st ?? { dang_hoc: 0, da_nghi: 0 }}
+                      isSelected={selectedId === item.id}
+                      onClick={() => setSelectedId(selectedId === item.id ? null : item.id)}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="pb-2 pt-1">
+                {/* Row view header */}
+                <div className="mb-1 hidden grid-cols-[36px_180px_120px_1fr_110px_60px_auto] items-center gap-3 px-4 pb-1 text-[9px] font-bold uppercase tracking-widest text-[#CCCCCC] md:grid">
+                  <span />
+                  <span>Tên lớp</span>
+                  <span>Môn</span>
+                  <span>Giáo viên</span>
+                  <span>Lịch học</span>
+                  <span className="text-right">HV</span>
+                  <span />
+                </div>
+                {pagedFilteredLop.map((item) => {
+                  const st = statsByLopId[String(item.id)];
+                  return (
+                    <LopHocListRow
                       key={item.id}
                       item={item}
                       monList={monList}
@@ -970,6 +1646,7 @@ export default function LopHocListView({
                 item={selected}
                 monList={monList}
                 nhanSuList={nhanSuList}
+                pickerNhanSuList={pickerNhanSuList}
                 chiNhanhList={chiNhanhList}
                 hvStats={statsByLopId[String(selected.id)] ?? null}
                 onClose={() => setSelectedId(null)}
@@ -985,7 +1662,7 @@ export default function LopHocListView({
             open={showCreate}
             onClose={() => setShowCreate(false)}
             monList={monList}
-            nhanSuList={nhanSuList}
+            pickerNhanSuList={pickerNhanSuList}
             chiNhanhList={chiNhanhList}
             defaultChiNhanhId={defaultChiNhanhId}
           />

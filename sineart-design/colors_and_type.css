@@ -1,0 +1,268 @@
+/* ════════════════════════════════════════
+   Sine Art — Colors & Type
+   Source: src/app/sineart-home.css + brand guide sheet
+   ════════════════════════════════════════ */
+
+/* Fonts: Geomanist (display) is proprietary — fallback to Grandstander from Google Fonts.
+   Be Vietnam Pro loaded alongside for experimental display use (hero / headlines).
+   Quicksand (body) is loaded LOCALLY from /fonts — brand-uploaded TTFs. */
+@import url("https://fonts.googleapis.com/css2?family=Grandstander:wght@500;700;900&family=Be+Vietnam+Pro:wght@500;700;800;900&display=swap");
+
+@font-face {
+  font-family: "Quicksand";
+  src: url("fonts/QUICKSAND-LIGHT.TTF") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Quicksand";
+  src: url("fonts/QUICKSAND-MEDIUM.TTF") format("truetype");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Quicksand";
+  src: url("fonts/QUICKSAND-SEMIBOLD.TTF") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Quicksand";
+  src: url("fonts/QUICKSAND-BOLD.TTF") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+/* Variable font covers any in-between weights (300–700) */
+@font-face {
+  font-family: "Quicksand VF";
+  src: url("fonts/QUICKSAND-VARIABLEFONT_WGHT.TTF") format("truetype-variations"),
+       url("fonts/QUICKSAND-VARIABLEFONT_WGHT.TTF") format("truetype");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ───── COLORS — foundations ───── */
+  --bg: #ffffff;
+  --ink: #2d2020;                       /* warm near-black, never pure #000 */
+  --ink-2: rgba(45, 32, 32, 0.78);      /* body copy on white */
+  --ink-muted: rgba(45, 32, 32, 0.56);  /* captions / sub */
+  --ink-divider: rgba(45, 32, 32, 0.1);
+  --ink-border: rgba(45, 32, 32, 0.07);
+  --ink-border-strong: rgba(45, 32, 32, 0.12);
+  --ink-tint: rgba(45, 32, 32, 0.045);  /* resting subtle surface */
+
+  /* ───── COLORS — brand gradient ───── */
+  --peach: #f8a668;
+  --magenta: #ee5b9f;
+  --grad: linear-gradient(135deg, #f8a668, #ee5b9f);
+  --grad-r: linear-gradient(135deg, #ee5b9f, #f8a668);
+  /* Richer 4-stop CTA (from nav-cta-btn) */
+  --grad-cta: linear-gradient(145deg, #fbc08a 0%, #f8a668 22%, #ee5b9f 78%, #d9468a 100%);
+
+  /* ───── COLORS — category swatches (per brand sheet) ───── */
+  --cat-hh: #fde859;   /* Hình họa — figure drawing (yellow) */
+  --cat-bc: #6efec0;   /* Bố cục màu — color composition (mint) */
+  --cat-tt: #bb89f8;   /* Trang trí màu — color decoration (lilac) */
+  --cat-dg: #f8a668;   /* Digital (peach, reuses brand) */
+  --cat-mt: #f0f0f0;   /* MT cơ bản (neutral) */
+  --surface-tint: rgba(187, 137, 248, 0.08); /* lilac surface hover */
+
+  /* ───── COLORS — on dark (hero overlay) ───── */
+  --on-dark: #ffffff;
+  --on-dark-2: rgba(255, 255, 255, 0.86);
+  --on-dark-muted: rgba(255, 255, 255, 0.55);
+
+  /* ───── TYPE — families ───── */
+  --font-display: "Be Vietnam Pro", "Geomanist", "Grandstander", Quicksand, system-ui, sans-serif;
+  --font-body: "Quicksand", system-ui, sans-serif;
+
+  /* ───── TYPE — scale ───── */
+  --fs-eyebrow: 11px;     /* uppercase, tracking 0.14em */
+  --fs-seclabel: 12px;    /* uppercase, tracking 0.1em */
+  --fs-caption: 11px;
+  --fs-small: 12px;
+  --fs-body: 15px;        /* base — upgrades to 16 on ≥900px */
+  --fs-body-lg: 16px;
+  --fs-subhead: 18px;
+  --fs-stat: 28px;        /* 42px on desktop */
+  --fs-feat: 24px;
+  --fs-h1: clamp(26px, 5.5vw, 40px);
+  --fs-h1-desktop: clamp(36px, 4.2vw, 52px);
+
+  /* ───── TYPE — weights ───── */
+  --fw-reg: 400;
+  --fw-med: 500;
+  --fw-semi: 600;
+  --fw-bold: 700;
+  --fw-black: 800;
+
+  /* ───── SPACING & radii ───── */
+  --gap: 10px;              /* 14px on ≥900px */
+  --r: 12px;                /* card radius (bo góc) — default everywhere */
+  --r-lg: 16px;             /* large card on desktop, hero modules */
+  --r-pill: 999px;
+  --r-sm: 12px;
+
+  /* ───── SHADOWS (warm, never cool) ───── */
+  --shadow-sm: 0 2px 10px rgba(45, 32, 32, 0.04);
+  --shadow: 0 4px 18px rgba(45, 32, 32, 0.06);
+  --shadow-md: 0 10px 32px rgba(45, 32, 32, 0.12);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.35);
+  --shadow-cta: 0 8px 28px rgba(232, 72, 150, 0.38),
+                0 2px 10px rgba(45, 32, 32, 0.12),
+                inset 0 1px 0 rgba(255, 255, 255, 0.35),
+                inset 0 -1px 0 rgba(45, 32, 32, 0.06);
+  --shadow-pill: 0 4px 14px rgba(238, 91, 159, 0.35);
+
+  /* ───── EASING ───── */
+  --ease-out: cubic-bezier(0.22, 1, 0.32, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-soft: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@media (min-width: 900px) {
+  :root {
+    --gap: 14px;
+    --fs-body: 16px;
+    --fs-stat: 42px;
+  }
+}
+
+/* ──────────────────────────────
+   BASE
+────────────────────────────── */
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ──────────────────────────────
+   SEMANTIC TYPE
+────────────────────────────── */
+.sa-eyebrow {
+  font-size: var(--fs-eyebrow);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 0 0 10px;
+}
+
+.sa-sec-label {
+  font-size: var(--fs-seclabel);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.sa-sec-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--ink-divider);
+}
+
+.sa-h1 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-black);
+  font-size: var(--fs-h1);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.sa-h1 em, .sa-grad-text {
+  font-style: normal;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.sa-h2 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-black);
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.sa-h3 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-black);
+  font-size: var(--fs-subhead);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.sa-body {
+  font-family: var(--font-body);
+  font-weight: var(--fw-med);
+  font-size: var(--fs-body);
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+.sa-caption {
+  font-family: var(--font-body);
+  font-weight: var(--fw-semi);
+  font-size: var(--fs-small);
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+.sa-stat-n {
+  font-family: var(--font-display);
+  font-weight: var(--fw-black);
+  font-size: var(--fs-stat);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.sa-stat-l {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
+  color: var(--ink-2);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+/* Logo wordmark */
+.sa-logo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.12em;
+  font-family: var(--font-display);
+  font-weight: var(--fw-black);
+  font-size: 22px;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  text-decoration: none;
+}
+.sa-logo-sine { color: var(--ink); }
+.sa-logo-art {
+  font-weight: var(--fw-black);
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}

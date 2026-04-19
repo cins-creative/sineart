@@ -1,7 +1,7 @@
 # Sine Art – Project Context for Claude Code
 
 > Đọc file này trước khi làm bất cứ việc gì.
-> Xem thêm: `SITE_STRUCTURE.md` (routing + URL rules), `HOMEPAGE_BRIEF.md` (data mapping trang chủ).
+> Xem thêm: `SITE_STRUCTURE.md` (routing + URL rules), `HOMEPAGE_BRIEF.md` (data mapping trang chủ), `.claude/skills/sineart-design/SKILL.md` (design system).
 
 ---
 
@@ -9,6 +9,41 @@
 
 Sine Art (`sineart.vn`) là trường mỹ thuật tại Việt Nam, ~350 học viên.
 Stack: Next.js 14 App Router + TypeScript + Tailwind + Supabase.
+
+---
+
+## Design System — QUAN TRỌNG
+
+Sine Art có design system riêng được dựng từ Claude Design.
+**Khi tạo hoặc sửa bất kỳ UI component nào, LUÔN tuân thủ design system này.**
+
+### Nguồn chính thức
+
+| Nguồn | Mục đích |
+|-------|----------|
+| `.cursorrules` (root) | Rule auto-load cho Cursor mọi chat |
+| `.claude/skills/sineart-design/SKILL.md` | Skill file — đọc trước khi làm UI |
+| `.claude/skills/sineart-design/README.md` | Tài liệu đầy đủ về design system |
+| `.claude/skills/sineart-design/HOW-TO-USE.md` | Hướng dẫn áp dụng |
+| `src/styles/design-tokens.css` | CSS variables (colors, typography) — đã import vào globals |
+| `public/fonts/` | Font files (Quicksand, Be Vietnam Pro) |
+| `public/brand/` | Logo, icon, illustration |
+
+### Brand tokens tóm tắt
+
+- **Gradient chính:** `#F8A568 → #EE5CA2` (CTA, điểm nhấn, featured card)
+- **Secondary:** `#BB89F8` (teacher accent, highlight phụ)
+- **Font public site:** Quicksand
+- **Font admin/HR:** Be Vietnam Pro
+- **Ảnh:** LUÔN dùng Cloudflare Images URL format `imagedelivery.net/...`
+
+### Quy tắc áp dụng
+
+- Trước khi viết UI component mới, đọc `.claude/skills/sineart-design/SKILL.md`
+- Dùng CSS variables từ `design-tokens.css` — không hardcode hex trong component
+- Dùng Tailwind utility class đã map sang token (xem `tailwind.config.ts`) thay vì arbitrary value
+- Không tự sáng tạo màu/spacing/radius mới — đề xuất thêm vào design system trước nếu cần
+- Component layout phải match pattern trong `README.md` của skill (card, button, form, modal)
 
 ---
 
@@ -29,55 +64,70 @@ Stack: Next.js 14 App Router + TypeScript + Tailwind + Supabase.
 ## Cấu trúc thư mục
 
 ```
-src/
-  app/                        # App Router — xem SITE_STRUCTURE.md để biết toàn bộ routes
-    (home)/
-      page.tsx                # Trang chủ — xem HOMEPAGE_BRIEF.md
-    khoa-hoc/
-      page.tsx
-      [slug]/page.tsx
-    gallery/
-      page.tsx
-      [mon]/page.tsx
-    tra-cuu-thong-tin/
-      page.tsx
-      [slug]/page.tsx
-    tong-hop-de-thi/
-      page.tsx
-      [slug]/page.tsx
-    blogs/
-      page.tsx
-      [slug]/page.tsx
-    mau-ve/
-      page.tsx
-      [slug]/page.tsx
-    ebook/
-      page.tsx
-      [slug]/page.tsx
-    thi-thu/
-      page.tsx
-      [slug]/page.tsx
-    tinh-diem/page.tsx
-    donghocphi/page.tsx
-    hr/
-      layout.tsx              # Auth check middleware
-      [role]/page.tsx
-    hiring/
-      [slug]/page.tsx
+sineart-web/
+  .cursorrules                # Design system rule cho Cursor
+  .claude/
+    skills/
+      sineart-design/         # Design system skill (Claude Design export)
+        SKILL.md
+        README.md
+        HOW-TO-USE.md
+        colors_and_type.css
+  public/
+    fonts/                    # Quicksand, Be Vietnam Pro
+    brand/                    # Logo, icon, illustration
+  src/
+    app/                      # App Router — xem SITE_STRUCTURE.md để biết toàn bộ routes
+      (home)/
+        page.tsx              # Trang chủ — xem HOMEPAGE_BRIEF.md
+      khoa-hoc/
+        page.tsx
+        [slug]/page.tsx
+      gallery/
+        page.tsx
+        [mon]/page.tsx
+      tra-cuu-thong-tin/
+        page.tsx
+        [slug]/page.tsx
+      tong-hop-de-thi/
+        page.tsx
+        [slug]/page.tsx
+      blogs/
+        page.tsx
+        [slug]/page.tsx
+      mau-ve/
+        page.tsx
+        [slug]/page.tsx
+      ebook/
+        page.tsx
+        [slug]/page.tsx
+      thi-thu/
+        page.tsx
+        [slug]/page.tsx
+      tinh-diem/page.tsx
+      donghocphi/page.tsx
+      hr/
+        layout.tsx            # Auth check middleware
+        [role]/page.tsx
+      hiring/
+        [slug]/page.tsx
 
-  components/
-    ui/                       # Base: button, input, modal...
-    features/                 # Feature-specific components
+    components/
+      ui/                     # Base: button, input, modal...
+      features/               # Feature-specific components
 
-  lib/
-    supabase/
-      client.ts               # createBrowserClient
-      server.ts               # createServerComponentClient
-    utils.ts                  # cn() helper
+    lib/
+      supabase/
+        client.ts             # createBrowserClient
+        server.ts             # createServerComponentClient
+      utils.ts                # cn() helper
 
-  types/
-    homepage.ts               # MonHoc, BaiHocVien, NhanSu, DanhGia
-    index.ts                  # Tất cả types
+    styles/
+      design-tokens.css       # Import từ Claude Design
+
+    types/
+      homepage.ts             # MonHoc, BaiHocVien, NhanSu, DanhGia
+      index.ts                # Tất cả types
 ```
 
 ---
@@ -443,6 +493,8 @@ POST /delete-cf-image    → xóa ảnh theo imageId
 - Không dùng Airtable cho feature mới
 - Fetch trong Server Components, truyền data xuống client qua props
 - Không fetch client-side trừ khi cần real-time hoặc user interaction
+- UI component phải tuân thủ design system tại `.claude/skills/sineart-design/`
+- Màu/font/spacing phải dùng token từ `design-tokens.css`, không hardcode
 
 ---
 
@@ -477,3 +529,7 @@ export const revalidate = 3600 // đặt ở đầu page.tsx
 |------|----------|
 | `SITE_STRUCTURE.md` | Toàn bộ routes, URL rules, redirect strategy, CMS strategy |
 | `HOMEPAGE_BRIEF.md` | Data mapping chi tiết cho trang chủ, Supabase queries, TypeScript types |
+| `.cursorrules` | Design system rule — Cursor auto-load mọi chat |
+| `.claude/skills/sineart-design/SKILL.md` | Design system skill — đọc trước khi làm UI |
+| `.claude/skills/sineart-design/README.md` | Tài liệu đầy đủ design system (colors, typography, components) |
+| `.claude/skills/sineart-design/HOW-TO-USE.md` | Hướng dẫn áp dụng design system |

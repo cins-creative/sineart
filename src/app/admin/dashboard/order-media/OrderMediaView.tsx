@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState, useTransition } from "react";
-import { Bold, ClipboardList, Italic, List, Loader2, ListOrdered, Underline } from "lucide-react";
+import { useCallback, useMemo, useState, useTransition } from "react";
+import { ClipboardList, Loader2 } from "lucide-react";
 
 import AdminMinhHoaDropzone, {
   minhHoaUrlsFromSlots,
   type MinhHoaUploadSlot,
 } from "@/app/admin/_components/AdminMinhHoaDropzone";
+import AdminRichTextEditor from "@/app/admin/_components/AdminRichTextEditor";
 import { createMktMediaOrder } from "@/app/admin/dashboard/quan-ly-media/actions";
 import { MKT_MEDIA_TYPE_OPTIONS } from "@/lib/data/mkt-media-form";
 import { htmlToPlainText, sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
@@ -29,16 +30,6 @@ function fieldLabel(text: string, required?: boolean) {
   );
 }
 
-function execBriefCmd(el: HTMLDivElement | null, command: string, value?: string) {
-  if (!el) return;
-  el.focus();
-  try {
-    document.execCommand(command, false, value);
-  } catch {
-    /* ignore */
-  }
-}
-
 const BRIEF_MAX_PLAIN = 12000;
 
 export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultEndYmd }: Props) {
@@ -51,7 +42,8 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
   const [type, setType] = useState<string>(MKT_MEDIA_TYPE_OPTIONS[0] ?? "");
   const [startDate, setStartDate] = useState(defaultStartYmd);
   const [endDate, setEndDate] = useState(defaultEndYmd);
-  const briefRef = useRef<HTMLDivElement>(null);
+  const [briefHtml, setBriefHtml] = useState<string>("");
+  const [briefUploading, setBriefUploading] = useState(false);
   const [minhHoa, setMinhHoa] = useState<MinhHoaUploadSlot[]>([]);
 
   const inputCls = useMemo(
@@ -62,14 +54,11 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
 
   const submit = useCallback(() => {
     setErr(null);
-    const rawBrief = briefRef.current?.innerHTML ?? "";
-    const safeBrief = sanitizeAdminRichHtml(rawBrief).trim();
-    const plainLen = htmlToPlainText(safeBrief).length;
-    if (plainLen > BRIEF_MAX_PLAIN) {
-      setErr(`Brief quá dài (tối đa khoảng ${BRIEF_MAX_PLAIN} ký tự nội dung).`);
+
+    if (briefUploading) {
+      setErr("Đợi ảnh trong brief tải xong rồi gửi order.");
       return;
     }
-    const urls = minhHoaUrlsFromSlots(minhHoa);
     if (minhHoa.some((s) => s.uploading)) {
       setErr("Đợi ảnh minh họa tải xong rồi gửi order.");
       return;
@@ -78,6 +67,15 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
       setErr("Có ảnh minh họa lỗi — xóa dòng lỗi hoặc thử tải lại.");
       return;
     }
+
+    const safeBrief = sanitizeAdminRichHtml(briefHtml).trim();
+    const plainLen = htmlToPlainText(safeBrief).length;
+    if (plainLen > BRIEF_MAX_PLAIN) {
+      setErr(`Brief quá dài (tối đa khoảng ${BRIEF_MAX_PLAIN} ký tự nội dung).`);
+      return;
+    }
+
+    const urls = minhHoaUrlsFromSlots(minhHoa);
 
     startTransition(async () => {
       const res = await createMktMediaOrder({
@@ -97,10 +95,19 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
       router.push("/admin/dashboard/quan-ly-media");
       router.refresh();
     });
-  }, [projectName, projectType, type, startDate, endDate, minhHoa, router]);
+  }, [
+    projectName,
+    projectType,
+    type,
+    startDate,
+    endDate,
+    briefHtml,
+    briefUploading,
+    minhHoa,
+    router,
+  ]);
 
-  const tbBtn =
-    "rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-[12px] font-semibold text-[#555] hover:bg-[#fafafa]";
+  const isSubmitDisabled = pending || briefUploading;
 
   return (
     <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
@@ -158,7 +165,11 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
               </div>
               <div>
                 {fieldLabel("Định dạng (type)", true)}
-                <select className={cn(inputCls, "cursor-pointer")} value={type} onChange={(e) => setType(e.target.value)}>
+                <select
+                  className={cn(inputCls, "cursor-pointer")}
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                >
                   {MKT_MEDIA_TYPE_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
                       {opt}
@@ -180,66 +191,28 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
               </div>
               <div>
                 {fieldLabel("Ngày kết thúc", true)}
-                <input type="date" className={inputCls} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                <input
+                  type="date"
+                  className={inputCls}
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
               </div>
             </div>
 
             <div>
               {fieldLabel("Brief / mô tả yêu cầu")}
-              <div className="overflow-hidden rounded-xl border border-[#EAEAEA] bg-white shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]">
-                <div className="flex flex-wrap gap-1 border-b border-[#EAEAEA] bg-[#fafafa] px-2 py-1.5">
-                  <button
-                    type="button"
-                    className={tbBtn}
-                    title="In đậm"
-                    onClick={() => execBriefCmd(briefRef.current, "bold")}
-                  >
-                    <Bold className="mx-0.5 inline h-3.5 w-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className={tbBtn}
-                    title="In nghiêng"
-                    onClick={() => execBriefCmd(briefRef.current, "italic")}
-                  >
-                    <Italic className="mx-0.5 inline h-3.5 w-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className={tbBtn}
-                    title="Gạch chân"
-                    onClick={() => execBriefCmd(briefRef.current, "underline")}
-                  >
-                    <Underline className="mx-0.5 inline h-3.5 w-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className={tbBtn}
-                    title="Danh sách chấm"
-                    onClick={() => execBriefCmd(briefRef.current, "insertUnorderedList")}
-                  >
-                    <List className="mx-0.5 inline h-3.5 w-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className={tbBtn}
-                    title="Danh sách số"
-                    onClick={() => execBriefCmd(briefRef.current, "insertOrderedList")}
-                  >
-                    <ListOrdered className="mx-0.5 inline h-3.5 w-3.5" aria-hidden />
-                  </button>
-                </div>
-                <div
-                  ref={briefRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  aria-label="Brief mô tả yêu cầu"
-                  className={cn(
-                    "min-h-[140px] max-h-[360px] overflow-y-auto px-3 py-2.5 text-[13px] text-[#323232] outline-none",
-                    "[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5",
-                  )}
-                />
-              </div>
+              <AdminRichTextEditor
+                onChange={setBriefHtml}
+                onUploadChange={setBriefUploading}
+                placeholder="Mô tả yêu cầu, thêm ảnh bằng cách paste hoặc kéo thả…"
+              />
+              {briefUploading ? (
+                <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-[#BC8AF9]">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  Ảnh đang được tải lên Cloudflare Images… Nút Gửi order sẽ mở khóa khi xong.
+                </p>
+              ) : null}
             </div>
 
             <div>
@@ -249,7 +222,9 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
           </div>
 
           {err ? (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">{err}</div>
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+              {err}
+            </div>
           ) : null}
 
           <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
@@ -261,15 +236,15 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
             </Link>
             <button
               type="button"
-              disabled={pending}
+              disabled={isSubmitDisabled}
               onClick={submit}
               className={cn(
                 "inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-bold text-white shadow-[0_4px_14px_rgba(238,92,162,0.35)] transition",
                 "bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60",
               )}
             >
-              {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-              Gửi order
+              {(pending || briefUploading) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+              {briefUploading ? "Đợi ảnh tải…" : "Gửi order"}
             </button>
           </div>
         </div>

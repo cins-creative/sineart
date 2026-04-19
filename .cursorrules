@@ -1,0 +1,13 @@
+# Khi thiết kế hoặc sửa UI cho Sine Art
+
+1. LUÔN đọc `design-system/SKILL.md` trước khi tạo/sửa component.
+2. Dùng token CSS trong `design-system/colors_and_type.css` — không hardcode hex, radius, shadow.
+3. Icon: CHỈ dùng Feather Icons (stroke 2, linecap round). Không trộn Material / Heroicons / FontAwesome / emoji.
+4. Radii mặc định: **12px** (`--r`). Chỉ lên 16px nếu container rất lớn. Button/pill = 999px.
+5. Shadow: một loại duy nhất — `--shadow-md` (0 10px 32px rgba(45,32,32,.12)).
+6. Font:
+   - Tiêu đề: `var(--font-display)` (Be Vietnam Pro → Geomanist fallback → Grandstander).
+   - Body/UI: `var(--font-body)` (Quicksand, load local từ /fonts).
+7. Màu: chỉ dùng palette đã định nghĩa. Gradient chính `--grad` (`#f8a668 → #ee5b9f`) dành cho accent/CTA, không dùng cho khối lớn hay body text.
+8. Hình khối: BO GÓC — không dùng góc nhọn cho container.
+9. Ngôn ngữ: tiếng Việt, ấm áp, khuyến khích. Không dịch tên danh mục (Hình họa, Bố cục màu, Trang trí màu).

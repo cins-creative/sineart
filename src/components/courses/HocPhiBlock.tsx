@@ -10,6 +10,7 @@ import type {
 import {
   dedupeMon1Pills,
   durationKey,
+  groupMon1ByPostTitle,
   isHocPhiCapTocSpecial,
   sameDur,
 } from "@/lib/hocPhiDedupe";
@@ -79,6 +80,22 @@ export default function HocPhiBlock({
     [gois, monHocId],
   );
 
+  // ── post_title grouping ─────────────────────────────────────────────────────
+  const postTitleGroups = useMemo(
+    () => groupMon1ByPostTitle(mon1Gois),
+    [mon1Gois],
+  );
+
+  /**
+   * Dùng post_title grouping khi có ít nhất một gói với post_title không rỗng.
+   * Fallback về chế độ cũ (combo-partner) nếu tất cả post_title đều rỗng/null.
+   */
+  const usePostTitleGrouping = useMemo(
+    () => postTitleGroups.some((g) => g.postTitle !== ""),
+    [postTitleGroups],
+  );
+  // ────────────────────────────────────────────────────────────────────────────
+
   const mon1Pills = useMemo(
     () => dedupeMon1Pills(mon1Gois),
     [mon1Gois],
@@ -92,10 +109,16 @@ export default function HocPhiBlock({
   >({});
 
   useEffect(() => {
-    setSelGoi(mon1Pills[0] ?? null);
+    if (usePostTitleGrouping) {
+      // Chọn pill đầu tiên của nhóm đầu tiên (nhóm rỗng post_title hoặc nhóm đầu)
+      setSelGoi(postTitleGroups[0]?.pills[0] ?? null);
+    } else {
+      setSelGoi(mon1Pills[0] ?? null);
+    }
     setSelPartners(new Set());
     setPartnerDur({});
-  }, [monHocId, mon1Pills, expressMode]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monHocId, expressMode, usePostTitleGrouping]);
 
   const partnerMonIds = useMemo(
     () =>
@@ -118,6 +141,7 @@ export default function HocPhiBlock({
   );
 
   const activeCombo: HocPhiComboRow | null = useMemo(() => {
+    if (usePostTitleGrouping) return null; // 2-môn price is baked into gia_goc
     if (!selGoi || selPartners.size === 0) return null;
     const allMons = [monHocId, ...Array.from(selPartners)];
     return (
@@ -141,7 +165,7 @@ export default function HocPhiBlock({
         });
       }) ?? null
     );
-  }, [selGoi, selPartners, partnerDur, gois, combos, monHocId]);
+  }, [selGoi, selPartners, partnerDur, gois, combos, monHocId, usePostTitleGrouping]);
 
   const headerRow = (
     <div className="hpb-goi-head">
@@ -191,34 +215,42 @@ export default function HocPhiBlock({
     }
   }
 
+  // ── Tính giá ────────────────────────────────────────────────────────────────
   const price1 = selGoi ? calc(selGoi.gia_goc, selGoi.discount) : 0;
+
   let partnerSum = 0;
   let origPartnerSum = 0;
-  Array.from(selPartners).forEach((monId) => {
-    if (!selGoi) return;
-    const dur = partnerDur[monId] ?? {
-      number: selGoi.number,
-      don_vi: selGoi.don_vi,
-    };
-    const pg = gois.find(
-      (r) =>
-        r.mon_hoc === monId &&
-        r.number === dur.number &&
-        r.don_vi.trim() === dur.don_vi.trim()
-    );
-    if (pg) {
-      partnerSum += calc(pg.gia_goc, pg.discount);
-      origPartnerSum += pg.gia_goc;
-    }
-  });
+  if (!usePostTitleGrouping) {
+    Array.from(selPartners).forEach((monId) => {
+      if (!selGoi) return;
+      const dur = partnerDur[monId] ?? {
+        number: selGoi.number,
+        don_vi: selGoi.don_vi,
+      };
+      const pg = gois.find(
+        (r) =>
+          r.mon_hoc === monId &&
+          r.number === dur.number &&
+          r.don_vi.trim() === dur.don_vi.trim()
+      );
+      if (pg) {
+        partnerSum += calc(pg.gia_goc, pg.discount);
+        origPartnerSum += pg.gia_goc;
+      }
+    });
+  }
 
   const comboSaving = activeCombo ? activeCombo.gia_giam : 0;
-  const total = price1 + partnerSum - comboSaving;
-  const origTotal = (selGoi?.gia_goc ?? 0) + origPartnerSum;
+  const total = usePostTitleGrouping
+    ? price1
+    : price1 + partnerSum - comboSaving;
+  const origTotal = usePostTitleGrouping
+    ? (selGoi?.gia_goc ?? 0)
+    : (selGoi?.gia_goc ?? 0) + origPartnerSum;
   const saved = origTotal - total;
+  // ────────────────────────────────────────────────────────────────────────────
 
-  const mainName =
-    monMap[monHocId]?.trim() || `Môn ${monHocId}`;
+  const mainName = monMap[monHocId]?.trim() || `Môn ${monHocId}`;
 
   const selGoiNoteText = useMemo(() => {
     const raw = selGoi?.note;
@@ -253,7 +285,12 @@ export default function HocPhiBlock({
         {origTotal > total ? (
           <span className="hpb-price-orig">{vnd(origTotal)}</span>
         ) : null}
-        {selPartners.size === 0 && selGoi && selGoi.discount > 0 ? (
+        {!usePostTitleGrouping && selPartners.size === 0 && selGoi && selGoi.discount > 0 ? (
+          <span className="hpb-badge hpb-badge--disc">
+            -{Math.round(selGoi.discount)}%
+          </span>
+        ) : null}
+        {usePostTitleGrouping && selGoi && selGoi.discount > 0 ? (
           <span className="hpb-badge hpb-badge--disc">
             -{Math.round(selGoi.discount)}%
           </span>
@@ -272,98 +309,30 @@ export default function HocPhiBlock({
         </div>
       ) : null}
 
-      <div className="hpb-row">
-        <span className="hpb-row-label">Chỉ học {mainName}:</span>
-        <div className="hpb-pills" role="group" aria-label="Thời lượng môn chính">
-          {mon1Pills.map((goi) => {
-            const isActive =
-              selGoi != null &&
-              goi.number === selGoi.number &&
-              goi.don_vi.trim() === selGoi.don_vi.trim();
-            return (
-              <button
-                key={durationKey(goi)}
-                type="button"
-                className={
-                  isActive ? "hpb-pill hpb-pill--active" : "hpb-pill"
-                }
-                aria-pressed={isActive}
-                onClick={() => handleSelectMon1(goi.number, goi.don_vi)}
-              >
-                {goi.number} {goi.don_vi}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {partnerMonIds.map((monId) => {
-        const isSelected = selPartners.has(monId);
-        const partnerLabel =
-          monMap[monId]?.trim() || `Môn ${monId}`;
-        const partnerSlug = monSlugMap[monId]?.trim();
-        return (
-          <div key={monId} className="hpb-row">
-            {partnerSlug ? (
-              <Link
-                href={`/khoa-hoc/${partnerSlug}`}
-                className="hpb-row-label hpb-row-label--link"
-                title={`Xem trang khóa «${partnerLabel}»`}
-              >
-                + {partnerLabel}:
-              </Link>
-            ) : (
-              <span className="hpb-row-label">+ {partnerLabel}:</span>
-            )}
-            <div className="hpb-pills" role="group" aria-label={`Gói ${partnerLabel}`}>
-              {mon1Pills.map((goi) => {
-                const hasPartner = hasPartnerPackageAtDuration(
-                  monId,
-                  goi.number,
-                  goi.don_vi,
-                  gois
-                );
-                const picked = partnerDur[monId];
-                const isActive =
-                  isSelected &&
-                  picked != null &&
-                  sameDur(picked, goi);
+      {usePostTitleGrouping ? (
+        // ── Chế độ post_title grouping: mỗi post_title = 1 hàng ──────────────
+        postTitleGroups.map((group) => (
+          <div key={group.postTitle || "__default__"} className="hpb-row">
+            <span className="hpb-row-label">
+              {group.postTitle ? `${group.postTitle}:` : `Chỉ học ${mainName}:`}
+            </span>
+            <div
+              className="hpb-pills"
+              role="group"
+              aria-label={group.postTitle || `Thời lượng ${mainName}`}
+            >
+              {group.pills.map((goi) => {
+                const isActive = selGoi != null && selGoi.id === goi.id;
                 return (
                   <button
-                    key={`${monId}-${durationKey(goi)}`}
+                    key={`${group.postTitle}|${durationKey(goi)}`}
                     type="button"
-                    disabled={!hasPartner}
-                    className={
-                      !hasPartner
-                        ? "hpb-pill hpb-pill--disabled"
-                        : isActive
-                          ? "hpb-pill hpb-pill--active"
-                          : "hpb-pill"
-                    }
+                    className={isActive ? "hpb-pill hpb-pill--active" : "hpb-pill"}
                     aria-pressed={isActive}
                     onClick={() => {
-                      if (!hasPartner) return;
-                      const cur = partnerDur[monId];
-                      if (
-                        isSelected &&
-                        cur &&
-                        sameDur(cur, goi)
-                      ) {
-                        togglePartner(monId);
-                        return;
-                      }
-                      setPartnerDur((prev) => ({
-                        ...prev,
-                        [monId]: {
-                          number: goi.number,
-                          don_vi: goi.don_vi.trim(),
-                        },
-                      }));
-                      setSelPartners((prev) => {
-                        const next = new Set(prev);
-                        next.add(monId);
-                        return next;
-                      });
+                      setSelGoi(goi);
+                      setSelPartners(new Set());
+                      setPartnerDur({});
                     }}
                   >
                     {goi.number} {goi.don_vi}
@@ -372,8 +341,114 @@ export default function HocPhiBlock({
               })}
             </div>
           </div>
-        );
-      })}
+        ))
+      ) : (
+        // ── Chế độ cũ: 1 hàng môn chính + hàng partner (combo) ───────────────
+        <>
+          <div className="hpb-row">
+            <span className="hpb-row-label">Chỉ học {mainName}:</span>
+            <div className="hpb-pills" role="group" aria-label="Thời lượng môn chính">
+              {mon1Pills.map((goi) => {
+                const isActive =
+                  selGoi != null &&
+                  goi.number === selGoi.number &&
+                  goi.don_vi.trim() === selGoi.don_vi.trim();
+                return (
+                  <button
+                    key={durationKey(goi)}
+                    type="button"
+                    className={
+                      isActive ? "hpb-pill hpb-pill--active" : "hpb-pill"
+                    }
+                    aria-pressed={isActive}
+                    onClick={() => handleSelectMon1(goi.number, goi.don_vi)}
+                  >
+                    {goi.number} {goi.don_vi}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {partnerMonIds.map((monId) => {
+            const isSelected = selPartners.has(monId);
+            const partnerLabel =
+              monMap[monId]?.trim() || `Môn ${monId}`;
+            const partnerSlug = monSlugMap[monId]?.trim();
+            return (
+              <div key={monId} className="hpb-row">
+                {partnerSlug ? (
+                  <Link
+                    href={`/khoa-hoc/${partnerSlug}`}
+                    className="hpb-row-label hpb-row-label--link"
+                    title={`Xem trang khóa «${partnerLabel}»`}
+                  >
+                    + {partnerLabel}:
+                  </Link>
+                ) : (
+                  <span className="hpb-row-label">+ {partnerLabel}:</span>
+                )}
+                <div className="hpb-pills" role="group" aria-label={`Gói ${partnerLabel}`}>
+                  {mon1Pills.map((goi) => {
+                    const hasPartner = hasPartnerPackageAtDuration(
+                      monId,
+                      goi.number,
+                      goi.don_vi,
+                      gois
+                    );
+                    const picked = partnerDur[monId];
+                    const isActive =
+                      isSelected &&
+                      picked != null &&
+                      sameDur(picked, goi);
+                    return (
+                      <button
+                        key={`${monId}-${durationKey(goi)}`}
+                        type="button"
+                        disabled={!hasPartner}
+                        className={
+                          !hasPartner
+                            ? "hpb-pill hpb-pill--disabled"
+                            : isActive
+                              ? "hpb-pill hpb-pill--active"
+                              : "hpb-pill"
+                        }
+                        aria-pressed={isActive}
+                        onClick={() => {
+                          if (!hasPartner) return;
+                          const cur = partnerDur[monId];
+                          if (
+                            isSelected &&
+                            cur &&
+                            sameDur(cur, goi)
+                          ) {
+                            togglePartner(monId);
+                            return;
+                          }
+                          setPartnerDur((prev) => ({
+                            ...prev,
+                            [monId]: {
+                              number: goi.number,
+                              don_vi: goi.don_vi.trim(),
+                            },
+                          }));
+                          setSelPartners((prev) => {
+                            const next = new Set(prev);
+                            next.add(monId);
+                            return next;
+                          });
+                        }}
+                      >
+                        {goi.number} {goi.don_vi}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
 
       <a href="/donghocphi" className="hpb-link kd-goi-link">
         Đăng ký / đóng học phí →

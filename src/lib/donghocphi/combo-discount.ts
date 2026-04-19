@@ -49,6 +49,7 @@ export function rawToHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
     so_buoi,
     special,
     note,
+    post_title: null,
   };
 }
 

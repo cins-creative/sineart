@@ -881,7 +881,7 @@ export const getGlobalTeacherPortfolioSlides = cache(
 function hocPhiBlockGoiSelectColumns(): string {
   return hpGoiHocPhiTableName() === "hp_goi_hoc_phi"
     ? 'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi'
-    : 'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi, special, note';
+    : 'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi, special, note, post_title';
 }
 
 function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
@@ -913,6 +913,11 @@ function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
     nt == null || nt === ""
       ? null
       : String(nt).trim() || null;
+  const ptRaw = row.post_title;
+  const post_title =
+    ptRaw == null || ptRaw === ""
+      ? null
+      : String(ptRaw).trim() || null;
 
   return {
     id: Number(row.id),
@@ -926,6 +931,7 @@ function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
     so_buoi,
     special,
     note,
+    post_title,
   };
 }
 

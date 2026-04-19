@@ -19,6 +19,8 @@ export type PaymentFeeCatalogItem = {
   special: string | null;
   /** `hp_combo_mon.id` — null nếu gói không thuộc combo */
   comboId: number | null;
+  /** `hp_goi_hoc_phi_new.post_title` — nhóm gói (vd: "1 môn", "2 môn"); null nếu chưa đặt. */
+  postTitle: string | null;
 };
 
 function rowToCatalogItem(r: HocPhiGoiRow): PaymentFeeCatalogItem {
@@ -28,10 +30,18 @@ function rowToCatalogItem(r: HocPhiGoiRow): PaymentFeeCatalogItem {
   const sp = r.special;
   const special =
     sp == null || sp === "" ? null : String(sp).trim() || null;
+  const pt = r.post_title;
+  const postTitle =
+    pt == null || pt === "" ? null : String(pt).trim() || null;
+  // Tên gói: postTitle (nếu có) + number + donVi
+  const tenGoiParts = [
+    ...(postTitle ? [postTitle] : []),
+    `${r.number} ${donVi}`,
+  ];
   return {
     id: r.id,
     monHocId: r.mon_hoc,
-    tenGoi: `${r.number} ${donVi}`.trim(),
+    tenGoi: tenGoiParts.join(" ").trim(),
     numberValue: r.number,
     donVi,
     giaGoc,
@@ -41,6 +51,7 @@ function rowToCatalogItem(r: HocPhiGoiRow): PaymentFeeCatalogItem {
     soBuoi: r.so_buoi,
     special,
     comboId: r.combo_id,
+    postTitle,
   };
 }
 

@@ -44,3 +44,32 @@ export function dedupeMon1Pills(rows: HocPhiGoiRow[]): HocPhiGoiRow[] {
     (a, b) => a.number - b.number || a.don_vi.localeCompare(b.don_vi, "vi")
   );
 }
+
+/**
+ * Nhóm `mon1Gois` theo `post_title` (đã dedup từng nhóm).
+ * Nhóm có `post_title` rỗng/null đứng đầu; các nhóm còn lại theo thứ tự xuất hiện.
+ */
+export function groupMon1ByPostTitle(
+  rows: HocPhiGoiRow[],
+): Array<{ postTitle: string; pills: HocPhiGoiRow[] }> {
+  const order: string[] = [];
+  const map = new Map<string, HocPhiGoiRow[]>();
+  for (const r of rows) {
+    const key = (r.post_title ?? "").trim();
+    if (!map.has(key)) {
+      order.push(key);
+      map.set(key, []);
+    }
+    map.get(key)!.push(r);
+  }
+  // Nhóm rỗng lên đầu, rồi theo thứ tự gặp lần đầu
+  const sorted = [...order].sort((a, b) => {
+    if (!a && b) return -1;
+    if (a && !b) return 1;
+    return 0;
+  });
+  return sorted.map((postTitle) => ({
+    postTitle,
+    pills: dedupeMon1Pills(map.get(postTitle)!),
+  }));
+}

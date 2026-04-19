@@ -98,6 +98,11 @@ export type HocPhiGoiRow = {
   special: string | null;
   /** `hp_goi_hoc_phi_new.note` — ghi chú hiển thị (widget học phí). */
   note: string | null;
+  /**
+   * `hp_goi_hoc_phi_new.post_title` — hậu tố phân nhóm (vd: "1 môn", "2 môn").
+   * Dùng để group các gói theo nhóm trong `HocPhiBlock`.
+   */
+  post_title: string | null;
 };
 
 /** Một dòng `hp_combo_mon` */

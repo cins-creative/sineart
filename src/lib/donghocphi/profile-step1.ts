@@ -64,13 +64,12 @@ export function isValidStudentEmail(s: string): boolean {
   return STUDENT_EMAIL_ALLOWED_DOMAINS.has(domain);
 }
 
-/** Đủ điều kiện bỏ qua bước 1 / tạo đơn — khớp validate nút bước 1 + API create-order */
+/** Đủ điều kiện bỏ qua bước 1 — cần họ tên + SĐT + email hợp lệ */
 export function profileCompleteForSkipStep1(p: QlHocVienStep1Fields): boolean {
   return (
     p.full_name.trim().length > 1 &&
     p.sdt.trim().length > 7 &&
-    isValidStudentEmail(p.email) &&
-    (p.facebook?.trim().length ?? 0) > 0
+    isValidStudentEmail(p.email)
   );
 }
 

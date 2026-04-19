@@ -7,7 +7,7 @@ import {
   pseudoDonIdFromSeed,
   resolveQrPaymentAmounts,
 } from "@/lib/payment/vietqr";
-import { firstApplicableComboDiscountDong } from "@/lib/donghocphi/combo-discount";
+import { firstApplicableComboDiscountDong, bestApplicableCombo } from "@/lib/donghocphi/combo-discount";
 import type {
   DhpDhCatalog,
   DhpInitialNguyenVongRow,
@@ -680,20 +680,20 @@ export default function DongHocPhiClient({
   );
 
   const [step, setStep] = useState<Step>(() => (skipStep1Boot ? 2 : 1));
-  const [fullName, setFullName] = useState(() => skipStep1Boot?.fullName ?? "");
-  const [phone, setPhone] = useState(() => skipStep1Boot?.phone ?? "");
-  const [email, setEmail] = useState(() => skipStep1Boot?.email ?? initialEmail ?? "");
-  const [sex, setSex] = useState<string>(() => skipStep1Boot?.sex ?? SEX_OPTIONS[0]);
+  const [fullName, setFullName] = useState(() => skipStep1Boot?.fullName ?? existingHocVien?.full_name ?? "");
+  const [phone, setPhone] = useState(() => skipStep1Boot?.phone ?? existingHocVien?.sdt ?? "");
+  const [email, setEmail] = useState(() => skipStep1Boot?.email ?? existingHocVien?.email ?? initialEmail ?? "");
+  const [sex, setSex] = useState<string>(() => skipStep1Boot?.sex ?? existingHocVien?.sex ?? SEX_OPTIONS[0]);
   const [namThi, setNamThi] = useState<string>(
-    () => skipStep1Boot?.namThi ?? String(new Date().getFullYear())
+    () => skipStep1Boot?.namThi ?? (existingHocVien?.nam_thi ? String(existingHocVien.nam_thi) : String(new Date().getFullYear()))
   );
   const [loaiKhoaHoc, setLoaiKhoaHoc] = useState<string>(
-    () => skipStep1Boot?.loaiKhoaHoc ?? LOAI_KHOA_HOC_DEFAULT
+    () => skipStep1Boot?.loaiKhoaHoc ?? existingHocVien?.loai_khoa_hoc ?? LOAI_KHOA_HOC_DEFAULT
   );
-  const [facebook, setFacebook] = useState(() => skipStep1Boot?.facebook ?? "");
+  const [facebook, setFacebook] = useState(() => skipStep1Boot?.facebook ?? existingHocVien?.facebook ?? "");
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
-    skipStep1Boot?.avatarUrl ?? initialAvatarUrl ?? null
+    skipStep1Boot?.avatarUrl ?? existingHocVien?.avatar ?? initialAvatarUrl ?? null
   );
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
@@ -894,6 +894,11 @@ export default function DongHocPhiClient({
     if (!rawStored || rawStored.emailNorm.trim().toLowerCase() !== em) return;
 
     const m = materializeStoredClassPick(rawStored, lopHoc, goiHocPhi);
+    // Chỉ coi là "đã restore từ LS" khi thực sự có lớp — tránh chặn bootstrap từ DB khi LS lưu rỗng
+    if (m.classIds.length === 0) {
+      clearDhpClassPickStorage();
+      return;
+    }
     pickRestoredFromLsRef.current = true;
     setSelectedClassIds(m.classIds);
     setFeeByClassId(m.feeByClassId);
@@ -903,6 +908,8 @@ export default function DongHocPhiClient({
   useEffect(() => {
     const em = email.trim().toLowerCase();
     if (!isValidStudentEmail(em) || paymentComplete) return;
+    // Không ghi LS khi rỗng — tránh che mất bootstrap từ DB lần sau
+    if (selectedClassIds.length === 0) return;
     writeDhpClassPickToStorage(em, selectedClassIds, feeByClassId, skipRenewalByClassId);
   }, [email, selectedClassIds, feeByClassId, skipRenewalByClassId, paymentComplete]);
 
@@ -967,32 +974,26 @@ export default function DongHocPhiClient({
     }, [selectedClasses, skipRenewalByClassId, feeByClassId, goiHocPhi]);
 
   const payingComboLines = useMemo(() => {
-    const out: {
-      monHocId: number;
-      number: number;
-      donVi: string;
-      comboId: number | null;
-    }[] = [];
+    const out: { goiId: number }[] = [];
     for (const cls of selectedClasses) {
       if (skipRenewalByClassId[cls.id]) continue;
       const feeId = pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
       if (feeId == null) continue;
-      const fee = goiHocPhi.find((f) => f.id === feeId);
-      if (!fee) continue;
-      out.push({
-        monHocId: cls.monHocId,
-        number: fee.numberValue,
-        donVi: fee.donVi,
-        comboId: fee.comboId ?? null,
-      });
+      out.push({ goiId: feeId });
     }
     return out;
   }, [selectedClasses, skipRenewalByClassId, feeByClassId, goiHocPhi]);
 
   const comboDiscountDong = useMemo(
     () =>
-      firstApplicableComboDiscountDong(payingComboLines, hocPhiCombos, hocPhiGois),
-    [payingComboLines, hocPhiCombos, hocPhiGois]
+      firstApplicableComboDiscountDong(payingComboLines, hocPhiCombos),
+    [payingComboLines, hocPhiCombos]
+  );
+
+  /** Combo đang áp dụng (nếu có) — để hiển thị badge "Đạt combo ..." trong tóm tắt. */
+  const matchedCombo = useMemo(
+    () => bestApplicableCombo(payingComboLines, hocPhiCombos),
+    [payingComboLines, hocPhiCombos]
   );
 
   const total = useMemo(
@@ -1123,7 +1124,7 @@ export default function DongHocPhiClient({
       const { data: hv, error: hvErr } = await supabase
         .from("ql_thong_tin_hoc_vien")
         .select("id")
-        .eq("email", em)
+        .ilike("email", em)
         .order("id", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1204,7 +1205,7 @@ export default function DongHocPhiClient({
       const { data: hv, error: hvErr } = await supabase
         .from("ql_thong_tin_hoc_vien")
         .select("id")
-        .eq("email", em)
+        .ilike("email", em)
         .order("id", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1615,7 +1616,7 @@ export default function DongHocPhiClient({
       const { data, error } = await supabase
         .from("ql_thong_tin_hoc_vien")
         .select("full_name, sdt, email, sex, nam_thi, loai_khoa_hoc, facebook, avatar")
-        .eq("email", em)
+        .ilike("email", em)
         .order("id", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1641,7 +1642,7 @@ export default function DongHocPhiClient({
         const { data: hvIdRow, error: hvIdErr } = await supabase
           .from("ql_thong_tin_hoc_vien")
           .select("id")
-          .eq("email", em)
+          .ilike("email", em)
           .order("id", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -1891,6 +1892,9 @@ export default function DongHocPhiClient({
                   placeholder="vd. tenban@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  readOnly={!!existingHocVien?.email}
+                  className={existingHocVien?.email ? "opacity-60 cursor-default select-all" : undefined}
+                  title={existingHocVien?.email ? "Email đăng nhập — không thể đổi tại đây" : undefined}
                 />
               </div>
 
@@ -2467,6 +2471,66 @@ export default function DongHocPhiClient({
                         </div>
                       );
                     })}
+                    {matchedCombo && matchedCombo.giam > 0 ? (
+                      <div
+                        className="dhp-st-row dhp-st-row--combo"
+                        role="status"
+                        aria-label={`Đạt combo ${matchedCombo.combo.ten_combo}, giảm thêm ${formatVnd(matchedCombo.giam)}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 8,
+                          padding: "8px 12px",
+                          margin: "4px 0",
+                          borderRadius: 10,
+                          border: "1px solid #10b98133",
+                          background: "linear-gradient(90deg, #ecfdf508, #d1fae520)",
+                        }}
+                      >
+                        <span style={{ fontSize: 14, lineHeight: "18px" }}>🎉</span>
+                        <div
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 2,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: "#047857",
+                              fontWeight: 600,
+                              wordBreak: "break-word",
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            Đạt combo:{" "}
+                            <strong style={{ fontWeight: 700 }}>
+                              {matchedCombo.combo.ten_combo}
+                            </strong>
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "#047857",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Giảm thêm{" "}
+                            <strong
+                              style={{
+                                fontWeight: 700,
+                                fontVariantNumeric: "tabular-nums",
+                              }}
+                            >
+                              {formatVnd(matchedCombo.giam)}
+                            </strong>
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
                     {summaryDiscountTotalDong > 0 ? (
                       <div className="dhp-st-row dhp-st-row--save" role="status">
                         <span className="dhp-st-label dhp-st-label--save">Tổng đã giảm giá</span>
@@ -2841,85 +2905,231 @@ export default function DongHocPhiClient({
               }
             }}
           />
-          <div className="dhp-pay-modal-panel">
-            <div className="dhp-pay-modal-inner">
-              <div className="dhp-pay-confirm-head dhp-pay-modal-head">
-                <div>
-                  <h2 id="dhp-remove-enroll-title" className="dhp-pay-confirm-title">
-                    Nhắc nhở trước khi huỷ ghi danh
-                  </h2>
-                  <p className="dhp-pay-confirm-lead">
-                    Lớp này vẫn còn ngày trong kỳ học phí hiện tại. Xác nhận sẽ xóa ghi danh và các dòng học phí liên
-                    quan trên hệ thống — không hoàn tác.
-                  </p>
-                </div>
-              </div>
-              <div className="dhp-pay-confirm-table-wrap dhp-pay-modal-table-wrap">
-                <table className="dhp-pay-confirm-table dhp-pay-modal-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Môn</th>
-                      <th scope="col">Lớp</th>
-                      <th scope="col">Kỳ học (DB)</th>
-                      <th scope="col">Nhắc nhở</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const m = removeEnrollModal;
-                      const cls = lopHoc.find((c) => c.id === m.lopId);
-                      const monLabel =
-                        cls != null
-                          ? monHoc.find((x) => x.id === cls.monHocId)?.tenMonHoc?.trim() || `Môn ${cls.monHocId}`
-                          : "—";
-                      const ky = qlKyByLopId[m.lopId];
-                      const kyCell =
-                        ky?.ngayDauKy || ky?.ngayCuoiKy
-                          ? `${formatNgayThanhToanDb(ky.ngayDauKy)} → ${formatNgayThanhToanDb(ky.ngayCuoiKy)}`
-                          : "—";
-                      const warn =
-                        m.message.trim() ||
-                        (m.daysRemaining > 0
-                          ? `Còn khoảng ${m.daysRemaining} ngày trong kỳ học phí hiện tại.`
-                          : "—");
-                      return (
-                        <tr key={m.lopId}>
-                          <td>{monLabel}</td>
-                          <td>{cls?.tenLop?.trim() || "—"}</td>
-                          <td>{kyCell}</td>
-                          <td>{warn}</td>
-                        </tr>
-                      );
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-              {classRemoveError ? (
-                <p className="dhp-step1-lookup-err dhp-remove-enroll-modal-err" role="alert">
-                  {classRemoveError}
-                </p>
-              ) : null}
-              <div className="dhp-pay-confirm-actions dhp-pay-modal-actions">
-                <button
-                  type="button"
-                  className="dhp-btn-modal-close"
-                  disabled={removeEnrollSubmitting}
-                  onClick={() => {
-                    setClassRemoveError(null);
-                    setRemoveEnrollModal(null);
-                  }}
-                >
-                  Huỷ
-                </button>
-                <button
-                  type="button"
-                  className="dhp-btn-profile"
-                  disabled={removeEnrollSubmitting}
-                  onClick={() => void confirmRemoveEnrolledFromModal()}
-                >
-                  {removeEnrollSubmitting ? "Đang xóa…" : "Xác nhận xóa ghi danh"}
-                </button>
-              </div>
+          <div className="dhp-pay-modal-panel" style={{ maxWidth: 480 }}>
+            <div className="dhp-pay-modal-inner" style={{ padding: 0 }}>
+              {(() => {
+                const m = removeEnrollModal;
+                const cls = lopHoc.find((c) => c.id === m.lopId);
+                const monLabel =
+                  cls != null
+                    ? monHoc.find((x) => x.id === cls.monHocId)?.tenMonHoc?.trim() || `Môn ${cls.monHocId}`
+                    : "—";
+                const ky = qlKyByLopId[m.lopId];
+                const hasKy = !!(ky?.ngayDauKy || ky?.ngayCuoiKy);
+                const dauStr = ky?.ngayDauKy ? formatNgayThanhToanDb(ky.ngayDauKy) : "—";
+                const cuoiStr = ky?.ngayCuoiKy ? formatNgayThanhToanDb(ky.ngayCuoiKy) : "—";
+                const warn =
+                  m.message.trim() ||
+                  (m.daysRemaining > 0
+                    ? `Còn khoảng ${m.daysRemaining} ngày trong kỳ học phí hiện tại.`
+                    : "");
+                return (
+                  <>
+                    {/* Header với icon cảnh báo */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 14,
+                        padding: "20px 22px 16px",
+                        borderBottom: "1px solid #F0F0F0",
+                      }}
+                    >
+                      <div
+                        style={{
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: 44,
+                          height: 44,
+                          borderRadius: 12,
+                          background: "linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%)",
+                          fontSize: 22,
+                        }}
+                      >
+                        ⚠️
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h2
+                          id="dhp-remove-enroll-title"
+                          className="dhp-pay-confirm-title"
+                          style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#1a1a2e" }}
+                        >
+                          Huỷ ghi danh lớp này?
+                        </h2>
+                        <p
+                          style={{
+                            margin: "4px 0 0",
+                            fontSize: 12,
+                            lineHeight: 1.5,
+                            color: "#6B7280",
+                          }}
+                        >
+                          Hành động này sẽ xóa ghi danh và các dòng học phí liên quan trên hệ thống —{" "}
+                          <strong style={{ color: "#DC2626" }}>không hoàn tác</strong>.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Body: thông tin lớp dạng card */}
+                    <div style={{ padding: "16px 22px" }}>
+                      <div
+                        style={{
+                          borderRadius: 14,
+                          border: "1.5px solid #EAEAEA",
+                          background: "#FAFAFA",
+                          padding: 14,
+                          marginBottom: 12,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            marginBottom: 8,
+                            fontSize: 10,
+                            fontWeight: 800,
+                            letterSpacing: "0.08em",
+                            textTransform: "uppercase",
+                            color: "#9CA3AF",
+                          }}
+                        >
+                          <span>🎨</span>
+                          <span>{monLabel}</span>
+                        </div>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: 16,
+                            fontWeight: 800,
+                            color: "#1a1a2e",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {cls?.tenLop?.trim() || "—"}
+                        </p>
+                      </div>
+
+                      {hasKy ? (
+                        <div
+                          style={{
+                            borderRadius: 12,
+                            background: "#EFF6FF",
+                            border: "1px solid #BFDBFE",
+                            padding: "10px 14px",
+                            marginBottom: warn ? 10 : 0,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: "0.06em",
+                              textTransform: "uppercase",
+                              color: "#3B82F6",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Kỳ học phí hiện tại
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: "#1E40AF",
+                            }}
+                          >
+                            <span>{dauStr}</span>
+                            <span style={{ color: "#93C5FD" }}>→</span>
+                            <span>{cuoiStr}</span>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {warn ? (
+                        <div
+                          style={{
+                            borderRadius: 12,
+                            background: "#FFFBEB",
+                            border: "1px solid #FDE68A",
+                            padding: "10px 14px",
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 10,
+                          }}
+                        >
+                          <span style={{ fontSize: 16, lineHeight: 1, marginTop: 1 }}>💡</span>
+                          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: "#92400E", fontWeight: 500 }}>
+                            {warn}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {classRemoveError ? (
+                      <div style={{ padding: "0 22px 12px" }}>
+                        <p
+                          className="dhp-step1-lookup-err dhp-remove-enroll-modal-err"
+                          role="alert"
+                          style={{ margin: 0 }}
+                        >
+                          {classRemoveError}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {/* Footer actions */}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        padding: "14px 22px 18px",
+                        borderTop: "1px solid #F0F0F0",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="dhp-btn-modal-close"
+                        disabled={removeEnrollSubmitting}
+                        onClick={() => {
+                          setClassRemoveError(null);
+                          setRemoveEnrollModal(null);
+                        }}
+                        style={{ flex: 1 }}
+                      >
+                        Huỷ
+                      </button>
+                      <button
+                        type="button"
+                        disabled={removeEnrollSubmitting}
+                        onClick={() => void confirmRemoveEnrolledFromModal()}
+                        style={{
+                          flex: 1.4,
+                          padding: "10px 16px",
+                          borderRadius: 10,
+                          border: "none",
+                          background: removeEnrollSubmitting
+                            ? "#FCA5A5"
+                            : "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
+                          color: "white",
+                          fontWeight: 700,
+                          fontSize: 13,
+                          cursor: removeEnrollSubmitting ? "not-allowed" : "pointer",
+                          boxShadow: "0 4px 12px rgba(220, 38, 38, 0.25)",
+                          transition: "transform 0.15s, box-shadow 0.15s",
+                        }}
+                      >
+                        {removeEnrollSubmitting ? "Đang xóa…" : "Xác nhận huỷ"}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

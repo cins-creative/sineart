@@ -113,6 +113,20 @@ function tenCombo(id: number | null, combos: AdminComboOption[]): string {
   return combos.find((c) => c.id === id)?.ten_combo ?? `#${id}`;
 }
 
+function tenCombos(ids: number[], combos: AdminComboOption[]): string {
+  if (!ids.length) return "—";
+  return ids.map((id) => tenCombo(id, combos)).join(", ");
+}
+
+function comboLabels(ids: number[], combos: AdminComboOption[]): string[] {
+  return ids.map((id) => tenCombo(id, combos));
+}
+
+/** Trả về danh sách combo chứa gói có ID `goiId` (dùng goi_ids mới). */
+function combosContainingGoi(goiId: number, combos: AdminComboOption[]): AdminComboOption[] {
+  return combos.filter((c) => c.goi_ids && c.goi_ids.includes(goiId));
+}
+
 /** Bản nháp một dòng khi chỉnh sửa cả bảng (chuỗi giống form modal). */
 type EditableGoiDraft = {
   id: number;
@@ -122,7 +136,7 @@ type EditableGoiDraft = {
   don_vi: string;
   gia_goc: string;
   discount: string;
-  combo_id: string;
+  combo_ids: string[];
   special: string;
   note: string;
   so_buoi: string;
@@ -143,6 +157,8 @@ function buildTuDongTenGoiFromDraft(d: EditableGoiDraft, mons: AdminMonOption[])
 }
 
 function rowToDraft(r: AdminGoiHocPhiRow): EditableGoiDraft {
+  const comboIds = (r.combo_ids?.length ? r.combo_ids : r.combo_id != null ? [r.combo_id] : [])
+    .map((id) => String(id));
   return {
     id: r.id,
     mon_hoc: r.mon_hoc != null ? String(r.mon_hoc) : "",
@@ -151,7 +167,7 @@ function rowToDraft(r: AdminGoiHocPhiRow): EditableGoiDraft {
     don_vi: r.don_vi ?? "",
     gia_goc: r.gia_goc != null ? String(Math.round(r.gia_goc)) : "",
     discount: r.discount != null ? String(r.discount) : "",
-    combo_id: r.combo_id != null ? String(r.combo_id) : "",
+    combo_ids: comboIds,
     special: r.special ?? "",
     note: r.note ?? "",
     so_buoi: r.so_buoi != null ? String(r.so_buoi) : "",
@@ -166,9 +182,8 @@ function draftToBulkInput(
   if (mon_hoc != null && (!Number.isFinite(mon_hoc) || mon_hoc <= 0)) {
     return { ok: false, error: `Gói #${d.id}: Môn học không hợp lệ.` };
   }
-  const comboRaw = d.combo_id.trim();
-  const combo_id = comboRaw === "" ? null : Number(comboRaw);
-  if (combo_id != null && (!Number.isFinite(combo_id) || combo_id <= 0)) {
+  const combo_ids = [...new Set(d.combo_ids.map((v) => Number(v)).filter((v) => Number.isFinite(v) && v > 0))];
+  if (combo_ids.some((id) => !Number.isFinite(id) || id <= 0)) {
     return { ok: false, error: `Gói #${d.id}: Combo không hợp lệ.` };
   }
   const don_vi = d.don_vi.trim() || null;
@@ -196,7 +211,8 @@ function draftToBulkInput(
       don_vi,
       gia_goc: parseClientNumNullable(d.gia_goc),
       discount: parseClientNumNullable(d.discount),
-      combo_id,
+      combo_id: combo_ids[0] ?? null,
+      combo_ids,
       so_buoi: parseClientNumNullable(d.so_buoi),
       special: specialTrim === "" ? null : specialTrim,
       note: noteTrim === "" ? null : noteTrim,
@@ -208,17 +224,45 @@ function draftToBulkInput(
 function ComboMonCreateModal({
   onClose,
   onCreated,
+  goiRows,
+  monOptions,
 }: {
   onClose: () => void;
   onCreated: (c: AdminComboOption) => void;
+  goiRows: AdminGoiHocPhiRow[];
+  monOptions: AdminMonOption[];
 }) {
   const router = useRouter();
   const [banner, setBanner] = useState("");
+  const [goiSearch, setGoiSearch] = useState("");
+  const [filterMonId, setFilterMonId] = useState("");
+  const [selectedGoiIds, setSelectedGoiIds] = useState<number[]>([]);
+  const [dangHoatDong, setDangHoatDong] = useState(true);
   const [state, action, pending] = useActionState(createHpComboMon, null as ComboMonFormState | null);
+
+  const filteredGois = useMemo(() => {
+    let list = goiRows;
+    if (filterMonId) {
+      const mid = Number(filterMonId);
+      if (Number.isFinite(mid) && mid > 0) list = list.filter((r) => r.mon_hoc === mid);
+    }
+    const s = goiSearch.trim().toLowerCase();
+    if (!s) return list;
+    return list.filter((r) => {
+      const nm = buildTuDongTenGoiFromRow(r, monOptions).toLowerCase();
+      return String(r.id).includes(s) || nm.includes(s);
+    });
+  }, [goiRows, goiSearch, filterMonId, monOptions]);
 
   useEffect(() => {
     if (state?.ok) {
-      onCreated({ id: state.id, ten_combo: state.ten_combo, gia_giam: state.gia_giam });
+      onCreated({
+        id: state.id,
+        ten_combo: state.ten_combo,
+        gia_giam: state.gia_giam,
+        goi_ids: state.goi_ids,
+        dang_hoat_dong: state.dang_hoat_dong,
+      });
       router.refresh();
       onClose();
     } else if (state && !state.ok) {
@@ -238,7 +282,7 @@ function ComboMonCreateModal({
         initial={{ scale: 0.94, opacity: 0, y: 12 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.94, opacity: 0, y: 12 }}
-        className="w-full max-w-[440px] overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgba(0,0,0,0.22)]"
+        className="w-full max-w-[520px] overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgba(0,0,0,0.22)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#EAEAEA] px-5 py-3.5">
@@ -255,37 +299,157 @@ function ComboMonCreateModal({
             <X size={16} />
           </button>
         </div>
-        <form action={action} className="space-y-4 px-5 py-4">
-          {banner ? (
-            <div className="rounded-xl border border-[#FFCDD2] bg-[#FFF0F3] px-3 py-2 text-sm text-[#C0244E]">
-              {banner}
+        <form action={action} className="max-h-[80vh] overflow-y-auto">
+          <div className="space-y-4 px-5 py-4">
+            {banner ? (
+              <div className="rounded-xl border border-[#FFCDD2] bg-[#FFF0F3] px-3 py-2 text-sm text-[#C0244E]">
+                {banner}
+              </div>
+            ) : null}
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
+                Tên combo
+              </span>
+              <input
+                name="ten_combo"
+                required
+                maxLength={500}
+                className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
+                placeholder="VD: HH Onl & TTM Onl 1 tháng"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
+                Giá giảm (₫)
+              </span>
+              <input
+                name="gia_giam"
+                className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
+                inputMode="numeric"
+                placeholder="0 = không giảm"
+              />
+            </label>
+
+            {/* goi_ids picker */}
+            <input type="hidden" name="goi_ids" value={selectedGoiIds.join(",")} />
+            <div className="block">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
+                Gói học phí trong combo{" "}
+                <span className="font-normal normal-case text-black/40">
+                  (chọn đủ → giảm giá)
+                </span>
+              </span>
+              {selectedGoiIds.length > 0 ? (
+                <div className="mb-2 flex flex-wrap gap-1">
+                  {selectedGoiIds.map((gid) => {
+                    const r = goiRows.find((x) => x.id === gid);
+                    return (
+                      <span
+                        key={gid}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#BC8AF9]/30 bg-[#BC8AF9]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#7a5bb0]"
+                      >
+                        #{gid}
+                        {r ? ` ${buildTuDongTenGoiFromRow(r, monOptions).slice(0, 24)}` : ""}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedGoiIds((prev) => prev.filter((x) => x !== gid))}
+                          className="ml-0.5 text-[#7a5bb0]/60 hover:text-[#7a5bb0]"
+                          aria-label={`Bỏ gói #${gid}`}
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mb-2 text-[11px] text-black/40">Chưa chọn gói nào.</p>
+              )}
+              <div className="rounded-xl border border-[#EAEAEA]">
+                <div className="flex items-center gap-0 border-b border-[#EAEAEA]">
+                  <select
+                    value={filterMonId}
+                    onChange={(e) => setFilterMonId(e.target.value)}
+                    className="shrink-0 border-0 border-r border-[#EAEAEA] bg-[#FAFAFA] px-2 py-2 text-xs font-medium text-[#323232] outline-none focus:ring-1 focus:ring-[#BC8AF9] rounded-tl-xl"
+                    style={{ width: "38%" }}
+                    aria-label="Lọc theo môn"
+                  >
+                    <option value="">Tất cả môn</option>
+                    {monOptions.map((m) => (
+                      <option key={m.id} value={String(m.id)}>
+                        {m.ten_mon_hoc}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    value={goiSearch}
+                    onChange={(e) => setGoiSearch(e.target.value)}
+                    placeholder="Tìm ID hoặc tên gói…"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-black/35"
+                  />
+                </div>
+                <div className="max-h-44 overflow-y-auto px-2 py-1.5">
+                  {filteredGois.length === 0 ? (
+                    <p className="px-2 py-3 text-center text-xs text-black/40">Không tìm thấy gói.</p>
+                  ) : (
+                    filteredGois.map((r) => {
+                      const checked = selectedGoiIds.includes(r.id);
+                      return (
+                        <label
+                          key={r.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-xs hover:bg-[#FAFAFA]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) =>
+                              setSelectedGoiIds((prev) =>
+                                e.target.checked
+                                  ? [...new Set([...prev, r.id])].sort((a, b) => a - b)
+                                  : prev.filter((x) => x !== r.id),
+                              )
+                            }
+                            className="h-3.5 w-3.5 rounded border-[#D8D8D8] text-[#BC8AF9] focus:ring-[#BC8AF9]"
+                          />
+                          <span className="shrink-0 font-mono text-black/50">#{r.id}</span>
+                          <span className="truncate text-[#323232]">
+                            {buildTuDongTenGoiFromRow(r, monOptions)}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
-          ) : null}
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
-              Tên combo
-            </span>
-            <input
-              name="ten_combo"
-              required
-              maxLength={500}
-              className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
-              placeholder="VD: HH Onl & TTM Onl 1 tháng"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
-              Giá giảm (₫)
-            </span>
-            <input
-              name="gia_giam"
-              className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
-              inputMode="numeric"
-              placeholder="0 = không giảm"
-            />
-            <p className="mt-1 text-[11px] text-black/45">Số tiền giảm khi đủ điều kiện combo (logic thanh toán hiện tại).</p>
-          </label>
-          <div className="flex justify-end gap-2 border-t border-[#EAEAEA] pt-4">
+
+            {/* dang_hoat_dong */}
+            <input type="hidden" name="dang_hoat_dong" value={dangHoatDong ? "true" : "false"} />
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#EAEAEA] px-3 py-2.5">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={dangHoatDong}
+                  onChange={(e) => setDangHoatDong(e.target.checked)}
+                />
+                <div
+                  className={`h-5 w-9 rounded-full transition-colors ${dangHoatDong ? "bg-[#BC8AF9]" : "bg-black/20"}`}
+                >
+                  <div
+                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${dangHoatDong ? "translate-x-4" : "translate-x-0.5"}`}
+                  />
+                </div>
+              </div>
+              <span className="text-sm font-medium text-[#323232]">
+                Đang hoạt động{" "}
+                <span className={`text-xs ${dangHoatDong ? "text-emerald-700" : "text-black/40"}`}>
+                  ({dangHoatDong ? "Combo đang áp dụng" : "Tắt — không giảm giá"})
+                </span>
+              </span>
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-[#EAEAEA] px-5 py-4">
             <button
               type="button"
               onClick={onClose}
@@ -311,22 +475,54 @@ function ComboMonEditModal({
   combo,
   onClose,
   onUpdated,
+  goiRows,
+  monOptions,
 }: {
   combo: AdminComboOption;
   onClose: () => void;
   onUpdated: (c: AdminComboOption) => void;
+  goiRows: AdminGoiHocPhiRow[];
+  monOptions: AdminMonOption[];
 }) {
   const router = useRouter();
   const [banner, setBanner] = useState("");
+  const [goiSearch, setGoiSearch] = useState("");
+  const [filterMonId, setFilterMonId] = useState("");
+  const [selectedGoiIds, setSelectedGoiIds] = useState<number[]>(() => combo.goi_ids ?? []);
+  const [dangHoatDong, setDangHoatDong] = useState(() => combo.dang_hoat_dong !== false);
   const [state, action, pending] = useActionState(updateHpComboMon, null as ComboMonFormState | null);
+
+  const filteredGois = useMemo(() => {
+    let list = goiRows;
+    if (filterMonId) {
+      const mid = Number(filterMonId);
+      if (Number.isFinite(mid) && mid > 0) list = list.filter((r) => r.mon_hoc === mid);
+    }
+    const s = goiSearch.trim().toLowerCase();
+    if (!s) return list;
+    return list.filter((r) => {
+      const nm = buildTuDongTenGoiFromRow(r, monOptions).toLowerCase();
+      return String(r.id).includes(s) || nm.includes(s);
+    });
+  }, [goiRows, goiSearch, filterMonId, monOptions]);
 
   useEffect(() => {
     setBanner("");
-  }, [combo.id]);
+    setSelectedGoiIds(combo.goi_ids ?? []);
+    setDangHoatDong(combo.dang_hoat_dong !== false);
+    setGoiSearch("");
+    setFilterMonId("");
+  }, [combo.id, combo.goi_ids, combo.dang_hoat_dong]);
 
   useEffect(() => {
     if (state?.ok) {
-      onUpdated({ id: state.id, ten_combo: state.ten_combo, gia_giam: state.gia_giam });
+      onUpdated({
+        id: state.id,
+        ten_combo: state.ten_combo,
+        gia_giam: state.gia_giam,
+        goi_ids: state.goi_ids,
+        dang_hoat_dong: state.dang_hoat_dong,
+      });
       router.refresh();
       onClose();
     } else if (state && !state.ok) {
@@ -346,7 +542,7 @@ function ComboMonEditModal({
         initial={{ scale: 0.94, opacity: 0, y: 12 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.94, opacity: 0, y: 12 }}
-        className="w-full max-w-[440px] overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgba(0,0,0,0.22)]"
+        className="w-full max-w-[520px] overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgba(0,0,0,0.22)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#EAEAEA] px-5 py-3.5">
@@ -363,37 +559,158 @@ function ComboMonEditModal({
             <X size={16} />
           </button>
         </div>
-        <form key={combo.id} action={action} className="space-y-4 px-5 py-4">
-          <input type="hidden" name="combo_row_id" value={String(combo.id)} />
-          {banner ? (
-            <div className="rounded-xl border border-[#FFCDD2] bg-[#FFF0F3] px-3 py-2 text-sm text-[#C0244E]">
-              {banner}
+        <form key={combo.id} action={action} className="max-h-[80vh] overflow-y-auto">
+          <div className="space-y-4 px-5 py-4">
+            <input type="hidden" name="combo_row_id" value={String(combo.id)} />
+            {banner ? (
+              <div className="rounded-xl border border-[#FFCDD2] bg-[#FFF0F3] px-3 py-2 text-sm text-[#C0244E]">
+                {banner}
+              </div>
+            ) : null}
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
+                Tên combo
+              </span>
+              <input
+                name="ten_combo"
+                required
+                maxLength={500}
+                defaultValue={combo.ten_combo}
+                className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
+                Giá giảm (₫)
+              </span>
+              <input
+                name="gia_giam"
+                defaultValue={String(Math.round(combo.gia_giam))}
+                className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
+                inputMode="numeric"
+              />
+            </label>
+
+            {/* goi_ids picker */}
+            <input type="hidden" name="goi_ids" value={selectedGoiIds.join(",")} />
+            <div className="block">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
+                Gói học phí trong combo{" "}
+                <span className="font-normal normal-case text-black/40">
+                  (chọn đủ → giảm giá)
+                </span>
+              </span>
+              {selectedGoiIds.length > 0 ? (
+                <div className="mb-2 flex flex-wrap gap-1">
+                  {selectedGoiIds.map((gid) => {
+                    const r = goiRows.find((x) => x.id === gid);
+                    return (
+                      <span
+                        key={gid}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#BC8AF9]/30 bg-[#BC8AF9]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#7a5bb0]"
+                      >
+                        #{gid}
+                        {r ? ` ${buildTuDongTenGoiFromRow(r, monOptions).slice(0, 24)}` : ""}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedGoiIds((prev) => prev.filter((x) => x !== gid))}
+                          className="ml-0.5 text-[#7a5bb0]/60 hover:text-[#7a5bb0]"
+                          aria-label={`Bỏ gói #${gid}`}
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mb-2 text-[11px] text-black/40">Chưa chọn gói nào.</p>
+              )}
+              <div className="rounded-xl border border-[#EAEAEA]">
+                <div className="flex items-center gap-0 border-b border-[#EAEAEA]">
+                  <select
+                    value={filterMonId}
+                    onChange={(e) => setFilterMonId(e.target.value)}
+                    className="shrink-0 border-0 border-r border-[#EAEAEA] bg-[#FAFAFA] px-2 py-2 text-xs font-medium text-[#323232] outline-none focus:ring-1 focus:ring-[#BC8AF9] rounded-tl-xl"
+                    style={{ width: "38%" }}
+                    aria-label="Lọc theo môn"
+                  >
+                    <option value="">Tất cả môn</option>
+                    {monOptions.map((m) => (
+                      <option key={m.id} value={String(m.id)}>
+                        {m.ten_mon_hoc}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    value={goiSearch}
+                    onChange={(e) => setGoiSearch(e.target.value)}
+                    placeholder="Tìm ID hoặc tên gói…"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-black/35"
+                  />
+                </div>
+                <div className="max-h-44 overflow-y-auto px-2 py-1.5">
+                  {filteredGois.length === 0 ? (
+                    <p className="px-2 py-3 text-center text-xs text-black/40">Không tìm thấy gói.</p>
+                  ) : (
+                    filteredGois.map((r) => {
+                      const checked = selectedGoiIds.includes(r.id);
+                      return (
+                        <label
+                          key={r.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-xs hover:bg-[#FAFAFA]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) =>
+                              setSelectedGoiIds((prev) =>
+                                e.target.checked
+                                  ? [...new Set([...prev, r.id])].sort((a, b) => a - b)
+                                  : prev.filter((x) => x !== r.id),
+                              )
+                            }
+                            className="h-3.5 w-3.5 rounded border-[#D8D8D8] text-[#BC8AF9] focus:ring-[#BC8AF9]"
+                          />
+                          <span className="shrink-0 font-mono text-black/50">#{r.id}</span>
+                          <span className="truncate text-[#323232]">
+                            {buildTuDongTenGoiFromRow(r, monOptions)}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
-          ) : null}
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
-              Tên combo
-            </span>
-            <input
-              name="ten_combo"
-              required
-              maxLength={500}
-              defaultValue={combo.ten_combo}
-              className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
-              Giá giảm (₫)
-            </span>
-            <input
-              name="gia_giam"
-              defaultValue={String(Math.round(combo.gia_giam))}
-              className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
-              inputMode="numeric"
-            />
-          </label>
-          <div className="flex justify-end gap-2 border-t border-[#EAEAEA] pt-4">
+
+            {/* dang_hoat_dong */}
+            <input type="hidden" name="dang_hoat_dong" value={dangHoatDong ? "true" : "false"} />
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#EAEAEA] px-3 py-2.5">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={dangHoatDong}
+                  onChange={(e) => setDangHoatDong(e.target.checked)}
+                />
+                <div
+                  className={`h-5 w-9 rounded-full transition-colors ${dangHoatDong ? "bg-[#BC8AF9]" : "bg-black/20"}`}
+                >
+                  <div
+                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${dangHoatDong ? "translate-x-4" : "translate-x-0.5"}`}
+                  />
+                </div>
+              </div>
+              <span className="text-sm font-medium text-[#323232]">
+                Đang hoạt động{" "}
+                <span className={`text-xs ${dangHoatDong ? "text-emerald-700" : "text-black/40"}`}>
+                  ({dangHoatDong ? "Combo đang áp dụng" : "Tắt — không giảm giá"})
+                </span>
+              </span>
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-[#EAEAEA] px-5 py-4">
             <button
               type="button"
               onClick={onClose}
@@ -411,6 +728,225 @@ function ComboMonEditModal({
           </div>
         </form>
       </motion.div>
+    </motion.div>
+  );
+}
+
+function ComboManagerModal({
+  combos,
+  onClose,
+  onUpsertCombo,
+  goiRows,
+  monOptions,
+}: {
+  combos: AdminComboOption[];
+  onClose: () => void;
+  onUpsertCombo: (c: AdminComboOption) => void;
+  goiRows: AdminGoiHocPhiRow[];
+  monOptions: AdminMonOption[];
+}) {
+  const { canDelete: roleMayDeleteCombo } = useAdminDashboardAbilities();
+  const router = useRouter();
+  const [comboCreateOpen, setComboCreateOpen] = useState(false);
+  const [comboCreateKey, setComboCreateKey] = useState(0);
+  const [comboEditOpen, setComboEditOpen] = useState(false);
+  const [comboEditKey, setComboEditKey] = useState(0);
+  const [activeComboId, setActiveComboId] = useState<number | null>(null);
+  const [deletePendingId, setDeletePendingId] = useState<number | null>(null);
+  const [banner, setBanner] = useState("");
+
+  const activeCombo = useMemo(
+    () => (activeComboId == null ? null : combos.find((c) => c.id === activeComboId) ?? null),
+    [activeComboId, combos],
+  );
+
+  async function handleDelete(comboId: number) {
+    if (!window.confirm(`Xóa combo #${comboId}? Hành động không hoàn tác.`)) return;
+    setDeletePendingId(comboId);
+    setBanner("");
+    try {
+      const res = await deleteHpComboMon(comboId);
+      if (!res.ok) {
+        setBanner(res.error);
+        return;
+      }
+      router.refresh();
+      if (activeComboId === comboId) setActiveComboId(null);
+    } finally {
+      setDeletePendingId(null);
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.96, opacity: 0, y: 8 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.96, opacity: 0, y: 8 }}
+        className="flex max-h-[88vh] w-full max-w-[1080px] flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_24px_64px_rgba(0,0,0,0.22)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#EAEAEA] px-5 py-3.5">
+          <div className="flex items-center gap-2">
+            <Layers2 size={18} className="text-[#BC8AF9]" />
+            <h3 className="m-0 text-base font-bold text-[#323232]">Quản lý gói combo</h3>
+            <span className="rounded-full bg-black/[0.04] px-2 py-0.5 text-[11px] font-semibold text-black/55">
+              {combos.length} combo
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setComboCreateKey((k) => k + 1);
+                setComboCreateOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-3 py-2 text-[13px] font-semibold text-white"
+            >
+              <Plus size={14} />
+              Thêm combo
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border-0 bg-black/[0.04] p-2 text-black/60 hover:bg-black/[0.08]"
+              aria-label="Đóng"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {banner ? (
+          <div className="border-b border-[#FFCDD2] bg-[#FFF0F3] px-5 py-2 text-sm text-[#C0244E]">{banner}</div>
+        ) : null}
+
+        <div className="min-h-0 flex-1 overflow-auto">
+          <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-[#EAEAEA] bg-[#FAFAFA] text-[11px] font-bold uppercase tracking-wide text-black/45">
+                <th className="w-20 px-4 py-2.5">ID</th>
+                <th className="min-w-[200px] px-4 py-2.5">Tên combo</th>
+                <th className="w-36 px-4 py-2.5">Giảm</th>
+                <th className="w-24 px-4 py-2.5 text-center normal-case">Trạng thái</th>
+                <th className="min-w-[260px] px-4 py-2.5 normal-case">Gói học phí (goi_ids)</th>
+                <th className="w-36 px-4 py-2.5 text-center normal-case">Hành động</th>
+              </tr>
+            </thead>
+            <tbody>
+              {combos.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-black/45">
+                    Chưa có combo nào.
+                  </td>
+                </tr>
+              ) : (
+                combos.map((combo) => (
+                  <tr key={combo.id} className="border-b border-[#F0F0F0] hover:bg-[#FFFBF8]/80">
+                    <td className="px-4 py-2.5 font-mono text-xs text-black/65">#{combo.id}</td>
+                    <td className="px-4 py-2.5 text-sm font-medium text-[#323232]">{combo.ten_combo}</td>
+                    <td className="px-4 py-2.5 text-sm tabular-nums text-[#323232]">{fmtVnd(combo.gia_giam)}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                          combo.dang_hoat_dong
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-black/[0.06] text-black/45"
+                        }`}
+                      >
+                        {combo.dang_hoat_dong ? "Active" : "Tắt"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {combo.goi_ids && combo.goi_ids.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {combo.goi_ids.map((gid) => {
+                            const r = goiRows.find((x) => x.id === gid);
+                            return (
+                              <span
+                                key={gid}
+                                title={r ? buildTuDongTenGoiFromRow(r, monOptions) : `Gói #${gid}`}
+                                className="inline-block rounded-full border border-[#BC8AF9]/25 bg-[#BC8AF9]/8 px-2 py-0.5 text-[10px] font-semibold text-[#7a5bb0]"
+                              >
+                                #{gid}
+                                {r ? ` ${buildTuDongTenGoiFromRow(r, monOptions).slice(0, 18)}` : ""}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-black/35">— chưa có gói —</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveComboId(combo.id);
+                            setComboEditKey((k) => k + 1);
+                            setComboEditOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#323232] hover:border-[#BC8AF9]/45 hover:bg-[#BC8AF9]/10"
+                        >
+                          <Pencil size={12} />
+                          Sửa
+                        </button>
+                        {roleMayDeleteCombo ? (
+                          <button
+                            type="button"
+                            disabled={deletePendingId === combo.id}
+                            onClick={() => void handleDelete(combo.id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
+                          >
+                            <Trash2 size={12} />
+                            {deletePendingId === combo.id ? "Đang xóa…" : "Xóa"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
+
+      <AnimatePresence>
+        {comboCreateOpen ? (
+          <ComboMonCreateModal
+            key={comboCreateKey}
+            onClose={() => setComboCreateOpen(false)}
+            onCreated={(c) => {
+              onUpsertCombo(c);
+            }}
+            goiRows={goiRows}
+            monOptions={monOptions}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {comboEditOpen && activeCombo ? (
+          <ComboMonEditModal
+            key={`${comboEditKey}-${activeCombo.id}`}
+            combo={activeCombo}
+            onClose={() => setComboEditOpen(false)}
+            onUpdated={(c) => {
+              onUpsertCombo(c);
+            }}
+            goiRows={goiRows}
+            monOptions={monOptions}
+          />
+        ) : null}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -453,7 +989,9 @@ function GoiModal({
     don_vi: row?.don_vi ?? "",
     gia_goc: row?.gia_goc != null ? String(Math.round(row.gia_goc)) : "",
     discount: row?.discount != null ? String(row.discount) : "",
-    combo_id: row?.combo_id != null ? String(row.combo_id) : "",
+    combo_ids: (row?.combo_ids?.length ? row.combo_ids : row?.combo_id != null ? [row.combo_id] : []).map((id) =>
+      String(id),
+    ),
     special: row?.special ?? "",
     note: row?.note ?? "",
     so_buoi: row?.so_buoi != null ? String(row.so_buoi) : "",
@@ -462,19 +1000,12 @@ function GoiModal({
   const [saveState, saveAction, savePending] = useActionState(saveGoiHocPhi, null as GoiHocPhiFormState | null);
 
   const selectedCombo = useMemo(() => {
-    const raw = form.combo_id.trim();
+    const raw = form.combo_ids[0] ?? "";
     if (!raw) return null;
     const n = Number(raw);
     if (!Number.isFinite(n) || n <= 0) return null;
     return allComboOptions.find((c) => c.id === n) ?? null;
-  }, [form.combo_id, allComboOptions]);
-
-  useEffect(() => {
-    if (!form.combo_id.trim()) {
-      setComboEditOpen(false);
-      setDeleteComboWarningOpen(false);
-    }
-  }, [form.combo_id]);
+  }, [form.combo_ids, allComboOptions]);
 
   function executeDeleteCombo() {
     if (!selectedCombo) return;
@@ -484,7 +1015,7 @@ function GoiModal({
       setDeleteComboWarningOpen(false);
       if (res.ok) {
         setModalError("");
-        setForm((f) => ({ ...f, combo_id: "" }));
+        setForm((f) => ({ ...f, combo_ids: f.combo_ids.filter((v) => Number(v) !== id) }));
         router.refresh();
       } else {
         setModalError(res.error);
@@ -500,7 +1031,9 @@ function GoiModal({
       don_vi: row?.don_vi ?? "",
       gia_goc: row?.gia_goc != null ? String(Math.round(row.gia_goc)) : "",
       discount: row?.discount != null ? String(row.discount) : "",
-      combo_id: row?.combo_id != null ? String(row.combo_id) : "",
+      combo_ids: (row?.combo_ids?.length ? row.combo_ids : row?.combo_id != null ? [row.combo_id] : []).map((id) =>
+        String(id),
+      ),
       special: row?.special ?? "",
       note: row?.note ?? "",
       so_buoi: row?.so_buoi != null ? String(row.so_buoi) : "",
@@ -519,7 +1052,7 @@ function GoiModal({
         don_vi: form.don_vi,
         gia_goc: "",
         discount: "",
-        combo_id: "",
+        combo_ids: [],
         special: form.special,
         note: "",
         so_buoi: "",
@@ -693,34 +1226,65 @@ function GoiModal({
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
               Combo <span className="font-normal normal-case text-black/40">(hp_combo_mon.id)</span>
             </span>
+            <input type="hidden" name="combo_ids" value={form.combo_ids.join(",")} />
+            <input type="hidden" name="combo_id" value={form.combo_ids[0] ?? ""} />
             {comboPickList ? (
-              <select
-                name="combo_id"
-                value={form.combo_id}
-                onChange={(e) => setForm((f) => ({ ...f, combo_id: e.target.value }))}
-                className="w-full rounded-xl border border-[#EAEAEA] bg-white px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
-              >
-                <option value="">— Không thuộc combo —</option>
-                {allComboOptions.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.ten_combo}
-                  </option>
-                ))}
-              </select>
+              <details className="overflow-hidden rounded-xl border border-[#EAEAEA] bg-white">
+                <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-medium text-[#323232]">
+                  {form.combo_ids.length <= 1 ? (
+                    form.combo_ids.length ? tenCombos(form.combo_ids.map(Number), allComboOptions) : "— Không thuộc combo —"
+                  ) : (
+                    <ul className="m-0 list-disc pl-4 text-xs leading-relaxed">
+                      {comboLabels(form.combo_ids.map(Number), allComboOptions).map((label, idx) => (
+                        <li key={`${idx}-${label}`} className="truncate">{label}</li>
+                      ))}
+                    </ul>
+                  )}
+                </summary>
+                <div className="max-h-56 min-w-[24rem] space-y-1 overflow-y-auto border-t border-[#EAEAEA] px-3 py-2">
+                  {allComboOptions.map((c) => {
+                    const checked = form.combo_ids.includes(String(c.id));
+                    return (
+                      <label key={c.id} className="flex items-center gap-2 rounded-lg px-1 py-1 text-sm hover:bg-[#FAFAFA]">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) =>
+                            setForm((f) => {
+                              const next = new Set(f.combo_ids);
+                              if (e.target.checked) next.add(String(c.id));
+                              else next.delete(String(c.id));
+                              return { ...f, combo_ids: [...next].sort((a, b) => Number(a) - Number(b)) };
+                            })
+                          }
+                          className="h-4 w-4 rounded border-[#D8D8D8] text-[#BC8AF9] focus:ring-[#BC8AF9]"
+                        />
+                        <span className="truncate">{c.ten_combo}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </details>
             ) : (
               <>
                 <input
-                  name="combo_id"
-                  value={form.combo_id}
-                  onChange={(e) => setForm((f) => ({ ...f, combo_id: e.target.value }))}
+                  value={form.combo_ids.join(",")}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      combo_ids: e.target.value
+                        .split(",")
+                        .map((v) => v.trim())
+                        .filter((v) => v.length > 0),
+                    }))
+                  }
                   className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
                   inputMode="numeric"
-                  placeholder="Để trống = không combo, hoặc nhập số ID"
+                  placeholder="Nhập nhiều ID, cách nhau bằng dấu phẩy"
                 />
                 <p className="mt-1.5 text-[11px] leading-snug text-black/45">
-                  Không tải được danh sách tên combo — nhập trực tiếp <code className="rounded bg-black/[0.04] px-0.5">id</code>{" "}
-                  từ bảng <code className="rounded bg-black/[0.04] px-0.5">hp_combo_mon</code>. Sửa/xóa combo khi chỉ có ID: dùng SQL
-                  Editor hoặc cấp quyền đọc danh sách rồi chọn combo ở trên.
+                  Không tải được danh sách tên combo — nhập trực tiếp nhiều <code className="rounded bg-black/[0.04] px-0.5">id</code>{" "}
+                  từ bảng <code className="rounded bg-black/[0.04] px-0.5">hp_combo_mon</code>.
                 </p>
               </>
             )}
@@ -735,7 +1299,7 @@ function GoiModal({
                   className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#EAEAEA] bg-white px-3 py-2 text-[13px] font-semibold text-[#323232] hover:border-[#BC8AF9]/45 hover:bg-[#BC8AF9]/10 sm:flex-initial"
                 >
                   <Pencil size={14} />
-                  Sửa combo này
+                  Sửa combo đầu tiên
                 </button>
                 {roleMayDeleteCombo ? (
                   <button
@@ -745,7 +1309,7 @@ function GoiModal({
                     className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50/80 px-3 py-2 text-[13px] font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 sm:flex-initial"
                   >
                     <Trash2 size={14} />
-                    Xóa combo
+                    Xóa combo đầu tiên
                   </button>
                 ) : null}
               </div>
@@ -854,8 +1418,14 @@ function GoiModal({
             onClose={() => setComboCreateOpen(false)}
             onCreated={(c) => {
               onComboCreated(c);
-              setForm((f) => ({ ...f, combo_id: String(c.id) }));
+              setForm((f) => {
+                const next = new Set(f.combo_ids);
+                next.add(String(c.id));
+                return { ...f, combo_ids: [...next].sort((a, b) => Number(a) - Number(b)) };
+              });
             }}
+            goiRows={[]}
+            monOptions={monOptions}
           />
         ) : null}
       </AnimatePresence>
@@ -869,6 +1439,8 @@ function GoiModal({
             onUpdated={(c) => {
               onComboCreated(c);
             }}
+            goiRows={[]}
+            monOptions={monOptions}
           />
         ) : null}
       </AnimatePresence>
@@ -964,6 +1536,8 @@ export default function GoiHocPhiView({ bundle }: Props) {
   const [rowSearch, setRowSearch] = useState("");
   const [goiListPage, setGoiListPage] = useState(1);
   const [isNew, setIsNew] = useState(false);
+  const [comboManagerOpen, setComboManagerOpen] = useState(false);
+  const [comboManagerKey, setComboManagerKey] = useState(0);
   const [editDraftById, setEditDraftById] = useState<Map<number, EditableGoiDraft> | null>(null);
   const [bulkHint, setBulkHint] = useState<{ ok: boolean; text: string } | null>(null);
   const [bulkSavePending, startBulkSave] = useTransition();
@@ -972,7 +1546,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
 
   const tableEditMode = editDraftById != null;
   const emptyTableColSpan =
-    (bundle.tableName !== "hp_goi_hoc_phi" ? 14 : 10) + (tableEditMode ? 1 : 0);
+    (bundle.tableName !== "hp_goi_hoc_phi" ? 13 : 9) + (tableEditMode ? 1 : 0);
 
   useEffect(() => {
     setBannerError(bundle.loadError ?? "");
@@ -1009,7 +1583,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
     if (s) {
       list = list.filter((r) => {
         const monName = tenMon(r.mon_hoc, bundle.monOptions).toLowerCase();
-        const comboName = tenCombo(r.combo_id, allComboOptions).toLowerCase();
+        const comboName = tenCombos(r.combo_ids, allComboOptions).toLowerCase();
         const dv = (r.don_vi ?? "").toLowerCase();
         const gn = fmtNum(r.goiNumber).toLowerCase();
         const sb = fmtNum(r.so_buoi).toLowerCase();
@@ -1248,6 +1822,17 @@ export default function GoiHocPhiView({ bundle }: Props) {
           )}
           <button
             type="button"
+            onClick={() => {
+              setComboManagerKey((k) => k + 1);
+              setComboManagerOpen(true);
+            }}
+            className="flex items-center gap-1.5 rounded-xl border border-[#EAEAEA] bg-white px-[16px] py-2.5 text-[13px] font-semibold text-[#323232] hover:border-[#BC8AF9]/40 hover:bg-[#BC8AF9]/8"
+          >
+            <Layers2 size={15} />
+            Quản lý combo
+          </button>
+          <button
+            type="button"
             disabled={tableEditMode}
             title={tableEditMode ? "Hủy chỉnh sửa bảng hoặc lưu trước khi thêm gói mới." : undefined}
             onClick={() => setIsNew(true)}
@@ -1284,7 +1869,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
           </div>
         ) : null}
 
-        <div className="mx-auto w-full max-w-[min(1680px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div className="mx-auto w-full max-w-[min(1960px,calc(100vw-1rem))] overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <div className="flex flex-col gap-3 border-b border-[#EAEAEA] bg-[#FAFAFA] px-4 py-3">
             <div className="relative w-full max-w-xl">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
@@ -1363,10 +1948,10 @@ export default function GoiHocPhiView({ bundle }: Props) {
                 isNewGoiTable
                   ? tableEditMode
                     ? "min-w-[1760px]"
-                    : "min-w-[1540px]"
+                    : "min-w-[1520px]"
                   : tableEditMode
-                    ? "min-w-[1340px]"
-                    : "min-w-[1140px]"
+                    ? "min-w-[1040px]"
+                    : "min-w-[840px]"
               }`}
             >
               <thead>
@@ -1383,7 +1968,6 @@ export default function GoiHocPhiView({ bundle }: Props) {
                   <th className="min-w-[5rem] max-w-[9rem] px-3 py-3">Đơn vị</th>
                   <th className="min-w-[7rem] px-3 py-3">Giá gốc</th>
                   <th className="w-[5.5rem] shrink-0 px-3 py-3">Discount</th>
-                  <th className="min-w-[11rem] max-w-[15rem] px-3 py-3">Combo</th>
                   {bundle.tableName !== "hp_goi_hoc_phi" ? (
                     <th className="min-w-[8rem] max-w-[11rem] px-3 py-3">Gói đặc biệt</th>
                   ) : null}
@@ -1502,32 +2086,6 @@ export default function GoiHocPhiView({ bundle }: Props) {
                                 aria-label={`Discount gói #${r.id}`}
                               />
                             </td>
-                            <td className="min-w-0 max-w-[15rem] px-3 py-2">
-                              {comboPickList ? (
-                                <select
-                                  value={draft.combo_id}
-                                  onChange={(e) => patchEditDraft(r.id, { combo_id: e.target.value })}
-                                  className={`${cellInput} max-w-[15rem]`}
-                                  aria-label={`Combo gói #${r.id}`}
-                                >
-                                  <option value="">— Không combo —</option>
-                                  {allComboOptions.map((c) => (
-                                    <option key={c.id} value={String(c.id)}>
-                                      {c.ten_combo}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <input
-                                  value={draft.combo_id}
-                                  onChange={(e) => patchEditDraft(r.id, { combo_id: e.target.value })}
-                                  className={`${cellInput} w-24 font-mono`}
-                                  inputMode="numeric"
-                                  placeholder="ID"
-                                  aria-label={`Combo id gói #${r.id}`}
-                                />
-                              )}
-                            </td>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
                               <td className="min-w-0 max-w-[11rem] px-3 py-2">
                                 <input
@@ -1590,9 +2148,6 @@ export default function GoiHocPhiView({ bundle }: Props) {
                             <td className="min-w-0 max-w-[9rem] truncate px-3 py-3 text-black/70">{r.don_vi ?? "—"}</td>
                             <td className="whitespace-nowrap px-3 py-3 text-xs font-semibold tabular-nums">{fmtVnd(r.gia_goc)}</td>
                             <td className="whitespace-nowrap px-3 py-3 font-mono text-xs tabular-nums">{fmtNum(r.discount)}</td>
-                            <td className="min-w-0 max-w-[15rem] truncate px-3 py-3 text-xs text-black/70">
-                              {tenCombo(r.combo_id, allComboOptions)}
-                            </td>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
                               <td className="min-w-0 max-w-[11rem] truncate px-3 py-3 text-xs text-black/70">
                                 {(r.special ?? "").trim() || "—"}
@@ -1700,6 +2255,19 @@ export default function GoiHocPhiView({ bundle }: Props) {
             allComboOptions={allComboOptions}
             onComboCreated={mergeCombo}
             onClose={() => setIsNew(false)}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {comboManagerOpen ? (
+          <ComboManagerModal
+            key={comboManagerKey}
+            combos={allComboOptions}
+            onClose={() => setComboManagerOpen(false)}
+            onUpsertCombo={mergeCombo}
+            goiRows={bundle.rows}
+            monOptions={bundle.monOptions}
           />
         ) : null}
       </AnimatePresence>

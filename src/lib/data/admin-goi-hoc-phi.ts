@@ -16,6 +16,37 @@ function parseNumericNullable(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function parseComboIdsField(v: unknown): number[] {
+  if (v == null) return [];
+  if (Array.isArray(v)) {
+    const out = v.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0);
+    return [...new Set(out)].sort((a, b) => a - b);
+  }
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return [];
+    if (t.startsWith("[") && t.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(t) as unknown;
+        if (Array.isArray(parsed)) return parseComboIdsField(parsed);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (t.startsWith("{") && t.endsWith("}")) {
+      return t
+        .slice(1, -1)
+        .split(",")
+        .map((x) => Number(x.trim()))
+        .filter((x) => Number.isFinite(x) && x > 0);
+    }
+    const n = Number(t);
+    return Number.isFinite(n) && n > 0 ? [n] : [];
+  }
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? [n] : [];
+}
+
 export type AdminGoiHocPhiRow = {
   id: number;
   created_at: string;
@@ -26,6 +57,8 @@ export type AdminGoiHocPhiRow = {
   gia_goc: number | null;
   discount: number | null;
   combo_id: number | null;
+  /** Danh sách combo (many-to-many qua bảng map); fallback: dùng `combo_id` nếu chưa có map. */
+  combo_ids: number[];
   /** `hp_goi_hoc_phi_new.special` — null nếu bảng legacy không có cột. */
   special: string | null;
   /** `hp_goi_hoc_phi_new.note` — ghi chú / nội dung bổ sung (null nếu bảng legacy). */
@@ -36,7 +69,15 @@ export type AdminGoiHocPhiRow = {
 };
 
 export type AdminMonOption = { id: number; ten_mon_hoc: string };
-export type AdminComboOption = { id: number; ten_combo: string; gia_giam: number };
+export type AdminComboOption = {
+  id: number;
+  ten_combo: string;
+  gia_giam: number;
+  /** `hp_combo_mon.goi_ids` — danh sách ID gói phải đủ trong giỏ để combo áp dụng. */
+  goi_ids: number[];
+  /** `hp_combo_mon.dang_hoat_dong` — false = combo bị tắt. */
+  dang_hoat_dong: boolean;
+};
 
 export type AdminGoiHocPhiBundle = {
   tableName: string;
@@ -72,7 +113,8 @@ function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
     don_vi: raw.don_vi == null || raw.don_vi === "" ? null : String(raw.don_vi).trim() || null,
     gia_goc: parseNumericNullable(raw.gia_goc),
     discount: parseNumericNullable(raw.discount),
-    combo_id: parseNumericNullable(raw.combo_id),
+    combo_id: null,
+    combo_ids: parseComboIdsField(raw.combo_id),
     special:
       specialRaw == null || specialRaw === ""
         ? null
@@ -117,7 +159,7 @@ export async function fetchAdminGoiHocPhiBundle(
 
   const { data: comboRows, error: comboErr } = await supabase
     .from("hp_combo_mon")
-    .select("id, ten_combo, gia_giam")
+    .select("id, ten_combo, gia_giam, goi_ids, dang_hoat_dong")
     .order("id", { ascending: true });
 
   let comboWarning: string | null = null;
@@ -127,6 +169,9 @@ export async function fetchAdminGoiHocPhiBundle(
   }
 
   const rows = (goiRows as Record<string, unknown>[] | null)?.map(mapRow) ?? [];
+  for (const row of rows) {
+    row.combo_id = row.combo_ids[0] ?? null;
+  }
   const monOptions: AdminMonOption[] =
     (monRows as { id: number; ten_mon_hoc: string | null }[] | null)?.map((m) => ({
       id: Number(m.id),
@@ -134,11 +179,13 @@ export async function fetchAdminGoiHocPhiBundle(
     })) ?? [];
   const comboOptions: AdminComboOption[] = comboErr
     ? []
-    : (comboRows as { id: number; ten_combo: string | null; gia_giam?: unknown }[] | null)?.map(
+    : (comboRows as { id: number; ten_combo: string | null; gia_giam?: unknown; goi_ids?: unknown; dang_hoat_dong?: unknown }[] | null)?.map(
         (c) => ({
           id: Number(c.id),
           ten_combo: String(c.ten_combo ?? "").trim() || `Combo #${c.id}`,
           gia_giam: parseNumericNullable(c.gia_giam) ?? 0,
+          goi_ids: parseComboIdsField(c.goi_ids),
+          dang_hoat_dong: c.dang_hoat_dong !== false,
         }),
       ) ?? [];
 

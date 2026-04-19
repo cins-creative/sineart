@@ -632,9 +632,20 @@ export default function KhoaHocDetailView({
                 const hetCho =
                   c.status === "full" || c.filled >= c.total;
                 return (
-                  <article key={c.id} className="kd-oc-card kd-oc-card--flip">
+                  <article
+                    key={c.id}
+                    className={`kd-oc-card kd-oc-card--flip${
+                      c.isCapToc ? " kd-oc-card--cap-toc" : ""
+                    }`}
+                  >
                     <div className="kd-oc-flip-inner">
                       <div className="kd-oc-face kd-oc-face--front">
+                        {c.isCapToc ? (
+                          <span className="kd-oc-cap-toc">
+                            <span aria-hidden>⚡</span>
+                            Cấp tốc
+                          </span>
+                        ) : null}
                         <h3 className="kd-oc-card-title">{c.title}</h3>
                         <p className="kd-oc-gv">GV: {c.gvNames}</p>
                         <span className={meta.className}>

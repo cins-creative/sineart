@@ -1,4 +1,5 @@
 import { getHocPhiBlockData } from "@/lib/data/courses-page";
+import { createClient } from "@/lib/supabase/server";
 import { dedupeMon1Pills, isHocPhiCapTocSpecial } from "@/lib/hocPhiDedupe";
 import type { HocPhiComboRow, HocPhiGoiRow } from "@/types/khoa-hoc";
 
@@ -62,8 +63,8 @@ export type PaymentFeeCatalogBundle = {
 };
 
 /**
- * Gói “Gói thời hạn” trên /donghocphi — cùng nguồn + dedupe với `HocPhiBlock` trên /khoa-hoc/[slug]
- * (getHocPhiBlockData: gói môn + gói cùng combo_id).
+ * Gói "Gói thời hạn" trên /donghocphi — cùng nguồn + dedupe với `HocPhiBlock` trên /khoa-hoc/[slug].
+ * Combo dùng `goi_ids`-based matching — fetch toàn bộ combo từ `hp_combo_mon`.
  */
 export async function fetchPaymentFeeCatalog(
   monIds: number[]
@@ -71,20 +72,20 @@ export async function fetchPaymentFeeCatalog(
   const unique = [...new Set(monIds.filter((id) => Number.isFinite(id) && id > 0))];
   if (!unique.length) return { fees: [], combos: [], gois: [] };
 
-  const blocks = await Promise.all(unique.map((monId) => getHocPhiBlockData(monId)));
+  const supabase = await createClient();
+  const [blocks, allCombosResult] = await Promise.all([
+    Promise.all(unique.map((monId) => getHocPhiBlockData(monId))),
+    supabase
+      ? supabase
+          .from("hp_combo_mon")
+          .select("id, ten_combo, gia_giam, goi_ids, dang_hoat_dong")
+          .order("id", { ascending: true })
+      : Promise.resolve(null),
+  ]);
 
-  const seenComboId = new Set<number>();
-  const mergedCombos: HocPhiComboRow[] = [];
   const seenGoiId = new Set<number>();
   const mergedGois: HocPhiGoiRow[] = [];
-
   for (const block of blocks) {
-    for (const c of block.combos) {
-      if (!seenComboId.has(c.id)) {
-        seenComboId.add(c.id);
-        mergedCombos.push(c);
-      }
-    }
     for (const g of block.gois) {
       if (!seenGoiId.has(g.id)) {
         seenGoiId.add(g.id);
@@ -92,7 +93,36 @@ export async function fetchPaymentFeeCatalog(
       }
     }
   }
-  mergedCombos.sort((a, b) => a.id - b.id);
+
+  // Dùng toàn bộ combo (goi_ids-based) thay vì chỉ combo qua combo_id trên gói
+  let mergedCombos: HocPhiComboRow[] = [];
+  if (
+    allCombosResult &&
+    !("error" in allCombosResult && allCombosResult.error) &&
+    allCombosResult.data?.length
+  ) {
+    mergedCombos = (allCombosResult.data as Record<string, unknown>[]).map((c) => ({
+      id: Number(c.id),
+      ten_combo: String(c.ten_combo ?? "").trim(),
+      gia_giam: Number(c.gia_giam ?? 0),
+      goi_ids: Array.isArray(c.goi_ids)
+        ? (c.goi_ids as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n > 0)
+        : [],
+      dang_hoat_dong: c.dang_hoat_dong !== false,
+    }));
+  } else {
+    // Fallback: dedup combos từ blocks (dùng combo_id cũ nếu chưa có goi_ids)
+    const seenComboId = new Set<number>();
+    for (const block of blocks) {
+      for (const c of block.combos) {
+        if (!seenComboId.has(c.id)) {
+          seenComboId.add(c.id);
+          mergedCombos.push(c);
+        }
+      }
+    }
+    mergedCombos.sort((a, b) => a.id - b.id);
+  }
 
   const seenRowId = new Set<number>();
   const out: PaymentFeeCatalogItem[] = [];
@@ -117,6 +147,31 @@ export async function fetchPaymentFeeCatalog(
       out.push(rowToCatalogItem(r));
     }
   }
+
+  // Build canonical map: raw goi_id (mọi ID gốc) → ID đã dedup trong picker (`out`).
+  // Combo trong DB lưu raw IDs, nhưng payment-client check theo ID picker đã chọn → cần normalize.
+  // Key: `monId|number|donVi|special-bucket` (giống dedupeMon1Pills, nhưng tách cấp tốc)
+  const canonicalIdByKey = new Map<string, number>();
+  for (const item of out) {
+    const isCap = isHocPhiCapTocSpecial(item.special);
+    const key = `${item.monHocId}|${item.numberValue}|${item.donVi.trim().toLowerCase()}|${isCap ? "1" : "0"}`;
+    canonicalIdByKey.set(key, item.id);
+  }
+  const canonicalMap: Record<number, number> = {};
+  for (const g of mergedGois) {
+    const isCap = isHocPhiCapTocSpecial(g.special);
+    const key = `${g.mon_hoc}|${g.number}|${(g.don_vi ?? "").trim().toLowerCase()}|${isCap ? "1" : "0"}`;
+    const canonical = canonicalIdByKey.get(key);
+    if (canonical != null) canonicalMap[g.id] = canonical;
+  }
+
+  // Normalize `combo.goi_ids` về canonical IDs để khớp với ID picker
+  mergedCombos = mergedCombos.map((c) => ({
+    ...c,
+    goi_ids: c.goi_ids
+      .map((id) => canonicalMap[id] ?? id)
+      .filter((id, idx, arr) => arr.indexOf(id) === idx), // dedupe sau normalize
+  }));
 
   return { fees: out, combos: mergedCombos, gois: mergedGois };
 }

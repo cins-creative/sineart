@@ -108,5 +108,5 @@ export const NAV_ITEMS: NavItem[] = [
       { emoji: "🟩", label: "Thi thử", href: "/thi-thu" },
     ],
   },
-  { kind: "link", id: "blogs", label: "Blogs", href: "/blogs" },
+  { kind: "link", id: "blogs", label: "Blogs", href: "/blog" },
 ];

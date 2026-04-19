@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 
-import type { AdminCreateHpDonLine, AdminDhpGoiOption } from "@/app/admin/dashboard/quan-ly-hoc-vien/actions";
+import type { AdminCreateHpDonLine, AdminDhpComboOption, AdminDhpGoiOption } from "@/app/admin/dashboard/quan-ly-hoc-vien/actions";
 import {
   buoiConLaiTrongKy,
   computeNgayCuoiKyFromRenewal,
@@ -25,9 +25,11 @@ import {
   adminCreateHpDonThu,
   adminPollHpDonThu,
   adminSyncHpChiTietDaThanhToan,
+  listHpComboMonForDhp,
   listHpGoiHocPhiForDhp,
   listHrNhanSuOptions,
 } from "@/app/admin/dashboard/quan-ly-hoc-vien/actions";
+import { firstApplicableComboDiscountDong } from "@/lib/donghocphi/combo-discount";
 import type { AdminQlhvEnrollment, AdminQlhvStudent } from "@/lib/data/admin-quan-ly-hoc-vien";
 import { buildVietQrImageUrl, resolveQrPaymentAmounts } from "@/lib/payment/vietqr";
 import { cn } from "@/lib/utils";
@@ -113,6 +115,8 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
   const [isPending, startTransition] = useTransition();
   const [staff, setStaff] = useState<{ id: number; full_name: string }[]>([]);
   const [gois, setGois] = useState<AdminDhpGoiOption[]>([]);
+  const [combos, setCombos] = useState<AdminDhpComboOption[]>([]);
+  const [canonicalMap, setCanonicalMap] = useState<Record<number, number>>({});
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   const [sessionStep, setSessionStep] = useState<"s1" | "s2">("s1");
@@ -158,7 +162,7 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
     });
     startTransition(() => {
       void (async () => {
-        const [a, b] = await Promise.all([listHrNhanSuOptions(), listHpGoiHocPhiForDhp()]);
+        const [a, b, c] = await Promise.all([listHrNhanSuOptions(), listHpGoiHocPhiForDhp(), listHpComboMonForDhp()]);
         if (!a.ok) {
           setLoadErr(a.error);
           return;
@@ -169,6 +173,8 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
         }
         setStaff(a.rows);
         setGois(b.rows);
+        setCanonicalMap(b.canonicalMap);
+        if (c.ok) setCombos(c.rows);
         const allowedIds = new Set(a.rows.map((r) => r.id));
         if (!allowedIds.has(defaultNguoiTaoId)) {
           const first = a.rows[0];
@@ -195,10 +201,61 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
     return s;
   }, [lines, goiById]);
 
+  const giaGocTotal = useMemo(() => {
+    let s = 0;
+    for (const ln of lines) {
+      const gid = Number(ln.goiId);
+      if (!Number.isFinite(gid) || gid <= 0) continue;
+      const g = goiById.get(gid);
+      if (g) s += g.gia_goc;
+    }
+    return s;
+  }, [lines, goiById]);
+
+  const chieuKhauDong = useMemo(
+    () => Math.max(0, Math.round(giaGocTotal - subtotalPreview)),
+    [giaGocTotal, subtotalPreview]
+  );
+
+  const khuyenMaiDong = useMemo(
+    () => Math.round(subtotalPreview * (Math.min(100, Math.max(0, Math.round(khuyenMai))) / 100)),
+    [subtotalPreview, khuyenMai]
+  );
+
+  const comboDiscountDong = useMemo(() => {
+    const payingLines = lines
+      .map((ln) => Number(ln.goiId))
+      .filter((id) => Number.isFinite(id) && id > 0)
+      .map((goiId) => ({ goiId }));
+    if (!payingLines.length || !combos.length) return 0;
+    // Normalize combo.goi_ids: admin có thể chọn ID bất kỳ trong nhóm dedup,
+    // cần map về canonical ID (nhỏ nhất trong nhóm) để khớp với ID picker chọn.
+    const normalizedCombos = combos.map((c) => ({
+      ...c,
+      goi_ids: c.goi_ids.map((id) => canonicalMap[id] ?? id),
+    }));
+    return firstApplicableComboDiscountDong(payingLines, normalizedCombos);
+  }, [lines, combos, canonicalMap]);
+
+  const matchedCombo = useMemo(() => {
+    if (comboDiscountDong <= 0) return null;
+    const selectedGoiIds = new Set(
+      lines.map((ln) => Number(ln.goiId)).filter((id) => Number.isFinite(id) && id > 0)
+    );
+    return (
+      combos
+        .filter((c) => {
+          if (!c.dang_hoat_dong || c.goi_ids.length === 0) return false;
+          const normalizedIds = c.goi_ids.map((id) => canonicalMap[id] ?? id);
+          return normalizedIds.every((id) => selectedGoiIds.has(id));
+        })
+        .sort((a, b) => b.gia_giam - a.gia_giam)[0] ?? null
+    );
+  }, [comboDiscountDong, lines, combos, canonicalMap]);
+
   const tongPreview = useMemo(() => {
-    const pct = Math.min(100, Math.max(0, Math.round(khuyenMai)));
-    return Math.max(0, Math.round(subtotalPreview * (1 - pct / 100)));
-  }, [subtotalPreview, khuyenMai]);
+    return Math.max(0, subtotalPreview - khuyenMaiDong - comboDiscountDong);
+  }, [subtotalPreview, khuyenMaiDong, comboDiscountDong]);
 
   const qrUrl = useMemo(() => {
     if (sessionStep !== "s2" || !isChuyenKhoanUi(hinhThuc)) return "";
@@ -540,6 +597,21 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
                     <Plus size={14} /> Thêm gói học phí
                   </button>
 
+                  {matchedCombo ? (
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                      <span className="text-base">🎉</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="m-0 text-[11px] font-bold text-emerald-700">
+                          Đạt combo: {matchedCombo.ten_combo}
+                        </p>
+                        <p className="m-0 text-[11px] text-emerald-600">
+                          Giảm thêm{" "}
+                          <strong className="tabular-nums text-base font-black text-emerald-700">{fmtVnd(comboDiscountDong)}</strong>
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {subtotalPreview > 0 ? (
                     <>
                       <p className="m-0 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#3b82f6]">Tổng đơn</p>
@@ -555,9 +627,37 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
                           placeholder="0"
                         />
                       </div>
-                      <div className="flex items-center justify-between rounded-xl border border-[#3b82f622] bg-gradient-to-r from-blue-500/6 to-indigo-500/5 px-3.5 py-2.5">
-                        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#3b82f6]">Tổng học phí cần đóng</span>
-                        <span className="text-lg font-black text-[#1a1a2e]">{fmtVnd(tongPreview)}</span>
+                      <div className="space-y-1.5 rounded-xl border border-[#3b82f622] bg-gradient-to-r from-blue-500/6 to-indigo-500/5 px-3.5 py-2.5">
+                        {chieuKhauDong > 0 || khuyenMaiDong > 0 || comboDiscountDong > 0 ? (
+                          <>
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-black/45">Giá gốc</span>
+                              <span className="tabular-nums text-black/60">{fmtVnd(giaGocTotal)}</span>
+                            </div>
+                            {chieuKhauDong > 0 ? (
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="text-black/45">Chiết khấu gói</span>
+                                <span className="tabular-nums text-black/50">−{fmtVnd(chieuKhauDong)}</span>
+                              </div>
+                            ) : null}
+                            {khuyenMaiDong > 0 ? (
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="text-black/45">Khuyến mãi ({khuyenMai}%)</span>
+                                <span className="tabular-nums text-black/50">−{fmtVnd(khuyenMaiDong)}</span>
+                              </div>
+                            ) : null}
+                            {comboDiscountDong > 0 ? (
+                              <div className="flex items-center justify-between text-[11px] border-t border-[#3b82f615] pt-1.5">
+                                <span className="text-emerald-600 font-medium">Combo giảm thêm</span>
+                                <span className="tabular-nums font-semibold text-emerald-600">−{fmtVnd(comboDiscountDong)}</span>
+                              </div>
+                            ) : null}
+                          </>
+                        ) : null}
+                        <div className={`flex items-center justify-between ${chieuKhauDong > 0 || khuyenMaiDong > 0 || comboDiscountDong > 0 ? "border-t border-[#3b82f620] pt-1.5" : ""}`}>
+                          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#3b82f6]">Tổng học phí cần đóng</span>
+                          <span className="text-lg font-black text-[#1a1a2e]">{fmtVnd(tongPreview)}</span>
+                        </div>
                       </div>
                     </>
                   ) : null}

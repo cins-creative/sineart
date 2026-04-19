@@ -12,6 +12,33 @@ function parseMoney(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function parseNumericArray(v: unknown): number[] {
+  if (v == null) return [];
+  if (Array.isArray(v)) {
+    return (v as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  }
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return [];
+    if (t.startsWith("{") && t.endsWith("}")) {
+      return t
+        .slice(1, -1)
+        .split(",")
+        .map((x) => Number(x.trim()))
+        .filter((n) => Number.isFinite(n) && n > 0);
+    }
+    if (t.startsWith("[") && t.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(t) as unknown;
+        if (Array.isArray(parsed)) return parseNumericArray(parsed);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return [];
+}
+
 /** Map một dòng gói từ Supabase → `HocPhiGoiRow` (khớp `mapHocPhiGoiRow` trong courses-page). */
 export function rawToHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
   const numRaw = row.number;
@@ -46,6 +73,7 @@ export function rawToHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
     gia_goc: giaGoc,
     discount,
     combo_id: comboNum != null && Number.isFinite(comboNum) ? comboNum : null,
+    combo_ids: comboNum != null && Number.isFinite(comboNum) ? [comboNum] : [],
     so_buoi,
     special,
     note,
@@ -58,64 +86,63 @@ export function rawToHocPhiComboRow(row: Record<string, unknown>): HocPhiComboRo
     id: Number(row.id),
     ten_combo: String(row.ten_combo ?? "").trim(),
     gia_giam: parseMoney(row.gia_giam),
+    goi_ids: parseNumericArray(row.goi_ids),
+    dang_hoat_dong: row.dang_hoat_dong !== false,
   };
 }
 
-/** Một dòng đang thanh toán — đủ để đối chiếu với `hp_combo_mon` + gói combo. */
+/**
+ * Một dòng đang thanh toán — đủ để đối chiếu với `goi_ids` trên `hp_combo_mon`.
+ * Chỉ cần `goiId` — combo khớp khi **tất cả** `goi_ids` trong combo đều có mặt trong giỏ.
+ */
 export type ComboPayingLineInput = {
-  monHocId: number;
-  number: number;
-  donVi: string;
-  comboId: number | null;
+  goiId: number;
 };
 
 /**
- * Giống `HocPhiBlock` (`combos.find`): combo **đầu tiên** (theo thứ tự `combosOrdered`)
- * mà đủ môn trong định nghĩa combo (`allGois` có `combo_id`), cùng thời lượng gói, và học viên
- * đang đóng đủ các môn đó với gói gắn `combo_id` tương ứng.
+ * Trả về số tiền giảm của combo tốt nhất áp dụng được.
+ *
+ * Logic:
+ *  - Combo phải `dang_hoat_dong = true`.
+ *  - Combo phải có ít nhất 1 gói trong `goi_ids`.
+ *  - **Tất cả** `goi_ids` của combo phải có trong giỏ (`payingLines`).
+ *  - Nếu nhiều combo đủ điều kiện → chỉ lấy combo giảm nhiều nhất (single_best_only).
  */
 export function firstApplicableComboDiscountDong(
   payingLines: ComboPayingLineInput[],
   combosOrdered: HocPhiComboRow[],
-  allGois: HocPhiGoiRow[]
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _allGois?: HocPhiGoiRow[],
 ): number {
+  return bestApplicableCombo(payingLines, combosOrdered)?.giam ?? 0;
+}
+
+/**
+ * Trả về combo tốt nhất đủ điều kiện (single_best_only) + số tiền giảm.
+ * `null` nếu không combo nào khớp.
+ */
+export function bestApplicableCombo(
+  payingLines: ComboPayingLineInput[],
+  combosOrdered: HocPhiComboRow[],
+): { combo: HocPhiComboRow; giam: number } | null {
+  const cartGoiIds = new Set(payingLines.map((l) => l.goiId));
+  let bestCombo: HocPhiComboRow | null = null;
+  let bestGiam = 0;
+
   for (const combo of combosOrdered) {
+    if (!combo.dang_hoat_dong) continue;
     const giam = Math.max(0, Math.round(combo.gia_giam));
     if (giam <= 0) continue;
+    if (!combo.goi_ids || combo.goi_ids.length === 0) continue;
 
-    const R = [
-      ...new Set(allGois.filter((g) => g.combo_id === combo.id).map((g) => g.mon_hoc)),
-    ];
-    if (R.length < 2) continue;
+    const allPresent = combo.goi_ids.every((id) => cartGoiIds.has(id));
+    if (!allPresent) continue;
 
-    const comboPaying = payingLines.filter(
-      (l) => l.comboId === combo.id && R.includes(l.monHocId)
-    );
-
-    const byMon = new Map<number, ComboPayingLineInput>();
-    let invalidDup = false;
-    for (const l of comboPaying) {
-      const prev = byMon.get(l.monHocId);
-      if (prev != null) {
-        if (prev.number !== l.number || prev.donVi.trim() !== l.donVi.trim()) {
-          invalidDup = true;
-          break;
-        }
-        continue;
-      }
-      byMon.set(l.monHocId, l);
+    if (giam > bestGiam) {
+      bestGiam = giam;
+      bestCombo = combo;
     }
-    if (invalidDup) continue;
-    if (byMon.size !== R.length) continue;
-
-    const first = [...byMon.values()][0];
-    if (!first) continue;
-    const sameDur = [...byMon.values()].every(
-      (l) => l.number === first.number && l.donVi.trim() === first.donVi.trim()
-    );
-    if (!sameDur) continue;
-
-    return giam;
   }
-  return 0;
+
+  return bestCombo ? { combo: bestCombo, giam: bestGiam } : null;
 }

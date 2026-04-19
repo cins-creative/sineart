@@ -28,7 +28,7 @@ import DongHocPhiClient, {
 } from "./payment-client";
 import "./donghocphi.css";
 
-export const revalidate = 120;
+export const dynamic = "force-dynamic";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -96,12 +96,22 @@ export default async function DongHocPhiPage({
   let initialHocVienId: number | null = null;
   let initialAvatarUrl: string | null = null;
 
-  if (supabase && initialEmail && isValidStudentEmail(initialEmail)) {
-    const em = initialEmail.trim().toLowerCase();
+  // Ưu tiên email từ URL; nếu không có thì dùng email của user đang đăng nhập
+  let effectiveEmail = initialEmail;
+  if (!effectiveEmail && supabase) {
+    const { data: authData } = await supabase.auth.getUser();
+    const authEmail = authData?.user?.email?.trim().toLowerCase() ?? null;
+    if (authEmail && isValidStudentEmail(authEmail)) {
+      effectiveEmail = authEmail;
+    }
+  }
+
+  if (supabase && effectiveEmail && isValidStudentEmail(effectiveEmail)) {
+    const em = effectiveEmail.trim().toLowerCase();
     const { data: hvRow, error: hvErr } = await supabase
       .from("ql_thong_tin_hoc_vien")
       .select("id, full_name, sdt, email, sex, nam_thi, loai_khoa_hoc, facebook, avatar")
-      .eq("email", em)
+      .ilike("email", em)
       .order("id", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -151,8 +161,7 @@ export default async function DongHocPhiPage({
       const mapped = dbRowToStep1Fields(hvRow);
       if (mapped) {
         initialAvatarUrl = mapped.avatar;
-      }
-      if (mapped && profileCompleteForSkipStep1(mapped)) {
+        // Luôn truyền xuống client để pre-fill fields; skip step 1 nếu đủ điều kiện
         existingHocVien = mapped;
       }
     }
@@ -169,7 +178,7 @@ export default async function DongHocPhiPage({
         hocPhiGois={hocPhiGois}
         preselectedMonId={preselectedMonId}
         initialCourseName={courseName}
-        initialEmail={initialEmail}
+        initialEmail={effectiveEmail}
         existingHocVien={existingHocVien}
         initialEnrolledClassIds={initialEnrolledClassIds}
         initialQlKyByLopId={initialQlKyByLopId}

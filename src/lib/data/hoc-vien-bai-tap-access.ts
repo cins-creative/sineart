@@ -55,7 +55,7 @@ export async function getHeThongBaiTapAccess(
   const { data: nhanSu } = await supabase
     .from("hr_nhan_su")
     .select("id")
-    .eq("email", email)
+    .ilike("email", email)
     .maybeSingle();
   const staffId =
     nhanSu != null && typeof (nhanSu as { id?: unknown }).id !== "undefined"
@@ -69,7 +69,7 @@ export async function getHeThongBaiTapAccess(
   const { data: qlhv } = await supabase
     .from("ql_thong_tin_hoc_vien")
     .select("id")
-    .eq("email", email)
+    .ilike("email", email)
     .maybeSingle();
 
   const hvId =

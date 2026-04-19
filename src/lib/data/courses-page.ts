@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
+import { isHocPhiCapTocSpecial } from "@/lib/hocPhiDedupe";
 import { createClient } from "@/lib/supabase/server";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -668,7 +669,7 @@ export async function getOngoingClassesForMon(
 
   const { data: lopRows, error: lopErr } = await supabase
     .from("ql_lop_hoc")
-    .select("id, class_name, class_full_name, teacher, chi_nhanh_id, lich_hoc")
+    .select("id, class_name, class_full_name, teacher, chi_nhanh_id, lich_hoc, special")
     .eq("mon_hoc", monId)
     .order("id", { ascending: true });
   if (lopErr || !lopRows?.length) return [];
@@ -755,12 +756,19 @@ export async function getOngoingClassesForMon(
       String(r.class_full_name ?? "").trim() ||
       String(r.class_name ?? "").trim() ||
       "Lớp đang mở";
+    const specialRaw = r.special;
+    const special =
+      specialRaw == null || specialRaw === ""
+        ? null
+        : String(specialRaw).trim() || null;
+    const isCapToc = isHocPhiCapTocSpecial(special);
     const branchId = Number(r.chi_nhanh_id);
     const branchLabel = Number.isFinite(branchId) ? branchMap.get(branchId) : undefined;
 
     return {
       id: `lop-${id}`,
       title,
+      isCapToc,
       gvNames: teacherNames.length ? teacherNames.join(" · ") : "Đang cập nhật",
       branchLabel: branchLabel || undefined,
       portfolioImage,
@@ -928,6 +936,7 @@ function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
     discount,
     combo_id:
       comboNum != null && Number.isFinite(comboNum) ? comboNum : null,
+    combo_ids: comboNum != null && Number.isFinite(comboNum) ? [comboNum] : [],
     so_buoi,
     special,
     note,
@@ -940,6 +949,10 @@ function mapHocPhiComboRow(row: Record<string, unknown>): HocPhiComboRow {
     id: Number(row.id),
     ten_combo: String(row.ten_combo ?? "").trim(),
     gia_giam: parseMoney(row.gia_giam),
+    goi_ids: Array.isArray(row.goi_ids)
+      ? (row.goi_ids as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n > 0)
+      : [],
+    dang_hoat_dong: row.dang_hoat_dong !== false,
   };
 }
 
@@ -1043,7 +1056,7 @@ export async function getHocPhiBlockData(
   if (comboIds.length > 0) {
     const { data: comboRows, error: eCombo } = await supabase
       .from("hp_combo_mon")
-      .select("id, ten_combo, gia_giam")
+      .select("id, ten_combo, gia_giam, goi_ids, dang_hoat_dong")
       .in("id", comboIds)
       .order("id", { ascending: true });
     if (!eCombo && comboRows?.length) {

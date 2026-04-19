@@ -8,6 +8,7 @@ import AdminMinhHoaDropzone, {
   slotsFromMinhHoaUrls,
   type MinhHoaUploadSlot,
 } from "@/app/admin/_components/AdminMinhHoaDropzone";
+import AdminRichTextEditor from "@/app/admin/_components/AdminRichTextEditor";
 import { updateMktMediaProjectDetail } from "@/app/admin/dashboard/quan-ly-media/actions";
 import { htmlToPlainText, sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
 import type {
@@ -554,6 +555,7 @@ function ProjectDetailModal({
   const [typeVal, setTypeVal] = useState(() => project.type?.trim() ?? "");
   const [statusVal, setStatusVal] = useState(() => coerceMediaStatusLabel(project.status));
   const [briefDraft, setBriefDraft] = useState(() => project.brief ?? "");
+  const [briefUploading, setBriefUploading] = useState(false);
   const [minhHoaSlots, setMinhHoaSlots] = useState<MinhHoaUploadSlot[]>(() =>
     slotsFromMinhHoaUrls(project.minh_hoa),
   );
@@ -570,6 +572,7 @@ function ProjectDetailModal({
     setTypeVal(project.type?.trim() ?? "");
     setStatusVal(coerceMediaStatusLabel(project.status));
     setBriefDraft(project.brief ?? "");
+    setBriefUploading(false);
     setMinhHoaSlots(slotsFromMinhHoaUrls(project.minh_hoa));
     setNguoiTao(project.nguoi_tao ?? mediaTeamStaff[0]?.id ?? null);
     setFormErr(null);
@@ -605,6 +608,7 @@ function ProjectDetailModal({
         setTypeVal(project.type?.trim() ?? "");
         setStatusVal(coerceMediaStatusLabel(project.status));
         setBriefDraft(project.brief ?? "");
+        setBriefUploading(false);
         setMinhHoaSlots(slotsFromMinhHoaUrls(project.minh_hoa));
         setNguoiTao(project.nguoi_tao ?? mediaTeamStaff[0]?.id ?? null);
         setFormErr(null);
@@ -640,6 +644,7 @@ function ProjectDetailModal({
     setTypeVal(project.type?.trim() ?? "");
     setStatusVal(coerceMediaStatusLabel(project.status));
     setBriefDraft(project.brief ?? "");
+    setBriefUploading(false);
     setMinhHoaSlots(slotsFromMinhHoaUrls(project.minh_hoa));
     setNguoiTao(project.nguoi_tao ?? mediaTeamStaff[0]?.id ?? null);
     setFormErr(null);
@@ -673,8 +678,6 @@ function ProjectDetailModal({
     return [...m.values()].sort((a, b) => a.full_name.localeCompare(b.full_name, "vi"));
   }, [mediaTeamStaff, project.nguoi_tao, staffNameById]);
 
-  const imgs = (project.minh_hoa ?? []).filter(Boolean);
-
   const toggleLam = (id: number) => {
     setLamSet((prev) => {
       const next = new Set(prev);
@@ -705,6 +708,10 @@ function ProjectDetailModal({
     }
     if (minhHoaSlots.some((s) => s.uploading)) {
       setFormErr("Đợi ảnh minh họa tải xong rồi mới lưu.");
+      return;
+    }
+    if (briefUploading) {
+      setFormErr("Đợi ảnh trong brief tải xong rồi mới lưu.");
       return;
     }
     if (minhHoaSlots.some((s) => s.error && !s.url)) {
@@ -1177,12 +1184,19 @@ function ProjectDetailModal({
                 <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 600, color: TEXT_MUTED, lineHeight: 1.4 }}>
                   HTML được lọc khi lưu (script/style bị loại).
                 </p>
-                <textarea
+                <AdminRichTextEditor
                   value={briefDraft}
-                  onChange={(e) => setBriefDraft(e.target.value)}
-                  rows={8}
-                  style={{ ...TEXTAREA_IN, width: "100%", minHeight: 140 }}
+                  onChange={setBriefDraft}
+                  onUploadChange={setBriefUploading}
+                  placeholder="Mô tả brief, có thể chèn ảnh/embed và review HTML trước khi lưu…"
+                  minHeight="140px"
+                  maxHeight="420px"
                 />
+                {briefUploading ? (
+                  <p style={{ margin: "6px 0 0", fontSize: 11, fontWeight: 600, color: "#BC8AF9", lineHeight: 1.4 }}>
+                    Ảnh trong brief đang tải lên… vui lòng đợi trước khi bấm Lưu thay đổi.
+                  </p>
+                ) : null}
               </>
             ) : project.brief?.trim() ? (
               <div
@@ -1216,67 +1230,6 @@ function ProjectDetailModal({
             )}
           </div>
 
-          <div style={{ marginTop: 12 }}>
-            {detailSectionTitle("Minh họa")}
-            {editing ? (
-              <AdminMinhHoaDropzone slots={minhHoaSlots} setSlots={setMinhHoaSlots} />
-            ) : null}
-            {!editing && !imgs.length ? (
-              <div
-                style={{
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 10,
-                  padding: "10px 12px",
-                  background: "#fff",
-                  fontSize: 13,
-                  color: TEXT_MUTED,
-                }}
-              >
-                Chưa có minh họa.
-              </div>
-            ) : null}
-            {!editing && imgs.length ? (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(132px, 1fr))",
-                  gap: 8,
-                }}
-              >
-                {imgs.map((url) => (
-                  <a
-                    key={url}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "block",
-                      borderRadius: 10,
-                      overflow: "hidden",
-                      border: `1px solid ${BORDER}`,
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                      transition: "transform 0.15s, box-shadow 0.15s",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "scale(1.02)";
-                      e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.1)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "scale(1)";
-                      e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)";
-                    }}
-                  >
-                    <img
-                      src={url}
-                      alt="Minh họa dự án"
-                      style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }}
-                    />
-                  </a>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
           {formErr ? (
             <div
               style={{
@@ -1297,7 +1250,7 @@ function ProjectDetailModal({
             <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
               <button
                 type="button"
-                disabled={savePending}
+                disabled={savePending || briefUploading}
                 onClick={onSave}
                 style={{
                   padding: "7px 16px",
@@ -1305,13 +1258,13 @@ function ProjectDetailModal({
                   border: "none",
                   fontSize: 12,
                   fontWeight: 700,
-                  cursor: savePending ? "wait" : "pointer",
+                  cursor: savePending || briefUploading ? "wait" : "pointer",
                   color: "#fff",
                   background: "linear-gradient(135deg, #f8a668, #ee5ca2)",
-                  opacity: savePending ? 0.75 : 1,
+                  opacity: savePending || briefUploading ? 0.75 : 1,
                 }}
               >
-                {savePending ? "Đang lưu…" : "Lưu thay đổi"}
+                {savePending ? "Đang lưu…" : briefUploading ? "Đợi ảnh brief…" : "Lưu thay đổi"}
               </button>
               <button
                 type="button"

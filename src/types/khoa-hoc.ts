@@ -66,6 +66,8 @@ export type OngoingClassStatus = "open" | "almost" | "full";
 export type OngoingClassCard = {
   id: string;
   title: string;
+  /** Lớp cấp tốc — suy từ `ql_lop_hoc.special` */
+  isCapToc: boolean;
   gvNames: string;
   branchLabel?: string;
   portfolioImage: string | null;
@@ -92,6 +94,8 @@ export type HocPhiGoiRow = {
   gia_goc: number;
   discount: number;
   combo_id: number | null;
+  /** `hp_goi_hoc_phi_new.combo_ids` — nhiều combo cho một gói. */
+  combo_ids: number[];
   /** `hp_goi_hoc_phi_new.so_buoi` — số buổi gói (đóng học phí). */
   so_buoi: number | null;
   /** `hp_goi_hoc_phi_new.special` — vd. «Cấp tốc» để tách gói cấp tốc. */
@@ -110,6 +114,10 @@ export type HocPhiComboRow = {
   id: number;
   ten_combo: string;
   gia_giam: number;
+  /** Danh sách ID gói học phí (`hp_goi_hoc_phi_new.id`) cần đủ trong giỏ để combo được áp dụng. */
+  goi_ids: number[];
+  /** Combo có đang kích hoạt không — `false` = bỏ qua khi tính giảm giá. */
+  dang_hoat_dong: boolean;
 };
 
 /** Dữ liệu server cho `HocPhiBlock` */

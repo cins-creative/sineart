@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { isValidStudentEmail, STUDENT_EMAIL_REQUIREMENT_VI } from "@/lib/donghocphi/profile-step1";
+import { firstApplicableComboDiscountDong } from "@/lib/donghocphi/combo-discount";
 import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import { insertQlQuanLyHocVienEnrollment } from "@/lib/supabase/insert-ql-quan-ly-hoc-vien";
@@ -428,6 +429,9 @@ export type AdminDhpGoiOption = {
   id: number;
   ten_goi_hoc_phi: string;
   mon_hoc: number | null;
+  /** Giá gốc trước chiết khấu gói. */
+  gia_goc: number;
+  /** Học phí thực đóng = gia_goc sau khi trừ discount%. */
   hoc_phi_dong: number;
   /** `hp_goi_hoc_phi_new.so_buoi` — buổi cộng vào ngày cuối kỳ (null bảng cũ). */
   so_buoi: number | null;
@@ -435,6 +439,14 @@ export type AdminDhpGoiOption = {
   post_title: string | null;
   /** true nếu post_title chứa "cấp tốc". */
   special: boolean;
+};
+
+export type AdminDhpComboOption = {
+  id: number;
+  ten_combo: string;
+  gia_giam: number;
+  goi_ids: number[];
+  dang_hoat_dong: boolean;
 };
 
 export type AdminCreateHpDonLine = {
@@ -532,14 +544,31 @@ async function dhpWaitForDonCodes(supabase: SupabaseClient, donId: number): Prom
 }
 
 /** Gộp dòng trùng nhãn/giá/buổi (DB có thể có 2 id khác nội dung hiển thị giống hệt). */
-function dhpDedupeGoiOptionsForPicker(rows: AdminDhpGoiOption[]): AdminDhpGoiOption[] {
-  const bySig = new Map<string, AdminDhpGoiOption>();
+function dhpDedupeGoiOptionsForPicker(rows: AdminDhpGoiOption[]): {
+  deduped: AdminDhpGoiOption[];
+  /** raw_id → canonical (smallest) id trong cùng nhóm (mon_hoc + name + price + so_buoi). */
+  canonicalMap: Record<number, number>;
+} {
+  // Pass 1: tìm canonical id (nhỏ nhất) cho mỗi signature
+  const sigToCanonical = new Map<string, number>();
   for (const r of rows) {
     const sig = `${r.mon_hoc ?? 0}\t${r.ten_goi_hoc_phi}\t${r.hoc_phi_dong}\t${r.so_buoi ?? "null"}`;
-    const prev = bySig.get(sig);
-    if (!prev || r.id < prev.id) bySig.set(sig, r);
+    const cur = sigToCanonical.get(sig);
+    if (cur == null || r.id < cur) sigToCanonical.set(sig, r.id);
   }
-  return [...bySig.values()].sort((a, b) => a.ten_goi_hoc_phi.localeCompare(b.ten_goi_hoc_phi, "vi"));
+  // Pass 2: build canonicalMap và collect canonical rows
+  const canonicalMap: Record<number, number> = {};
+  const canonicalById = new Map<number, AdminDhpGoiOption>();
+  for (const r of rows) {
+    const sig = `${r.mon_hoc ?? 0}\t${r.ten_goi_hoc_phi}\t${r.hoc_phi_dong}\t${r.so_buoi ?? "null"}`;
+    const canonical = sigToCanonical.get(sig)!;
+    canonicalMap[r.id] = canonical;
+    if (r.id === canonical) canonicalById.set(canonical, r);
+  }
+  const deduped = [...canonicalById.values()].sort((a, b) =>
+    a.ten_goi_hoc_phi.localeCompare(b.ten_goi_hoc_phi, "vi")
+  );
+  return { deduped, canonicalMap };
 }
 
 function dhpUnwrapOne<T extends Record<string, unknown>>(v: T | T[] | null | undefined): T | null {
@@ -605,7 +634,7 @@ export async function listHrNhanSuOptions(): Promise<
 }
 
 export async function listHpGoiHocPhiForDhp(): Promise<
-  { ok: true; rows: AdminDhpGoiOption[] } | { ok: false; error: string }
+  { ok: true; rows: AdminDhpGoiOption[]; canonicalMap: Record<number, number> } | { ok: false; error: string }
 > {
   const session = await getAdminSessionOrNull();
   if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
@@ -626,6 +655,7 @@ export async function listHpGoiHocPhiForDhp(): Promise<
       const id = Number(row.id);
       if (!Number.isFinite(id) || id <= 0) continue;
       const payable = dhpLegacyGoiPayable(row);
+      const giaGocLegacy = dhpParseMoney(row.hoc_phi);
       const mon = row.mon_hoc;
       const mon_hoc =
         mon == null || mon === "" ? null : Number.isFinite(Number(mon)) ? Number(mon) : null;
@@ -633,13 +663,15 @@ export async function listHpGoiHocPhiForDhp(): Promise<
         id,
         ten_goi_hoc_phi: String(row.ten_goi_hoc_phi ?? "").trim() || `Gói #${id}`,
         mon_hoc: mon_hoc != null && mon_hoc > 0 ? mon_hoc : null,
+        gia_goc: giaGocLegacy > 0 ? giaGocLegacy : payable,
         hoc_phi_dong: payable,
         so_buoi: null,
         post_title: null,
         special: false,
       });
     }
-    return { ok: true, rows: dhpDedupeGoiOptionsForPicker(rows) };
+    const { deduped, canonicalMap } = dhpDedupeGoiOptionsForPicker(rows);
+    return { ok: true, rows: deduped, canonicalMap };
   }
 
   const { data, error } = await supabase
@@ -703,13 +735,15 @@ export async function listHpGoiHocPhiForDhp(): Promise<
         id,
       }),
       mon_hoc: mon_hoc != null && mon_hoc > 0 ? mon_hoc : null,
+      gia_goc: giaGoc > 0 ? giaGoc : payable,
       hoc_phi_dong: payable,
       so_buoi: soBuoiRounded,
       post_title: postTitle,
       special: specialText != null,
     });
   }
-  return { ok: true, rows: dhpDedupeGoiOptionsForPicker(rows) };
+  const { deduped, canonicalMap } = dhpDedupeGoiOptionsForPicker(rows);
+  return { ok: true, rows: deduped, canonicalMap };
 }
 
 export async function adminPollHpDonThu(
@@ -875,7 +909,58 @@ export async function adminCreateHpDonThu(payload: {
   }
 
   const discountDong = Math.round(subtotal * (pct / 100));
-  const invoiceTotalDong = Math.max(0, Math.round(subtotal - discountDong));
+  const afterKm = Math.max(0, Math.round(subtotal - discountDong));
+
+  // Kiểm tra combo discount dựa trên goi_ids trong hp_combo_mon
+  let comboDiscountDong = 0;
+  const selectedGoiIds = lines.map((ln) => Math.trunc(ln.goiId));
+  if (selectedGoiIds.length > 0) {
+    const { data: allGoisRaw } = await supabase
+      .from(goiTable)
+      .select("id, mon_hoc, gia_goc, discount, so_buoi, post_title, special")
+      .order("id", { ascending: true });
+    // Build canonical map: raw_id → smallest id với cùng (mon_hoc, gia_goc, discount, so_buoi)
+    const sigMap = new Map<string, number>();
+    for (const r of (allGoisRaw ?? []) as Record<string, unknown>[]) {
+      const id = Number(r.id);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      const sig = `${r.mon_hoc ?? 0}\t${r.gia_goc ?? 0}\t${r.discount ?? 0}\t${r.so_buoi ?? "null"}`;
+      const cur = sigMap.get(sig);
+      if (cur == null || id < cur) sigMap.set(sig, id);
+    }
+    const canonMap: Record<number, number> = {};
+    for (const r of (allGoisRaw ?? []) as Record<string, unknown>[]) {
+      const id = Number(r.id);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      const sig = `${r.mon_hoc ?? 0}\t${r.gia_goc ?? 0}\t${r.discount ?? 0}\t${r.so_buoi ?? "null"}`;
+      const canonical = sigMap.get(sig);
+      if (canonical != null) canonMap[id] = canonical;
+    }
+    const { data: comboRows } = await supabase
+      .from("hp_combo_mon")
+      .select("id, ten_combo, gia_giam, goi_ids, dang_hoat_dong")
+      .order("gia_giam", { ascending: false });
+    if (comboRows?.length) {
+      const payingLines = selectedGoiIds.map((gid) => ({ goiId: canonMap[gid] ?? gid }));
+      const normalizedCombos = (comboRows as Record<string, unknown>[]).map((c) => {
+        const rawIds = Array.isArray(c.goi_ids)
+          ? (c.goi_ids as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n > 0)
+          : [];
+        return {
+          id: Number(c.id),
+          ten_combo: String(c.ten_combo ?? ""),
+          gia_giam: Number(c.gia_giam ?? 0),
+          goi_ids: rawIds.map((id) => canonMap[id] ?? id),
+          dang_hoat_dong: c.dang_hoat_dong !== false,
+        };
+      });
+      const comboDiscountCalc = firstApplicableComboDiscountDong(payingLines, normalizedCombos);
+      comboDiscountDong = comboDiscountCalc;
+    }
+  }
+
+  const totalDiscount = discountDong + comboDiscountDong;
+  const invoiceTotalDong = Math.max(0, Math.round(subtotal - totalDiscount));
   if (invoiceTotalDong <= 0) return { ok: false, error: "Tổng sau khuyến mãi phải > 0." };
 
   const { data: donRow, error: donErr } = await supabase
@@ -885,7 +970,7 @@ export async function adminCreateHpDonThu(payload: {
       nguoi_tao: nguoiTaoId,
       hinh_thuc_thu: hinhDb,
       status: "Chờ thanh toán",
-      giam_gia: discountDong > 0 ? discountDong : null,
+      giam_gia: totalDiscount > 0 ? totalDiscount : null,
     })
     .select("id")
     .single();
@@ -930,4 +1015,37 @@ export async function adminCreateHpDonThu(payload: {
     maDonSo: codes.ma_don_so,
     invoiceTotalDong,
   };
+}
+
+export async function listHpComboMonForDhp(): Promise<
+  { ok: true; rows: AdminDhpComboOption[] } | { ok: false; error: string }
+> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { data, error } = await supabase
+    .from("hp_combo_mon")
+    .select("id, ten_combo, gia_giam, goi_ids, dang_hoat_dong")
+    .order("id", { ascending: true });
+
+  if (error) return { ok: false, error: error.message };
+
+  const rows: AdminDhpComboOption[] = (data ?? []).map((r) => {
+    const row = r as Record<string, unknown>;
+    const raw = row.goi_ids;
+    const goi_ids = Array.isArray(raw)
+      ? (raw as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    return {
+      id: Number(row.id),
+      ten_combo: String(row.ten_combo ?? "").trim() || `Combo #${Number(row.id)}`,
+      gia_giam: Number(row.gia_giam ?? 0),
+      goi_ids,
+      dang_hoat_dong: row.dang_hoat_dong !== false,
+    };
+  });
+
+  return { ok: true, rows };
 }

@@ -5,10 +5,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useTransition } from "react";
 import { ClipboardList, Loader2 } from "lucide-react";
 
-import AdminMinhHoaDropzone, {
-  minhHoaUrlsFromSlots,
-  type MinhHoaUploadSlot,
-} from "@/app/admin/_components/AdminMinhHoaDropzone";
 import AdminRichTextEditor from "@/app/admin/_components/AdminRichTextEditor";
 import { createMktMediaOrder } from "@/app/admin/dashboard/quan-ly-media/actions";
 import { MKT_MEDIA_TYPE_OPTIONS } from "@/lib/data/mkt-media-form";
@@ -44,7 +40,6 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
   const [endDate, setEndDate] = useState(defaultEndYmd);
   const [briefHtml, setBriefHtml] = useState<string>("");
   const [briefUploading, setBriefUploading] = useState(false);
-  const [minhHoa, setMinhHoa] = useState<MinhHoaUploadSlot[]>([]);
 
   const inputCls = useMemo(
     () =>
@@ -59,14 +54,6 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
       setErr("Đợi ảnh trong brief tải xong rồi gửi order.");
       return;
     }
-    if (minhHoa.some((s) => s.uploading)) {
-      setErr("Đợi ảnh minh họa tải xong rồi gửi order.");
-      return;
-    }
-    if (minhHoa.some((s) => s.error && !s.url)) {
-      setErr("Có ảnh minh họa lỗi — xóa dòng lỗi hoặc thử tải lại.");
-      return;
-    }
 
     const safeBrief = sanitizeAdminRichHtml(briefHtml).trim();
     const plainLen = htmlToPlainText(safeBrief).length;
@@ -74,8 +61,6 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
       setErr(`Brief quá dài (tối đa khoảng ${BRIEF_MAX_PLAIN} ký tự nội dung).`);
       return;
     }
-
-    const urls = minhHoaUrlsFromSlots(minhHoa);
 
     startTransition(async () => {
       const res = await createMktMediaOrder({
@@ -85,7 +70,7 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
         start_date: startDate,
         end_date: endDate,
         brief: safeBrief || null,
-        minh_hoa: urls,
+        minh_hoa: [],
         nguoi_lam_ids: [],
       });
       if (!res.ok) {
@@ -103,7 +88,6 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
     endDate,
     briefHtml,
     briefUploading,
-    minhHoa,
     router,
   ]);
 
@@ -215,10 +199,6 @@ export default function OrderMediaView({ creatorLabel, defaultStartYmd, defaultE
               ) : null}
             </div>
 
-            <div>
-              {fieldLabel("Minh họa")}
-              <AdminMinhHoaDropzone slots={minhHoa} setSlots={setMinhHoa} />
-            </div>
           </div>
 
           {err ? (

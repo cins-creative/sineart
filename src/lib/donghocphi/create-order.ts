@@ -3,7 +3,6 @@ import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import {
   firstApplicableComboDiscountDong,
   rawToHocPhiComboRow,
-  rawToHocPhiGoiRow,
 } from "@/lib/donghocphi/combo-discount";
 import { insertQlQuanLyHocVienEnrollment } from "@/lib/supabase/insert-ql-quan-ly-hoc-vien";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -196,8 +195,8 @@ export async function createDongHocPhiOrder(
   const sdt = student.sdt?.trim() ?? "";
   const email = student.email?.trim().toLowerCase() ?? "";
   const fb = student.facebook?.trim() ?? "";
-  if (name.length < 2 || sdt.length < 8 || !isValidStudentEmail(email) || fb.length < 1) {
-    return { ok: false, error: "Thiếu hoặc sai thông tin học viên (họ tên, SĐT, email, Facebook).", code: "VALIDATION" };
+  if (name.length < 2 || sdt.length < 8 || !isValidStudentEmail(email)) {
+    return { ok: false, error: "Thiếu hoặc sai thông tin học viên (họ tên, SĐT, email).", code: "VALIDATION" };
   }
   if (!lines.length) {
     return { ok: false, error: "Chưa có dòng lớp / gói.", code: "VALIDATION" };
@@ -220,7 +219,6 @@ export async function createDongHocPhiOrder(
     goiId: number;
     payableDong: number;
     soBuoi: number;
-    comboId: number | null;
     packageNumber: number;
     donVi: string;
   };
@@ -245,7 +243,7 @@ export async function createDongHocPhiOrder(
 
     const { data: goiRow, error: goiErr } = await supabase
       .from(goiTable)
-      .select('id, mon_hoc, "number", don_vi, gia_goc, discount, so_buoi, combo_id')
+      .select('id, mon_hoc, "number", don_vi, gia_goc, discount, so_buoi')
       .eq("id", ln.goiId)
       .maybeSingle();
     if (goiErr) {
@@ -269,7 +267,6 @@ export async function createDongHocPhiOrder(
       gia_goc: unknown;
       discount: unknown;
       so_buoi: unknown;
-      combo_id?: unknown;
     };
     const goiMon = Number(gr.mon_hoc);
     if (goiMon !== monHocId) {
@@ -292,10 +289,6 @@ export async function createDongHocPhiOrder(
     const packageNumber =
       numRaw == null || numRaw === "" ? 0 : Number(numRaw);
     const donVi = String(gr.don_vi ?? "").trim() || "tháng";
-    const comboRaw = gr.combo_id;
-    const comboNum = comboRaw == null || comboRaw === "" ? null : Number(comboRaw);
-    const comboId =
-      comboNum != null && Number.isFinite(comboNum) && comboNum > 0 ? comboNum : null;
 
     validated.push({
       lopId: ln.lopId,
@@ -303,49 +296,68 @@ export async function createDongHocPhiOrder(
       goiId: ln.goiId,
       payableDong: payable,
       soBuoi,
-      comboId,
       packageNumber: Number.isFinite(packageNumber) ? packageNumber : 0,
       donVi,
     });
     invoiceSubtotal += payable;
   }
 
-  const payingComboLines = validated.map((v) => ({
-    monHocId: v.monHocId,
-    number: v.packageNumber,
-    donVi: v.donVi,
-    comboId: v.comboId,
-  }));
-
-  const distinctComboIds = [
-    ...new Set(
-      validated
-        .map((v) => v.comboId)
-        .filter((x): x is number => x != null && x > 0)
-    ),
-  ];
+  const payingComboLines = validated.map((v) => ({ goiId: v.goiId }));
 
   let comboDiscountDong = 0;
-  if (distinctComboIds.length > 0) {
-    const { data: comboRows, error: comboErr } = await supabase
-      .from("hp_combo_mon")
-      .select("id, ten_combo, gia_giam")
-      .in("id", distinctComboIds)
-      .order("id", { ascending: true });
-    if (!comboErr && comboRows?.length) {
-      const combosOrdered = (comboRows as Record<string, unknown>[]).map(rawToHocPhiComboRow);
-      const { data: goiComboRows, error: goiComboErr } = await supabase
+  if (payingComboLines.length > 0) {
+    const [comboRes, allGoiRes] = await Promise.all([
+      supabase
+        .from("hp_combo_mon")
+        .select("id, ten_combo, gia_giam, goi_ids, dang_hoat_dong")
+        .eq("dang_hoat_dong", true)
+        .order("gia_giam", { ascending: false }),
+      // Fetch tất cả gói để build canonical map (raw id → id đã dedup theo picker logic)
+      supabase
         .from(goiTable)
-        .select('id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi')
-        .in("combo_id", distinctComboIds);
-      if (!goiComboErr && goiComboRows?.length) {
-        const allGoisForCombo = (goiComboRows as Record<string, unknown>[]).map(rawToHocPhiGoiRow);
-        comboDiscountDong = firstApplicableComboDiscountDong(
-          payingComboLines,
-          combosOrdered,
-          allGoisForCombo
-        );
+        .select('id, mon_hoc, "number", don_vi, special'),
+    ]);
+    const { data: comboRows, error: comboErr } = comboRes;
+    if (!comboErr && comboRows?.length && allGoiRes.data?.length) {
+      // Build canonical map: ID nhỏ nhất cho cùng (mon_hoc, number, don_vi, cap-toc-bucket)
+      const isCapToc = (s: unknown): boolean => {
+        const raw = String(s ?? "").trim();
+        if (!raw) return false;
+        const t = raw.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+        return t.includes("cap toc");
+      };
+      const smallestByKey = new Map<string, number>();
+      for (const r of allGoiRes.data as Record<string, unknown>[]) {
+        const id = Number(r.id);
+        const mon = Number(r.mon_hoc);
+        const num = Number(r.number ?? 0);
+        const dv = String(r.don_vi ?? "").trim().toLowerCase();
+        const cap = isCapToc(r.special) ? "1" : "0";
+        const key = `${mon}|${num}|${dv}|${cap}`;
+        const cur = smallestByKey.get(key);
+        if (cur == null || id < cur) smallestByKey.set(key, id);
       }
+      const canonicalMap: Record<number, number> = {};
+      for (const r of allGoiRes.data as Record<string, unknown>[]) {
+        const id = Number(r.id);
+        const mon = Number(r.mon_hoc);
+        const num = Number(r.number ?? 0);
+        const dv = String(r.don_vi ?? "").trim().toLowerCase();
+        const cap = isCapToc(r.special) ? "1" : "0";
+        const key = `${mon}|${num}|${dv}|${cap}`;
+        const canonical = smallestByKey.get(key);
+        if (canonical != null) canonicalMap[id] = canonical;
+      }
+
+      const combosOrdered = (comboRows as Record<string, unknown>[])
+        .map(rawToHocPhiComboRow)
+        .map((c) => ({
+          ...c,
+          goi_ids: c.goi_ids
+            .map((id) => canonicalMap[id] ?? id)
+            .filter((id, idx, arr) => arr.indexOf(id) === idx),
+        }));
+      comboDiscountDong = firstApplicableComboDiscountDong(payingComboLines, combosOrdered);
     }
   }
 

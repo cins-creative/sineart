@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEventHandler } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { Node } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import TiptapImage from "@tiptap/extension-image";
 import TiptapUnderline from "@tiptap/extension-underline";
@@ -12,6 +13,7 @@ import TiptapPlaceholder from "@tiptap/extension-placeholder";
 import {
   Bold,
   CirclePlay,
+  Braces,
   Code,
   Heading1,
   Heading2,
@@ -35,8 +37,10 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
 
 export type AdminRichTextEditorProps = {
+  value?: string;
   onChange?: (html: string) => void;
   onUploadChange?: (isPending: boolean) => void;
   placeholder?: string;
@@ -51,9 +55,65 @@ function extractYouTubeId(url: string): string | null {
   return m?.[1] ?? null;
 }
 
+function sanitizeEmbedHtml(raw: string): string {
+  return raw
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+=(["']).*?\1/gi, "")
+    .replace(/\son\w+=([^\s>]+)/gi, "");
+}
+
+function normalizeHtmlIntoBlocks(raw: string): string {
+  const input = raw.trim();
+  if (!input) return "";
+
+  const hasBlockTag = /<(p|h[1-6]|ul|ol|li|blockquote|pre|table|thead|tbody|tr|td|th|div|iframe|img|hr)\b/i.test(
+    input,
+  );
+  if (hasBlockTag) return input;
+
+  const hasBreaks = /<br\s*\/?>/i.test(input) || /\r?\n/.test(input);
+  if (!hasBreaks) return input;
+
+  const withBr = input.replace(/\r?\n/g, "<br>");
+  const parts = withBr
+    .split(/<br\s*\/?>/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (!parts.length) return "";
+  return parts.map((line) => `<p>${line}</p>`).join("");
+}
+
+const EmbeddedIframe = Node.create({
+  name: "embeddedIframe",
+  group: "block",
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      src: { default: null },
+      title: { default: "Embedded content" },
+      allow: { default: null },
+      referrerpolicy: { default: "no-referrer-when-downgrade" },
+      loading: { default: "lazy" },
+      allowfullscreen: { default: true },
+      style: { default: "width:100%;min-height:360px;border:0;border-radius:12px;" },
+    };
+  },
+  parseHTML() {
+    return [{ tag: "iframe[src]" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    const attrs = { ...HTMLAttributes };
+    if (!attrs.allow) delete attrs.allow;
+    return ["iframe", attrs];
+  },
+});
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function AdminRichTextEditor({
+  value,
   onChange,
   onUploadChange,
   placeholder = "Nhập nội dung…",
@@ -63,8 +123,14 @@ export default function AdminRichTextEditor({
   const pendingCountRef = useRef(0);
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const htmlSelectionRef = useRef<{ from: number; to: number } | null>(null);
+  const toolbarSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingCount, setUploadingCount] = useState(0);
+  const [htmlEmbedOpen, setHtmlEmbedOpen] = useState(false);
+  const [htmlEmbedValue, setHtmlEmbedValue] = useState("");
+  const [htmlEmbedError, setHtmlEmbedError] = useState<string | null>(null);
+  const [showHtmlReview, setShowHtmlReview] = useState(false);
 
   function incPending() {
     pendingCountRef.current++;
@@ -157,8 +223,48 @@ export default function AdminRichTextEditor({
       .run();
   }
 
+  function openHtmlEmbed() {
+    const ed = editorRef.current;
+    if (ed) {
+      const { from, to } = ed.state.selection;
+      htmlSelectionRef.current = { from, to };
+    } else {
+      htmlSelectionRef.current = null;
+    }
+    setHtmlEmbedValue("");
+    setHtmlEmbedError(null);
+    setHtmlEmbedOpen(true);
+  }
+
+  function submitHtmlEmbed() {
+    const clean = sanitizeEmbedHtml(htmlEmbedValue).trim();
+    if (!clean) {
+      setHtmlEmbedError("Mã HTML trống hoặc không hợp lệ.");
+      return;
+    }
+    const ed = editorRef.current;
+    if (!ed) {
+      setHtmlEmbedError("Editor chưa sẵn sàng, thử lại.");
+      return;
+    }
+    const sel = htmlSelectionRef.current;
+    const chain = sel
+      ? ed.chain().focus().setTextSelection(sel).insertContent(clean)
+      : ed.chain().focus().insertContent(clean);
+    const ok = chain.run();
+    if (!ok) {
+      setHtmlEmbedError("Không thể chèn HTML này. Hãy thử iframe/blockquote chuẩn.");
+      return;
+    }
+    setHtmlEmbedOpen(false);
+    setHtmlEmbedValue("");
+    setHtmlEmbedError(null);
+    htmlSelectionRef.current = null;
+  }
+
   const editor = useEditor({
     immediatelyRender: false,
+    content: normalizeHtmlIntoBlocks(value ?? ""),
     extensions: [
       StarterKit,
       TiptapImage.configure({ allowBase64: false, inline: false }),
@@ -170,6 +276,7 @@ export default function AdminRichTextEditor({
       TiptapTableCell,
       TiptapTableHeader,
       TiptapPlaceholder.configure({ placeholder }),
+      EmbeddedIframe,
     ],
     onUpdate({ editor: e }) {
       onChange?.(e.getHTML());
@@ -202,7 +309,16 @@ export default function AdminRichTextEditor({
     editorRef.current = editor;
   }, [editor]);
 
+  useEffect(() => {
+    if (!editor || value === undefined) return;
+    const next = normalizeHtmlIntoBlocks(value || "");
+    if (editor.getHTML() === next) return;
+    editor.commands.setContent(next, false);
+  }, [editor, value]);
+
   const inTable = editor?.isActive("table") ?? false;
+  const editorHtml = editor?.getHTML() ?? "";
+  const sanitizedSavedHtml = sanitizeAdminRichHtml(editorHtml);
 
   // ── Toolbar helpers ──────────────────────────────────────────────────────
   const tb = (active?: boolean, disabled?: boolean) =>
@@ -216,6 +332,23 @@ export default function AdminRichTextEditor({
     );
 
   const sep = <div className="mx-1 h-4 w-px shrink-0 bg-[#EAEAEA]" />;
+  const keepSelectionMouseDown: MouseEventHandler<HTMLButtonElement> = (event) => {
+    event.preventDefault();
+    const ed = editorRef.current;
+    if (!ed) return;
+    const { from, to } = ed.state.selection;
+    toolbarSelectionRef.current = { from, to };
+  };
+
+  function runWithPreservedSelection(run: (chain: any) => any) {
+    const ed = editorRef.current;
+    if (!ed) return;
+    const saved = toolbarSelectionRef.current;
+    let chain = ed.chain().focus();
+    if (saved) chain = chain.setTextSelection(saved);
+    run(chain).run();
+    toolbarSelectionRef.current = null;
+  }
 
   const groupLabel = (text: string) => (
     <span className="self-center px-0.5 text-[9.5px] font-bold uppercase tracking-widest text-[#CCCCCC]">
@@ -232,22 +365,27 @@ export default function AdminRichTextEditor({
         {/* Row 1 — Text formatting + Headings + Lists */}
         <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5">
           <button type="button" className={tb(editor?.isActive("bold"))} title="In đậm (Ctrl+B)"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().toggleBold().run()}>
             <Bold className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(editor?.isActive("italic"))} title="In nghiêng (Ctrl+I)"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().toggleItalic().run()}>
             <Italic className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(editor?.isActive("underline"))} title="Gạch chân (Ctrl+U)"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().toggleUnderline().run()}>
             <UnderlineIcon className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(editor?.isActive("strike"))} title="Gạch ngang"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().toggleStrike().run()}>
             <Strikethrough className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(editor?.isActive("code"))} title="Code inline"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().toggleCode().run()}>
             <Code className="h-3.5 w-3.5" />
           </button>
@@ -255,37 +393,45 @@ export default function AdminRichTextEditor({
           {sep}
 
           <button type="button" className={tb(editor?.isActive("heading", { level: 1 }))} title="Tiêu đề 1"
-            onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}>
+            onMouseDown={keepSelectionMouseDown}
+            onClick={() => runWithPreservedSelection((chain) => chain.toggleHeading({ level: 1 }))}>
             <Heading1 className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(editor?.isActive("heading", { level: 2 }))} title="Tiêu đề 2"
-            onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
+            onMouseDown={keepSelectionMouseDown}
+            onClick={() => runWithPreservedSelection((chain) => chain.toggleHeading({ level: 2 }))}>
             <Heading2 className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(editor?.isActive("heading", { level: 3 }))} title="Tiêu đề 3"
-            onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}>
+            onMouseDown={keepSelectionMouseDown}
+            onClick={() => runWithPreservedSelection((chain) => chain.toggleHeading({ level: 3 }))}>
             <Heading3 className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(editor?.isActive("paragraph"))} title="Đoạn văn (P)"
-            onClick={() => editor?.chain().focus().setParagraph().run()}>
+            onMouseDown={keepSelectionMouseDown}
+            onClick={() => runWithPreservedSelection((chain) => chain.setParagraph())}>
             <Pilcrow className="h-3.5 w-3.5" />
           </button>
 
           {sep}
 
           <button type="button" className={tb(editor?.isActive("bulletList"))} title="Danh sách • (Bullet)"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().toggleBulletList().run()}>
             <List className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(editor?.isActive("orderedList"))} title="Danh sách số"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().toggleOrderedList().run()}>
             <ListOrdered className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(editor?.isActive("blockquote"))} title="Trích dẫn"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().toggleBlockquote().run()}>
             <Quote className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(editor?.isActive("codeBlock"))} title="Khối code"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().toggleCodeBlock().run()}>
             <Terminal className="h-3.5 w-3.5" />
           </button>
@@ -296,44 +442,54 @@ export default function AdminRichTextEditor({
           {groupLabel("Bảng")}
           {sep}
           <button type="button" className={tb(false)} title="Chèn bảng mới"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
             <Table className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb(false, !inTable)} disabled={!inTable} title="+Cột trái"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().addColumnBefore().run()}>
             +←Col
           </button>
           <button type="button" className={tb(false, !inTable)} disabled={!inTable} title="+Cột phải"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().addColumnAfter().run()}>
             Col→+
           </button>
           <button type="button" className={tb(false, !inTable)} disabled={!inTable} title="Xóa cột"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().deleteColumn().run()}>
             −Col
           </button>
           {sep}
           <button type="button" className={tb(false, !inTable)} disabled={!inTable} title="+Hàng trên"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().addRowBefore().run()}>
             +↑Row
           </button>
           <button type="button" className={tb(false, !inTable)} disabled={!inTable} title="+Hàng dưới"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().addRowAfter().run()}>
             Row↓+
           </button>
           <button type="button" className={tb(false, !inTable)} disabled={!inTable} title="Xóa hàng"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().deleteRow().run()}>
             −Row
           </button>
           {sep}
           <button type="button" className={tb(false, !inTable)} disabled={!inTable} title="Gộp ô"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().mergeCells().run()}>
             Merge
           </button>
           <button type="button" className={tb(false, !inTable)} disabled={!inTable} title="Tách ô"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().splitCell().run()}>
             Split
           </button>
           <button type="button" className={tb(false, !inTable)} disabled={!inTable} title="Tiêu đề hàng"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().toggleHeaderRow().run()}>
             Header
           </button>
@@ -343,6 +499,7 @@ export default function AdminRichTextEditor({
             disabled={!inTable}
             title="Xóa bảng"
             className={cn(tb(false, !inTable), inTable && "hover:bg-red-50 hover:text-red-600")}
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().deleteTable().run()}
           >
             ×Bảng
@@ -354,15 +511,18 @@ export default function AdminRichTextEditor({
           {groupLabel("Media")}
           {sep}
           <button type="button" className={tb(editor?.isActive("link"))} title="Đặt link"
+            onMouseDown={keepSelectionMouseDown}
             onClick={handleSetLink}>
             <LinkIcon className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb()} title="Gỡ link"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().extendMarkRange("link").unsetLink().run()}>
             <Link2Off className="h-3.5 w-3.5" />
           </button>
           {sep}
           <button type="button" className={tb()} title="Chèn ảnh từ file"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => fileInputRef.current?.click()}>
             <ImageIcon className="h-3.5 w-3.5" />
           </button>
@@ -380,14 +540,35 @@ export default function AdminRichTextEditor({
           <button type="button"
             className={cn(tb(), "text-red-500 hover:bg-red-50")}
             title="Nhúng video YouTube"
+            onMouseDown={keepSelectionMouseDown}
             onClick={handleYoutubeEmbed}>
             <CirclePlay className="h-3.5 w-3.5" />
             <span className="ml-1">YouTube</span>
+          </button>
+          <button
+            type="button"
+            className={cn(tb(), "text-[#5a3fa0] hover:bg-[#BC8AF9]/10")}
+            title="Nhúng mã HTML"
+            onMouseDown={keepSelectionMouseDown}
+            onClick={openHtmlEmbed}
+          >
+            <Braces className="h-3.5 w-3.5" />
+            <span className="ml-1">Embed HTML</span>
+          </button>
+          <button
+            type="button"
+            className={cn(tb(showHtmlReview), "text-[#4f4f4f]")}
+            title="Xem HTML sau khi sanitize"
+            onMouseDown={keepSelectionMouseDown}
+            onClick={() => setShowHtmlReview((v) => !v)}
+          >
+            Review HTML
           </button>
 
           {sep}
 
           <button type="button" className={tb()} title="Đường kẻ ngang"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
             <Minus className="h-3.5 w-3.5" />
           </button>
@@ -395,10 +576,12 @@ export default function AdminRichTextEditor({
           {sep}
 
           <button type="button" className={tb()} title="Hoàn tác (Ctrl+Z)"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().undo().run()}>
             <RotateCcw className="h-3.5 w-3.5" />
           </button>
           <button type="button" className={tb()} title="Làm lại (Ctrl+Y)"
+            onMouseDown={keepSelectionMouseDown}
             onClick={() => editor?.chain().focus().redo().run()}>
             <RotateCw className="h-3.5 w-3.5" />
           </button>
@@ -457,6 +640,8 @@ export default function AdminRichTextEditor({
           // YouTube — wrapper div
           "[&_.ProseMirror_[data-youtube-video]]:relative [&_.ProseMirror_[data-youtube-video]]:my-3 [&_.ProseMirror_[data-youtube-video]]:w-full [&_.ProseMirror_[data-youtube-video]]:overflow-hidden [&_.ProseMirror_[data-youtube-video]]:rounded-lg [&_.ProseMirror_[data-youtube-video]]:pb-[56.25%]",
           "[&_.ProseMirror_[data-youtube-video]_iframe]:absolute [&_.ProseMirror_[data-youtube-video]_iframe]:inset-0 [&_.ProseMirror_[data-youtube-video]_iframe]:h-full [&_.ProseMirror_[data-youtube-video]_iframe]:w-full [&_.ProseMirror_[data-youtube-video]_iframe]:border-0",
+          // Generic iframe embeds (eg. Sketchfab)
+          "[&_.ProseMirror_iframe]:my-3 [&_.ProseMirror_iframe]:block [&_.ProseMirror_iframe]:w-full [&_.ProseMirror_iframe]:min-h-[360px] [&_.ProseMirror_iframe]:rounded-lg [&_.ProseMirror_iframe]:border-0",
           // Table
           "[&_.ProseMirror_table]:my-2 [&_.ProseMirror_table]:w-full [&_.ProseMirror_table]:table-fixed [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:overflow-hidden",
           "[&_.ProseMirror_th]:border [&_.ProseMirror_th]:border-[#d8d6ce] [&_.ProseMirror_th]:bg-[#f5f4ef] [&_.ProseMirror_th]:p-2 [&_.ProseMirror_th]:text-left [&_.ProseMirror_th]:text-[12px] [&_.ProseMirror_th]:font-semibold",
@@ -478,6 +663,72 @@ export default function AdminRichTextEditor({
           >
             ✕
           </button>
+        </div>
+      ) : null}
+
+      {htmlEmbedOpen ? (
+        <div className="border-t border-[#EAEAEA] bg-[#fcfcfd] p-3">
+          <div className="mb-2 text-[12px] font-semibold text-[#3a3a3a]">Nhúng mã HTML</div>
+          <textarea
+            value={htmlEmbedValue}
+            onChange={(e) => setHtmlEmbedValue(e.target.value)}
+            placeholder='<iframe src="..."></iframe> hoặc <blockquote>...</blockquote>'
+            className="h-28 w-full resize-y rounded-md border border-[#EAEAEA] bg-white px-2.5 py-2 text-[12px] text-[#323232] outline-none ring-[#BC8AF9]/30 focus:ring-2"
+          />
+          {htmlEmbedError ? (
+            <div className="mt-2 text-[11px] font-medium text-red-600">{htmlEmbedError}</div>
+          ) : (
+            <div className="mt-2 text-[11px] text-[#8b8b8b]">
+              Script và thuộc tính sự kiện (`on*`) sẽ tự động bị loại bỏ.
+            </div>
+          )}
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-[#EAEAEA] px-2.5 py-1.5 text-[12px] font-medium text-[#666] hover:bg-[#f5f5f5]"
+              onClick={() => {
+                setHtmlEmbedOpen(false);
+                setHtmlEmbedError(null);
+                setHtmlEmbedValue("");
+                htmlSelectionRef.current = null;
+              }}
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              className="rounded-md bg-[#5a3fa0] px-2.5 py-1.5 text-[12px] font-semibold text-white hover:opacity-90"
+              onClick={submitHtmlEmbed}
+            >
+              Chèn HTML
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {showHtmlReview ? (
+        <div className="border-t border-[#EAEAEA] bg-[#fcfcfd] p-3">
+          <div className="mb-2 text-[12px] font-semibold text-[#3a3a3a]">
+            Review HTML (phiên bản sẽ được lưu)
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <div className="mb-1 text-[11px] font-semibold text-[#666]">Render preview</div>
+              <div
+                className="min-h-28 rounded-md border border-[#EAEAEA] bg-white p-2 text-[12px] text-[#323232]"
+                dangerouslySetInnerHTML={{ __html: sanitizedSavedHtml || "<p></p>" }}
+              />
+            </div>
+            <div>
+              <div className="mb-1 text-[11px] font-semibold text-[#666]">HTML source</div>
+              <pre className="max-h-56 overflow-auto rounded-md border border-[#EAEAEA] bg-white p-2 text-[11px] leading-relaxed text-[#444]">
+                {sanitizedSavedHtml || "<p></p>"}
+              </pre>
+            </div>
+          </div>
+          <div className="mt-2 text-[11px] text-[#8b8b8b]">
+            Đây là HTML sau sanitize khi submit, nên nếu thẻ bị loại bỏ bạn sẽ thấy ngay ở đây.
+          </div>
         </div>
       ) : null}
     </div>

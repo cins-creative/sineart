@@ -28,8 +28,20 @@ function revalidateGoiPages(): void {
   revalidatePath(REVALIDATE);
 }
 
+function parseComboIdsCsv(raw: unknown): number[] {
+  const text = String(raw ?? "").trim();
+  if (!text) return [];
+  const out: number[] = [];
+  for (const part of text.split(",")) {
+    const n = Number(part.trim());
+    if (!Number.isFinite(n) || n <= 0) continue;
+    if (!out.includes(n)) out.push(n);
+  }
+  return out.sort((a, b) => a - b);
+}
+
 export type ComboMonFormState =
-  | { ok: true; id: number; ten_combo: string; gia_giam: number }
+  | { ok: true; id: number; ten_combo: string; gia_giam: number; goi_ids: number[]; dang_hoat_dong: boolean }
   | { ok: false; error: string };
 
 export type DeleteComboResult = { ok: true } | { ok: false; error: string };
@@ -66,11 +78,13 @@ export async function createHpComboMon(
   if (ten_combo.length > 500) return { ok: false, error: "Tên combo quá dài." };
 
   const gia_giam = parseMoneyInt(String(formData.get("gia_giam") ?? ""));
+  const goi_ids = parseComboIdsCsv(formData.get("goi_ids"));
+  const dang_hoat_dong = formData.get("dang_hoat_dong") !== "false";
 
   const { data, error } = await supabase
     .from("hp_combo_mon")
-    .insert({ ten_combo, gia_giam })
-    .select("id, ten_combo, gia_giam")
+    .insert({ ten_combo, gia_giam, goi_ids, dang_hoat_dong })
+    .select("id, ten_combo, gia_giam, goi_ids, dang_hoat_dong")
     .single();
 
   if (error) {
@@ -80,13 +94,16 @@ export async function createHpComboMon(
     };
   }
 
-  const row = data as { id: number; ten_combo: string | null; gia_giam?: unknown };
+  const row = data as { id: number; ten_combo: string | null; gia_giam?: unknown; goi_ids?: unknown; dang_hoat_dong?: unknown };
   const id = Number(row.id);
   if (!Number.isFinite(id) || id <= 0) {
     return { ok: false, error: "Thêm combo nhưng không đọc được id." };
   }
 
   const giamOut = parseMoneyInt(String(row.gia_giam ?? gia_giam));
+  const goi_ids_out = Array.isArray(row.goi_ids)
+    ? (row.goi_ids as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n > 0)
+    : goi_ids;
 
   revalidateGoiPages();
   return {
@@ -94,6 +111,8 @@ export async function createHpComboMon(
     id,
     ten_combo: String(row.ten_combo ?? ten_combo).trim() || ten_combo,
     gia_giam: giamOut,
+    goi_ids: goi_ids_out,
+    dang_hoat_dong: row.dang_hoat_dong !== false,
   };
 }
 
@@ -118,20 +137,25 @@ export async function updateHpComboMon(
   if (ten_combo.length > 500) return { ok: false, error: "Tên combo quá dài." };
 
   const gia_giam = parseMoneyInt(String(formData.get("gia_giam") ?? ""));
+  const goi_ids = parseComboIdsCsv(formData.get("goi_ids"));
+  const dang_hoat_dong = formData.get("dang_hoat_dong") !== "false";
 
   const { data, error } = await supabase
     .from("hp_combo_mon")
-    .update({ ten_combo, gia_giam })
+    .update({ ten_combo, gia_giam, goi_ids, dang_hoat_dong })
     .eq("id", id)
-    .select("id, ten_combo, gia_giam")
+    .select("id, ten_combo, gia_giam, goi_ids, dang_hoat_dong")
     .single();
 
   if (error) {
     return { ok: false, error: withHpComboMonGrantHint(error.message || "Không cập nhật được combo.") };
   }
 
-  const row = data as { id: number; ten_combo: string | null; gia_giam?: unknown };
+  const row = data as { id: number; ten_combo: string | null; gia_giam?: unknown; goi_ids?: unknown; dang_hoat_dong?: unknown };
   const giamOut = parseMoneyInt(String(row.gia_giam ?? gia_giam));
+  const goi_ids_out = Array.isArray(row.goi_ids)
+    ? (row.goi_ids as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n > 0)
+    : goi_ids;
 
   revalidateGoiPages();
   return {
@@ -139,6 +163,8 @@ export async function updateHpComboMon(
     id: Number(row.id),
     ten_combo: String(row.ten_combo ?? ten_combo).trim() || ten_combo,
     gia_giam: giamOut,
+    goi_ids: goi_ids_out,
+    dang_hoat_dong: row.dang_hoat_dong !== false,
   };
 }
 
@@ -293,6 +319,12 @@ export async function saveGoiHocPhi(
   if (combo_id != null && (!Number.isFinite(combo_id) || combo_id <= 0)) {
     return { ok: false, error: "Combo không hợp lệ." };
   }
+  const combo_ids = parseComboIdsCsv(formData.get("combo_ids"));
+  if (combo_ids.some((id) => !Number.isFinite(id) || id <= 0)) {
+    return { ok: false, error: "Danh sách combo không hợp lệ." };
+  }
+  if (combo_ids.length === 0 && combo_id != null) combo_ids.push(combo_id);
+  const primaryComboId = combo_ids[0] ?? combo_id ?? null;
 
   if (don_vi != null && don_vi.length > 500) {
     return { ok: false, error: "Đơn vị quá dài (tối đa 500 ký tự)." };
@@ -325,7 +357,7 @@ export async function saveGoiHocPhi(
     don_vi,
     gia_goc,
     discount,
-    combo_id,
+    combo_id: isLegacyGoiTable ? primaryComboId : combo_ids,
     so_buoi,
   };
   if (!isLegacyGoiTable) {
@@ -335,8 +367,8 @@ export async function saveGoiHocPhi(
   }
 
   if (!Number.isFinite(id) || id <= 0) {
-    const { error } = await supabase.from(tbl).insert(payload);
-    if (error) {
+    const { data: inserted, error } = await supabase.from(tbl).insert(payload).select("id").single();
+    if (error || !inserted) {
       return {
         ok: false,
         error: error.message || `Không thêm được vào ${tbl}.`,
@@ -363,6 +395,7 @@ export type GoiHocPhiBulkRowInput = {
   gia_goc: number | null;
   discount: number | null;
   combo_id: number | null;
+  combo_ids?: number[];
   so_buoi: number | null;
   special?: string | null;
   note?: string | null;
@@ -415,6 +448,11 @@ export async function saveGoiHocPhiBulk(rows: GoiHocPhiBulkRowInput[]): Promise<
     if (combo_id != null && (!Number.isFinite(combo_id) || combo_id <= 0)) {
       return { ok: false, error: `Gói #${id}: Combo không hợp lệ.` };
     }
+    const combo_ids = [
+      ...new Set((row.combo_ids ?? []).map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)),
+    ].sort((a, b) => a - b);
+    if (combo_ids.length === 0 && combo_id != null) combo_ids.push(combo_id);
+    const primaryComboId = combo_ids[0] ?? combo_id ?? null;
 
     if (don_vi != null && don_vi.length > 500) {
       return { ok: false, error: `Gói #${id}: Đơn vị quá dài (tối đa 500 ký tự).` };
@@ -444,7 +482,7 @@ export async function saveGoiHocPhiBulk(rows: GoiHocPhiBulkRowInput[]): Promise<
       don_vi,
       gia_goc,
       discount,
-      combo_id,
+      combo_id: isLegacyGoiTable ? primaryComboId : combo_ids,
       so_buoi,
     };
     if (!isLegacyGoiTable) {

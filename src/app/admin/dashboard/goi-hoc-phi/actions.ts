@@ -203,6 +203,66 @@ export async function deleteGoiHocPhi(goiId: number): Promise<DeleteGoiHocPhiRes
   return { ok: true };
 }
 
+export type DuplicateGoiHocPhiResult =
+  | { ok: true; newId: number }
+  | { ok: false; error: string };
+
+/** Nhân bản một dòng gói học phí (insert mới, cùng dữ liệu, ID mới). */
+export async function duplicateGoiHocPhi(goiId: number): Promise<DuplicateGoiHocPhiResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  if (!Number.isFinite(goiId) || goiId <= 0) {
+    return { ok: false, error: "ID gói không hợp lệ." };
+  }
+
+  const tbl = table();
+  const isLegacyGoiTable = tbl === "hp_goi_hoc_phi";
+
+  const selectCols =
+    'mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi' +
+    (isLegacyGoiTable ? "" : ", special, note, post_title");
+
+  const { data: raw, error: fetchErr } = await supabase.from(tbl).select(selectCols).eq("id", goiId).maybeSingle();
+
+  if (fetchErr) return { ok: false, error: fetchErr.message || "Không đọc được gói gốc." };
+  if (!raw) return { ok: false, error: `Không tìm thấy gói #${goiId}.` };
+
+  const row = raw as unknown as Record<string, unknown>;
+  const payload: Record<string, unknown> = {
+    mon_hoc: row.mon_hoc ?? null,
+    number: row.number ?? row["number"] ?? null,
+    don_vi: row.don_vi ?? null,
+    gia_goc: row.gia_goc ?? null,
+    discount: row.discount ?? null,
+    combo_id: row.combo_id ?? null,
+    so_buoi: row.so_buoi ?? null,
+  };
+  if (!isLegacyGoiTable) {
+    payload.special = row.special ?? null;
+    payload.note = row.note ?? null;
+    payload.post_title = row.post_title ?? null;
+  }
+
+  const { data: inserted, error: insertErr } = await supabase.from(tbl).insert(payload).select("id").single();
+
+  if (insertErr) {
+    return { ok: false, error: insertErr.message || "Không nhân bản được gói." };
+  }
+
+  const ins = inserted as { id?: unknown };
+  const newId = Number(ins.id);
+  if (!Number.isFinite(newId) || newId <= 0) {
+    return { ok: false, error: "Đã chèn nhưng không đọc được ID mới." };
+  }
+
+  revalidateGoiPages();
+  return { ok: true, newId };
+}
+
 export async function saveGoiHocPhi(
   _prev: GoiHocPhiFormState | null,
   formData: FormData,

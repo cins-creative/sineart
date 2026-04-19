@@ -8,6 +8,7 @@ import {
   Banknote,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Layers2,
   Pencil,
   Plus,
@@ -22,6 +23,7 @@ import {
   createHpComboMon,
   deleteGoiHocPhi,
   deleteHpComboMon,
+  duplicateGoiHocPhi,
   saveGoiHocPhi,
   saveGoiHocPhiBulk,
   updateHpComboMon,
@@ -966,10 +968,11 @@ export default function GoiHocPhiView({ bundle }: Props) {
   const [bulkHint, setBulkHint] = useState<{ ok: boolean; text: string } | null>(null);
   const [bulkSavePending, startBulkSave] = useTransition();
   const [deleteRowPendingId, setDeleteRowPendingId] = useState<number | null>(null);
+  const [duplicateRowPendingId, setDuplicateRowPendingId] = useState<number | null>(null);
 
   const tableEditMode = editDraftById != null;
   const emptyTableColSpan =
-    (bundle.tableName !== "hp_goi_hoc_phi" ? 13 : 9) + (tableEditMode ? 1 : 0);
+    (bundle.tableName !== "hp_goi_hoc_phi" ? 14 : 10) + (tableEditMode ? 1 : 0);
 
   useEffect(() => {
     setBannerError(bundle.loadError ?? "");
@@ -1174,6 +1177,25 @@ export default function GoiHocPhiView({ bundle }: Props) {
     }
   }
 
+  async function handleDuplicateGoiRow(id: number) {
+    setBulkHint(null);
+    setDuplicateRowPendingId(id);
+    try {
+      const res = await duplicateGoiHocPhi(id);
+      if (res.ok) {
+        setEditDraftById(null);
+        editBaselineRef.current = new Map();
+        setBulkHint({ ok: true, text: `Đã nhân bản #${id} → gói mới #${res.newId}.` });
+        setGoiListPage(1);
+        router.refresh();
+      } else {
+        setBulkHint({ ok: false, text: res.error });
+      }
+    } finally {
+      setDuplicateRowPendingId(null);
+    }
+  }
+
   return (
     <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
@@ -1262,7 +1284,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
           </div>
         ) : null}
 
-        <div className="mx-auto w-full max-w-[1280px] overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div className="mx-auto w-full max-w-[min(1680px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <div className="flex flex-col gap-3 border-b border-[#EAEAEA] bg-[#FAFAFA] px-4 py-3">
             <div className="relative w-full max-w-xl">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
@@ -1323,7 +1345,8 @@ export default function GoiHocPhiView({ bundle }: Props) {
           {tableEditMode ? (
             <p className="m-0 border-b border-amber-100 bg-amber-50/90 px-4 py-2 text-xs leading-relaxed text-amber-950">
               Đang chỉnh sửa toàn bộ danh sách đã tải. Dùng <strong className="font-semibold">Lưu tất cả</strong> để ghi
-              xuống database; cột <strong className="font-semibold">Xóa</strong> gỡ bản ghi ngay (không cần Lưu). Chuyển
+              xuống database; cột <strong className="font-semibold">Xóa</strong> gỡ bản ghi ngay (không cần Lưu).{" "}
+              <strong className="font-semibold">Nhân bản</strong> tạo bản ghi mới và thoát chế độ chỉnh sửa bảng. Chuyển
               trang vẫn giữ bản nháp cho mọi dòng.
             </p>
           ) : null}
@@ -1339,41 +1362,43 @@ export default function GoiHocPhiView({ bundle }: Props) {
               className={`w-full border-collapse text-left text-sm ${
                 isNewGoiTable
                   ? tableEditMode
-                    ? "min-w-[1650px]"
-                    : "min-w-[1420px]"
+                    ? "min-w-[1760px]"
+                    : "min-w-[1540px]"
                   : tableEditMode
-                    ? "min-w-[1230px]"
-                    : "min-w-[1020px]"
+                    ? "min-w-[1340px]"
+                    : "min-w-[1140px]"
               }`}
             >
               <thead>
                 <tr className="border-b border-[#EAEAEA] bg-[#FAFAFA] text-[11px] font-bold uppercase tracking-wide text-black/45">
-                  <th className="px-4 py-3">ID</th>
+                  <th className="w-[4.25rem] shrink-0 whitespace-nowrap px-3 py-3">ID</th>
                   {bundle.tableName !== "hp_goi_hoc_phi" ? (
-                    <th className="min-w-[11rem] max-w-[14rem] px-4 py-3 normal-case">Tên gói</th>
+                    <th className="min-w-[13rem] max-w-[18rem] px-3 py-3 normal-case">Tên gói</th>
                   ) : null}
-                  <th className="px-4 py-3">Môn</th>
+                  <th className="min-w-[10rem] max-w-[13rem] px-3 py-3">Môn</th>
                   {bundle.tableName !== "hp_goi_hoc_phi" ? (
-                    <th className="min-w-[6rem] px-4 py-3 normal-case">Hậu tố</th>
+                    <th className="min-w-[7rem] max-w-[10rem] px-3 py-3 normal-case">Hậu tố</th>
                   ) : null}
-                  <th className="px-4 py-3">number</th>
-                  <th className="px-4 py-3">Đơn vị</th>
-                  <th className="px-4 py-3">Giá gốc</th>
-                  <th className="px-4 py-3">Discount</th>
-                  <th className="px-4 py-3">Combo</th>
+                  <th className="w-[4.5rem] shrink-0 px-3 py-3">number</th>
+                  <th className="min-w-[5rem] max-w-[9rem] px-3 py-3">Đơn vị</th>
+                  <th className="min-w-[7rem] px-3 py-3">Giá gốc</th>
+                  <th className="w-[5.5rem] shrink-0 px-3 py-3">Discount</th>
+                  <th className="min-w-[11rem] max-w-[15rem] px-3 py-3">Combo</th>
                   {bundle.tableName !== "hp_goi_hoc_phi" ? (
-                    <th className="px-4 py-3">Gói đặc biệt</th>
+                    <th className="min-w-[8rem] max-w-[11rem] px-3 py-3">Gói đặc biệt</th>
                   ) : null}
                   {bundle.tableName !== "hp_goi_hoc_phi" ? (
-                    <th className="min-w-[200px] px-4 py-3">Ghi chú</th>
+                    <th className="min-w-[220px] max-w-[320px] px-3 py-3">Ghi chú</th>
                   ) : null}
-                  <th className="px-4 py-3">Số buổi</th>
+                  <th className="w-[4.5rem] shrink-0 px-3 py-3">Số buổi</th>
+                  <th className="w-11 shrink-0 px-2 py-3 text-center normal-case">
+                    <span className="sr-only">Nhân bản</span>
+                    <Copy className="mx-auto inline h-3.5 w-3.5 opacity-50" aria-hidden />
+                  </th>
                   {tableEditMode ? (
-                    <th className="w-px whitespace-nowrap px-3 py-3 text-center normal-case">
-                      Xóa
-                    </th>
+                    <th className="w-11 shrink-0 px-2 py-3 text-center normal-case">Xóa</th>
                   ) : null}
-                  <th className="px-4 py-3">Tạo</th>
+                  <th className="min-w-[6.5rem] whitespace-nowrap px-3 py-3">Tạo</th>
                 </tr>
               </thead>
               <tbody>
@@ -1404,22 +1429,22 @@ export default function GoiHocPhiView({ bundle }: Props) {
                       "min-w-0 max-w-[9.5rem] rounded-lg border border-[#EAEAEA] bg-white px-2 py-1 text-xs outline-none ring-[#BC8AF9] focus:ring-1";
                     return (
                       <tr key={r.id} className="border-b border-[#F0F0F0] hover:bg-[#FFFBF8]/80">
-                        <td className="px-4 py-3 font-mono text-xs text-black/70">{r.id}</td>
+                        <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-black/70">{r.id}</td>
                         {showRowEdit && draft ? (
                           <>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
                               <td
-                                className="max-w-[14rem] px-4 py-2 align-top text-xs leading-snug text-black/75"
+                                className="min-w-0 max-w-[18rem] px-3 py-2 align-top text-xs leading-snug text-black/75"
                                 title={buildTuDongTenGoiFromDraft(draft, bundle.monOptions)}
                               >
                                 <span className="line-clamp-3">{buildTuDongTenGoiFromDraft(draft, bundle.monOptions)}</span>
                               </td>
                             ) : null}
-                            <td className="max-w-[200px] px-4 py-2">
+                            <td className="min-w-0 max-w-[13rem] px-3 py-2">
                               <select
                                 value={draft.mon_hoc}
                                 onChange={(e) => patchEditDraft(r.id, { mon_hoc: e.target.value })}
-                                className={`${cellInput} max-w-[200px]`}
+                                className={`${cellInput} max-w-[13rem]`}
                                 aria-label={`Môn học gói #${r.id}`}
                               >
                                 <option value="">— Không gán —</option>
@@ -1431,17 +1456,17 @@ export default function GoiHocPhiView({ bundle }: Props) {
                               </select>
                             </td>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
-                              <td className="max-w-[140px] px-4 py-2">
+                              <td className="min-w-0 max-w-[10rem] px-3 py-2">
                                 <input
                                   value={draft.post_title}
                                   onChange={(e) => patchEditDraft(r.id, { post_title: e.target.value })}
                                   maxLength={500}
-                                  className={`${cellInput} w-full max-w-[140px]`}
+                                  className={`${cellInput} w-full max-w-[10rem]`}
                                   aria-label={`Hậu tố (post_title) gói #${r.id}`}
                                 />
                               </td>
                             ) : null}
-                            <td className="px-4 py-2">
+                            <td className="px-3 py-2">
                               <input
                                 value={draft.goi_number}
                                 onChange={(e) => patchEditDraft(r.id, { goi_number: e.target.value })}
@@ -1450,16 +1475,16 @@ export default function GoiHocPhiView({ bundle }: Props) {
                                 aria-label={`Số number gói #${r.id}`}
                               />
                             </td>
-                            <td className="max-w-[140px] px-4 py-2">
+                            <td className="min-w-0 max-w-[9rem] px-3 py-2">
                               <input
                                 value={draft.don_vi}
                                 onChange={(e) => patchEditDraft(r.id, { don_vi: e.target.value })}
                                 maxLength={500}
-                                className={`${cellInput} w-full max-w-[140px]`}
+                                className={`${cellInput} w-full max-w-[9rem]`}
                                 aria-label={`Đơn vị gói #${r.id}`}
                               />
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="px-3 py-2">
                               <input
                                 value={draft.gia_goc}
                                 onChange={(e) => patchEditDraft(r.id, { gia_goc: e.target.value })}
@@ -1468,7 +1493,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
                                 aria-label={`Giá gốc gói #${r.id}`}
                               />
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="px-3 py-2">
                               <input
                                 value={draft.discount}
                                 onChange={(e) => patchEditDraft(r.id, { discount: e.target.value })}
@@ -1477,12 +1502,12 @@ export default function GoiHocPhiView({ bundle }: Props) {
                                 aria-label={`Discount gói #${r.id}`}
                               />
                             </td>
-                            <td className="max-w-[180px] px-4 py-2">
+                            <td className="min-w-0 max-w-[15rem] px-3 py-2">
                               {comboPickList ? (
                                 <select
                                   value={draft.combo_id}
                                   onChange={(e) => patchEditDraft(r.id, { combo_id: e.target.value })}
-                                  className={`${cellInput} max-w-[180px]`}
+                                  className={`${cellInput} max-w-[15rem]`}
                                   aria-label={`Combo gói #${r.id}`}
                                 >
                                   <option value="">— Không combo —</option>
@@ -1504,31 +1529,31 @@ export default function GoiHocPhiView({ bundle }: Props) {
                               )}
                             </td>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
-                              <td className="max-w-[160px] px-4 py-2">
+                              <td className="min-w-0 max-w-[11rem] px-3 py-2">
                                 <input
                                   value={draft.special}
                                   list={tableSpecialListId}
                                   onChange={(e) => patchEditDraft(r.id, { special: e.target.value })}
                                   maxLength={500}
                                   autoComplete="off"
-                                  className={`${cellInput} w-full max-w-[160px]`}
+                                  className={`${cellInput} w-full max-w-[11rem]`}
                                   aria-label={`Gói đặc biệt gói #${r.id}`}
                                 />
                               </td>
                             ) : null}
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
-                              <td className="max-w-[280px] min-w-[200px] px-4 py-2 align-top">
+                              <td className="min-w-[220px] max-w-[320px] px-3 py-2 align-top">
                                 <textarea
                                   value={draft.note}
                                   onChange={(e) => patchEditDraft(r.id, { note: e.target.value })}
                                   maxLength={4000}
                                   rows={3}
-                                  className="min-h-[72px] w-full max-w-[280px] resize-y rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-xs leading-snug outline-none ring-[#BC8AF9] focus:ring-1"
+                                  className="min-h-[72px] w-full max-w-[min(320px,100%)] resize-y rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-xs leading-snug outline-none ring-[#BC8AF9] focus:ring-1"
                                   aria-label={`Ghi chú gói #${r.id}`}
                                 />
                               </td>
                             ) : null}
-                            <td className="px-4 py-2">
+                            <td className="px-3 py-2">
                               <input
                                 value={draft.so_buoi}
                                 onChange={(e) => patchEditDraft(r.id, { so_buoi: e.target.value })}
@@ -1542,7 +1567,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
                           <>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
                               <td
-                                className="max-w-[14rem] px-4 py-3 align-top text-xs leading-snug text-black/80"
+                                className="min-w-0 max-w-[18rem] px-3 py-3 align-top text-xs leading-snug text-black/80"
                                 title={buildTuDongTenGoiFromRow(r, bundle.monOptions)}
                               >
                                 <span className="line-clamp-3 whitespace-pre-wrap break-words">
@@ -1550,32 +1575,32 @@ export default function GoiHocPhiView({ bundle }: Props) {
                                 </span>
                               </td>
                             ) : null}
-                            <td className="max-w-[200px] truncate px-4 py-3 font-medium">
+                            <td className="min-w-0 max-w-[13rem] truncate px-3 py-3 font-medium">
                               {tenMon(r.mon_hoc, bundle.monOptions)}
                             </td>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
                               <td
-                                className="max-w-[120px] truncate px-4 py-3 text-xs text-black/70"
+                                className="min-w-0 max-w-[10rem] truncate px-3 py-3 text-xs text-black/70"
                                 title={(r.post_title ?? "").trim() || undefined}
                               >
                                 {(r.post_title ?? "").trim() || "—"}
                               </td>
                             ) : null}
-                            <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.goiNumber)}</td>
-                            <td className="max-w-[120px] truncate px-4 py-3 text-black/70">{r.don_vi ?? "—"}</td>
-                            <td className="px-4 py-3 text-xs font-semibold">{fmtVnd(r.gia_goc)}</td>
-                            <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.discount)}</td>
-                            <td className="max-w-[160px] truncate px-4 py-3 text-xs text-black/70">
+                            <td className="whitespace-nowrap px-3 py-3 font-mono text-xs">{fmtNum(r.goiNumber)}</td>
+                            <td className="min-w-0 max-w-[9rem] truncate px-3 py-3 text-black/70">{r.don_vi ?? "—"}</td>
+                            <td className="whitespace-nowrap px-3 py-3 text-xs font-semibold tabular-nums">{fmtVnd(r.gia_goc)}</td>
+                            <td className="whitespace-nowrap px-3 py-3 font-mono text-xs tabular-nums">{fmtNum(r.discount)}</td>
+                            <td className="min-w-0 max-w-[15rem] truncate px-3 py-3 text-xs text-black/70">
                               {tenCombo(r.combo_id, allComboOptions)}
                             </td>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
-                              <td className="max-w-[160px] truncate px-4 py-3 text-xs text-black/70">
+                              <td className="min-w-0 max-w-[11rem] truncate px-3 py-3 text-xs text-black/70">
                                 {(r.special ?? "").trim() || "—"}
                               </td>
                             ) : null}
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
                               <td
-                                className="max-w-[280px] px-4 py-3 align-top text-xs leading-snug text-black/75"
+                                className="min-w-[220px] max-w-[320px] px-3 py-3 align-top text-xs leading-snug text-black/75"
                                 title={(r.note ?? "").trim() || undefined}
                               >
                                 {(r.note ?? "").trim() ? (
@@ -1585,14 +1610,34 @@ export default function GoiHocPhiView({ bundle }: Props) {
                                 )}
                               </td>
                             ) : null}
-                            <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.so_buoi)}</td>
+                            <td className="whitespace-nowrap px-3 py-3 font-mono text-xs">{fmtNum(r.so_buoi)}</td>
                           </>
                         )}
+                        <td className="px-2 py-2 align-middle text-center">
+                          <button
+                            type="button"
+                            disabled={
+                              bulkSavePending ||
+                              deleteRowPendingId !== null ||
+                              duplicateRowPendingId !== null
+                            }
+                            onClick={() => void handleDuplicateGoiRow(r.id)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-[#7a5bb0] hover:border-[#BC8AF9]/50 hover:bg-[#BC8AF9]/12 disabled:opacity-45"
+                            title="Nhân bản gói (bản sao cùng dữ liệu)"
+                            aria-label={`Nhân bản gói học phí #${r.id}`}
+                          >
+                            <Copy size={15} strokeWidth={2} />
+                          </button>
+                        </td>
                         {tableEditMode ? (
                           <td className="px-2 py-2 align-middle text-center">
                             <button
                               type="button"
-                              disabled={bulkSavePending || deleteRowPendingId !== null}
+                              disabled={
+                                bulkSavePending ||
+                                deleteRowPendingId !== null ||
+                                duplicateRowPendingId !== null
+                              }
                               onClick={() => void handleDeleteGoiRow(r.id)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-45"
                               title="Xóa gói này"
@@ -1602,7 +1647,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
                             </button>
                           </td>
                         ) : null}
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-black/55">{fmtDate(r.created_at)}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-xs text-black/55">{fmtDate(r.created_at)}</td>
                       </tr>
                     );
                   })

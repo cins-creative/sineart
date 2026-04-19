@@ -20,6 +20,7 @@ import {
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import {
   createHpComboMon,
+  deleteGoiHocPhi,
   deleteHpComboMon,
   saveGoiHocPhi,
   saveGoiHocPhiBulk,
@@ -58,9 +59,49 @@ function fmtDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("vi-VN");
 }
 
+function parseClientNumNullable(raw: string): number | null {
+  const t = raw.replace(/\s/g, "").replace(/,/g, "").trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
 function tenMon(id: number | null, mons: AdminMonOption[]): string {
   if (id == null) return "—";
   return mons.find((m) => m.id === id)?.ten_mon_hoc ?? `#${id}`;
+}
+
+/** Tên gói hiển thị: Môn + post_title + gói đặc biệt + number + đơn vị (cách nhau bằng khoảng trắng). */
+function buildTuDongTenGoiParts(p: {
+  tenMon: string;
+  post_title: string;
+  special: string;
+  goi_number: string;
+  don_vi: string;
+}): string {
+  const parts: string[] = [];
+  const tm = p.tenMon.trim();
+  if (tm) parts.push(tm);
+  const pt = p.post_title.trim();
+  if (pt) parts.push(pt);
+  const sp = p.special.trim();
+  if (sp) parts.push(sp);
+  const n = parseClientNumNullable(p.goi_number);
+  if (n != null) parts.push(fmtNum(n));
+  const dv = p.don_vi.trim();
+  if (dv) parts.push(dv);
+  return parts.length ? parts.join(" ") : "—";
+}
+
+function buildTuDongTenGoiFromRow(r: AdminGoiHocPhiRow, mons: AdminMonOption[]): string {
+  const tenM = tenMon(r.mon_hoc, mons);
+  return buildTuDongTenGoiParts({
+    tenMon: tenM !== "—" ? tenM : "",
+    post_title: r.post_title ?? "",
+    special: r.special ?? "",
+    goi_number: r.goiNumber != null ? String(r.goiNumber) : "",
+    don_vi: r.don_vi ?? "",
+  });
 }
 
 const GOI_LIST_PAGE_SIZE = 10;
@@ -74,6 +115,7 @@ function tenCombo(id: number | null, combos: AdminComboOption[]): string {
 type EditableGoiDraft = {
   id: number;
   mon_hoc: string;
+  post_title: string;
   goi_number: string;
   don_vi: string;
   gia_goc: string;
@@ -84,10 +126,25 @@ type EditableGoiDraft = {
   so_buoi: string;
 };
 
+function buildTuDongTenGoiFromDraft(d: EditableGoiDraft, mons: AdminMonOption[]): string {
+  const monRaw = d.mon_hoc.trim();
+  const monId = monRaw === "" ? null : Number(monRaw);
+  const tenM =
+    monId != null && Number.isFinite(monId) && monId > 0 ? tenMon(monId, mons) : "";
+  return buildTuDongTenGoiParts({
+    tenMon: tenM && tenM !== "—" ? tenM : "",
+    post_title: d.post_title,
+    special: d.special,
+    goi_number: d.goi_number,
+    don_vi: d.don_vi,
+  });
+}
+
 function rowToDraft(r: AdminGoiHocPhiRow): EditableGoiDraft {
   return {
     id: r.id,
     mon_hoc: r.mon_hoc != null ? String(r.mon_hoc) : "",
+    post_title: r.post_title ?? "",
     goi_number: r.goiNumber != null ? String(r.goiNumber) : "",
     don_vi: r.don_vi ?? "",
     gia_goc: r.gia_goc != null ? String(Math.round(r.gia_goc)) : "",
@@ -97,13 +154,6 @@ function rowToDraft(r: AdminGoiHocPhiRow): EditableGoiDraft {
     note: r.note ?? "",
     so_buoi: r.so_buoi != null ? String(r.so_buoi) : "",
   };
-}
-
-function parseClientNumNullable(raw: string): number | null {
-  const t = raw.replace(/\s/g, "").replace(/,/g, "").trim();
-  if (!t) return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
 }
 
 function draftToBulkInput(
@@ -131,6 +181,10 @@ function draftToBulkInput(
   if (noteTrim.length > 4000) {
     return { ok: false, error: `Gói #${d.id}: Ghi chú quá dài (tối đa 4000 ký tự).` };
   }
+  const postTitleTrim = d.post_title.trim();
+  if (postTitleTrim.length > 500) {
+    return { ok: false, error: `Gói #${d.id}: Hậu tố (post_title) quá dài (tối đa 500 ký tự).` };
+  }
   return {
     ok: true,
     row: {
@@ -144,6 +198,7 @@ function draftToBulkInput(
       so_buoi: parseClientNumNullable(d.so_buoi),
       special: specialTrim === "" ? null : specialTrim,
       note: noteTrim === "" ? null : noteTrim,
+      post_title: postTitleTrim === "" ? null : postTitleTrim,
     },
   };
 }
@@ -391,6 +446,7 @@ function GoiModal({
   const supportsSpecial = goiTableName !== "hp_goi_hoc_phi";
   const [form, setForm] = useState({
     mon_hoc: row?.mon_hoc != null ? String(row.mon_hoc) : "",
+    post_title: row?.post_title ?? "",
     goi_number: row?.goiNumber != null ? String(row.goiNumber) : "",
     don_vi: row?.don_vi ?? "",
     gia_goc: row?.gia_goc != null ? String(Math.round(row.gia_goc)) : "",
@@ -437,6 +493,7 @@ function GoiModal({
   useEffect(() => {
     setForm({
       mon_hoc: row?.mon_hoc != null ? String(row.mon_hoc) : "",
+      post_title: row?.post_title ?? "",
       goi_number: row?.goiNumber != null ? String(row.goiNumber) : "",
       don_vi: row?.don_vi ?? "",
       gia_goc: row?.gia_goc != null ? String(Math.round(row.gia_goc)) : "",
@@ -448,6 +505,34 @@ function GoiModal({
     });
     setModalError("");
   }, [row, isNew]);
+
+  const modalTenGoiPreview = useMemo(() => {
+    if (!supportsSpecial) return "";
+    return buildTuDongTenGoiFromDraft(
+      {
+        id: 0,
+        mon_hoc: form.mon_hoc,
+        post_title: form.post_title,
+        goi_number: form.goi_number,
+        don_vi: form.don_vi,
+        gia_goc: "",
+        discount: "",
+        combo_id: "",
+        special: form.special,
+        note: "",
+        so_buoi: "",
+      },
+      monOptions,
+    );
+  }, [
+    supportsSpecial,
+    form.mon_hoc,
+    form.post_title,
+    form.goi_number,
+    form.don_vi,
+    form.special,
+    monOptions,
+  ]);
 
   useEffect(() => {
     if (saveState?.ok) {
@@ -523,6 +608,33 @@ function GoiModal({
               ))}
             </select>
           </label>
+
+          {supportsSpecial ? (
+            <>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-black/45">
+                  Hậu tố <span className="font-normal normal-case text-black/40">(post_title)</span>
+                </span>
+                <input
+                  name="post_title"
+                  value={form.post_title}
+                  onChange={(e) => setForm((f) => ({ ...f, post_title: e.target.value }))}
+                  maxLength={500}
+                  className="w-full rounded-xl border border-[#EAEAEA] px-3 py-2.5 text-sm outline-none ring-[#BC8AF9] focus:ring-2"
+                  placeholder="VD: 2 môn"
+                />
+                <p className="mt-1 text-[11px] leading-snug text-black/45">
+                  Ghép tên gói: Môn + hậu tố + gói đặc biệt + số (number) + đơn vị.
+                </p>
+              </label>
+              <div className="rounded-xl border border-[#EAEAEA] bg-[#FAFAFA] px-3 py-2.5 text-sm text-[#323232]">
+                <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-black/40">
+                  Tên gói (xem trước)
+                </span>
+                <span className="font-medium leading-snug">{modalTenGoiPreview}</span>
+              </div>
+            </>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block sm:col-span-1">
@@ -853,8 +965,11 @@ export default function GoiHocPhiView({ bundle }: Props) {
   const [editDraftById, setEditDraftById] = useState<Map<number, EditableGoiDraft> | null>(null);
   const [bulkHint, setBulkHint] = useState<{ ok: boolean; text: string } | null>(null);
   const [bulkSavePending, startBulkSave] = useTransition();
+  const [deleteRowPendingId, setDeleteRowPendingId] = useState<number | null>(null);
 
   const tableEditMode = editDraftById != null;
+  const emptyTableColSpan =
+    (bundle.tableName !== "hp_goi_hoc_phi" ? 13 : 9) + (tableEditMode ? 1 : 0);
 
   useEffect(() => {
     setBannerError(bundle.loadError ?? "");
@@ -897,6 +1012,8 @@ export default function GoiHocPhiView({ bundle }: Props) {
         const sb = fmtNum(r.so_buoi).toLowerCase();
         const sp = (r.special ?? "").toLowerCase();
         const nt = (r.note ?? "").toLowerCase();
+        const pt = (r.post_title ?? "").toLowerCase();
+        const tenTuDong = buildTuDongTenGoiFromRow(r, bundle.monOptions).toLowerCase();
         return (
           String(r.id).includes(s) ||
           monName.includes(s) ||
@@ -905,7 +1022,9 @@ export default function GoiHocPhiView({ bundle }: Props) {
           gn.includes(s) ||
           sb.includes(s) ||
           sp.includes(s) ||
-          nt.includes(s)
+          nt.includes(s) ||
+          pt.includes(s) ||
+          tenTuDong.includes(s)
         );
       });
     }
@@ -1021,6 +1140,40 @@ export default function GoiHocPhiView({ bundle }: Props) {
     });
   }
 
+  async function handleDeleteGoiRow(id: number) {
+    if (
+      !window.confirm(
+        `Xóa vĩnh viễn gói học phí #${id}? Hành động không hoàn tác (nếu còn dữ liệu tham chiếu, xóa sẽ thất bại).`,
+      )
+    ) {
+      return;
+    }
+    setBulkHint(null);
+    setDeleteRowPendingId(id);
+    try {
+      const res = await deleteGoiHocPhi(id);
+      if (res.ok) {
+        editBaselineRef.current.delete(id);
+        setEditDraftById((prev) => {
+          if (!prev) return prev;
+          const next = new Map(prev);
+          next.delete(id);
+          if (next.size === 0) {
+            editBaselineRef.current = new Map();
+            return null;
+          }
+          return next;
+        });
+        setBulkHint({ ok: true, text: `Đã xóa gói #${id}.` });
+        router.refresh();
+      } else {
+        setBulkHint({ ok: false, text: res.error });
+      }
+    } finally {
+      setDeleteRowPendingId(null);
+    }
+  }
+
   return (
     <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
@@ -1116,7 +1269,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
               <input
                 value={rowSearch}
                 onChange={(e) => setRowSearch(e.target.value)}
-                placeholder="Tìm ID, môn, combo, gói đặc biệt, ghi chú, đơn vị, số buổi…"
+                placeholder="Tìm ID, tên gói (tự ghép), hậu tố, môn, combo, đặc biệt, ghi chú…"
                 className="h-10 w-full rounded-xl border border-[#EAEAEA] bg-white pl-10 pr-9 text-sm outline-none focus:ring-2 focus:ring-[#BC8AF9]"
                 aria-label="Tìm trong danh sách gói"
               />
@@ -1170,7 +1323,8 @@ export default function GoiHocPhiView({ bundle }: Props) {
           {tableEditMode ? (
             <p className="m-0 border-b border-amber-100 bg-amber-50/90 px-4 py-2 text-xs leading-relaxed text-amber-950">
               Đang chỉnh sửa toàn bộ danh sách đã tải. Dùng <strong className="font-semibold">Lưu tất cả</strong> để ghi
-              xuống database. Chuyển trang vẫn giữ bản nháp cho mọi dòng.
+              xuống database; cột <strong className="font-semibold">Xóa</strong> gỡ bản ghi ngay (không cần Lưu). Chuyển
+              trang vẫn giữ bản nháp cho mọi dòng.
             </p>
           ) : null}
           <div className="w-full min-w-0 overflow-x-auto">
@@ -1185,17 +1339,23 @@ export default function GoiHocPhiView({ bundle }: Props) {
               className={`w-full border-collapse text-left text-sm ${
                 isNewGoiTable
                   ? tableEditMode
-                    ? "min-w-[1380px]"
-                    : "min-w-[1220px]"
+                    ? "min-w-[1650px]"
+                    : "min-w-[1420px]"
                   : tableEditMode
-                    ? "min-w-[1180px]"
+                    ? "min-w-[1230px]"
                     : "min-w-[1020px]"
               }`}
             >
               <thead>
                 <tr className="border-b border-[#EAEAEA] bg-[#FAFAFA] text-[11px] font-bold uppercase tracking-wide text-black/45">
                   <th className="px-4 py-3">ID</th>
+                  {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                    <th className="min-w-[11rem] max-w-[14rem] px-4 py-3 normal-case">Tên gói</th>
+                  ) : null}
                   <th className="px-4 py-3">Môn</th>
+                  {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                    <th className="min-w-[6rem] px-4 py-3 normal-case">Hậu tố</th>
+                  ) : null}
                   <th className="px-4 py-3">number</th>
                   <th className="px-4 py-3">Đơn vị</th>
                   <th className="px-4 py-3">Giá gốc</th>
@@ -1208,6 +1368,11 @@ export default function GoiHocPhiView({ bundle }: Props) {
                     <th className="min-w-[200px] px-4 py-3">Ghi chú</th>
                   ) : null}
                   <th className="px-4 py-3">Số buổi</th>
+                  {tableEditMode ? (
+                    <th className="w-px whitespace-nowrap px-3 py-3 text-center normal-case">
+                      Xóa
+                    </th>
+                  ) : null}
                   <th className="px-4 py-3">Tạo</th>
                 </tr>
               </thead>
@@ -1215,7 +1380,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
                 {sorted.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={bundle.tableName !== "hp_goi_hoc_phi" ? 11 : 9}
+                      colSpan={emptyTableColSpan}
                       className="px-4 py-16 text-center text-[#AAAAAA]"
                     >
                       Chưa có gói nào. Nhấn &quot;Thêm gói&quot; để tạo.
@@ -1224,7 +1389,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
                 ) : filteredRows.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={bundle.tableName !== "hp_goi_hoc_phi" ? 11 : 9}
+                      colSpan={emptyTableColSpan}
                       className="px-4 py-16 text-center text-[#AAAAAA]"
                     >
                       Không có gói nào khớp bộ lọc môn. Đổi &quot;Lọc theo môn&quot; hoặc thêm gói cho môn này.
@@ -1242,6 +1407,14 @@ export default function GoiHocPhiView({ bundle }: Props) {
                         <td className="px-4 py-3 font-mono text-xs text-black/70">{r.id}</td>
                         {showRowEdit && draft ? (
                           <>
+                            {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                              <td
+                                className="max-w-[14rem] px-4 py-2 align-top text-xs leading-snug text-black/75"
+                                title={buildTuDongTenGoiFromDraft(draft, bundle.monOptions)}
+                              >
+                                <span className="line-clamp-3">{buildTuDongTenGoiFromDraft(draft, bundle.monOptions)}</span>
+                              </td>
+                            ) : null}
                             <td className="max-w-[200px] px-4 py-2">
                               <select
                                 value={draft.mon_hoc}
@@ -1257,6 +1430,17 @@ export default function GoiHocPhiView({ bundle }: Props) {
                                 ))}
                               </select>
                             </td>
+                            {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                              <td className="max-w-[140px] px-4 py-2">
+                                <input
+                                  value={draft.post_title}
+                                  onChange={(e) => patchEditDraft(r.id, { post_title: e.target.value })}
+                                  maxLength={500}
+                                  className={`${cellInput} w-full max-w-[140px]`}
+                                  aria-label={`Hậu tố (post_title) gói #${r.id}`}
+                                />
+                              </td>
+                            ) : null}
                             <td className="px-4 py-2">
                               <input
                                 value={draft.goi_number}
@@ -1356,9 +1540,27 @@ export default function GoiHocPhiView({ bundle }: Props) {
                           </>
                         ) : (
                           <>
+                            {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                              <td
+                                className="max-w-[14rem] px-4 py-3 align-top text-xs leading-snug text-black/80"
+                                title={buildTuDongTenGoiFromRow(r, bundle.monOptions)}
+                              >
+                                <span className="line-clamp-3 whitespace-pre-wrap break-words">
+                                  {buildTuDongTenGoiFromRow(r, bundle.monOptions)}
+                                </span>
+                              </td>
+                            ) : null}
                             <td className="max-w-[200px] truncate px-4 py-3 font-medium">
                               {tenMon(r.mon_hoc, bundle.monOptions)}
                             </td>
+                            {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                              <td
+                                className="max-w-[120px] truncate px-4 py-3 text-xs text-black/70"
+                                title={(r.post_title ?? "").trim() || undefined}
+                              >
+                                {(r.post_title ?? "").trim() || "—"}
+                              </td>
+                            ) : null}
                             <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.goiNumber)}</td>
                             <td className="max-w-[120px] truncate px-4 py-3 text-black/70">{r.don_vi ?? "—"}</td>
                             <td className="px-4 py-3 text-xs font-semibold">{fmtVnd(r.gia_goc)}</td>
@@ -1386,6 +1588,20 @@ export default function GoiHocPhiView({ bundle }: Props) {
                             <td className="px-4 py-3 font-mono text-xs">{fmtNum(r.so_buoi)}</td>
                           </>
                         )}
+                        {tableEditMode ? (
+                          <td className="px-2 py-2 align-middle text-center">
+                            <button
+                              type="button"
+                              disabled={bulkSavePending || deleteRowPendingId !== null}
+                              onClick={() => void handleDeleteGoiRow(r.id)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-45"
+                              title="Xóa gói này"
+                              aria-label={`Xóa gói học phí #${r.id}`}
+                            >
+                              <Trash2 size={15} strokeWidth={2} />
+                            </button>
+                          </td>
+                        ) : null}
                         <td className="whitespace-nowrap px-4 py-3 text-xs text-black/55">{fmtDate(r.created_at)}</td>
                       </tr>
                     );

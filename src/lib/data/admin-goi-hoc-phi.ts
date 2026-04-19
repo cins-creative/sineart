@@ -30,6 +30,8 @@ export type AdminGoiHocPhiRow = {
   special: string | null;
   /** `hp_goi_hoc_phi_new.note` — ghi chú / nội dung bổ sung (null nếu bảng legacy). */
   note: string | null;
+  /** `hp_goi_hoc_phi_new.post_title` — hậu tố tên gói (null nếu bảng legacy / chưa có cột). */
+  post_title: string | null;
   so_buoi: number | null;
 };
 
@@ -54,13 +56,14 @@ const GOI_SELECT_BASE =
 
 function goiSelectForTable(tableName: string): string {
   if (tableName === "hp_goi_hoc_phi") return GOI_SELECT_BASE;
-  return `${GOI_SELECT_BASE}, special, note`;
+  return `${GOI_SELECT_BASE}, special, note, post_title`;
 }
 
 function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
   const numRaw = raw.number ?? raw["number"];
   const specialRaw = raw.special;
   const noteRaw = raw.note;
+  const postTitleRaw = raw.post_title;
   return {
     id: Number(raw.id),
     created_at: String(raw.created_at ?? ""),
@@ -78,6 +81,10 @@ function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
       noteRaw == null || noteRaw === ""
         ? null
         : String(noteRaw).trim() || null,
+    post_title:
+      postTitleRaw == null || postTitleRaw === ""
+        ? null
+        : String(postTitleRaw).trim() || null,
     so_buoi: parseNumericNullable(raw.so_buoi),
   };
 }

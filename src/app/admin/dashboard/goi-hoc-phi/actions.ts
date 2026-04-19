@@ -170,6 +170,39 @@ export async function deleteHpComboMon(comboId: number): Promise<DeleteComboResu
   return { ok: true };
 }
 
+export type DeleteGoiHocPhiResult = { ok: true } | { ok: false; error: string };
+
+/** Xóa một dòng trong bảng gói học phí (`hp_goi_hoc_phi_new` hoặc legacy). */
+export async function deleteGoiHocPhi(goiId: number): Promise<DeleteGoiHocPhiResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  if (!Number.isFinite(goiId) || goiId <= 0) {
+    return { ok: false, error: "ID gói không hợp lệ." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delOk.ok) return { ok: false, error: delOk.error };
+
+  const tbl = table();
+  const { error } = await supabase.from(tbl).delete().eq("id", goiId);
+
+  if (error) {
+    return {
+      ok: false,
+      error:
+        error.message ||
+        `Không xóa được gói (kiểm tra FK: học viên / hóa đơn có thể đang tham chiếu gói #${goiId}).`,
+    };
+  }
+
+  revalidateGoiPages();
+  return { ok: true };
+}
+
 export async function saveGoiHocPhi(
   _prev: GoiHocPhiFormState | null,
   formData: FormData,
@@ -220,6 +253,12 @@ export async function saveGoiHocPhi(
     return { ok: false, error: "Ghi chú quá dài (tối đa 4000 ký tự)." };
   }
 
+  const postTitleRaw = String(formData.get("post_title") ?? "").trim();
+  const post_title = postTitleRaw === "" ? null : postTitleRaw;
+  if (!isLegacyGoiTable && post_title != null && post_title.length > 500) {
+    return { ok: false, error: "Hậu tố (post_title) quá dài (tối đa 500 ký tự)." };
+  }
+
   const payload: Record<string, unknown> = {
     mon_hoc,
     number: goiNumber,
@@ -232,6 +271,7 @@ export async function saveGoiHocPhi(
   if (!isLegacyGoiTable) {
     payload.special = special;
     payload.note = note;
+    payload.post_title = post_title;
   }
 
   if (!Number.isFinite(id) || id <= 0) {
@@ -266,6 +306,7 @@ export type GoiHocPhiBulkRowInput = {
   so_buoi: number | null;
   special?: string | null;
   note?: string | null;
+  post_title?: string | null;
 };
 
 export type GoiHocPhiBulkResult =
@@ -331,6 +372,12 @@ export async function saveGoiHocPhiBulk(rows: GoiHocPhiBulkRowInput[]): Promise<
       return { ok: false, error: `Gói #${id}: Ghi chú quá dài (tối đa 4000 ký tự).` };
     }
 
+    const postTitleTrim = String(row.post_title ?? "").trim();
+    const post_title = postTitleTrim === "" ? null : postTitleTrim;
+    if (!isLegacyGoiTable && post_title != null && post_title.length > 500) {
+      return { ok: false, error: `Gói #${id}: Hậu tố (post_title) quá dài (tối đa 500 ký tự).` };
+    }
+
     const payload: Record<string, unknown> = {
       mon_hoc,
       number: goiNumber,
@@ -343,6 +390,7 @@ export async function saveGoiHocPhiBulk(rows: GoiHocPhiBulkRowInput[]): Promise<
     if (!isLegacyGoiTable) {
       payload.special = special;
       payload.note = note;
+      payload.post_title = post_title;
     }
 
     const { error } = await supabase.from(tbl).update(payload).eq("id", id);

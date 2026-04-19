@@ -70,7 +70,7 @@ const TT_COLOR: Record<string, { bg: string; text: string }> = {
   Nghỉ: { bg: "#fee2e2", text: "#dc2626" },
 };
 
-type LopOpt = { id: number; name: string; mon_hoc: number | null };
+type LopOpt = { id: number; name: string; mon_hoc: number | null; special: boolean };
 
 /** Lọc danh sách theo `computeOverallStatus` (gộp mọi khoá của HV). */
 type QuanLyHvStatusFilter = "all" | "Đang học" | "Chưa học" | "Nghỉ";
@@ -1650,7 +1650,7 @@ function AddKhoaModal({
               <option value="">— Chọn lớp —</option>
               {lopOptions.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.name}
+                  {l.special ? "⚡ " : ""}{l.name}
                 </option>
               ))}
             </select>

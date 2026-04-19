@@ -97,7 +97,8 @@ function recomputeKyDatesForLine(
 function lopDisplayName(kh: AdminQlhvEnrollment): string {
   const l = kh.lop;
   if (!l) return kh.lop_hoc != null ? `Lớp #${kh.lop_hoc}` : "—";
-  return String(l.class_full_name ?? "").trim() || String(l.class_name ?? "").trim() || `Lớp #${l.id}`;
+  const name = String(l.class_name ?? "").trim() || String(l.class_full_name ?? "").trim() || `Lớp #${l.id}`;
+  return l.special ? `⚡ ${name}` : name;
 }
 
 type Props = {
@@ -486,7 +487,7 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
                               <option value="">— Chọn gói —</option>
                               {list.map((g) => (
                                 <option key={g.id} value={String(g.id)}>
-                                  {g.ten_goi_hoc_phi} — {fmtVnd(g.hoc_phi_dong)}
+                                  {g.special ? "⚡ " : ""}{g.ten_goi_hoc_phi} — {fmtVnd(g.hoc_phi_dong)}
                                 </option>
                               ))}
                             </select>

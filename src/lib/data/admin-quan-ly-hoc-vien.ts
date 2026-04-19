@@ -40,6 +40,7 @@ export type AdminQlhvLopBrief = {
   class_name: string | null;
   class_full_name: string | null;
   mon_hoc: number | null;
+  special: boolean;
 };
 
 export type AdminQlhvEnrollment = {
@@ -153,7 +154,7 @@ export async function fetchAdminQuanLyHocVienBundle(supabase: SupabaseClient): P
 
   const lopRes = await supabase
     .from("ql_lop_hoc")
-    .select("id, class_name, class_full_name, mon_hoc")
+    .select("id, class_name, class_full_name, mon_hoc, special")
     .order("class_full_name", { ascending: true });
 
   const lopById: Record<string, AdminQlhvLopBrief> = {};
@@ -166,6 +167,7 @@ export async function fetchAdminQuanLyHocVienBundle(supabase: SupabaseClient): P
         class_name: raw.class_name != null ? String(raw.class_name).trim() || null : null,
         class_full_name: raw.class_full_name != null ? String(raw.class_full_name).trim() || null : null,
         mon_hoc: nId(raw.mon_hoc),
+        special: raw.special != null && String(raw.special).trim() !== "",
       };
     }
   }

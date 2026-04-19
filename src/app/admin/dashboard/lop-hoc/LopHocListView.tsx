@@ -60,7 +60,7 @@ type Props = {
 
 type HvStats = { dang_hoc: number; da_nghi: number };
 
-const LOP_LIST_PAGE_SIZE = 10;
+const LOP_LIST_PAGE_SIZE = 20;
 
 function getAccent(tenMon: string | null): string {
   if (!tenMon) return DS.teacher;

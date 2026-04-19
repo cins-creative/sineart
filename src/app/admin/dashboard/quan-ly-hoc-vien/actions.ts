@@ -431,6 +431,10 @@ export type AdminDhpGoiOption = {
   hoc_phi_dong: number;
   /** `hp_goi_hoc_phi_new.so_buoi` — buổi cộng vào ngày cuối kỳ (null bảng cũ). */
   so_buoi: number | null;
+  /** `hp_goi_hoc_phi_new.post_title` — nhóm/tên hiển thị public. */
+  post_title: string | null;
+  /** true nếu post_title chứa "cấp tốc". */
+  special: boolean;
 };
 
 export type AdminCreateHpDonLine = {
@@ -465,8 +469,15 @@ function dhpLegacyGoiPayable(row: Record<string, unknown>): number {
 
 function dhpFormatNewGoiLabel(
   monTen: string | null,
-  row: { number?: unknown; don_vi?: unknown; so_buoi?: unknown; id: number }
+  row: { number?: unknown; don_vi?: unknown; so_buoi?: unknown; special?: unknown; post_title?: unknown; id: number }
 ): string {
+  const parts: string[] = [];
+  const mon = (monTen ?? "").trim();
+  if (mon) parts.push(mon);
+  const pt = String(row.post_title ?? "").trim();
+  if (pt) parts.push(pt);
+  const sp = String(row.special ?? "").trim();
+  if (sp) parts.push(sp);
   const numRaw = row.number;
   const num =
     numRaw == null || numRaw === ""
@@ -474,21 +485,10 @@ function dhpFormatNewGoiLabel(
       : Number.isFinite(Number(numRaw))
         ? Number(numRaw)
         : null;
-  const donVi = String(row.don_vi ?? "").trim() || "tháng";
-  const soBuoi = dhpParseMoney(row.so_buoi);
-  const qty =
-    num != null && Number.isInteger(num) && num === Math.floor(num)
-      ? String(Math.round(num))
-      : num != null
-        ? String(num)
-        : "";
-  let tail = [qty, donVi].filter(Boolean).join(" ").trim();
-  if (soBuoi > 0) tail = tail ? `${tail} · ${Math.round(soBuoi)} buổi` : `${Math.round(soBuoi)} buổi`;
-  const mon = (monTen ?? "").trim();
-  if (mon && tail) return `${mon} — ${tail}`;
-  if (mon) return mon;
-  if (tail) return tail;
-  return `Gói #${row.id}`;
+  if (num != null) parts.push(Number.isInteger(num) ? String(Math.round(num)) : String(num));
+  const dv = String(row.don_vi ?? "").trim() || "tháng";
+  if (dv && num != null) parts.push(dv);
+  return parts.length ? parts.join(" ") : `Gói #${row.id}`;
 }
 
 function dhpSliceIsoDate(raw: string | null | undefined): string | null {
@@ -635,6 +635,8 @@ export async function listHpGoiHocPhiForDhp(): Promise<
         mon_hoc: mon_hoc != null && mon_hoc > 0 ? mon_hoc : null,
         hoc_phi_dong: payable,
         so_buoi: null,
+        post_title: null,
+        special: false,
       });
     }
     return { ok: true, rows: dhpDedupeGoiOptionsForPicker(rows) };
@@ -642,7 +644,7 @@ export async function listHpGoiHocPhiForDhp(): Promise<
 
   const { data, error } = await supabase
     .from(goiTable)
-    .select('id, mon_hoc, gia_goc, discount, "number", don_vi, so_buoi, combo_id')
+    .select('id, mon_hoc, gia_goc, discount, "number", don_vi, so_buoi, combo_id, post_title, special')
     .order("mon_hoc", { ascending: true })
     .order("id", { ascending: true });
   if (error) return { ok: false, error: error.message };
@@ -688,17 +690,23 @@ export async function listHpGoiHocPhiForDhp(): Promise<
     const monTen = mon_hoc != null ? monNameById.get(mon_hoc) ?? null : null;
     const soBuoiRounded =
       row.so_buoi == null || row.so_buoi === "" ? null : Math.round(dhpParseMoney(row.so_buoi));
+    const postTitle = row.post_title != null ? String(row.post_title).trim() || null : null;
+    const specialText = row.special != null ? String(row.special).trim() || null : null;
     rows.push({
       id,
       ten_goi_hoc_phi: dhpFormatNewGoiLabel(monTen, {
         number: row.number,
         don_vi: row.don_vi,
         so_buoi: row.so_buoi,
+        special: row.special,
+        post_title: row.post_title,
         id,
       }),
       mon_hoc: mon_hoc != null && mon_hoc > 0 ? mon_hoc : null,
       hoc_phi_dong: payable,
       so_buoi: soBuoiRounded,
+      post_title: postTitle,
+      special: specialText != null,
     });
   }
   return { ok: true, rows: dhpDedupeGoiOptionsForPicker(rows) };

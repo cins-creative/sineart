@@ -38,8 +38,9 @@ export default async function QuanLyHocVienPageData() {
   const lopOptions = Object.values(bundle.lopById)
     .map((l) => ({
       id: l.id,
-      name: l.class_full_name || l.class_name || `Lớp #${l.id}`,
+      name: l.class_name || l.class_full_name || `Lớp #${l.id}`,
       mon_hoc: l.mon_hoc,
+      special: l.special,
     }))
     .sort((a, b) => a.name.localeCompare(b.name, "vi"));
 

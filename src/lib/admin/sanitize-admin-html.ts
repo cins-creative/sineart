@@ -1,8 +1,10 @@
 /** Giảm rủi ro XSS khi lưu / hiển thị HTML nội bộ admin (không thay DOMPurify đầy đủ). */
 export function sanitizeAdminRichHtml(html: string): string {
   let t = html;
+  // Strip full blocks (tag + content) để CSS/JS không lọt ra dưới dạng text.
+  t = t.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
   t = t.replace(/<\/?(?:script|object|embed|link|meta|style|base)[^>]*>/gi, "");
-  t = t.replace(/<(?:script|object|embed)[^>]*>[\s\S]*?<\/(?:script|object|embed)>/gi, "");
+  t = t.replace(/<(?:object|embed)[^>]*>[\s\S]*?<\/(?:object|embed)>/gi, "");
   t = t.replace(/\son\w+\s*=\s*["'][^"']*["']/gi, "");
   t = t.replace(/\son\w+\s*=\s*[^\s>]*/gi, "");
   t = t.replace(/javascript:/gi, "");

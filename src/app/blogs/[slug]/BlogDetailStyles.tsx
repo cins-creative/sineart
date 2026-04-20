@@ -103,11 +103,13 @@ const css = `
 
   /* SIDEBAR */
   .bd-sidebar{display:flex;flex-direction:column;gap:20px;position:sticky;top:80px}
-  .bd-sb-cta{background:linear-gradient(135deg,rgba(248,166,104,.12),rgba(238,91,159,.12));border:1.5px solid rgba(238,91,159,.2);border-radius:20px;padding:20px;text-align:center}
-  .bd-sb-cta-logo{width:52px;height:52px;border-radius:50%;background:var(--grad);margin:0 auto 10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-family:var(--font-d);font-size:13px}
-  .bd-sb-cta-title{font-family:var(--font-d);font-size:16px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px}
-  .bd-sb-cta-desc{font-size:12px;color:var(--ink-2);line-height:1.55;margin-bottom:14px}
-  .bd-btn-primary{display:block;background:var(--grad-cta);color:#fff;padding:11px;border-radius:999px;text-align:center;font-size:13px;font-weight:800;box-shadow:var(--shadow-cta)}
+  .bd-sb-cta{background:radial-gradient(circle at 0% 0%,rgba(248,166,104,.25),transparent 55%),radial-gradient(circle at 100% 100%,rgba(238,91,159,.22),transparent 55%),#fff;border:1.5px solid rgba(238,91,159,.2);border-radius:20px;padding:24px 22px}
+  .bd-sb-cta-logo{width:56px;height:56px;border-radius:16px;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-family:var(--font-d);font-size:13px;margin:0 0 14px}
+  .bd-sb-cta-title{font-family:var(--font-d);font-size:20px;font-weight:800;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em}
+  .bd-sb-cta-title em{font-style:normal;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .bd-sb-cta-desc{font-size:13px;color:var(--ink-2);line-height:1.55;margin:0 0 18px}
+  .bd-btn-primary{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--grad-cta);color:#fff;padding:12px 16px;border-radius:999px;width:100%;font-size:13px;font-weight:800;box-shadow:var(--shadow-cta);text-align:center}
+  .bd-sb-cta-secondary{display:block;text-align:center;font-size:12px;font-weight:700;color:var(--ink-muted);padding:12px 8px 2px}
   .bd-sb-section{background:#fff;border-radius:16px;border:1.5px solid var(--ink-border);padding:18px 16px}
   .bd-sb-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);margin-bottom:14px;display:flex;align-items:center;gap:8px}
   .bd-sb-label::after{content:"";flex:1;height:1px;background:var(--ink-divider)}

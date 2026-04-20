@@ -187,31 +187,12 @@ export default async function BlogDetailPage({ params }: Props) {
               className="bd-banner-link bd-banner-link--yellow"
               aria-label="Khóa học Hình Họa tại Sine Art"
             >
-              <div className="bd-banner-styled bd-banner-styled--yellow">
-                <div className="bd-banner-left">
-                  <div className="bd-banner-logo">
-                    <svg width="28" height="28" viewBox="0 0 40 40" fill="none" aria-hidden>
-                      <circle cx="20" cy="20" r="20" fill="rgba(255,255,255,0.25)"/>
-                      <text x="50%" y="55%" dominantBaseline="middle" textAnchor="middle" fontSize="16" fontWeight="700" fill="white">S</text>
-                    </svg>
-                    <span>Sine<strong>Art</strong></span>
-                  </div>
-                  <h3 className="bd-banner-heading">
-                    KHÓA HỌC<br />
-                    <span className="bd-banner-highlight bd-banner-highlight--yellow">HÌNH HỌA</span><br />
-                    TẠI SINE ART
-                  </h3>
-                  <span className="bd-banner-cta">NHẬN THÔNG TIN</span>
-                </div>
-                <div className="bd-banner-right bd-banner-right--yellow">
-                  <svg width="120" height="100" viewBox="0 0 120 100" fill="none" opacity="0.18" aria-hidden>
-                    <circle cx="60" cy="50" r="45" stroke="white" strokeWidth="3"/>
-                    <line x1="20" y1="20" x2="100" y2="80" stroke="white" strokeWidth="2"/>
-                    <line x1="100" y1="20" x2="20" y2="80" stroke="white" strokeWidth="2"/>
-                    <circle cx="60" cy="50" r="18" stroke="white" strokeWidth="2"/>
-                  </svg>
-                </div>
-              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/banners/banner-hinh-hoa.png"
+                alt="Khóa học Hình Họa tại Sine Art"
+                className="bd-banner-img"
+              />
             </a>
 
             {/* Ending */}
@@ -307,9 +288,10 @@ export default async function BlogDetailPage({ params }: Props) {
             {/* CTA */}
             <div className="bd-sb-cta">
               <div className="bd-sb-cta-logo">SA</div>
-              <div className="bd-sb-cta-title">Học mỹ thuật bài bản</div>
+              <div className="bd-sb-cta-title">Học mỹ thuật <em>bài bản</em> tại Sine Art</div>
               <p className="bd-sb-cta-desc">Giáo trình khoa học, đồng hành cùng 350+ học viên trên hành trình Họa sỹ công nghệ.</p>
               <Link href="/khoa-hoc" className="bd-btn-primary">▶ Xem khoá học</Link>
+              <Link href="/dang-ky" className="bd-sb-cta-secondary">🎨 Đăng ký học thử miễn phí →</Link>
             </div>
 
             {/* TOC */}

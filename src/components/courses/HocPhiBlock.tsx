@@ -14,6 +14,7 @@ import {
   isHocPhiCapTocSpecial,
   sameDur,
 } from "@/lib/hocPhiDedupe";
+import { bestApplicableCombo } from "@/lib/donghocphi/combo-discount";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import "./hoc-phi-block.css";
@@ -120,51 +121,45 @@ export default function HocPhiBlock({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monHocId, expressMode, usePostTitleGrouping]);
 
-  const partnerMonIds = useMemo(
-    () =>
-      [
-        ...new Set(
-          gois
-            .filter(
-              (r) =>
-                r.combo_id != null &&
-                r.mon_hoc !== monHocId &&
-                gois.some(
-                  (g) =>
-                    g.mon_hoc === monHocId && g.combo_id === r.combo_id,
-                ),
-            )
-            .map((r) => r.mon_hoc),
-        ),
-      ],
-    [gois, monHocId],
-  );
+  /**
+   * Partner môn ID = các môn khác môn chính xuất hiện trong `hp_combo_mon.goi_ids`
+   * của combo đang hoạt động và chứa ít nhất 1 gói của môn chính.
+   */
+  const partnerMonIds = useMemo(() => {
+    const mainGoiIds = new Set(
+      gois.filter((g) => g.mon_hoc === monHocId).map((g) => g.id),
+    );
+    const result = new Set<number>();
+    for (const combo of combos) {
+      if (!combo.dang_hoat_dong) continue;
+      if (!combo.goi_ids.some((id) => mainGoiIds.has(id))) continue;
+      for (const gid of combo.goi_ids) {
+        const g = gois.find((r) => r.id === gid);
+        if (g && g.mon_hoc !== monHocId) result.add(g.mon_hoc);
+      }
+    }
+    return [...result];
+  }, [gois, combos, monHocId]);
 
   const activeCombo: HocPhiComboRow | null = useMemo(() => {
     if (usePostTitleGrouping) return null; // 2-môn price is baked into gia_goc
     if (!selGoi || selPartners.size === 0) return null;
-    const allMons = [monHocId, ...Array.from(selPartners)];
-    return (
-      combos.find((combo) => {
-        return allMons.every((mid) => {
-          const dur =
-            mid === monHocId
-              ? { number: selGoi.number, don_vi: selGoi.don_vi }
-              : partnerDur[mid] ?? {
-                  number: selGoi.number,
-                  don_vi: selGoi.don_vi,
-                };
-          const dvt = dur.don_vi.trim();
-          return gois.some(
-            (r) =>
-              r.mon_hoc === mid &&
-              r.combo_id === combo.id &&
-              r.number === dur.number &&
-              r.don_vi.trim() === dvt
-          );
-        });
-      }) ?? null
-    );
+    const cartIds = new Set<number>([selGoi.id]);
+    for (const monId of selPartners) {
+      const dur = partnerDur[monId] ?? {
+        number: selGoi.number,
+        don_vi: selGoi.don_vi,
+      };
+      const pg = gois.find(
+        (r) =>
+          r.mon_hoc === monId &&
+          r.number === dur.number &&
+          r.don_vi.trim() === dur.don_vi.trim(),
+      );
+      if (pg) cartIds.add(pg.id);
+    }
+    const lines = [...cartIds].map((id) => ({ goiId: id }));
+    return bestApplicableCombo(lines, combos)?.combo ?? null;
   }, [selGoi, selPartners, partnerDur, gois, combos, monHocId, usePostTitleGrouping]);
 
   const headerRow = (

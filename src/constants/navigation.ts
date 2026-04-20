@@ -81,6 +81,8 @@ export const NAV_ITEMS: NavItem[] = [
         href: "/kien-thuc-nen-tang",
       },
       { emoji: "🟪", label: "Free ebook", href: "/ebook" },
+      { emoji: "🟨", label: "Đề thi", href: "/tong-hop-de-thi" },
+      { emoji: "🟪", label: "Mẫu vẽ hình họa", href: "/mau-ve" },
     ],
   },
   {
@@ -97,16 +99,6 @@ export const NAV_ITEMS: NavItem[] = [
       { emoji: "🟩", label: "Tính điểm", href: "/tinh-diem" },
     ],
   },
-  {
-    kind: "dropdown",
-    id: "de-thi",
-    label: "Đề thi",
-    href: "/tong-hop-de-thi",
-    children: [
-      { emoji: "🟨", label: "Đề thi", href: "/tong-hop-de-thi" },
-      { emoji: "🟪", label: "Mẫu vẽ hình họa", href: "/mau-ve" },
-      { emoji: "🟩", label: "Thi thử", href: "/thi-thu" },
-    ],
-  },
+  { kind: "link", id: "thi-thu", label: "Thi thử", href: "/thi-thu" },
   { kind: "link", id: "blogs", label: "Blogs", href: "/blog" },
 ];

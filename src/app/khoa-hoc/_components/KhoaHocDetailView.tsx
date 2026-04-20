@@ -15,6 +15,7 @@ import TeachersSection from "@/app/_components/TeachersSection";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  KD_DANH_CHO_AI,
   KD_DEFAULT_LEARN,
   KD_FAQ,
   KD_REVIEWS,
@@ -35,9 +36,9 @@ function learnBullets(tinh: string | null): string[] {
   const parts = tinh
     .split(/[.•\n]+/)
     .map((s) => s.trim())
-    .filter(Boolean);
-  if (parts.length >= 3) return parts.slice(0, 6);
-  return [...KD_DEFAULT_LEARN.slice(0, 4), ...parts].slice(0, 6);
+    .filter((s) => s.length >= 12); // loại bỏ fragment quá ngắn (vd: "Online", "Tại lớp")
+  if (parts.length >= 3) return parts.slice(0, 8);
+  return [...KD_DEFAULT_LEARN.slice(0, 8 - parts.length), ...parts].slice(0, 8);
 }
 
 function normalizeMonLabel(s: string): string {
@@ -76,103 +77,45 @@ function sbNextMonthFirstDateVi(): string {
   return d.toLocaleDateString("vi-VN");
 }
 
-function IconSbCalendar({ className }: { className?: string }) {
+function IconClock({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      width={18}
-      height={18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
+    <svg className={className} width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
     </svg>
   );
 }
-
-function IconSbUsers({ className }: { className?: string }) {
+function IconUsers({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      width={18}
-      height={18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    <svg className={className} width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 }
-
-function IconSbGrad({ className }: { className?: string }) {
+function IconCalendar({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      width={18}
-      height={18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
-      <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
+    <svg className={className} width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
     </svg>
   );
 }
-
-function IconSbClock({ className }: { className?: string }) {
+function IconScreen({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      width={18}
-      height={18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 6v6l4 2" />
+    <svg className={className} width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><path d="M8 21h8M12 17v4" />
     </svg>
   );
 }
-
-function IconSbScreen({ className }: { className?: string }) {
+function IconStar({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      width={18}
-      height={18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-      <path d="M8 21h8M12 17v4" />
+    <svg className={className} width={16} height={16} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
+}
+function IconCheck() {
+  return (
+    <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20 6L9 17l-5-5" />
     </svg>
   );
 }
@@ -183,7 +126,6 @@ export default function KhoaHocDetailView({
   studentGallery = [],
   hocPhiBlock = null,
   hocPhiMonId = null,
-  /** Chỉ loại «Luyện thi» (`ql_mon_hoc.loai_khoa_hoc`) mới hiện nút / gói cấp tốc. */
   hocPhiAllowCapToc = false,
   teacherPortfolioSlides = [],
   baiTapList = [],
@@ -191,18 +133,12 @@ export default function KhoaHocDetailView({
 }: {
   detail: KhoaHocDetailData | null;
   fallbackTitle?: string;
-  /** Cùng `GalleryDisplayItem` như trang chủ — map từ `hv_bai_hoc_vien` + embed */
   studentGallery?: GalleryDisplayItem[];
-  /** Dữ liệu bảng học phí (brief hoc-phi-block) */
   hocPhiBlock?: HocPhiBlockData | null;
-  /** `ql_mon_hoc.id` dùng cho học phí — có thể có khi `detail` null (slug khớp DB) */
   hocPhiMonId?: number | null;
   hocPhiAllowCapToc?: boolean;
-  /** Toàn bộ portfolio nhân sự (không filter) */
   teacherPortfolioSlides?: TeacherPortfolioSlide[];
-  /** `hv_he_thong_bai_tap` theo môn — chương trình đào tạo */
   baiTapList?: BaiTap[];
-  /** Lớp đang diễn ra map từ `ql_lop_hoc` theo môn hiện tại */
   ongoingClasses?: OngoingClassCard[];
 }) {
   const d = detail;
@@ -228,8 +164,6 @@ export default function KhoaHocDetailView({
   const [hvGalIdx, setHvGalIdx] = useState(0);
   const [faqOpen, setFaqOpen] = useState<number | null>(0);
   const [dhpEmailModalOpen, setDhpEmailModalOpen] = useState(false);
-  /** null = dùng tab gợi ý theo môn đang xem; có giá trị = người dùng chọn pill lọc GV */
-  const [teacherMonFilter, setTeacherMonFilter] = useState<string | null>(null);
 
   useEffect(() => {
     setHvGalIdx((i) => {
@@ -239,7 +173,6 @@ export default function KhoaHocDetailView({
     });
   }, [studentGallery.length]);
 
-  /** Tự chuyển ảnh chính mỗi 4s (vòng lặp khi có ≥ 2 ảnh). */
   useEffect(() => {
     const n = studentGallery.length;
     if (n <= 1) return;
@@ -260,25 +193,10 @@ export default function KhoaHocDetailView({
     return ["Tất cả", ...mons];
   }, [teacherPortfolioSlides]);
 
-  const preferredTeacherMonTab = useMemo(() => {
-    const tNorm = normalizeMonLabel(title);
-    return (
-      teacherMonTabs.find((mon) => normalizeMonLabel(mon) === tNorm) ??
-      null
-    );
-  }, [teacherMonTabs, title]);
-
-  useEffect(() => {
-    setTeacherMonFilter(null);
-  }, [d?.id, hocPhiMonId]);
-
   const effectiveTeacherMonTab = useMemo(() => {
-    const userPick =
-      teacherMonFilter != null && teacherMonTabs.includes(teacherMonFilter)
-        ? teacherMonFilter
-        : null;
-    return userPick ?? preferredTeacherMonTab ?? "Tất cả";
-  }, [teacherMonFilter, teacherMonTabs, preferredTeacherMonTab]);
+    const tNorm = normalizeMonLabel(title);
+    return teacherMonTabs.find((mon) => normalizeMonLabel(mon) === tNorm) ?? "Tất cả";
+  }, [teacherMonTabs, title]);
 
   const visibleTeacherSlides = useMemo(() => {
     if (effectiveTeacherMonTab === "Tất cả") {
@@ -290,100 +208,7 @@ export default function KhoaHocDetailView({
   }, [teacherPortfolioSlides, effectiveTeacherMonTab]);
 
   const khaiGiangDisplay = useMemo(() => sbNextMonthFirstDateVi(), []);
-
   const isOnline = d?.hinhThucTag === "Online";
-  const sbMetaRows = useMemo(() => {
-    if (isOnline) {
-      return [
-        {
-          key: "kg",
-          icon: IconSbCalendar,
-          label: "Khai giảng",
-          value: khaiGiangDisplay,
-          valueAccent: true,
-        },
-        {
-          key: "ss",
-          icon: IconSbUsers,
-          label: "Sỉ số lớp",
-          value: "~20 người/buổi",
-          valueAccent: false,
-        },
-        {
-          key: "gv",
-          icon: IconSbGrad,
-          label: "Giáo viên",
-          value: "1 GV/lớp",
-          valueAccent: false,
-        },
-        {
-          key: "lich",
-          icon: IconSbCalendar,
-          label: "Lịch học",
-          value: "246 hoặc 357",
-          valueAccent: false,
-        },
-        {
-          key: "tg",
-          icon: IconSbClock,
-          label: "Thời gian học",
-          value: "19h00 - 21h30",
-          valueAccent: false,
-        },
-        {
-          key: "tai",
-          icon: IconSbScreen,
-          label: "Học tại",
-          value: "Google Meet",
-          valueAccent: false,
-        },
-      ] as const;
-    }
-    return [
-      {
-        key: "kg",
-        icon: IconSbCalendar,
-        label: "Khai giảng",
-        value: khaiGiangDisplay,
-        valueAccent: true,
-      },
-      {
-        key: "ss",
-        icon: IconSbUsers,
-        label: "Sỉ số lớp",
-        value: "~20 người/buổi",
-        valueAccent: false,
-      },
-      {
-        key: "gv",
-        icon: IconSbGrad,
-        label: "Giáo viên",
-        value: "1 GV/lớp",
-        valueAccent: false,
-      },
-      {
-        key: "lich",
-        icon: IconSbCalendar,
-        label: "Lịch học",
-        value: "Theo lịch lớp & chi nhánh",
-        valueAccent: false,
-      },
-      {
-        key: "tg",
-        icon: IconSbClock,
-        label: "Thời gian học",
-        value: "Theo từng lớp (thường 19h - 21h30)",
-        valueAccent: false,
-      },
-      {
-        key: "tai",
-        icon: IconSbScreen,
-        label: "Học tại",
-        value: "TP.HCM — chi nhánh theo lịch đăng ký",
-        valueAccent: false,
-      },
-    ] as const;
-  }, [isOnline, khaiGiangDisplay]);
 
   const gradStyle =
     d?.gradientStart && d?.gradientEnd
@@ -403,6 +228,7 @@ export default function KhoaHocDetailView({
 
   return (
     <div className="kd-page">
+      {/* BREADCRUMB */}
       <nav className="kd-bc" aria-label="Breadcrumb">
         <Link href="/">Trang chủ</Link>
         <span className="kd-bc-sep">›</span>
@@ -413,377 +239,374 @@ export default function KhoaHocDetailView({
         <span className="kd-bc-current">{title}</span>
       </nav>
 
-      <div className="kd-body">
-        <div className="kd-left">
-          <div className="kd-eyebrow">
-            <span className="kd-tag">{tag}</span>
-            <span className="kd-live">
-              <span className="kd-live-dot" aria-hidden />
-              Còn nhận học viên
-            </span>
-          </div>
-          <h1 className="kd-title">{title}</h1>
-          <p className="kd-sub">{sub}</p>
+      {/* PAGE GRID */}
+      <div className="kd-page-grid">
+        {/* LEFT / MAIN CONTENT */}
+        <div className="kd-page-main">
 
-          <section className="kd-hv-section" aria-labelledby="kd-hv-heading">
-              <h2 id="kd-hv-heading" className="kd-sec">
-                Bài học viên
-              </h2>
-              {studentGallery.length > 0 && hvMainItem ? (
-                <>
-                  <div className="kd-hv-gallery">
-                    <div className="kd-hv-main">
-                      {hvMainSrc ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={hvGalIdx}
-                          src={hvMainSrc}
-                          alt=""
-                          className="kd-hv-main-img"
-                        />
-                      ) : (
-                        <div
-                          className="kd-hv-ph kd-hv-ph--main"
-                          style={gradStyle}
-                          aria-hidden
-                        />
-                      )}
-                      <div className="kd-hv-overlay" aria-live="polite" aria-atomic="true">
-                        {hvGalIdx + 1} / {studentGallery.length} ảnh
-                      </div>
-                      <div className="kd-hv-main-cap">
-                        <span className="kd-hv-student">
-                          {hvMainItem.studentName}
-                        </span>
-                        <span className="kd-hv-cat">
-                          {hvMainItem.categoryLabel}
-                        </span>
-                      </div>
+          {/* ── 00 TITLE ── */}
+          <header className="kd-page-title-row">
+            <div className="kd-page-eyebrow">
+              <span className="kd-page-eyebrow-dot" aria-hidden />
+              <span>{tag}</span>
+              <span className="kd-page-eyebrow-sep" aria-hidden>·</span>
+              <span>{crumbMid}</span>
+            </div>
+            <h1 className="kd-page-h1">
+              Khóa học {title.replace(/\s+(Online|Tại lớp|Tai lop|Offline)\s*$/i, "").trim() || title} {tag}
+            </h1>
+            <div className="kd-page-title-rule" aria-hidden />
+          </header>
+
+          {/* ── 01 STUDENT WORKS ── */}
+          <section className="kd-block kd-works-top" id="works">
+            <div className="kd-sec-label">Bài học viên khoá trước</div>
+            <h2 className="kd-sec-title">
+              Những gì bạn sẽ làm được <em>sau khoá học</em>
+            </h2>
+            <p className="kd-sec-sub">
+              Tất cả đều là bài thật, không chỉnh sửa, chụp từ nguyên bản giấy.
+            </p>
+
+            {studentGallery.length > 0 && hvMainItem ? (
+              <>
+                <div className="kd-hv-gallery">
+                  <div className="kd-hv-main">
+                    {hvMainSrc ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={hvGalIdx}
+                        src={hvMainSrc}
+                        alt=""
+                        className="kd-hv-main-img"
+                      />
+                    ) : (
+                      <div className="kd-hv-ph kd-hv-ph--main" style={gradStyle} aria-hidden />
+                    )}
+                    <div className="kd-hv-overlay" aria-live="polite" aria-atomic="true">
+                      {hvGalIdx + 1} / {studentGallery.length} ảnh
                     </div>
-                    {studentGallery.length > 1 ? (
-                      <div
-                        className="kd-hv-thumbs"
-                        role="tablist"
-                        aria-label="Chọn ảnh bài học viên"
-                      >
-                        {studentGallery.map((item, i) => {
-                          const thumbSrc = item.photo
-                            ? cfImageForThumbnail(item.photo) || item.photo
-                            : null;
-                          return (
-                            <button
-                              key={`${String(item.id)}-${i}`}
-                              type="button"
-                              role="tab"
-                              aria-selected={hvGalIdx === i}
-                              className={`kd-hv-thumb${
-                                hvGalIdx === i ? " kd-hv-thumb--sel" : ""
-                              }`}
-                              onClick={() => setHvGalIdx(i)}
-                            >
-                              {thumbSrc ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={thumbSrc}
-                                  alt=""
-                                  className="kd-hv-thumb-img"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div
-                                  className="kd-hv-thumb-ph"
-                                  style={gradStyle}
-                                  aria-hidden
-                                />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
+                    <div className="kd-hv-main-cap">
+                      <span className="kd-hv-student">{hvMainItem.studentName}</span>
+                      <span className="kd-hv-cat">{hvMainItem.categoryLabel}</span>
+                    </div>
                   </div>
-                  <p className="kd-hv-more">
-                    <Link href="/gallery" className="kd-link-more">
-                      Xem gallery toàn trang →
-                    </Link>
-                  </p>
-                </>
-              ) : (
-                <p className="kd-hv-empty">
-                  Chưa có tác phẩm tải được cho khóa này.{" "}
-                  <Link href="/gallery" className="kd-link-more">
-                    Xem gallery toàn trang →
-                  </Link>
+                  {studentGallery.length > 1 && (
+                    <div className="kd-hv-thumbs" role="tablist" aria-label="Chọn ảnh bài học viên">
+                      {studentGallery.map((item, i) => {
+                        const thumbSrc = item.photo
+                          ? cfImageForThumbnail(item.photo) || item.photo
+                          : null;
+                        return (
+                          <button
+                            key={`${String(item.id)}-${i}`}
+                            type="button"
+                            role="tab"
+                            aria-selected={hvGalIdx === i}
+                            className={`kd-hv-thumb${hvGalIdx === i ? " kd-hv-thumb--sel" : ""}`}
+                            onClick={() => setHvGalIdx(i)}
+                          >
+                            {thumbSrc ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={thumbSrc} alt="" className="kd-hv-thumb-img" loading="lazy" />
+                            ) : (
+                              <div className="kd-hv-thumb-ph" style={gradStyle} aria-hidden />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <p className="kd-hv-more">
+                  <Link href="/gallery" className="kd-link-more">Xem gallery toàn trang →</Link>
                 </p>
-              )}
+              </>
+            ) : (
+              <p className="kd-hv-empty">
+                Chưa có tác phẩm tải được cho khóa này.{" "}
+                <Link href="/gallery" className="kd-link-more">Xem gallery toàn trang →</Link>
+              </p>
+            )}
           </section>
 
-          <div className="kd-div" />
+          {/* ── 02 OVERVIEW ── */}
+          <section className="kd-block" id="overview">
+            <div className="kd-sec-label">Tổng quan</div>
+            <h2 className="kd-sec-title">
+              Khoá học dành cho bạn <em>nghĩ bằng màu</em>
+            </h2>
 
-          <h2 className="kd-sec">Bạn sẽ học được gì?</h2>
-          <ul className="kd-learn-grid">
-            {bullets.map((line) => (
-              <li key={line} className="kd-learn-item">
-                <span className="kd-check" aria-hidden>
-                  ✓
-                </span>
-                {line}
-              </li>
-            ))}
-          </ul>
+            <div className="kd-ov-grid">
+              {/* Body */}
+              <div className="kd-ov-body">
+                {d?.gioiThieuMonHocHtml?.trim() ? (
+                  <div
+                    className="kd-mon-html"
+                    dangerouslySetInnerHTML={{ __html: d.gioiThieuMonHocHtml.trim() }}
+                  />
+                ) : (
+                  <>
+                    <p>
+                      <span className="kd-drop">{title.charAt(0)}</span>
+                      {title.slice(1)} không chỉ là "tô cho đẹp". Ở Sine Art, bạn học
+                      cách <b>nhìn màu như một hoạ sĩ</b> — hiểu sắc độ, nóng lạnh,
+                      tương phản, và tổ chức bố cục có chủ đích.
+                    </p>
+                    <p>
+                      Khoá học đưa bạn từ nguyên lý cơ bản đến bài trang trí hoàn
+                      chỉnh. Mỗi buổi có bài tập riêng, được chấm 1-1, và bạn sẽ hoàn
+                      thành <b>6 tác phẩm</b> đủ chất lượng đưa vào portfolio.
+                    </p>
+                    <p>
+                      Đây là nền tảng bắt buộc cho bất kỳ ai muốn theo đuổi nghề{" "}
+                      <b>Hoạ sĩ công nghệ</b> — Concept Art, Illustration, Animation,
+                      Game Art. Cũng là khoá được ưu tiên trong lộ trình Luyện thi ĐH
+                      Mỹ thuật.
+                    </p>
+                  </>
+                )}
+              </div>
 
-          <div className="kd-div" aria-hidden />
+              {/* "Khoá này dành cho ai?" sidebar */}
+              <aside className="kd-ov-side">
+                <h4 className="kd-dca-heading">
+                  <span className="kd-dca-star" aria-hidden />
+                  Khoá này dành cho ai?
+                </h4>
+                <ul className="kd-dca-list">
+                  {KD_DANH_CHO_AI.map((item) => (
+                    <li key={item.bold} className="kd-dca-item">
+                      <span className="kd-dca-k" aria-hidden />
+                      <div>
+                        <b>{item.bold}</b> {item.text}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            </div>
+          </section>
 
-          {d?.gioiThieuMonHocHtml?.trim() ? (
-            <div
-              className="kd-mon-html"
-              dangerouslySetInnerHTML={{
-                __html: d.gioiThieuMonHocHtml.trim(),
-              }}
-            />
-          ) : (
-            <div className="kd-mon-grid">
-              {KD_THREE_SUBJECTS.map((m) => (
-                <div key={m.name} className="kd-mon-card">
-                  <div className="kd-mon-icon" aria-hidden>
-                    {m.icon}
+          {/* ── 03 OUTCOMES ── */}
+          <section className="kd-block">
+            <div className="kd-sec-label" style={{ color: "#a37e00" }}>Kết quả</div>
+            <h2 className="kd-sec-title" style={{ fontSize: "clamp(22px,2.4vw,28px)", marginBottom: 18 }}>
+              Bạn sẽ học được gì — <em>{bullets.length} năng lực cụ thể</em>
+            </h2>
+            <div className="kd-out-grid">
+              {bullets.map((b, i) => (
+                <div key={i} className="kd-out-cell">
+                  <div className="kd-out-num">{String(i + 1).padStart(2, "0")}</div>
+                  <div>
+                    <div className="kd-out-title">{b.split("—")[0]?.trim() ?? b}</div>
+                    {b.includes("—") && (
+                      <div className="kd-out-desc">{b.split("—").slice(1).join("—").trim()}</div>
+                    )}
                   </div>
-                  <div className="kd-mon-name">{m.name}</div>
-                  <p className="kd-mon-desc">{m.desc}</p>
                 </div>
               ))}
             </div>
+          </section>
+
+          {/* ── 04 CURRICULUM ── */}
+          <section className="kd-block" id="curriculum">
+            <div className="kd-sec-label">Giáo trình {baiTapList.length > 0 ? `${baiTapList.length} buổi` : ""}</div>
+            <h2 className="kd-sec-title">
+              Lộ trình <em>tuần tự, có kiểm tra</em>
+            </h2>
+            <p className="kd-sec-sub">
+              Mỗi buổi 3 giờ, bắt đầu bằng demo giáo viên, kết thúc bằng bài tập chấm 1-1.
+            </p>
+            <BaiTapList
+              monHocId={hocPhiMonId ?? undefined}
+              initialData={baiTapList}
+              enrollUrl={autoRegisterHref}
+            />
+          </section>
+
+          {/* ── 05 INTRO VIDEO ── */}
+          {introVideoEmbedSrc && (
+            <section className="kd-block kd-intro-video" aria-labelledby="kd-intro-video-title">
+              <div className="kd-sec-label">Giới thiệu</div>
+              <h2 id="kd-intro-video-title" className="kd-sec-title">
+                Video giới thiệu <em>«{title}»</em>
+              </h2>
+              <div className="kd-video-16x9">
+                <iframe
+                  src={introVideoEmbedSrc}
+                  title={`Video giới thiệu môn «${title}»`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+            </section>
           )}
 
-          {introVideoEmbedSrc ? (
-            <>
-              <div className="kd-div" aria-hidden />
-              <section
-                className="kd-intro-video"
-                aria-labelledby="kd-intro-video-title"
-              >
-                <h2 id="kd-intro-video-title" className="kd-sec">
-                  Video giới thiệu môn «{title}»
-                </h2>
-                <div className="kd-video-16x9">
-                  <iframe
-                    src={introVideoEmbedSrc}
-                    title={`Video giới thiệu môn «${title}»`}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                  />
-                </div>
-              </section>
-            </>
-          ) : null}
-          <div className="kd-div" />
+          {/* ── 07 TEACHERS ── */}
+          <section className="kd-block" id="teachers">
+            <div className="kd-sec-label">Giảng viên khoá</div>
+            <h2 className="kd-sec-title">
+              Hoạ sĩ đang <em>hành nghề thực tế</em> dạy bạn
+            </h2>
+            <p className="kd-sec-sub">
+              Không phải giáo viên thuần lý thuyết — tất cả đang làm việc tại các studio lớn.
+            </p>
+            <TeachersSection slides={visibleTeacherSlides} />
+          </section>
 
-          <h2 className="kd-sec">Chương trình đào tạo môn «{title}»</h2>
-          <BaiTapList
-            monHocId={hocPhiMonId ?? undefined}
-            initialData={baiTapList}
-            enrollUrl={autoRegisterHref}
-          />
+          {/* ── 08 SCHEDULE / ONGOING CLASSES ── */}
+          <section className="kd-block" id="schedule" aria-labelledby="kd-schedule-title">
+            <div className="kd-sec-label">Lịch & học phí</div>
+            <h2 id="kd-schedule-title" className="kd-sec-title">
+              Chọn <em>khung lớp</em> phù hợp với bạn
+            </h2>
+            <p className="kd-sec-sub">
+              Cùng giáo trình, cùng chất lượng. Giáo viên có thể khác nhau giữa các khung.
+            </p>
+            {ongoingClasses.length > 0 ? (
+              <div className="kd-sch-grid">
+                {ongoingClasses.map((c) => {
+                  const meta = KD_OC_BADGE[c.status];
+                  const pct = c.total > 0 ? Math.min(100, Math.round((100 * c.filled) / c.total)) : 0;
+                  const hetCho = c.status === "full" || c.filled >= c.total;
+                  return (
+                    <div
+                      key={c.id}
+                      className={`kd-sch-card${c.isCapToc ? " kd-sch-card--cap-toc" : ""}${hetCho ? " kd-sch-card--full" : ""}`}
+                    >
+                      {c.isCapToc && (
+                        <span className="kd-oc-cap-toc">
+                          <span aria-hidden>⚡</span> Cấp tốc
+                        </span>
+                      )}
+                      <div className="kd-sch-day">{c.lich}</div>
+                      <div className="kd-sch-time">{c.gio}</div>
+                      <div className="kd-sch-meta">GV: {c.gvNames}</div>
+                      <div className="kd-oc-seats">
+                        {hetCho ? "Hết chỗ" : `Còn chỗ`} · {c.filled}/{c.total}
+                      </div>
+                      <div className="kd-oc-bar-track" role="progressbar" aria-valuenow={c.filled} aria-valuemin={0} aria-valuemax={c.total}>
+                        <div className={meta.barClass} style={{ width: `${pct}%` }} />
+                      </div>
+                      {hetCho ? (
+                        <span className="kd-sch-btn kd-sch-btn--disabled">Đăng ký đợt sau</span>
+                      ) : (
+                        <a href={autoRegisterHref} className="kd-sch-btn kd-sch-btn--active">
+                          Đăng ký khung này →
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="kd-sch-empty">
+                <p>Chưa có lịch khai giảng. Để lại thông tin để nhận thông báo sớm nhất.</p>
+                <a href={autoRegisterHref} className="kd-sch-btn kd-sch-btn--active" style={{ display: "inline-block", marginTop: 12 }}>
+                  Nhận thông báo khai giảng →
+                </a>
+              </div>
+            )}
+          </section>
 
-          <div className="kd-div" />
+          {/* ── 09 REVIEWS ── */}
+          <section className="kd-block" id="reviews">
+            <div className="kd-sec-label">Đánh giá từ học viên</div>
+            <h2 className="kd-sec-title">
+              Học viên nói gì — <em>không lọc</em>
+            </h2>
+            <p className="kd-sec-sub">Tất cả được đồng bộ trực tiếp từ Google Reviews.</p>
 
-          <h2 className="kd-sec">Giáo viên giảng dạy</h2>
-          {teacherMonTabs.length > 1 ? (
-            <div
-              className="kd-teacher-filter"
-              role="group"
-              aria-label="Lọc portfolio giáo viên theo môn học"
-            >
-              <p className="kd-teacher-filter-label">Theo môn học</p>
-              <div className="kd-goi-pill-row">
-                {teacherMonTabs.map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    className={`kd-goi-pill${
-                      effectiveTeacherMonTab === tab
-                        ? " kd-goi-pill--active"
-                        : ""
-                    }`}
-                    onClick={() => setTeacherMonFilter(tab)}
-                  >
-                    {tab}
-                  </button>
+            <div className="kd-rating-bar">
+              <div>
+                <div className="kd-rating-num">4.8</div>
+                <div className="kd-stars" aria-hidden>★★★★★</div>
+                <div className="kd-rating-count">Dựa trên đánh giá nội bộ</div>
+              </div>
+              <div className="kd-bars">
+                {[5, 4, 3, 2, 1].map((n) => (
+                  <div key={n} className="kd-bar-row">
+                    <span>{n}★</span>
+                    <div className="kd-bar-track">
+                      <div className="kd-bar-fill" style={{ width: `${n === 5 ? 78 : n === 4 ? 14 : 8}%` }} />
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
-          ) : null}
-          <TeachersSection slides={visibleTeacherSlides} />
-
-          <div className="kd-div" />
-
-          <section className="kd-ongoing" aria-labelledby="kd-ongoing-title">
-            <p className="kd-ongoing-eyebrow">LỊCH KHAI GIẢNG</p>
-            <h2 id="kd-ongoing-title" className="kd-ongoing-title">
-              Lớp đang diễn ra
-            </h2>
-            <div className="kd-ongoing-grid">
-              {ongoingClasses.map((c) => {
-                const meta = KD_OC_BADGE[c.status];
-                const pct =
-                  c.total > 0
-                    ? Math.min(100, Math.round((100 * c.filled) / c.total))
-                    : 0;
-                const hetCho =
-                  c.status === "full" || c.filled >= c.total;
-                return (
-                  <article
-                    key={c.id}
-                    className={`kd-oc-card kd-oc-card--flip${
-                      c.isCapToc ? " kd-oc-card--cap-toc" : ""
-                    }`}
-                  >
-                    <div className="kd-oc-flip-inner">
-                      <div className="kd-oc-face kd-oc-face--front">
-                        {c.isCapToc ? (
-                          <span className="kd-oc-cap-toc">
-                            <span aria-hidden>⚡</span>
-                            Cấp tốc
-                          </span>
-                        ) : null}
-                        <h3 className="kd-oc-card-title">{c.title}</h3>
-                        <p className="kd-oc-gv">GV: {c.gvNames}</p>
-                        <span className={meta.className}>
-                          <span className="kd-oc-badge-dot" aria-hidden />
-                          {meta.label}
-                        </span>
-                        <div className="kd-oc-sch">
-                          <div className="kd-oc-sch-cell">
-                            <span className="kd-oc-sch-lbl">LỊCH</span>
-                            <span className="kd-oc-sch-val">{c.lich}</span>
-                          </div>
-                          <div className="kd-oc-sch-cell">
-                            <span className="kd-oc-sch-lbl">GIỜ</span>
-                            <span className="kd-oc-sch-val">{c.gio}</span>
-                          </div>
-                        </div>
-                        <div className="kd-oc-foot">
-                          <div className="kd-oc-seats">
-                            {c.filled}/{c.total} chỗ
-                          </div>
-                          <div
-                            className="kd-oc-bar-track"
-                            role="progressbar"
-                            aria-valuenow={c.filled}
-                            aria-valuemin={0}
-                            aria-valuemax={c.total}
-                            aria-label={`Đã đăng ký ${c.filled} trên ${c.total} chỗ`}
-                          >
-                            <div
-                              className={meta.barClass}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="kd-oc-face kd-oc-face--back">
-                        {c.portfolioImage ? (
-                          <>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={c.portfolioImage}
-                              alt=""
-                              className="kd-oc-portfolio-img"
-                              loading="lazy"
-                            />
-                          </>
-                        ) : (
-                          <div className="kd-oc-portfolio-empty" />
-                        )}
-                      </div>
+            <div className="kd-review-grid">
+              {KD_REVIEWS.map((r) => (
+                <article key={r.name} className="kd-review">
+                  <div className="kd-rv-top">
+                    <div className="kd-rv-av">{r.initials}</div>
+                    <div>
+                      <div className="kd-rv-name">{r.name}</div>
+                      <div className="kd-rv-stars" aria-hidden>★★★★★</div>
                     </div>
-                  </article>
-                );
-              })}
+                  </div>
+                  <p className="kd-rv-text">{r.text}</p>
+                </article>
+              ))}
             </div>
           </section>
 
-          <div className="kd-div" />
-
-          <h2 className="kd-sec">Đánh giá từ học viên</h2>
-          <div className="kd-rating-bar">
-            <div>
-              <div className="kd-rating-num">4.8</div>
-              <div className="kd-stars" aria-hidden>
-                ★★★★★
-              </div>
-              <div className="kd-rating-count">Dựa trên đánh giá nội bộ</div>
-            </div>
-            <div className="kd-bars">
-              {[5, 4, 3, 2, 1].map((n) => (
-                <div key={n} className="kd-bar-row">
-                  <span>{n}★</span>
-                  <div className="kd-bar-track">
-                    <div
-                      className="kd-bar-fill"
-                      style={{ width: `${n === 5 ? 78 : n === 4 ? 14 : 8}%` }}
-                    />
-                  </div>
+          {/* ── 10 FAQ ── */}
+          <section className="kd-block" id="faq">
+            <div className="kd-sec-label">Câu hỏi thường gặp</div>
+            <h2 className="kd-sec-title">
+              Bạn đang <em>thắc mắc điều gì?</em>
+            </h2>
+            <div className="kd-faq-list">
+              {KD_FAQ.map((item, i) => (
+                <div key={item.q} className={`kd-faq${faqOpen === i ? " kd-faq--open" : ""}`}>
+                  <button
+                    type="button"
+                    className="kd-faq-q"
+                    aria-expanded={faqOpen === i}
+                    onClick={() => setFaqOpen(faqOpen === i ? null : i)}
+                  >
+                    {item.q}
+                    <span className="kd-faq-arr" aria-hidden>+</span>
+                  </button>
+                  <div className="kd-faq-a">{item.a}</div>
                 </div>
               ))}
             </div>
-          </div>
-          <div className="kd-review-grid">
-            {KD_REVIEWS.map((r) => (
-              <article key={r.name} className="kd-review">
-                <div className="kd-rv-top">
-                  <div className="kd-rv-av">{r.initials}</div>
-                  <div>
-                    <div className="kd-rv-name">{r.name}</div>
-                    <div className="kd-rv-stars" aria-hidden>
-                      ★★★★★
-                    </div>
-                  </div>
+          </section>
+
+          {/* ── 11 FINAL CTA ── */}
+          <section className="kd-cta-band">
+            <div className="kd-cta-band-inner">
+              <div>
+                <h2 className="kd-cta-band-title">
+                  Sẵn sàng nghĩ <span style={{ color: "#fde859" }}>bằng màu?</span>
+                </h2>
+                <p className="kd-cta-band-sub">
+                  Bắt đầu từ buổi học thử miễn phí, gặp giáo viên, xem studio. Nếu không hợp, bạn không trả gì cả.
+                </p>
+                <div className="kd-cta-band-actions">
+                  <a href={autoRegisterHref} className="kd-cta-band-btn kd-cta-band-btn--primary">
+                    🎨 Đặt buổi học thử
+                  </a>
+                  <a href="tel:+842838123456" className="kd-cta-band-btn kd-cta-band-btn--ghost">
+                    Chat với tư vấn Zalo
+                  </a>
                 </div>
-                <p className="kd-rv-text">{r.text}</p>
-              </article>
-            ))}
-          </div>
-
-          <div className="kd-div" />
-
-          <h2 className="kd-sec">Câu hỏi thường gặp</h2>
-          <div className="kd-faq-list">
-            {KD_FAQ.map((item, i) => (
-              <div
-                key={item.q}
-                className={`kd-faq${faqOpen === i ? " kd-faq--open" : ""}`}
-              >
-                <button
-                  type="button"
-                  className="kd-faq-q"
-                  aria-expanded={faqOpen === i}
-                  onClick={() => setFaqOpen(faqOpen === i ? null : i)}
-                >
-                  {item.q}
-                  <span className="kd-faq-arr" aria-hidden>
-                    +
-                  </span>
-                </button>
-                <div className="kd-faq-a">{item.a}</div>
               </div>
-            ))}
-          </div>
-
-          <div className="kd-cta">
-            <div>
-              <div className="kd-cta-title">Sẵn sàng bắt đầu?</div>
-              <div className="kd-cta-sub">
-                Để lại thông tin — tư vấn lộ trình phù hợp với bạn.
+              <div className="kd-cta-band-stats">
+                <div className="kd-cta-stat"><div className="kd-cta-stat-n">347</div><div className="kd-cta-stat-l">Học viên đã hoàn thành</div></div>
+                <div className="kd-cta-stat"><div className="kd-cta-stat-n">4.9/5</div><div className="kd-cta-stat-l">128 đánh giá</div></div>
+                <div className="kd-cta-stat"><div className="kd-cta-stat-n">92%</div><div className="kd-cta-stat-l">Đỗ ĐH Mỹ thuật top</div></div>
               </div>
             </div>
-            <a href="tel:+842838123456" className="kd-cta-btn">
-              Liên hệ tư vấn
-            </a>
-          </div>
-        </div>
+          </section>
 
+        </div>{/* /kd-page-main */}
+
+        {/* ── STICKY SIDEBAR ── */}
         <aside className="kd-sidebar" aria-label="Thông tin khóa học">
+          {/* Học phí block */}
           {hocPhiBlock != null && hocPhiMonId != null ? (
             <HocPhiBlock
               key={hocPhiMonId}
@@ -793,29 +616,50 @@ export default function KhoaHocDetailView({
             />
           ) : null}
 
-          <div className="kd-sb-meta-card">
-            {sbMetaRows.map((row) => {
-              const Ico = row.icon;
-              return (
-                <div key={row.key} className="kd-sb-meta-row">
-                  <div className="kd-sb-meta-left">
-                    <Ico className="kd-sb-meta-ico" />
-                    <span className="kd-sb-meta-label">{row.label}</span>
-                  </div>
-                  <span
-                    className={
-                      row.valueAccent
-                        ? "kd-sb-meta-value kd-sb-meta-value--accent"
-                        : "kd-sb-meta-value"
-                    }
-                  >
-                    {row.value}
-                  </span>
+          {/* Stats block */}
+          <div className="kd-sb-stats">
+            <div className="kd-sb-stat-row">
+              <div className="kd-sb-stat-ic kd-sb-stat-ic--purple"><IconClock /></div>
+              <div>
+                <div className="kd-sb-stat-k">Thời lượng</div>
+                <div className="kd-sb-stat-v">
+                  {baiTapList.length > 0 ? `${baiTapList.length} buổi · ${baiTapList.length * 3}h` : "Theo khoá học"}
                 </div>
-              );
-            })}
+              </div>
+            </div>
+            <div className="kd-sb-stat-row">
+              <div className="kd-sb-stat-ic kd-sb-stat-ic--yellow"><IconUsers /></div>
+              <div>
+                <div className="kd-sb-stat-k">Sỉ số</div>
+                <div className="kd-sb-stat-v">8–12 HV / lớp</div>
+              </div>
+            </div>
+            <div className="kd-sb-stat-row">
+              <div className="kd-sb-stat-ic kd-sb-stat-ic--peach"><IconCalendar /></div>
+              <div>
+                <div className="kd-sb-stat-k">Khai giảng</div>
+                <div className="kd-sb-stat-v kd-sb-stat-v--accent">{khaiGiangDisplay}</div>
+              </div>
+            </div>
+            <div className="kd-sb-stat-row">
+              <div className="kd-sb-stat-ic kd-sb-stat-ic--screen">
+                {isOnline ? <IconScreen /> : <IconScreen />}
+              </div>
+              <div>
+                <div className="kd-sb-stat-k">Học tại</div>
+                <div className="kd-sb-stat-v">{isOnline ? "Google Meet" : "TP.HCM — theo chi nhánh"}</div>
+              </div>
+            </div>
+            <div className="kd-sb-stat-row">
+              <div className="kd-sb-stat-ic kd-sb-stat-ic--mint"><IconStar /></div>
+              <div>
+                <div className="kd-sb-stat-k">Đánh giá</div>
+                <div className="kd-sb-stat-v">4.9 · 128 đánh giá</div>
+              </div>
+            </div>
           </div>
 
+          {/* CTA buttons */}
           <div className="kd-sb-cta-row">
             <button
               type="button"
@@ -828,8 +672,37 @@ export default function KhoaHocDetailView({
               Đăng ký qua tư vấn
             </a>
           </div>
+
+          {/* Perks */}
+          <div className="kd-sb-perks">
+            {["1 buổi học thử", "Chứng chỉ Sine Art", "Vật tư đầy đủ", "Chat 24/7"].map((p) => (
+              <div key={p} className="kd-sb-perk">
+                <span className="kd-sb-perk-ok" aria-hidden><IconCheck /></span>
+                {p}
+              </div>
+            ))}
+          </div>
+
+          {/* Trust */}
+          <div className="kd-sb-trust">
+            <span className="kd-sb-trust-stars" aria-hidden>★★★★★</span>
+            <span>347 HV đã hoàn thành · 92% đỗ ĐH Mỹ thuật</span>
+          </div>
+
+          {/* Mon-html fallback (giới thiệu môn) */}
+          {!d?.gioiThieuMonHocHtml && (
+            <div className="kd-sb-mon-grid">
+              {KD_THREE_SUBJECTS.map((m) => (
+                <div key={m.name} className="kd-mon-card">
+                  <div className="kd-mon-icon" aria-hidden>{m.icon}</div>
+                  <div className="kd-mon-name">{m.name}</div>
+                  <p className="kd-mon-desc">{m.desc}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </aside>
-      </div>
+      </div>{/* /kd-page-grid */}
 
       <DongHocPhiEmailGateModal
         open={dhpEmailModalOpen}

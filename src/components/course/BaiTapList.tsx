@@ -49,14 +49,14 @@ function Chevron({
   const rm = reducedMotion === true;
   return (
     <motion.svg
-      className={styles.chevron}
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden
+      style={{ width: "100%", height: "100%", display: "block" }}
       animate={{ rotate: open ? 180 : 0 }}
       transition={rm ? { duration: 0 } : { duration: 0.28, ease: EASE }}
     >
-      <polyline points="6 9 12 15 18 9" stroke="currentColor" strokeWidth="2" />
+      <polyline points="6 9 12 15 18 9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
     </motion.svg>
   );
 }
@@ -185,6 +185,9 @@ export default function BaiTapList({
                         }
                         aria-expanded={open}
                       >
+                        <div className={styles.baiNum} aria-hidden>
+                          B{d.bai_so}
+                        </div>
                         <div className={styles.thumbWrap}>
                           {thumbSrc ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -199,8 +202,8 @@ export default function BaiTapList({
                           )}
                         </div>
                         <div className={styles.headMain}>
-                          <span className={styles.baiSo}>Bài {d.bai_so}</span>
                           <span className={styles.tenBai}>{d.ten_bai_tap}</span>
+                          <span className={styles.baiSo}>Bài {d.bai_so}</span>
                         </div>
                         <span
                           className={`${styles.badge} ${badgeClass(d.muc_do_quan_trong)}`}
@@ -208,7 +211,9 @@ export default function BaiTapList({
                           {d.muc_do_quan_trong}
                         </span>
                         <span className={styles.buoiTag}>{d.so_buoi} buổi</span>
-                        <Chevron open={open} reducedMotion={reducedMotion} />
+                        <div className={styles.chevron}>
+                          <Chevron open={open} reducedMotion={reducedMotion} />
+                        </div>
                       </motion.button>
                       <motion.div
                         className={styles.lessonBodyMotion}

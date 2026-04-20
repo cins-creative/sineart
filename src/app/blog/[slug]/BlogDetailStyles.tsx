@@ -53,10 +53,10 @@ const css = `
   .bd-prose s{text-decoration:line-through}
   .bd-prose a{color:var(--ink);background:linear-gradient(transparent 62%,rgba(238,91,159,.18) 62%);font-weight:600}
   .bd-prose a:hover{background:linear-gradient(transparent 62%,rgba(238,91,159,.38) 62%)}
-  .bd-prose h1{font-family:var(--font-d);font-size:clamp(22px,2.5vw,30px);font-weight:800;letter-spacing:-.02em;line-height:1.15;margin:1.8em 0 .35em}
-  .bd-prose h2{font-family:var(--font-d);font-size:clamp(18px,2vw,24px);font-weight:800;letter-spacing:-.02em;line-height:1.2;margin:1.6em 0 0}
+  .bd-prose h1{font-family:var(--font-d);font-size:clamp(22px,2.5vw,30px);font-weight:800;letter-spacing:-.02em;line-height:1.15;margin:1.8em 0 .35em;scroll-margin-top:100px}
+  .bd-prose h2{font-family:var(--font-d);font-size:clamp(18px,2vw,24px);font-weight:800;letter-spacing:-.02em;line-height:1.2;margin:1.6em 0 0;scroll-margin-top:100px}
   .bd-prose h2+.bd-h2-line{width:44px;height:3px;background:#fde859;border-radius:2px;margin:.5em 0 1em}
-  .bd-prose h3{font-family:var(--font-d);font-size:clamp(15px,1.7vw,19px);font-weight:800;letter-spacing:-.015em;line-height:1.3;margin:1.4em 0 .3em}
+  .bd-prose h3{font-family:var(--font-d);font-size:clamp(15px,1.7vw,19px);font-weight:800;letter-spacing:-.015em;line-height:1.3;margin:1.4em 0 .3em;scroll-margin-top:100px}
   .bd-prose ul{list-style:disc;padding-left:22px;margin:.5em 0 1em}
   .bd-prose ol{list-style:decimal;padding-left:22px;margin:.5em 0 1em}
   .bd-prose li{margin:.25em 0;line-height:1.65}
@@ -137,7 +137,27 @@ const css = `
     .bd-main{padding:18px 16px}
     .bd-h1{font-size:24px}
     .bd-navpn{flex-direction:column}
+    .bd-banner-styled{min-height:90px}
+    .bd-banner-heading{font-size:22px}
   }
+
+  /* BANNERS */
+  .bd-banner-link{display:block;margin:28px 0;border-radius:14px;overflow:hidden;cursor:pointer;transition:transform .18s,box-shadow .18s;box-shadow:0 4px 18px rgba(45,32,32,.10)}
+  .bd-banner-link:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(45,32,32,.18)}
+  .bd-banner-img{display:block;width:100%;height:auto;border-radius:14px}
+
+  /* Yellow banner (CSS-only) */
+  .bd-banner-styled{display:flex;align-items:stretch;min-height:120px;border-radius:14px;overflow:hidden;position:relative}
+  .bd-banner-styled--yellow{background:linear-gradient(135deg,#f8e84a 0%,#f9c133 35%,#f7a23a 75%,#f07b2a 100%)}
+  .bd-banner-left{flex:1;padding:22px 28px;display:flex;flex-direction:column;justify-content:center;gap:8px;z-index:1}
+  .bd-banner-logo{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:rgba(0,0,0,.7)}
+  .bd-banner-logo strong{font-weight:800;color:#000}
+  .bd-banner-heading{font-family:"Be Vietnam Pro",system-ui,sans-serif;font-size:clamp(20px,3vw,30px);font-weight:900;letter-spacing:-.02em;line-height:1.1;color:#1a1000;margin:0;text-shadow:0 1px 0 rgba(255,255,255,.35)}
+  .bd-banner-highlight{display:inline-block;padding:2px 12px;border-radius:999px;font-size:clamp(18px,2.6vw,28px)}
+  .bd-banner-highlight--yellow{background:rgba(0,0,0,.12);color:#7a3d00}
+  .bd-banner-cta{display:inline-flex;align-items:center;width:fit-content;padding:7px 18px;background:rgba(0,0,0,.18);color:#fff;font-size:12px;font-weight:800;letter-spacing:.1em;border-radius:999px;border:1.5px solid rgba(255,255,255,.45);text-shadow:none}
+  .bd-banner-right{display:flex;align-items:center;justify-content:center;padding:16px 24px;position:relative;overflow:hidden}
+  .bd-banner-right--yellow::before{content:"";position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='100' cy='100' r='90' stroke='white' stroke-width='2' fill='none' opacity='0.15'/%3E%3Ccircle cx='100' cy='100' r='55' stroke='white' stroke-width='2' fill='none' opacity='0.12'/%3E%3Cline x1='30' y1='30' x2='170' y2='170' stroke='white' stroke-width='1.5' opacity='0.1'/%3E%3Cline x1='170' y1='30' x2='30' y2='170' stroke='white' stroke-width='1.5' opacity='0.1'/%3E%3C/svg%3E") center/contain no-repeat;opacity:.6}
 `;
 
 export function BlogDetailStyles() {

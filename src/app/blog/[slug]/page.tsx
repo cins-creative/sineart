@@ -141,21 +141,6 @@ export default async function BlogDetailPage({ params }: Props) {
                 </div>
                 <div className="bd-author-role">Nguồn · {dateStr}</div>
               </div>
-              {post.nguon && (
-                <div className="bd-author-actions">
-                  <a
-                    href={post.nguon}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bd-icon-btn"
-                    aria-label="Mở bài viết gốc"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                    </svg>
-                  </a>
-                </div>
-              )}
             </div>
 
             {/* Hero thumbnail */}
@@ -170,6 +155,22 @@ export default async function BlogDetailPage({ params }: Props) {
               }
             />
 
+            {/* Banner 1 — Trang Trí Màu (between opening/cover and content) */}
+            <a
+              href="https://sineart.vercel.app/khoa-hoc/trang-tri-mau"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bd-banner-link"
+              aria-label="Khóa học Trang Trí Màu tại Sine Art"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/banners/banner-trang-tri-mau.png"
+                alt="Khóa học Trang Trí Màu tại Sine Art"
+                className="bd-banner-img"
+              />
+            </a>
+
             {/* Content */}
             {safeContent && (
               <div
@@ -177,6 +178,41 @@ export default async function BlogDetailPage({ params }: Props) {
                 dangerouslySetInnerHTML={{ __html: contentWithIds }}
               />
             )}
+
+            {/* Banner 2 — Hình Họa (between content and ending) */}
+            <a
+              href="https://sineart.vercel.app/khoa-hoc/hinh-hoa"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bd-banner-link bd-banner-link--yellow"
+              aria-label="Khóa học Hình Họa tại Sine Art"
+            >
+              <div className="bd-banner-styled bd-banner-styled--yellow">
+                <div className="bd-banner-left">
+                  <div className="bd-banner-logo">
+                    <svg width="28" height="28" viewBox="0 0 40 40" fill="none" aria-hidden>
+                      <circle cx="20" cy="20" r="20" fill="rgba(255,255,255,0.25)"/>
+                      <text x="50%" y="55%" dominantBaseline="middle" textAnchor="middle" fontSize="16" fontWeight="700" fill="white">S</text>
+                    </svg>
+                    <span>Sine<strong>Art</strong></span>
+                  </div>
+                  <h3 className="bd-banner-heading">
+                    KHÓA HỌC<br />
+                    <span className="bd-banner-highlight bd-banner-highlight--yellow">HÌNH HỌA</span><br />
+                    TẠI SINE ART
+                  </h3>
+                  <span className="bd-banner-cta">NHẬN THÔNG TIN</span>
+                </div>
+                <div className="bd-banner-right bd-banner-right--yellow">
+                  <svg width="120" height="100" viewBox="0 0 120 100" fill="none" opacity="0.18" aria-hidden>
+                    <circle cx="60" cy="50" r="45" stroke="white" strokeWidth="3"/>
+                    <line x1="20" y1="20" x2="100" y2="80" stroke="white" strokeWidth="2"/>
+                    <line x1="100" y1="20" x2="20" y2="80" stroke="white" strokeWidth="2"/>
+                    <circle cx="60" cy="50" r="18" stroke="white" strokeWidth="2"/>
+                  </svg>
+                </div>
+              </div>
+            </a>
 
             {/* Ending */}
             {safeEnding && (

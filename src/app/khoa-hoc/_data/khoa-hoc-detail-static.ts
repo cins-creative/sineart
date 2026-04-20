@@ -195,3 +195,22 @@ export const KD_DEFAULT_LEARN = [
   "Truy cập tài liệu và bài giảng của chương trình",
   "Theo dõi tiến độ qua từng buổi học",
 ];
+
+export const KD_DANH_CHO_AI: { bold: string; text: string }[] = [
+  {
+    bold: "Học sinh THPT",
+    text: "chuẩn bị thi các trường Mỹ thuật, Kiến trúc, Sân khấu Điện ảnh.",
+  },
+  {
+    bold: "Người mới",
+    text: "muốn xây nền tảng màu sắc có hệ thống, không học mẹo.",
+  },
+  {
+    bold: "Hoạ sĩ số",
+    text: "cần củng cố nguyên lý màu truyền thống trước khi chuyển sang Digital.",
+  },
+  {
+    bold: "Sinh viên",
+    text: "ngành thiết kế cần portfolio có chiều sâu về màu.",
+  },
+];

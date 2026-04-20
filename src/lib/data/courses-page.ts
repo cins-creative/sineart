@@ -899,9 +899,30 @@ function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
   const donVi = String(row.don_vi ?? "").trim();
   const giaGoc = parseMoney(row.gia_goc);
   const discount = Math.min(100, Math.max(0, parseMoney(row.discount)));
+  // `combo_id` trên bảng mới có thể là int[] (mảng combo) hoặc int đơn; bảng legacy là int.
   const comboRaw = row.combo_id;
-  const comboNum =
-    comboRaw == null || comboRaw === "" ? null : Number(comboRaw);
+  let combo_ids: number[] = [];
+  if (Array.isArray(comboRaw)) {
+    combo_ids = (comboRaw as unknown[])
+      .map(Number)
+      .filter((n) => Number.isFinite(n) && n > 0);
+  } else if (typeof comboRaw === "string") {
+    const t = comboRaw.trim();
+    if (t.startsWith("{") && t.endsWith("}")) {
+      combo_ids = t
+        .slice(1, -1)
+        .split(",")
+        .map((x) => Number(x.trim()))
+        .filter((n) => Number.isFinite(n) && n > 0);
+    } else if (t !== "") {
+      const n = Number(t);
+      if (Number.isFinite(n) && n > 0) combo_ids = [n];
+    }
+  } else if (comboRaw != null && comboRaw !== "") {
+    const n = Number(comboRaw);
+    if (Number.isFinite(n) && n > 0) combo_ids = [n];
+  }
+  const primaryComboId = combo_ids[0] ?? null;
   const sbRaw = row.so_buoi;
   const soBuoiParsed =
     sbRaw == null || sbRaw === ""
@@ -934,9 +955,8 @@ function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
     don_vi: donVi,
     gia_goc: giaGoc,
     discount,
-    combo_id:
-      comboNum != null && Number.isFinite(comboNum) ? comboNum : null,
-    combo_ids: comboNum != null && Number.isFinite(comboNum) ? [comboNum] : [],
+    combo_id: primaryComboId,
+    combo_ids,
     so_buoi,
     special,
     note,
@@ -1022,49 +1042,55 @@ export async function getHocPhiBlockData(
   }
 
   const main = (mainRows ?? []) as unknown as Record<string, unknown>[];
-  const comboIds = [
+  const mainGois = main.map(mapHocPhiGoiRow);
+  const mainGoiIds = new Set(mainGois.map((g) => g.id));
+
+  // Fetch toàn bộ combo đang hoạt động để đối chiếu theo `goi_ids`
+  // (thay cho logic cũ dựa `combo_id` đơn trên bảng gói).
+  const { data: allComboRows } = await supabase
+    .from("hp_combo_mon")
+    .select("id, ten_combo, gia_giam, goi_ids, dang_hoat_dong")
+    .order("id", { ascending: true });
+  const allCombos: HocPhiComboRow[] = (
+    (allComboRows ?? []) as Record<string, unknown>[]
+  ).map(mapHocPhiComboRow);
+
+  // Combo liên quan = combo active có chứa ít nhất 1 gói chính
+  const relevantCombos = allCombos.filter(
+    (c) =>
+      c.dang_hoat_dong &&
+      c.goi_ids.length > 0 &&
+      c.goi_ids.some((id) => mainGoiIds.has(id)),
+  );
+
+  // Gói partner = các goi_ids trong relevantCombos không thuộc môn chính
+  const partnerGoiIds = [
     ...new Set(
-      main
-        .map((r) => r.combo_id)
-        .filter((c) => c != null && c !== "")
-        .map((c) => Number(c))
-        .filter((n) => Number.isFinite(n))
+      relevantCombos
+        .flatMap((c) => c.goi_ids)
+        .filter((id) => !mainGoiIds.has(id)),
     ),
   ];
 
-  let merged: Record<string, unknown>[] = [...main];
-  if (comboIds.length > 0) {
+  let gois: HocPhiGoiRow[] = [...mainGois];
+  if (partnerGoiIds.length > 0) {
     const { data: extra } = await supabase
       .from(goiTable)
       .select(goiCols)
-      .in("combo_id", comboIds);
+      .in("id", partnerGoiIds);
     const extraRows = (extra ?? []) as unknown as Record<string, unknown>[];
     if (extraRows.length) {
-      const byId = new Map<number, Record<string, unknown>>();
-      for (const r of merged) byId.set(Number(r.id), r);
+      const byId = new Map<number, HocPhiGoiRow>();
+      for (const g of gois) byId.set(g.id, g);
       for (const r of extraRows) {
-        const id = Number(r.id);
-        if (!byId.has(id)) byId.set(id, r);
+        const g = mapHocPhiGoiRow(r);
+        if (!byId.has(g.id)) byId.set(g.id, g);
       }
-      merged = [...byId.values()];
+      gois = [...byId.values()];
     }
   }
 
-  const gois = merged.map(mapHocPhiGoiRow);
-
-  let combos: HocPhiComboRow[] = [];
-  if (comboIds.length > 0) {
-    const { data: comboRows, error: eCombo } = await supabase
-      .from("hp_combo_mon")
-      .select("id, ten_combo, gia_giam, goi_ids, dang_hoat_dong")
-      .in("id", comboIds)
-      .order("id", { ascending: true });
-    if (!eCombo && comboRows?.length) {
-      combos = (comboRows as Record<string, unknown>[]).map(
-        mapHocPhiComboRow
-      );
-    }
-  }
+  const combos: HocPhiComboRow[] = relevantCombos;
 
   const monIds = [...new Set(gois.map((g) => g.mon_hoc))];
   const monMap: Record<number, string> = {};

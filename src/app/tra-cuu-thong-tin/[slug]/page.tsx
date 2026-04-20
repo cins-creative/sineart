@@ -75,18 +75,17 @@ export default async function TraCuuDetailPage({ params }: Props) {
     .filter((s): s is string => !!s);
 
   const { prev, next } = adjacent;
+  // body_html được admin kiểm duyệt + Claude generate (có class-based CSS trong
+  // <style>). Dùng sanitize nhẹ giữ nguyên <style> để match hoàn toàn với
+  // admin preview (chỉ strip <script> + inline event handler).
   const safeContent = post.body_html
-    ? sanitizeAdminRichHtml(stripHtmlCodeFence(post.body_html))
+    ? sanitizeTraCuuBodyHtml(stripHtmlCodeFence(post.body_html))
     : "";
   const safeExcerpt = post.excerpt ? sanitizeAdminRichHtml(post.excerpt) : "";
   const contentWithIds = injectHeadingIds(safeContent);
   const headings = extractHeadings(safeContent);
   const readMin = estimateReadMinutes(post.body_html ?? post.excerpt ?? "");
   const dateStr = formatDateVi(post.published_at);
-
-  const thumbSrc = post.thumbnail_url
-    ? cfImageForThumbnail(post.thumbnail_url) ?? post.thumbnail_url
-    : null;
 
   // Author display: ưu tiên trường đầu tiên, fallback "Sine Art"
   const authorLabel = truongNames[0] ?? "Sine Art";
@@ -178,36 +177,6 @@ export default async function TraCuuDetailPage({ params }: Props) {
               </div>
             </div>
 
-            {/* Hero thumbnail */}
-            {(thumbSrc || true) && (
-              <div
-                className="bd-cover"
-                role="img"
-                aria-label={post.thumbnail_alt ?? post.title ?? ""}
-                style={
-                  thumbSrc
-                    ? { backgroundImage: `url(${thumbSrc})` }
-                    : { background: grad(post.id) }
-                }
-              />
-            )}
-
-            {/* Banner 1 — Trang Trí Màu */}
-            <a
-              href="https://sineart.vercel.app/khoa-hoc/trang-tri-mau"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bd-banner-link"
-              aria-label="Khoá học Trang Trí Màu tại Sine Art"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/banners/banner-trang-tri-mau.png"
-                alt="Khoá học Trang Trí Màu tại Sine Art"
-                className="bd-banner-img"
-              />
-            </a>
-
             {/* Content */}
             {safeContent && (
               <div
@@ -231,33 +200,6 @@ export default async function TraCuuDetailPage({ params }: Props) {
                 className="bd-banner-img"
               />
             </a>
-
-            {/* CTA inline */}
-            <div className="bd-cta-inline">
-              <div className="bd-cta-icon">
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="rgba(45,32,32,.55)"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                </svg>
-              </div>
-              <div className="bd-cta-body">
-                <div className="bd-cta-eyebrow">Khoá học Sine Art</div>
-                <div className="bd-cta-title">Học mỹ thuật bài bản</div>
-                <div className="bd-cta-meta">Giáo trình khoa học · Đồng hành 350+ học viên</div>
-                <Link href="/khoa-hoc" className="bd-btn-inline">
-                  Xem khoá học →
-                </Link>
-              </div>
-            </div>
 
             {/* Share */}
             <div className="bd-share">
@@ -433,4 +375,24 @@ function stripHtmlCodeFence(input: string): string {
   const t = input.trim();
   const m = t.match(/^```(?:html)?\s*\n?([\s\S]*?)\n?```$/i);
   return (m ? m[1]! : t).trim();
+}
+
+/**
+ * Sanitize nhẹ cho body_html của tra-cuu — giữ nguyên `<style>` block vì Claude
+ * thường dùng class-based CSS (ví dụ `.stat-grid{display:grid;...}`). Chỉ loại bỏ
+ * `<script>`, inline event handler, `javascript:` URL.
+ *
+ * Lưu ý: body_html là nội dung admin-controlled (giống blog), trust level cao.
+ * CSS trong `<style>` có thể leak global nên Claude được yêu cầu dùng class tên
+ * unique (.stat-grid, .method-card…) hoặc inline style.
+ */
+function sanitizeTraCuuBodyHtml(html: string): string {
+  let t = html;
+  t = t.replace(/<(script|iframe)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
+  t = t.replace(/<\/?(?:script|object|embed|link|meta|base|iframe)[^>]*>/gi, "");
+  t = t.replace(/\son\w+\s*=\s*["'][^"']*["']/gi, "");
+  t = t.replace(/\son\w+\s*=\s*[^\s>]*/gi, "");
+  t = t.replace(/javascript:/gi, "");
+  t = t.replace(/data:text\/html/gi, "");
+  return t;
 }

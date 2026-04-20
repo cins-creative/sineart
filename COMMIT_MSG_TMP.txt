@@ -1,0 +1,6 @@
+fix(tra-cuu/slug): polish detail page layout + sanitize fix
+
+- Use sanitizeTraCuuBodyHtml (keep <style> blocks) so Claude class-based CSS renders correctly on public page.
+- Replace .bd-prose with .bd-tc-body container to avoid blog styles overriding Claude inline styles.
+- Add default padding/gap to common Claude class patterns (hero, card, box, grid, stats-grid) in TraCuuDetailStyles.
+- Remove hero cover thumbnail, banner Trang Tri Mau, and CTA inline block from detail page.

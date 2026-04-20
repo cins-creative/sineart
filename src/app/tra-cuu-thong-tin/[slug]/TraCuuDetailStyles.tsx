@@ -32,8 +32,31 @@ const css = `
   .bd-tc-body strong,.bd-tc-body b{font-weight:700;color:#1a1a1a}
   .bd-tc-body hr{border:none;border-top:1px solid rgba(45,32,32,.08);margin:2em 0}
   .bd-tc-body img{max-width:100%;height:auto;border-radius:10px}
-  /* Bảng: KHÔNG áp border/background global — để inline style của Claude tự quyết. */
-  .bd-tc-body table{border-collapse:collapse;margin:16px 0}
+  /* Table defaults — padding cho ô + margin, KHÔNG áp border/background toàn cục
+     để inline style của Claude (gradient header, zebra row, v.v.) tự quyết. */
+  .bd-tc-body table{width:100%;border-collapse:separate;border-spacing:0;margin:18px 0;font-size:14px}
+  .bd-tc-body th,.bd-tc-body td{padding:11px 14px;vertical-align:top}
+  .bd-tc-body thead th{font-weight:800}
+
+  /* Grid defaults — gap + margin khi Claude quên khai báo.
+     Inline style="gap:..." của Claude sẽ override do specificity cao hơn. */
+  .bd-tc-body [class*="grid" i],
+  .bd-tc-body [class*="stats" i],
+  .bd-tc-body [class*="cards" i]{gap:14px;margin:16px 0}
+
+  /* Container card defaults — padding + border-radius khi Claude quên khai báo.
+     Áp dụng cho các class phổ biến Claude thường dùng. */
+  .bd-tc-body .hero,
+  .bd-tc-body .card,
+  .bd-tc-body .box,
+  .bd-tc-body .panel,
+  .bd-tc-body [class*="info-box" i],
+  .bd-tc-body [class*="method" i]:not([class*="methods" i]),
+  .bd-tc-body [class*="section-card" i],
+  .bd-tc-body [class*="feature" i]:not([class*="features" i]){padding:20px 24px;border-radius:14px}
+
+  /* Khoảng cách tối thiểu giữa các section block con trực tiếp. */
+  .bd-tc-body > * + *{margin-top:14px}
 `;
 
 export function TraCuuDetailStyles() {

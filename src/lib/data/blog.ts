@@ -144,3 +144,89 @@ async function fetchAdjacentBlogsUncached(
 }
 
 export const fetchAdjacentBlogs = cache(fetchAdjacentBlogsUncached);
+
+// ─── Blog list ────────────────────────────────────────────────────────────────
+
+const BLOG_LIST_SELECT =
+  "id, created_at, title, thumbnail, feature, nguon, image_alt, opening";
+
+export type BlogListResult = {
+  posts: BlogListItem[];
+  total: number;
+  totalPages: number;
+};
+
+async function fetchBlogListUncached(opts: {
+  page?: number;
+  perPage?: number;
+  search?: string;
+}): Promise<BlogListResult> {
+  const { page = 1, perPage = 9, search } = opts;
+  const supabase = await createClient();
+  if (!supabase) return { posts: [], total: 0, totalPages: 0 };
+
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+
+  let query = supabase
+    .from("mkt_blogs")
+    .select(BLOG_LIST_SELECT, { count: "exact" })
+    .order("created_at", { ascending: false });
+
+  if (search?.trim()) {
+    query = query.ilike("title", `%${search.trim()}%`);
+  }
+
+  const { data, error, count } = await query.range(from, to);
+  if (error || !data) return { posts: [], total: 0, totalPages: 0 };
+
+  const total = count ?? 0;
+  return {
+    posts: data as BlogListItem[],
+    total,
+    totalPages: Math.max(1, Math.ceil(total / perPage)),
+  };
+}
+
+export const fetchBlogList = cache(fetchBlogListUncached);
+
+async function fetchFeaturedBlogUncached(): Promise<BlogListItem | null> {
+  const supabase = await createClient();
+  if (!supabase) return null;
+
+  // Ưu tiên bài có feature=true, fallback latest
+  const { data: featured } = await supabase
+    .from("mkt_blogs")
+    .select(BLOG_LIST_SELECT)
+    .eq("feature", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (featured) return featured as BlogListItem;
+
+  const { data: latest } = await supabase
+    .from("mkt_blogs")
+    .select(BLOG_LIST_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return (latest as BlogListItem) ?? null;
+}
+
+export const fetchFeaturedBlog = cache(fetchFeaturedBlogUncached);
+
+async function fetchPopularBlogsUncached(limit = 5): Promise<BlogListItem[]> {
+  const supabase = await createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("mkt_blogs")
+    .select(BLOG_LIST_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return data as BlogListItem[];
+}
+
+export const fetchPopularBlogs = cache(fetchPopularBlogsUncached);

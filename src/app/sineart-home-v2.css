@@ -538,12 +538,12 @@
 }
 .hero-sticker--1 {
   top: 10%;
-  right: -18%;
+  right: -4%;
   transform: rotate(4deg);
 }
 .hero-sticker--2 {
   bottom: 18%;
-  right: -16%;
+  right: -2%;
   transform: rotate(-3deg);
   animation-delay: 1.2s;
 }

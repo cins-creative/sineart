@@ -100,5 +100,5 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   { kind: "link", id: "thi-thu", label: "Thi thử", href: "/thi-thu" },
-  { kind: "link", id: "blogs", label: "Blogs", href: "/blog" },
+  { kind: "link", id: "blogs", label: "Blogs", href: "/blogs" },
 ];

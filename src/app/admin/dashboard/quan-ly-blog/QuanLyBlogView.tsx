@@ -287,7 +287,7 @@ export default function QuanLyBlogView({ initialBlogs, missingServiceRole, loadE
                         </button>
                         <a
                           className="qlb-btn qlb-btn-ghost qlb-btn-sm"
-                          href={`/blog/${b.id}-${slugify(b.title ?? "")}`}
+                          href={`/blogs/${b.id}-${slugify(b.title ?? "")}`}
                           target="_blank"
                           rel="noreferrer"
                         >

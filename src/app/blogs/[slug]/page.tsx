@@ -103,7 +103,7 @@ export default async function BlogDetailPage({ params }: Props) {
 
             {/* Breadcrumb */}
             <nav className="bd-crumb" aria-label="Breadcrumb">
-              <Link href="/blog" className="bd-crumb-back">
+              <Link href="/blogs" className="bd-crumb-back">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden><polyline points="15 18 9 12 15 6"/></svg>
                 Blogs
               </Link>
@@ -242,21 +242,21 @@ export default async function BlogDetailPage({ params }: Props) {
               <span className="bd-share-label">Chia sẻ</span>
               <div className="bd-share-btns">
                 <a
-                  href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`https://sineart.vn/blog/${buildBlogSlug(post.id, post.title)}`)}`}
+                  href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`https://sineart.vn/blogs/${buildBlogSlug(post.id, post.title)}`)}`}
                   target="_blank" rel="noopener noreferrer"
                   className="bd-icon-btn" aria-label="Chia sẻ Facebook"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg>
                 </a>
                 <a
-                  href={`https://www.linkedin.com/shareArticle?url=${encodeURIComponent(`https://sineart.vn/blog/${buildBlogSlug(post.id, post.title)}`)}`}
+                  href={`https://www.linkedin.com/shareArticle?url=${encodeURIComponent(`https://sineart.vn/blogs/${buildBlogSlug(post.id, post.title)}`)}`}
                   target="_blank" rel="noopener noreferrer"
                   className="bd-icon-btn" aria-label="Chia sẻ LinkedIn"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M19 3h-14c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-14c0-1.1-.9-2-2-2zm-11 16h-2.5v-8h2.5v8zm-1.25-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm9.75 9h-2.5v-4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v4h-2.5v-8h2.5v1c.5-.69 1.35-1 2-1 1.66 0 3 1.34 3 3v5z"/></svg>
                 </a>
                 <a
-                  href={`https://sineart.vn/blog/${buildBlogSlug(post.id, post.title)}`}
+                  href={`https://sineart.vn/blogs/${buildBlogSlug(post.id, post.title)}`}
                   className="bd-icon-btn" aria-label="Sao chép link"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -270,7 +270,7 @@ export default async function BlogDetailPage({ params }: Props) {
             <div className="bd-navpn">
               {prev ? (
                 <Link
-                  href={`/blog/${buildBlogSlug(prev.id, prev.title)}`}
+                  href={`/blogs/${buildBlogSlug(prev.id, prev.title)}`}
                   className="bd-navpn-item"
                 >
                   <span className="bd-navpn-icon">
@@ -285,7 +285,7 @@ export default async function BlogDetailPage({ params }: Props) {
 
               {next ? (
                 <Link
-                  href={`/blog/${buildBlogSlug(next.id, next.title)}`}
+                  href={`/blogs/${buildBlogSlug(next.id, next.title)}`}
                   className="bd-navpn-item bd-navpn-item--next"
                 >
                   <div>
@@ -332,7 +332,7 @@ export default async function BlogDetailPage({ params }: Props) {
                     return (
                       <Link
                         key={r.id}
-                        href={`/blog/${buildBlogSlug(r.id, r.title)}`}
+                        href={`/blogs/${buildBlogSlug(r.id, r.title)}`}
                         className="bd-related-item"
                       >
                         <div

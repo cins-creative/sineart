@@ -20,6 +20,18 @@ export type BlogListItem = Pick<
   "id" | "created_at" | "title" | "thumbnail" | "feature" | "nguon" | "opening"
 >;
 
+/** Trích tên domain hiển thị từ URL nguồn (nguon field). */
+export function sourceDomain(url: string | null | undefined): string {
+  if (!url) return "Sine Art";
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, "");
+  } catch {
+    // Không phải URL — trả về string gốc nhưng cắt ngắn
+    return url.length > 40 ? url.slice(0, 40) + "…" : url;
+  }
+}
+
 /** Chuyển title thành slug ASCII-safe. */
 export function slugifyTitle(title: string): string {
   return title

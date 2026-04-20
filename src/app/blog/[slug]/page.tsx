@@ -11,6 +11,7 @@ import {
   extractHeadings,
   injectHeadingIds,
   formatDateVi,
+  sourceDomain,
 } from "@/lib/data/blog";
 import { sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
@@ -53,11 +54,10 @@ function thumbGrad(id: number) {
   return THUMB_GRADS[id % 5]!;
 }
 
-function initials(name: string | null) {
-  if (!name) return "SA";
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
-  return (words[0]!.charAt(0) + words[words.length - 1]!.charAt(0)).toUpperCase();
+function initials(nguon: string | null) {
+  const name = sourceDomain(nguon);
+  const part = name.replace(/\..+/, "").trim();
+  return part.slice(0, 2).toUpperCase();
 }
 
 // ─── SVG icons ───────────────────────────────────────────────────────────────
@@ -168,8 +168,12 @@ export default async function BlogSlugPage({ params }: Props) {
             <div className="blog-author-card">
               <div className="blog-author-av">{initials(post.nguon)}</div>
               <div className="blog-author-info">
-                <div className="blog-author-name">{post.nguon}</div>
-                <div className="blog-author-role">Sine Art · {dateStr}</div>
+                <div className="blog-author-name">
+                  <a href={post.nguon} target="_blank" rel="noopener noreferrer" className="blog-nguon-link">
+                    {sourceDomain(post.nguon)}
+                  </a>
+                </div>
+                <div className="blog-author-role">Nguồn · {dateStr}</div>
               </div>
             </div>
           )}
@@ -392,6 +396,8 @@ export default async function BlogSlugPage({ params }: Props) {
         .blog-author-av{width:44px;height:44px;border-radius:50%;background:var(--grad);color:#fff;font-family:var(--font-display);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
         .blog-author-name{font-size:14px;font-weight:700;margin-bottom:2px}
         .blog-author-role{font-size:12px;color:var(--ink-muted)}
+        .blog-nguon-link{color:var(--ink);text-decoration:none;border-bottom:1.5px solid rgba(45,32,32,.15)}
+        .blog-nguon-link:hover{border-bottom-color:var(--magenta);color:var(--magenta)}
 
         /* HERO COVER */
         .blog-hero-cover{aspect-ratio:16/9;border-radius:16px;margin-bottom:32px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;overflow:hidden}

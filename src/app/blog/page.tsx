@@ -9,6 +9,7 @@ import {
   buildBlogSlug,
   estimateReadMinutes,
   formatDateVi,
+  sourceDomain,
   type BlogListItem,
 } from "@/lib/data/blog";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
@@ -37,11 +38,10 @@ function thumbGrad(id: number) {
   return THUMB_GRADS[id % 5]!;
 }
 
-function initials(name: string | null | undefined) {
-  if (!name) return "SA";
-  const w = name.trim().split(/\s+/);
-  if (w.length === 1) return w[0]!.slice(0, 2).toUpperCase();
-  return (w[0]!.charAt(0) + w[w.length - 1]!.charAt(0)).toUpperCase();
+function initials(nguon: string | null | undefined) {
+  const name = sourceDomain(nguon);
+  const w = name.replace(/\..+/, "").trim(); // lấy phần trước dấu chấm đầu tiên
+  return w.slice(0, 2).toUpperCase();
 }
 
 function ThumbDiv({
@@ -192,8 +192,8 @@ export default async function BlogPage({ searchParams }: PageProps) {
                   </ThumbDiv>
                   <div className="featured-meta">
                     <div className="cat-row">
-                      <span className="cat-name">{featured.nguon ?? "Sine Art"}</span>
-                      {featuredReadMin && (
+                      <span className="cat-name">{sourceDomain(featured.nguon)}</span>
+                      {featuredReadMin && featuredReadMin > 0 && (
                         <>
                           <span className="cat-sep">·</span>
                           <span className="cat-time">{featuredReadMin} phút đọc</span>
@@ -211,7 +211,7 @@ export default async function BlogPage({ searchParams }: PageProps) {
                     )}
                     <div className="author-row">
                       <span className="avatar">{initials(featured.nguon)}</span>
-                      <span className="author-name">{featured.nguon ?? "Sine Art"}</span>
+                      <span className="author-name">{sourceDomain(featured.nguon)}</span>
                       <span className="cat-sep">·</span>
                       <span className="author-date">{formatDateVi(featured.created_at)}</span>
                     </div>
@@ -239,20 +239,22 @@ export default async function BlogPage({ searchParams }: PageProps) {
                     return (
                       <Link key={post.id} href={`/blog/${slug}`} className="card">
                         <ThumbDiv post={post} className="card-thumb">
-                          {post.nguon && (
-                            <span className="thumb-badge">{post.nguon}</span>
-                          )}
+                          <span className="thumb-badge">{sourceDomain(post.nguon)}</span>
                         </ThumbDiv>
                         <div className="card-body">
                           <div className="cat-row">
-                            <span className="cat-name">{post.nguon ?? "Sine Art"}</span>
-                            <span className="cat-sep">·</span>
-                            <span className="cat-time">{readMin} phút</span>
+                            <span className="cat-name">{sourceDomain(post.nguon)}</span>
+                            {readMin > 0 && (
+                              <>
+                                <span className="cat-sep">·</span>
+                                <span className="cat-time">{readMin} phút</span>
+                              </>
+                            )}
                           </div>
                           <h3 className="card-title">{post.title}</h3>
                           <div className="card-footer">
                             <span className="avatar">{initials(post.nguon)}</span>
-                            <span className="author-name">{post.nguon ?? "Sine Art"}</span>
+                            <span className="author-name">{sourceDomain(post.nguon)}</span>
                             <span className="cat-sep">·</span>
                             <span className="author-date">{formatDateVi(post.created_at)}</span>
                           </div>
@@ -327,7 +329,7 @@ export default async function BlogPage({ searchParams }: PageProps) {
                         <div className="popular-title">{p.title}</div>
                         <div className="popular-meta">
                           <span className="cat-dot neutral" />
-                          {p.nguon ?? "Sine Art"} · {formatDateVi(p.created_at)}
+                          {sourceDomain(p.nguon)} · {formatDateVi(p.created_at)}
                         </div>
                       </div>
                     </Link>

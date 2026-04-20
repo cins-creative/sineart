@@ -2,6 +2,8 @@
  * "Ba trụ cột" — 3 card giải thích vì sao chọn Sine Art.
  * Static — không cần data từ server; tokens trong `sineart-home-v2.css`.
  */
+import type { ReactElement } from "react";
+
 const BookIcon = () => (
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
     <path
@@ -44,7 +46,7 @@ type Pillar = {
   num: string;
   title: string;
   text: string;
-  Icon: () => JSX.Element;
+  Icon: () => ReactElement;
 };
 
 const PILLARS: Pillar[] = [

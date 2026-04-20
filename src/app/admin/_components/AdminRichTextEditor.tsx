@@ -313,7 +313,7 @@ export default function AdminRichTextEditor({
     if (!editor || value === undefined) return;
     const next = normalizeHtmlIntoBlocks(value || "");
     if (editor.getHTML() === next) return;
-    editor.commands.setContent(next, false);
+    editor.commands.setContent(next, { emitUpdate: false });
   }, [editor, value]);
 
   const inTable = editor?.isActive("table") ?? false;

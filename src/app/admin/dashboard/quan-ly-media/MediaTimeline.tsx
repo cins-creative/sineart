@@ -1200,7 +1200,7 @@ function ProjectDetailModal({
               </>
             ) : project.brief?.trim() ? (
               <div
-                className="[&_a]:text-blue-600 [&_a]:underline [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5"
+                className="[&_a]:text-blue-600 [&_a]:underline [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_table]:w-full [&_table]:border-collapse [&_table]:my-2 [&_td]:border [&_td]:border-[#e0e0e0] [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_td]:text-[13px] [&_th]:border [&_th]:border-[#e0e0e0] [&_th]:px-3 [&_th]:py-2 [&_th]:align-top [&_th]:bg-[#f5f5f5] [&_th]:font-semibold [&_th]:text-[13px]"
                 style={{
                   border: `1px solid ${BORDER}`,
                   borderRadius: 10,

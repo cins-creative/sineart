@@ -22,7 +22,18 @@ export default function VideoSection() {
 
   return (
     <div className="video-section">
-      <div className="sec-label">Xem lớp học</div>
+      <div className="sec-head sec-head--align-start">
+        <div className="sec-head-left">
+          <div className="sec-label">Học thử · Xem trực tiếp</div>
+          <h2 className="sec-title">
+            Online hay Offline — <em>liệu có hiệu quả?</em>
+          </h2>
+          <p className="sec-sub">
+            Sine Art có 2 hình thức học với giáo trình giống hệt nhau. Xem video giới thiệu từng
+            lớp để chọn cách học phù hợp với bạn.
+          </p>
+        </div>
+      </div>
       <div className="video-tabs">
         {tabs.map((t) => (
           <button

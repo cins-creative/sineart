@@ -2,7 +2,6 @@ import { KHOA_HOC_GROUP_FILTERS } from "@/lib/khoa-hoc-course-filters";
 import type { CourseGroupId } from "@/types/khoa-hoc";
 import Link from "next/link";
 
-/** Màu chấm / nền placeholder — thay ảnh sau qua CSS `.courses-block-thumb--*` hoặc `background-image` */
 const GROUP_DOT: Record<CourseGroupId, string> = {
   lthi: "#7f77dd",
   digital: "#1d9e75",
@@ -10,14 +9,51 @@ const GROUP_DOT: Record<CourseGroupId, string> = {
   botro: "#888780",
 };
 
+const ArrowIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <line
+      x1="5"
+      y1="12"
+      x2="19"
+      y2="12"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+    />
+    <polyline
+      points="12 5 19 12 12 19"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  </svg>
+);
+
 /**
- * Trang chủ: 4 block theo loại khóa — bento 1 lớn (Luyện thi ĐH) + 3 nhỏ (CSS `.courses-blocks`).
- * Ảnh placeholder — thay sau trong CSS.
+ * Trang chủ: 4 block theo loại khóa — bento 1 lớn (Luyện thi ĐH) + 3 nhỏ.
+ * Mapping dữ liệu: `KHOA_HOC_GROUP_FILTERS` (không đổi), CSS v2 override visual.
  */
 export default function CoursesSection() {
   return (
     <div className="courses-wrap" id="khoa-hoc">
-      <div className="sec-label">Khoá học</div>
+      <div className="sec-head">
+        <div className="sec-head-left">
+          <div className="sec-label">Khoá học</div>
+          <h2 className="sec-title">
+            Lộ trình <em>bài bản</em> cho mọi người học
+          </h2>
+          <p className="sec-sub">
+            Từ thiếu nhi đến luyện thi đại học và học nghề chuyên sâu — chúng tôi có lộ trình
+            phù hợp cho bạn.
+          </p>
+        </div>
+        <Link href="/khoa-hoc" className="sec-link">
+          Tất cả khoá học
+          <ArrowIcon />
+        </Link>
+      </div>
 
       <div
         className="courses-blocks"

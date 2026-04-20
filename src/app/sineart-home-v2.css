@@ -1,0 +1,1307 @@
+/*
+ * sineart-home-v2.css — lớp redesign theo MHTML "Sine Art — Trường mỹ thuật cho Họa sỹ công nghệ"
+ * Cascade SAU `sineart-home.css` để override các phần visual chính.
+ * Giữ mechanics nav + avatar + dropdown logic; chỉ đổi style.
+ */
+
+/* ─────────────────────────────
+  TOKENS REDESIGN — cascade override
+───────────────────────────── */
+.sa-root {
+  /* Brand ink hơi ấm (MHTML --ink) — text chính trên nền trắng */
+  --ink: #2d2020;
+  --ink-2: rgba(45, 32, 32, 0.78);
+  --ink-muted: rgba(45, 32, 32, 0.56);
+  --ink-divider: rgba(45, 32, 32, 0.1);
+  --ink-border: rgba(45, 32, 32, 0.07);
+  --ink-border-strong: rgba(45, 32, 32, 0.12);
+  --ink-tint: rgba(45, 32, 32, 0.045);
+
+  /* Accent: peach → magenta là CTA; vàng/mint/lilac là kênh môn học */
+  --peach: #f8a668;
+  --magenta: #ee5b9f;
+  --grad: linear-gradient(135deg, #f8a668, #ee5b9f);
+  --grad-r: linear-gradient(135deg, #ee5b9f, #f8a668);
+  --grad-cta:
+    linear-gradient(145deg, #fbc08a 0%, #f8a668 22%, #ee5b9f 78%, #d9468a 100%);
+
+  /* Cat palette (đồng bộ với pill / dot / sticker) */
+  --cat-hh: #fde859; /* Hình họa — vàng */
+  --cat-bc: #6efec0; /* Bố cục màu — mint */
+  --cat-tt: #bb89f8; /* Trang trí màu — lilac */
+  --cat-dg: #f8a668; /* Digital — peach */
+
+  --shadow-sm: 0 2px 10px rgba(45, 32, 32, 0.04);
+  --shadow: 0 4px 18px rgba(45, 32, 32, 0.06);
+  --shadow-md: 0 10px 32px rgba(45, 32, 32, 0.12);
+  --shadow-cta:
+    0 8px 28px rgba(232, 72, 150, 0.38),
+    0 2px 10px rgba(45, 32, 32, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(45, 32, 32, 0.06);
+  --shadow-pill: 0 4px 14px rgba(238, 91, 159, 0.35);
+
+  --font-display: var(--font-be-vietnam-pro), "Be Vietnam Pro",
+    var(--font-quicksand), Quicksand, system-ui, sans-serif;
+  --font-body: var(--font-quicksand), Quicksand, system-ui, sans-serif;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.32, 1);
+  --ease-soft: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Body font vẫn Quicksand; heading → Be Vietnam Pro */
+.sa-root .hero-headline,
+.sa-root .hero h1,
+.sa-root .sa-h1,
+.sa-root .sa-h2,
+.sa-root .sa-h3,
+.sa-root h1,
+.sa-root h2:not(.sec-label),
+.sa-root h3:not(.sec-label) {
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
+}
+
+/* ─────────────────────────────
+  SECTION LABEL — redesign nhẹ: thêm dash gradient phía trước
+───────────────────────────── */
+.sa-root .sec-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.sa-root .sec-label::before {
+  content: "";
+  width: 28px;
+  height: 2px;
+  background: var(--grad);
+  border-radius: 2px;
+  flex: none;
+}
+.sa-root .sec-label::after {
+  display: none; /* bỏ thanh divider cũ — dash trước đã đủ định hướng */
+}
+
+/* ─────────────────────────────
+  NAV — giữ dock bottom-fixed (không phá mechanics)
+  Redesign: pill link dày hơn, active có underline gradient
+───────────────────────────── */
+.nav-bottom-fixed .sticky {
+  /* vẫn giữ layout cũ */
+}
+.nav-bottom-fixed .nav-link a,
+.nav-bottom-fixed .nav-link .nav-dd-t {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink-2);
+  padding: 8px 14px;
+  border-radius: 999px;
+  transition: background 0.18s, color 0.18s;
+}
+.nav-bottom-fixed .nav-link a:hover,
+.nav-bottom-fixed .nav-link .nav-dd-t:hover {
+  background: rgba(45, 32, 32, 0.05);
+  color: var(--ink);
+}
+.nav-bottom-fixed .nav-link a.active,
+.nav-bottom-fixed .nav-link .nav-dd-t.active {
+  color: var(--ink);
+}
+
+/* ─────────────────────────────
+  NAV DROPDOWN — redesign panel
+───────────────────────────── */
+.nav-dd-panel {
+  min-width: 300px !important;
+  padding: 10px !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1.5px solid var(--ink-border-strong) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--shadow-md) !important;
+  backdrop-filter: blur(12px) saturate(1.1);
+}
+
+/* Group title ("LUYỆN THI & BỔ TRỢ", "DIGITAL", …) */
+.nav-dd-group {
+  padding: 6px 4px 4px;
+}
+.nav-dd-group + .nav-dd-group {
+  margin-top: 6px;
+  border-top: 1px dashed var(--ink-divider);
+  padding-top: 10px;
+}
+.nav-dd-group-title {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 4px 10px 8px;
+}
+
+/* Mỗi item — card-lite với hover peach tint */
+.nav-dd-item {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink) !important;
+  transition: background 0.15s, transform 0.15s;
+  background: transparent !important;
+}
+.nav-dd-item:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(248, 166, 104, 0.08),
+    rgba(238, 91, 159, 0.06)
+  ) !important;
+  transform: translateX(2px);
+}
+.nav-dd-item.active {
+  background: linear-gradient(
+    90deg,
+    rgba(248, 166, 104, 0.14),
+    rgba(238, 91, 159, 0.1)
+  ) !important;
+  color: var(--ink) !important;
+}
+.nav-dd-emoji {
+  font-size: 15px;
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+.nav-dd-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.nav-dd-label-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-dd-tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  flex: none;
+}
+.nav-dd-tag--online {
+  background: rgba(110, 254, 192, 0.3);
+  color: #0a5a3e;
+}
+.nav-dd-tag--offline {
+  background: rgba(248, 166, 104, 0.25);
+  color: #7a3c0b;
+}
+
+/* ─────────────────────────────
+  HERO — redesign theo MHTML
+───────────────────────────── */
+.sa-root .hero {
+  position: relative;
+  padding: 56px 0 80px;
+  overflow: hidden;
+  isolation: isolate;
+  min-height: unset; /* override base */
+  background: #ffffff;
+}
+.sa-root .hero-cover,
+.sa-root .hero-ov {
+  display: none; /* bỏ ảnh cover cũ — dùng bg + blob + card nổi */
+}
+
+.sa-root .hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 85% 15%,
+      rgba(248, 166, 104, 0.22) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 8% 80%,
+      rgba(187, 137, 248, 0.22) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 60% 90%,
+      rgba(110, 254, 192, 0.18) 0%,
+      transparent 40%
+    ),
+    #ffffff;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 48px;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+/* Floating blob phía sau hero */
+.hero-blob {
+  position: absolute;
+  border-radius: 50%;
+  z-index: -1;
+  pointer-events: none;
+  animation: heroFloaty 8s ease-in-out infinite;
+}
+.hero-blob--1 {
+  width: 120px;
+  height: 120px;
+  background: var(--cat-hh);
+  top: 70px;
+  left: 6%;
+  opacity: 0.85;
+}
+.hero-blob--2 {
+  width: 70px;
+  height: 70px;
+  background: var(--cat-bc);
+  top: 420px;
+  left: 4%;
+  animation-delay: 2s;
+}
+.hero-blob--3 {
+  width: 40px;
+  height: 40px;
+  background: var(--peach);
+  top: 220px;
+  right: 48%;
+  animation-delay: 4s;
+}
+.hero-blob--4 {
+  width: 26px;
+  height: 26px;
+  background: var(--magenta);
+  bottom: 120px;
+  right: 12%;
+  animation-delay: 1s;
+}
+@keyframes heroFloaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Copy column */
+.hero-copy-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.hero-eyebrow {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(45, 32, 32, 0.08);
+  padding: 7px 14px 7px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink) !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 22px !important;
+  white-space: nowrap;
+  text-align: initial !important;
+}
+.hero-eyebrow-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--grad);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  flex: none;
+}
+.hero-eyebrow-dot svg {
+  width: 10px;
+  height: 10px;
+}
+
+.sa-root .hero-headline {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(40px, 5.4vw, 68px);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  margin: 0 0 20px !important;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.sa-root .hero-headline em {
+  font-style: normal;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  display: inline-block;
+}
+.sa-root .hero-headline .hero-underline {
+  position: relative;
+  display: inline-block;
+}
+.sa-root .hero-headline .hero-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 10px;
+  background: var(--cat-hh);
+  border-radius: 8px;
+  z-index: -1;
+  opacity: 0.75;
+}
+
+.sa-root .hero-lead {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 52ch;
+  margin: 0 0 28px;
+}
+
+.sa-root .hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 36px;
+}
+.sa-root .hero-actions .btn-p {
+  background: var(--grad) !important;
+  color: #fff !important;
+  padding: 14px 24px !important;
+  border-radius: 999px !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  box-shadow: 0 8px 28px rgba(238, 91, 159, 0.38) !important;
+  transition: transform 0.15s !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.sa-root .hero-actions .btn-p:hover {
+  transform: translateY(-2px);
+}
+.sa-root .hero-actions .btn-g {
+  background: rgba(45, 32, 32, 0.05) !important;
+  color: var(--ink) !important;
+  padding: 14px 22px !important;
+  border-radius: 999px !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  border: none !important;
+}
+.sa-root .hero-actions .btn-g:hover {
+  background: rgba(45, 32, 32, 0.09) !important;
+}
+
+/* Trust avatars + text */
+.hero-trust {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.hero-trust-avs {
+  display: inline-flex;
+}
+.hero-trust-avs .av {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  margin-left: -10px;
+  box-shadow: 0 2px 8px rgba(45, 32, 32, 0.1);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+}
+.hero-trust-avs .av:first-child {
+  margin-left: 0;
+}
+.hero-trust-avs .av.more {
+  background: var(--grad);
+  color: #fff;
+}
+.hero-trust-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+.hero-trust-text b {
+  color: var(--ink);
+  font-weight: 800;
+}
+.hero-trust-text .stars {
+  color: var(--magenta);
+  letter-spacing: 1px;
+}
+
+/* Visual column — 3 cards + 2 stickers */
+.hero-visual {
+  position: relative;
+  aspect-ratio: 1 / 1;
+}
+.hero-card {
+  position: absolute;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(45, 32, 32, 0.18);
+  background-size: cover;
+  background-position: center;
+  border: 6px solid #fff;
+}
+.hero-card--main {
+  inset: 5% 10% 8% 8%;
+  z-index: 2;
+  transform: rotate(-3deg);
+  background-image: linear-gradient(135deg, #ffd0a8, #ffb0d5);
+  background-image: var(
+    --hero-cover-img,
+    linear-gradient(135deg, #ffd0a8, #ffb0d5)
+  );
+}
+.hero-card--top {
+  width: 42%;
+  aspect-ratio: 3 / 4;
+  top: -2%;
+  right: 0;
+  z-index: 3;
+  transform: rotate(5deg);
+  background-image: linear-gradient(160deg, #fde859, #f8a668);
+}
+.hero-card--bottom {
+  width: 46%;
+  aspect-ratio: 4 / 3;
+  bottom: -4%;
+  left: -4%;
+  z-index: 3;
+  transform: rotate(-6deg);
+  background-image: linear-gradient(160deg, #6efec0, #bb89f8);
+}
+.hero-sticker {
+  position: absolute;
+  z-index: 4;
+  background: #fff;
+  border-radius: 100px;
+  padding: 12px 18px 12px 14px;
+  box-shadow: 0 12px 30px rgba(45, 32, 32, 0.14);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1.5px solid rgba(45, 32, 32, 0.06);
+  animation: heroFloaty 5s ease-in-out infinite;
+}
+.hero-sticker--1 {
+  top: 18%;
+  right: -6%;
+  transform: rotate(6deg);
+}
+.hero-sticker--2 {
+  bottom: 22%;
+  right: -2%;
+  transform: rotate(-4deg);
+  animation-delay: 1.2s;
+}
+.hero-sticker-emoji {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--cat-hh);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  flex: none;
+}
+.hero-sticker--2 .hero-sticker-emoji {
+  background: var(--cat-tt);
+}
+.hero-sticker-txt {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.15;
+}
+.hero-sticker-sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* ─────────────────────────────
+  STAT STRIP — 3 hoặc 4 cell card nổi
+───────────────────────────── */
+.sa-root .stat-strip {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0 !important;
+  max-width: 1140px;
+  margin: -48px auto 0 !important;
+  padding: 28px 32px !important;
+  background: #fff !important;
+  border-radius: 24px !important;
+  border: 1.5px solid rgba(45, 32, 32, 0.05) !important;
+  box-shadow: 0 18px 48px rgba(45, 32, 32, 0.1) !important;
+  position: relative;
+  z-index: 4;
+}
+.sa-root .stat-strip.stat-strip--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+.sa-root .stat-strip .stat-card {
+  background: transparent !important;
+  padding: 0 24px !important;
+  border-left: 1px dashed rgba(45, 32, 32, 0.12);
+  display: flex !important;
+  flex-direction: column;
+  gap: 4px !important;
+  border-radius: 0 !important;
+}
+.sa-root .stat-strip .stat-card:first-child {
+  border-left: none;
+  padding-left: 8px !important;
+}
+.sa-root .stat-strip .stat-n {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 48px !important;
+  line-height: 1 !important;
+  letter-spacing: -0.03em;
+  color: var(--ink) !important;
+  font-variant-numeric: tabular-nums;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent !important;
+}
+.sa-root .stat-strip .stat-l {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--ink-2) !important;
+  margin-top: 8px !important;
+  line-height: 1.35 !important;
+}
+.sa-root .stat-strip .stat-s {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+
+/* ─────────────────────────────
+  SECTION BLOCK — spacing + sec-title
+───────────────────────────── */
+.sa-root .page-inner > * {
+  margin-top: 96px;
+}
+.sa-root .page-inner > *:first-child {
+  margin-top: 64px;
+}
+
+.sa-root .sec-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(30px, 3.4vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  margin: 0 0 12px;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.sa-root .sec-title em {
+  font-style: normal;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.sa-root .sec-sub {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0;
+}
+.sa-root .sec-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 40px;
+}
+.sa-root .sec-head .sec-head-left {
+  max-width: 640px;
+}
+.sa-root .sec-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--magenta);
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ─────────────────────────────
+  COURSES — redesign các block bento
+───────────────────────────── */
+.sa-root .courses-wrap {
+  position: relative;
+}
+.sa-root .courses-blocks {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 16px !important;
+  margin-top: 8px;
+}
+.sa-root .courses-block {
+  position: relative;
+  border-radius: 20px !important;
+  overflow: hidden;
+  background: #fff;
+  border: 1.5px solid var(--ink-border);
+  box-shadow: var(--shadow);
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+.sa-root .courses-block:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+.sa-root .courses-block--featured {
+  grid-row: span 2;
+  min-height: 420px;
+  background: linear-gradient(160deg, #fff7ef 0%, #ffe8d4 100%);
+}
+.sa-root .courses-block-thumb {
+  aspect-ratio: 16 / 10;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  overflow: hidden;
+}
+.sa-root .courses-block--featured .courses-block-thumb {
+  aspect-ratio: unset;
+  flex: 1 1 auto;
+  min-height: 240px;
+  /* Width tự co theo parent (fix overflow do base CSS đặt width:100%) */
+  width: auto;
+  margin: 20px 20px 0;
+  border-radius: 16px;
+}
+.sa-root .courses-block-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.15),
+    transparent 50%
+  );
+}
+.sa-root .courses-block-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--grad);
+  color: #fff;
+  z-index: 2;
+  box-shadow: var(--shadow-pill);
+}
+.sa-root .courses-block-cap {
+  padding: 16px 18px 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sa-root .courses-block--featured .courses-block-cap {
+  padding: 18px 22px 22px;
+}
+.sa-root .courses-block-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.sa-root .courses-block--featured .courses-block-title {
+  font-size: 22px;
+}
+.sa-root .courses-block-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* ─────────────────────────────
+  VIDEO SECTION — pill-tab + frame bo lớn
+───────────────────────────── */
+.sa-root .video-section {
+  background: linear-gradient(180deg, #fff 0%, #fdf8f3 100%);
+  padding: 48px 28px;
+  border-radius: 28px;
+  border: 1.5px solid var(--ink-border);
+  box-shadow: var(--shadow-sm);
+}
+.sa-root .video-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px !important;
+}
+.sa-root .video-tabs .vtab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px !important;
+  border-radius: 999px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  border: 1.5px solid var(--ink-border-strong) !important;
+  background: transparent !important;
+  color: var(--ink-2) !important;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.sa-root .video-tabs .vtab:hover {
+  border-color: rgba(45, 32, 32, 0.22) !important;
+  color: var(--ink) !important;
+}
+.sa-root .video-tabs .vtab.active {
+  background: var(--grad) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: 0 6px 18px rgba(238, 91, 159, 0.28) !important;
+}
+.sa-root .video-block--embed {
+  border-radius: 24px !important;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  box-shadow: 0 24px 60px rgba(45, 32, 32, 0.15);
+}
+.sa-root .video-caption {
+  margin-top: 14px !important;
+  font-size: 14px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+/* ─────────────────────────────
+  REVIEWS — pill selector giữ; card typing đẹp hơn
+───────────────────────────── */
+.sa-root .reviews-wrap {
+  position: relative;
+}
+.sa-root .reviews-wrap .gmap-badge {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink-2);
+  background: #fff;
+  border: 1.5px solid var(--ink-border-strong);
+  border-radius: 999px;
+  padding: 6px 14px;
+  box-shadow: var(--shadow-sm);
+}
+.sa-root .reviews-wrap .rv-pill {
+  padding: 8px 14px 8px 8px !important;
+  border-radius: 999px !important;
+  border: 1.5px solid var(--ink-border-strong) !important;
+  background: transparent !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--ink-2) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.18s;
+}
+.sa-root .reviews-wrap .rv-pill.active {
+  background: var(--grad) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: var(--shadow-pill) !important;
+}
+.sa-root .reviews-wrap .rv-pill .rp-av {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--grad);
+  color: #fff;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 10px;
+}
+.sa-root .reviews-wrap .rv-pill.active .rp-av {
+  background: rgba(255, 255, 255, 0.22);
+}
+.sa-root .reviews-wrap .rv-big {
+  background: #fff;
+  border: 1.5px solid var(--ink-border);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  padding: 28px 28px 24px !important;
+  margin-top: 20px;
+}
+.sa-root .reviews-wrap .rv-avatar {
+  border: 3px solid #fff !important;
+  box-shadow: var(--shadow) !important;
+}
+.sa-root .reviews-wrap .rv-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--ink);
+}
+.sa-root .reviews-wrap .rv-course {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+}
+.sa-root .reviews-wrap .rv-stars {
+  color: var(--magenta);
+  letter-spacing: 1px;
+  font-size: 12px;
+}
+.sa-root .reviews-wrap .rv-text-big {
+  font-size: 17px !important;
+  font-weight: 500 !important;
+  line-height: 1.6 !important;
+  color: var(--ink) !important;
+  font-style: italic;
+}
+.sa-root .reviews-wrap .rv-text-big::before {
+  content: "“";
+  font-family: Georgia, serif;
+  font-size: 48px;
+  line-height: 0;
+  display: block;
+  margin-bottom: 18px;
+  color: var(--peach);
+  font-style: normal;
+}
+
+/* ─────────────────────────────
+  GALLERY — pill tabs + masonry
+───────────────────────────── */
+.sa-root .gallery-wrap .gtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px !important;
+}
+.sa-root .gallery-wrap .gtabs .gtab {
+  padding: 9px 16px !important;
+  border-radius: 999px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  border: 1.5px solid var(--ink-border-strong) !important;
+  background: transparent !important;
+  color: var(--ink-2) !important;
+  transition: all 0.18s;
+}
+.sa-root .gallery-wrap .gtabs .gtab:hover {
+  border-color: rgba(45, 32, 32, 0.22) !important;
+  color: var(--ink) !important;
+}
+.sa-root .gallery-wrap .gtabs .gtab.active {
+  background: var(--grad) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: var(--shadow-pill) !important;
+}
+.sa-root .gallery-wrap .gallery-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 32px auto 0;
+  padding: 12px 22px;
+  border-radius: 999px;
+  background: rgba(45, 32, 32, 0.05);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 14px;
+  transition: background 0.18s;
+}
+.sa-root .gallery-wrap .gallery-more:hover {
+  background: rgba(45, 32, 32, 0.09);
+}
+
+/* ─────────────────────────────
+  TEACHERS — scroll ngang giữ, card mềm hơn
+───────────────────────────── */
+.sa-root .teacher-wrap .tc-art-full {
+  border-radius: 20px !important;
+  overflow: hidden;
+  border: 1.5px solid var(--ink-border);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ─────────────────────────────
+  CAREER — giữ mechanics, soft look
+───────────────────────────── */
+.sa-root .career-intro-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(26px, 2.8vw, 36px) !important;
+  letter-spacing: -0.025em;
+  line-height: 1.1 !important;
+}
+.sa-root .career-intro-text {
+  color: var(--ink-2) !important;
+  font-weight: 500 !important;
+}
+
+/* ─────────────────────────────
+  WHY SECTION — 3 trụ cột
+───────────────────────────── */
+.sa-root .why-section {
+  position: relative;
+  background: linear-gradient(180deg, #fff 0%, #fdf8f3 100%);
+  padding: 64px 28px;
+  border-radius: 32px;
+  border: 1.5px solid var(--ink-border);
+  box-shadow: var(--shadow-sm);
+  margin-top: 96px;
+}
+.sa-root .sec-head--align-start {
+  justify-content: flex-start;
+}
+.sa-root .why-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.sa-root .why-card {
+  position: relative;
+  background: #fff;
+  border: 1.5px solid var(--ink-border);
+  border-radius: 20px;
+  padding: 28px 26px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.sa-root .why-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow);
+}
+.sa-root .why-num {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 52px;
+  color: rgba(45, 32, 32, 0.05);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  pointer-events: none;
+}
+.sa-root .why-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  margin-bottom: 18px;
+  position: relative;
+}
+.sa-root .why-card--c1 .why-icon {
+  background: var(--cat-hh);
+}
+.sa-root .why-card--c2 .why-icon {
+  background: var(--cat-bc);
+}
+.sa-root .why-card--c3 .why-icon {
+  background: var(--cat-tt);
+}
+.sa-root .why-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--ink);
+  margin: 0 0 10px;
+}
+.sa-root .why-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-2);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ─────────────────────────────
+  CTA BAND — khoá chốt gradient
+───────────────────────────── */
+.sa-root .cta-band-wrap {
+  margin-top: 96px;
+  padding: 0 28px;
+}
+.sa-root .cta-band {
+  position: relative;
+  overflow: hidden;
+  background: var(--grad);
+  border-radius: 32px;
+  padding: 56px 48px;
+  color: #fff;
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 40px;
+  align-items: center;
+  box-shadow: 0 24px 60px rgba(238, 91, 159, 0.3);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.sa-root .cta-band::before,
+.sa-root .cta-band::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.sa-root .cta-band::before {
+  width: 220px;
+  height: 220px;
+  background: rgba(255, 255, 255, 0.12);
+  top: -80px;
+  right: 20%;
+}
+.sa-root .cta-band::after {
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.15);
+  bottom: -40px;
+  left: 15%;
+}
+.sa-root .cta-band-left {
+  position: relative;
+  z-index: 2;
+}
+.sa-root .cta-band-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(28px, 3vw, 40px);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  color: #fff;
+  margin: 0 0 12px;
+}
+.sa-root .cta-band-title em {
+  font-style: normal;
+  background: #fff;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.sa-root .cta-band-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 24px;
+  max-width: 40ch;
+  line-height: 1.55;
+}
+.sa-root .cta-band-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sa-root .cta-band-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  color: var(--ink);
+  padding: 14px 24px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 15px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s;
+}
+.sa-root .cta-band-btn-primary:hover {
+  transform: translateY(-2px);
+}
+.sa-root .cta-band-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  padding: 14px 22px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 15px;
+  backdrop-filter: blur(8px);
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  transition: background 0.18s;
+}
+.sa-root .cta-band-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+.sa-root .cta-band-right {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.sa-root .cta-stick {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border-radius: 18px;
+  padding: 18px 16px;
+  color: #fff;
+}
+.sa-root .cta-stick-n {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+.sa-root .cta-stick-l {
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 8px;
+  opacity: 0.85;
+}
+
+/* ─────────────────────────────
+  RESPONSIVE — fallback mobile
+───────────────────────────── */
+@media (max-width: 900px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+    padding: 0 20px;
+  }
+  .sa-root .hero {
+    padding: 32px 0 56px;
+  }
+  .sa-root .hero-headline {
+    font-size: clamp(32px, 8vw, 44px) !important;
+  }
+  .sa-root .stat-strip {
+    grid-template-columns: repeat(2, 1fr) !important;
+    padding: 20px !important;
+    gap: 16px 0 !important;
+    margin: -32px 16px 0 !important;
+  }
+  .sa-root .stat-strip .stat-card {
+    padding: 10px 14px !important;
+  }
+  .sa-root .stat-strip .stat-card:nth-child(3) {
+    border-left: none;
+    padding-left: 14px !important;
+  }
+  .sa-root .courses-blocks {
+    grid-template-columns: 1fr;
+    gap: 12px !important;
+  }
+  .sa-root .courses-block--featured {
+    grid-row: span 1;
+    min-height: 320px;
+  }
+  .sa-root .page-inner > * {
+    margin-top: 64px;
+  }
+  .hero-visual {
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  .nav-dd-panel {
+    min-width: 0 !important;
+  }
+  .sa-root .sec-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .sa-root .why-section {
+    padding: 40px 20px;
+    margin-top: 64px;
+    border-radius: 24px;
+  }
+  .sa-root .why-grid {
+    grid-template-columns: 1fr;
+  }
+  .sa-root .cta-band-wrap {
+    margin-top: 64px;
+    padding: 0 16px;
+  }
+  .sa-root .cta-band {
+    grid-template-columns: 1fr;
+    padding: 36px 24px;
+    gap: 28px;
+  }
+  .sa-root .cta-band-right {
+    grid-template-columns: 1fr 1fr;
+  }
+}

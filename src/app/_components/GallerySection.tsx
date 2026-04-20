@@ -224,11 +224,22 @@ export default function GallerySection({
     <div className={["home-gallery", rootClassName].filter(Boolean).join(" ")}>
       <div className="gallery-wrap" id={galleryWrapId}>
         {showSectionTitle ? (
-          sectionTitleAs === "h1" ? (
-            <h1 className="sec-label gallery-sec-title">{sectionTitle}</h1>
-          ) : (
-            <div className="sec-label gallery-sec-title">{sectionTitle}</div>
-          )
+          <div className="sec-head sec-head--align-start">
+            <div className="sec-head-left">
+              {sectionTitleAs === "h1" ? (
+                <h1 className="sec-label gallery-sec-title">{sectionTitle}</h1>
+              ) : (
+                <div className="sec-label gallery-sec-title">{sectionTitle}</div>
+              )}
+              <h2 className="sec-title">
+                Tác phẩm từ lớp — <em>không chỉnh sửa</em>
+              </h2>
+              <p className="sec-sub">
+                Tất cả bài vẽ đều do học viên Sine Art thực hiện trong khoá học. Chọn theo thể
+                loại để xem chi tiết.
+              </p>
+            </div>
+          </div>
         ) : null}
         {tabMode === "work_kind" && !showWorkKindTabs ? null : (
           <div className="gtabs">

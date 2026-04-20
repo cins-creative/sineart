@@ -1,12 +1,21 @@
 import type { Metadata } from "next";
-import { Quicksand } from "next/font/google";
+import { Be_Vietnam_Pro, Quicksand } from "next/font/google";
 import ConditionalCta from "./_components/ConditionalCta";
 import "./globals.css";
 import "./sineart-home.css";
+import "./sineart-home-v2.css";
 
 const quicksand = Quicksand({
   subsets: ["latin", "vietnamese"],
   variable: "--font-quicksand",
+});
+
+/** Font display — dùng cho heading theo design system mới (Be Vietnam Pro, weight 500–900). */
+const beVietnamPro = Be_Vietnam_Pro({
+  subsets: ["latin", "vietnamese"],
+  weight: ["500", "700", "800", "900"],
+  variable: "--font-be-vietnam-pro",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -23,7 +32,7 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
-      className={`${quicksand.variable} ${quicksand.className} h-full antialiased`}
+      className={`${quicksand.variable} ${beVietnamPro.variable} ${quicksand.className} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex w-full min-w-0 flex-col overflow-x-clip" suppressHydrationWarning>

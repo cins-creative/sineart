@@ -88,12 +88,19 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
 
   return (
     <div className="reviews-wrap">
-      <div className="reviews-header">
-        <div className="sec-label" style={{ margin: 0, flex: 1 }}>
-          Học viên nói gì
+      <div className="sec-head">
+        <div className="sec-head-left">
+          <div className="sec-label">Học viên nói gì</div>
+          <h2 className="sec-title">
+            Câu chuyện từ <em>chính học viên</em>
+          </h2>
+          <p className="sec-sub">
+            Review thực, không chỉnh sửa — lấy trực tiếp từ Google Reviews và Facebook.
+          </p>
         </div>
         <div className="gmap-badge">
-          ⭐ 4.9 <span style={{ opacity: 0.45, fontWeight: 500 }}>· Google</span>
+          <span className="gmap-stars">★★★★★</span> 4.9/5{" "}
+          <span style={{ opacity: 0.55, fontWeight: 600 }}>· Google</span>
         </div>
       </div>
       <div className="rv-selector">

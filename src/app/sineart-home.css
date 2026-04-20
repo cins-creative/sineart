@@ -128,7 +128,7 @@
   border-radius: 22px 22px 0 0;
   overflow: hidden;
 }
-.sticky {
+.nav-bottom-fixed .sticky {
   position: relative;
   bottom: auto;
   left: auto;
@@ -1836,12 +1836,13 @@ button.mi {
     font-size: 16px;
   }
 
-  /* NAV — desktop: thanh sticky trên cùng; CTA fixed góc phải dưới */
+  /* NAV — desktop: thanh fixed trên cùng; CTA fixed góc phải dưới */
   .nav-bottom-fixed {
     position: static;
     width: 100%;
     min-width: 0;
     max-width: none;
+    min-height: 72px;
     margin: 0;
     display: block;
     padding-bottom: 0;
@@ -1887,10 +1888,12 @@ button.mi {
     width: 16px;
     height: 16px;
   }
-  .sticky {
-    position: sticky;
+  .nav-bottom-fixed .sticky {
+    position: fixed;
     top: 0;
     bottom: auto;
+    left: 0;
+    right: 0;
     width: 100%;
     min-width: 0;
     max-width: 100%;
@@ -1907,7 +1910,7 @@ button.mi {
     grid-template-columns: unset;
     grid-template-rows: unset;
     grid-template-areas: none;
-    background: rgba(255, 255, 255, 0.88);
+    background: rgba(255, 255, 255, 0.8);
     backdrop-filter: blur(20px) saturate(1.12);
     -webkit-backdrop-filter: blur(20px) saturate(1.12);
     border-radius: 0;

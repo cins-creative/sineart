@@ -5,18 +5,6 @@ const css = `
   .bd *{box-sizing:border-box}
   .bd a{text-decoration:none;color:inherit}
 
-  /* NAV */
-  .bd-nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.88);backdrop-filter:blur(14px);border-bottom:1px solid var(--ink-border)}
-  .bd-nav-inner{max-width:1340px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:64px;gap:16px}
-  .bd-logo{display:inline-flex;gap:.12em;font-family:var(--font-d);font-weight:800;font-size:22px;letter-spacing:-.03em}
-  .bd-logo-art{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .bd-nav-links{display:flex;gap:2px}
-  .bd-nav-links a{padding:9px 14px;border-radius:999px;font-size:14px;font-weight:700;color:var(--ink-2)}
-  .bd-nav-links a:hover{background:var(--ink-tint)}
-  .bd-nav-links a.on{color:var(--ink)}
-  .bd-btn-cta{display:inline-flex;gap:8px;align-items:center;padding:10px 18px 10px 12px;border-radius:999px;background:var(--grad-cta);color:#fff;font-size:14px;font-weight:800;white-space:nowrap}
-  .bd-btn-play{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center}
-
   /* SHELL */
   .bd-shell{max-width:1160px;margin:0 auto;padding:0 28px}
 
@@ -79,10 +67,16 @@ const css = `
   .bd-prose hr{border:none;border-top:1px solid var(--ink-border);margin:2em 0}
   .bd-prose img{display:block;max-width:100%;height:auto;border-radius:12px;margin:1em auto}
   .bd-prose iframe{width:100%;min-height:360px;border:0;border-radius:12px;display:block;margin:1em 0}
-  .bd-prose table{width:100%;border-collapse:collapse;margin:1em 0;font-size:14px}
-  .bd-prose th{border:1px solid #e0e0e0;padding:10px 12px;background:#f5f5f5;font-weight:700;text-align:left;vertical-align:top}
-  .bd-prose td{border:1px solid #e0e0e0;padding:10px 12px;vertical-align:top}
+  .bd-prose table{width:100%;border-collapse:collapse;margin:1.5em 0;font-size:14px;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(45,32,32,.07)}
+  .bd-prose thead{background:linear-gradient(135deg,rgba(248,166,104,.15),rgba(238,91,159,.12))}
+  .bd-prose th{border:1px solid rgba(45,32,32,.1);padding:12px 16px;font-family:var(--font-d);font-weight:800;text-align:left;vertical-align:top;color:var(--ink);font-size:13px;letter-spacing:.01em}
+  .bd-prose td{border:1px solid rgba(45,32,32,.07);padding:11px 16px;vertical-align:top;line-height:1.6}
+  .bd-prose tr:nth-child(even) td{background:rgba(248,246,242,.7)}
+  .bd-prose tr:hover td{background:rgba(248,166,104,.05)}
   .bd-prose--end{margin-top:28px;padding-top:28px;border-top:1px solid var(--ink-border)}
+  .bd-prose .tip-box{background:linear-gradient(135deg,rgba(253,232,89,.15),rgba(248,166,104,.1));border:1.5px solid rgba(248,166,104,.4);border-left:4px solid var(--peach);border-radius:0 12px 12px 0;padding:14px 18px;margin:1.4em 0;font-size:15px;line-height:1.65}
+  .bd-prose .tip-box strong{color:var(--ink);font-weight:800}
+  .bd-prose img+p>em,.bd-prose img+em{display:block;text-align:center;font-size:13px;color:var(--ink-muted);margin-top:-6px;margin-bottom:14px;font-style:italic}
 
   /* CTA INLINE */
   .bd-cta-inline{background:linear-gradient(135deg,rgba(253,232,89,.18) 0%,rgba(248,166,104,.12) 100%);border:1.5px solid rgba(253,232,89,.45);border-radius:20px;padding:22px;margin:32px 0;display:flex;gap:16px;align-items:center}
@@ -132,10 +126,6 @@ const css = `
   .bd-related-title{font-family:var(--font-d);font-size:12px;font-weight:800;line-height:1.3;margin-bottom:2px}
   .bd-related-meta{font-size:10px;color:var(--ink-muted)}
 
-  /* FIXED CTA */
-  .bd-cta-fixed{position:fixed;bottom:24px;right:24px;z-index:60;display:inline-flex;align-items:center;gap:8px;background:var(--grad-cta);color:#fff;padding:12px 20px 12px 12px;border-radius:999px;font-weight:800;font-size:14px;box-shadow:var(--shadow-cta)}
-  .bd-cta-fixed-play{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center}
-
   /* RESPONSIVE */
   @media(max-width:960px){
     .bd-body{grid-template-columns:1fr;padding:20px 0 48px}
@@ -147,7 +137,6 @@ const css = `
     .bd-main{padding:18px 16px}
     .bd-h1{font-size:24px}
     .bd-navpn{flex-direction:column}
-    .bd-nav-links{display:none}
   }
 `;
 

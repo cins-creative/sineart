@@ -183,7 +183,7 @@ async function fetchBlogListUncached(opts: {
   let query = supabase
     .from("mkt_blogs")
     .select(BLOG_LIST_SELECT, { count: "exact" })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: true });
 
   if (search?.trim()) {
     query = query.ilike("title", `%${search.trim()}%`);

@@ -13,6 +13,9 @@ import {
   type BlogListItem,
 } from "@/lib/data/blog";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { getKhoaHocPageData } from "@/lib/data/courses-page";
+import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import NavBar from "../_components/NavBar";
 import { BlogSearchBar } from "./BlogSearchBar";
 import { BlogStyles } from "./BlogStyles";
 
@@ -77,11 +80,13 @@ export default async function BlogPage({ searchParams }: PageProps) {
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const search = q?.trim() ?? "";
 
-  const [{ posts, total, totalPages }, featured, popular] = await Promise.all([
+  const [{ posts, total, totalPages }, featured, popular, { courses }] = await Promise.all([
     fetchBlogList({ page, perPage: PER_PAGE, search }),
     fetchFeaturedBlog(),
     fetchPopularBlogs(5),
+    getKhoaHocPageData(),
   ]);
+  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 
   const featuredSlug = featured ? buildBlogSlug(featured.id, featured.title) : null;
   const featuredReadMin = featured
@@ -108,24 +113,8 @@ export default async function BlogPage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="sa-blog">
-      {/* ─── NAV ─── */}
-      <nav className="nav">
-        <div className="shell-wide nav-inner">
-          <Link className="sa-logo" href="/">
-            <span className="sa-logo-sine">Sine</span>
-            <span className="sa-logo-art">Art</span>
-          </Link>
-          <div className="nav-links">
-            <Link href="/">Trang chủ</Link>
-            <Link href="/khoa-hoc">Khoá học</Link>
-            <a href="#" className="active">Tin tức</a>
-          </div>
-          <div className="nav-right">
-            <Link className="btn-cta" href="/dang-ky"><span className="play">▶</span>Vào học</Link>
-          </div>
-        </div>
-      </nav>
+    <div className="sa-root sa-blog">
+      <NavBar khoaHocGroups={khoaHocGroups} />
 
       {/* ─── HERO ─── */}
       <section className="page-hero">
@@ -340,27 +329,6 @@ export default async function BlogPage({ searchParams }: PageProps) {
           </aside>
         </div>
       </div>
-
-      {/* ─── FOOTER ─── */}
-      <footer className="footer">
-        <div className="shell">
-          <div className="footer-inner">
-            <div className="foot-brand">
-              <Link className="sa-logo" href="/">
-                <span className="sa-logo-sine">Sine</span>
-                <span className="sa-logo-art">Art</span>
-              </Link>
-              <h3>Trường mỹ thuật cho <span className="art">Họa sỹ công nghệ</span></h3>
-              <p>Đào tạo bài bản và khoa học — chuẩn bị cho sự nghiệp trong Hoạt hình, Phim và Game.</p>
-            </div>
-            <div className="foot-col"><h4>Khoá học</h4><ul><li><Link href="/khoa-hoc">Hình họa</Link></li><li><Link href="/khoa-hoc">Bố cục màu</Link></li><li><Link href="/khoa-hoc">Trang trí màu</Link></li></ul></div>
-            <div className="foot-col"><h4>Về chúng tôi</h4><ul><li><Link href="/">Trang chủ</Link></li><li><Link href="/gallery">Bài vẽ</Link></li><li><Link href="/blog">Tin tức</Link></li></ul></div>
-            <div className="foot-col"><h4>Liên hệ</h4><ul><li><a href="mailto:hello@sineart.vn">hello@sineart.vn</a></li></ul></div>
-          </div>
-        </div>
-      </footer>
-
-      <Link className="nav-cta-fixed" href="/dang-ky"><span className="play">▶</span>Vào học</Link>
 
       <BlogStyles />
     </div>

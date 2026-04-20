@@ -15,6 +15,9 @@ import {
 } from "@/lib/data/blog";
 import { sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { getKhoaHocPageData } from "@/lib/data/courses-page";
+import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import NavBar from "../../_components/NavBar";
 import { BlogToc } from "./BlogToc";
 import { BlogDetailStyles } from "./BlogDetailStyles";
 
@@ -59,13 +62,16 @@ export default async function BlogDetailPage({ params }: Props) {
   const id = idFromBlogSlug(slug);
   if (!id) notFound();
 
-  const [post, related, adjacent] = await Promise.all([
+  const [post, related, adjacent, { courses }] = await Promise.all([
     fetchBlogById(id),
     fetchRelatedBlogs(id, 3),
     fetchAdjacentBlogs(id, new Date().toISOString()),
+    getKhoaHocPageData(),
   ]);
 
   if (!post) notFound();
+
+  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 
   const { prev, next } = adjacent;
   const readMin = estimateReadMinutes(post.opening, post.content, post.ending);
@@ -84,26 +90,9 @@ export default async function BlogDetailPage({ params }: Props) {
     : null;
 
   return (
-    <div className="bd">
+    <div className="sa-root bd">
       <BlogDetailStyles />
-
-      {/* NAV */}
-      <nav className="bd-nav">
-        <div className="bd-nav-inner">
-          <Link className="bd-logo" href="/">
-            <span>Sine</span>
-            <span className="bd-logo-art">Art</span>
-          </Link>
-          <div className="bd-nav-links">
-            <Link href="/">Trang chủ</Link>
-            <Link href="/khoa-hoc">Khoá học</Link>
-            <Link href="/blog" className="on">Tin tức</Link>
-          </div>
-          <Link className="bd-btn-cta" href="/dang-ky">
-            <span className="bd-btn-play">▶</span>Vào học
-          </Link>
-        </div>
-      </nav>
+      <NavBar khoaHocGroups={khoaHocGroups} />
 
       {/* SHELL */}
       <div className="bd-shell">
@@ -335,10 +324,6 @@ export default async function BlogDetailPage({ params }: Props) {
         </div>
       </div>
 
-      {/* Fixed CTA */}
-      <Link className="bd-cta-fixed" href="/dang-ky">
-        <span className="bd-cta-fixed-play">▶</span>Vào học
-      </Link>
     </div>
   );
 }

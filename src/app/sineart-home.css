@@ -1589,10 +1589,6 @@ button.mi {
   display:flex; align-items:center; justify-content:center;
   border:1px solid rgba(248,166,104,.2);
 }
-.rv-aw-sh { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:10px; }
-.aw-c { width:34px;height:34px;border-radius:50%;background:rgba(248,166,104,.25); }
-.aw-e { font-size:26px; }
-.aw-r { width:24px;height:42px;background:rgba(238,91,159,.2);border-radius:6px;transform:rotate(10deg); }
 .rv-aw-tag {
   position:absolute; bottom:8px; left:8px;
   background:rgba(45,32,32,.45); color:white;

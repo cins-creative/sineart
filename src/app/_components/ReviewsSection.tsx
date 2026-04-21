@@ -173,11 +173,6 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
           <span className="cursor" />
         </div>
         <div className="rv-artwork">
-          <div className="rv-aw-sh">
-            <div className="aw-c" />
-            <div className="aw-e">🌸</div>
-            <div className="aw-r" />
-          </div>
           <div className="rv-aw-tag">{rv.artTag}</div>
         </div>
       </div>

@@ -29,23 +29,128 @@ type ExtractedArticle = {
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
-async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": UA,
-      Accept: "text/html,application/xhtml+xml",
-    },
-    cache: "no-store",
-    redirect: "follow",
-  });
-  if (!res.ok) {
-    throw new Error(`Không fetch được URL (${res.status} ${res.statusText}).`);
-  }
-  const ct = res.headers.get("content-type") ?? "";
+const DEFAULT_WORKER = "https://sine-art-api.nguyenthanhtu-nkl.workers.dev";
+
+/**
+ * Headers giả lập navigation của Chrome thật để qua WAF/anti-bot đơn giản.
+ * Không đủ để qua Cloudflare Bot Management — case đó sẽ fallback sang Worker.
+ */
+const BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent": UA,
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Sec-Ch-Ua":
+    '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+  "Sec-Ch-Ua-Mobile": "?0",
+  "Sec-Ch-Ua-Platform": '"Windows"',
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
+};
+
+function assertHtmlContentType(ct: string) {
   if (!ct.includes("text/html") && !ct.includes("application/xhtml")) {
     throw new Error(`URL không trả về HTML (content-type: ${ct}).`);
   }
-  return await res.text();
+}
+
+/**
+ * Fetch HTML qua Cloudflare Worker proxy — IP của Cloudflare network thường
+ * không bị các site (Cloudflare/WAF) chặn như IP Vercel datacenter.
+ *
+ * Yêu cầu env:
+ *   - SINE_ART_WORKER_SECRET (bắt buộc — nếu thiếu sẽ throw và fallback thất bại)
+ *   - SINE_ART_WORKER_URL    (tuỳ chọn — mặc định DEFAULT_WORKER)
+ */
+async function fetchHtmlViaWorker(url: string): Promise<string> {
+  const secret =
+    process.env.SINE_ART_WORKER_SECRET?.trim() ||
+    process.env.WORKER_API_SECRET?.trim();
+  const base = process.env.SINE_ART_WORKER_URL?.trim() || DEFAULT_WORKER;
+  if (!secret) {
+    throw new Error(
+      "Thiếu SINE_ART_WORKER_SECRET — không thể fallback qua Cloudflare Worker.",
+    );
+  }
+
+  const res = await fetch(`${base.replace(/\/$/, "")}/fetch-url`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-secret": secret,
+    },
+    body: JSON.stringify({ url }),
+    cache: "no-store",
+  });
+
+  const data = (await res.json().catch(() => null)) as {
+    ok?: boolean;
+    status?: number;
+    statusText?: string;
+    contentType?: string;
+    html?: string;
+    error?: string;
+  } | null;
+
+  if (!data) {
+    throw new Error(`Worker fetch-url lỗi không đọc được JSON (HTTP ${res.status}).`);
+  }
+  if (!data.ok) {
+    throw new Error(
+      `Worker fetch-url trả lỗi: ${data.status ?? "?"} ${data.statusText ?? data.error ?? ""}`.trim(),
+    );
+  }
+  assertHtmlContentType(data.contentType ?? "");
+  if (typeof data.html !== "string" || !data.html.trim()) {
+    throw new Error("Worker fetch-url trả HTML rỗng.");
+  }
+  return data.html;
+}
+
+/**
+ * 2 tầng fetch:
+ *   1. Direct fetch từ Vercel với header browser thật (nhanh, đủ cho site mở).
+ *   2. Nếu bị chặn (403/401/429/451 hoặc network error) → retry qua Cloudflare
+ *      Worker. Worker đi qua network CF nên IP reputation tốt, qua được hầu hết
+ *      anti-bot ngoại trừ Cloudflare Bot Management mức cao.
+ */
+async function fetchHtml(url: string): Promise<string> {
+  let directError: string | null = null;
+  try {
+    const res = await fetch(url, {
+      headers: BROWSER_HEADERS,
+      cache: "no-store",
+      redirect: "follow",
+    });
+    if (res.ok) {
+      const ct = res.headers.get("content-type") ?? "";
+      assertHtmlContentType(ct);
+      return await res.text();
+    }
+    // 4xx từ WAF/anti-bot → chuyển sang Worker. 5xx cũng retry vì có thể origin
+    // đang drop theo IP.
+    if ([401, 403, 429, 451, 500, 502, 503].includes(res.status)) {
+      directError = `Direct fetch ${res.status} ${res.statusText}`;
+    } else {
+      throw new Error(`Không fetch được URL (${res.status} ${res.statusText}).`);
+    }
+  } catch (err) {
+    if (directError == null) {
+      directError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  try {
+    return await fetchHtmlViaWorker(url);
+  } catch (workerErr) {
+    const msg = workerErr instanceof Error ? workerErr.message : String(workerErr);
+    throw new Error(
+      `Không fetch được URL. Direct: ${directError ?? "unknown"}. Worker fallback: ${msg}`,
+    );
+  }
 }
 
 /** Resolve URL tương đối -> tuyệt đối dựa trên URL gốc. */

@@ -614,9 +614,6 @@
   max-width: 36rem;
   text-wrap: balance;
   animation: fadeUp 0.5s 0.18s ease both;
-  text-shadow:
-    0 1px 2px rgba(12, 8, 8, 0.52),
-    0 2px 16px rgba(12, 8, 8, 0.38);
 }
 
 .hero-actions { display:flex; gap:8px; animation:fadeUp .5s .24s ease both; }
@@ -2004,9 +2001,18 @@ button.mi {
     margin-bottom: 0;
   }
 
-  /* Tác phẩm học viên — masonry 4 cột */
+  /* Tác phẩm học viên — masonry 6 cột full-bleed (thoát khỏi .page-inner 920px) */
+  .home-gallery {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+  .home-gallery .gallery-wrap {
+    padding: 24px 28px 0;
+    max-width: none;
+  }
   .masonry {
-    columns: 4;
+    columns: 6;
     column-gap: var(--gallery-gap);
     padding: 0 0 8px;
   }

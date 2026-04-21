@@ -1,0 +1,11 @@
+name = "sine-art-api"
+main = "index.mjs"
+compatibility_date = "2024-09-01"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "sineart-images"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "4be0d0e78d6243c08c30c1d7df7f8d95"

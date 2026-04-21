@@ -239,24 +239,30 @@ export default function KhoaHocDetailView({
         <span className="kd-bc-current">{title}</span>
       </nav>
 
-      {/* PAGE GRID */}
+      {/* PAGE GRID
+         * Title được kéo ra khỏi .kd-page-main để làm grid item trực tiếp.
+         * Thứ tự visual được điều khiển bởi CSS grid-row:
+         *   Mobile: title (row 1) → sidebar (row 2) → main (row 3)
+         *   Desktop: title col1 row1, main col1 row2, sidebar col2 row1/span 2 (sticky)
+         * Xem khoa-hoc-detail.css — selector `.kd-page-grid`.
+         */}
       <div className="kd-page-grid">
+        {/* ── 00 TITLE (grid item trực tiếp) ── */}
+        <header className="kd-page-title-row">
+          <div className="kd-page-eyebrow">
+            <span className="kd-page-eyebrow-dot" aria-hidden />
+            <span>{tag}</span>
+            <span className="kd-page-eyebrow-sep" aria-hidden>·</span>
+            <span>{crumbMid}</span>
+          </div>
+          <h1 className="kd-page-h1">
+            Khóa học {title.replace(/\s+(Online|Tại lớp|Tai lop|Offline)\s*$/i, "").trim() || title} {tag}
+          </h1>
+          <div className="kd-page-title-rule" aria-hidden />
+        </header>
+
         {/* LEFT / MAIN CONTENT */}
         <div className="kd-page-main">
-
-          {/* ── 00 TITLE ── */}
-          <header className="kd-page-title-row">
-            <div className="kd-page-eyebrow">
-              <span className="kd-page-eyebrow-dot" aria-hidden />
-              <span>{tag}</span>
-              <span className="kd-page-eyebrow-sep" aria-hidden>·</span>
-              <span>{crumbMid}</span>
-            </div>
-            <h1 className="kd-page-h1">
-              Khóa học {title.replace(/\s+(Online|Tại lớp|Tai lop|Offline)\s*$/i, "").trim() || title} {tag}
-            </h1>
-            <div className="kd-page-title-rule" aria-hidden />
-          </header>
 
           {/* ── 01 STUDENT WORKS ── */}
           <section className="kd-block kd-works-top" id="works">

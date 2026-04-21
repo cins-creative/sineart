@@ -2060,7 +2060,15 @@
    NEW DESIGN — Trang trí màu design system (2026)
    ═══════════════════════════════════════════════════════════════ */
 
-/* Page grid */
+/* Page grid
+ *
+ * 3 grid items trực tiếp: .kd-page-title-row, .kd-page-main, .kd-sidebar
+ * (xem KhoaHocDetailView.tsx — sidebar nằm sau main trong JSX).
+ *
+ * Mobile (< 900px): 1 cột, grid-row explicit:
+ *   Row 1 = title, Row 2 = sidebar (học phí ngay dưới title), Row 3 = main content.
+ * Desktop (≥ 900px): 2 cột, sidebar ở cột phải span 2 hàng → sticky đúng.
+ */
 .kd-page-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -2069,15 +2077,38 @@
   margin-top: 24px;
 }
 
+.kd-page-grid > .kd-page-title-row { grid-row: 1; }
+.kd-page-grid > .kd-sidebar        { grid-row: 2; }
+.kd-page-grid > .kd-page-main      { grid-row: 3; }
+
 @media (min-width: 900px) {
   .kd-page-grid {
     grid-template-columns: 1fr 320px;
     gap: 0 28px;
   }
+  .kd-page-grid > .kd-page-title-row {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .kd-page-grid > .kd-page-main {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .kd-page-grid > .kd-sidebar {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
 }
 
 .kd-page-main {
   min-width: 0;
+}
+
+/* Trên mobile, sidebar nằm giữa title và main → cần thở giữa sidebar và block đầu tiên của main */
+@media (max-width: 899px) {
+  .kd-page-grid > .kd-page-main {
+    margin-top: 32px;
+  }
 }
 
 /* Section block */

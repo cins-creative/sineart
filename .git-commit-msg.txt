@@ -1,9 +1,0 @@
-fix(khoa-hoc/slug): mobile đưa sidebar học phí lên ngay sau tiêu đề
-
-Kéo .kd-page-title-row ra khỏi .kd-page-main để thành grid item trực tiếp
-của .kd-page-grid. Dùng grid-row explicit:
-- Mobile (<900px): title → sidebar → main (học phí nổi bật ngay đầu).
-- Desktop (≥900px): title col1 row1, main col1 row2, sidebar col2 span 2
-  hàng giữ sticky như cũ.
-
-Thêm margin-top:32px cho .kd-page-main trên mobile để tách khỏi sidebar.

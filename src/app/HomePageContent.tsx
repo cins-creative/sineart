@@ -1,5 +1,4 @@
 import CareerSection from "./_components/CareerSection";
-import CoursesSection from "./_components/CoursesSection";
 import CtaBandSection from "./_components/CtaBandSection";
 import GallerySection from "./_components/GallerySection";
 import HeroSection from "./_components/HeroSection";
@@ -30,7 +29,6 @@ export async function HomePageContent() {
         groups={data.stats.groups}
       />
       <div className="page-inner">
-        <CoursesSection />
         <WhySection />
         <VideoSection />
         <ReviewsSection reviews={data.reviews} />

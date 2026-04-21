@@ -86,7 +86,6 @@ export function KhoaHocPageSkeleton({ className }: { className?: string }) {
   );
 }
 
-const HOME_COURSE_THUMB = ["lthi", "digital", "kids", "botro"] as const;
 
 /** Skeleton trang chủ (`/`) — Suspense + `app/loading.tsx` */
 export function HomePageSkeleton({ className }: { className?: string }) {
@@ -134,35 +133,6 @@ export function HomePageSkeleton({ className }: { className?: string }) {
       </div>
 
       <div className="page-inner">
-        <div className="courses-wrap">
-          <div className="sec-label" aria-hidden>
-            <span className="inline-block h-3 w-28 animate-pulse rounded bg-zinc-200/80" />
-          </div>
-          <div className="courses-blocks">
-            {HOME_COURSE_THUMB.map((id) => (
-              <div
-                key={id}
-                className={cn(
-                  "courses-block",
-                  id === "lthi" && "courses-block--featured",
-                  `courses-block--${id}`,
-                )}
-              >
-                <div
-                  className={cn(
-                    "courses-block-thumb",
-                    `courses-block-thumb--${id}`,
-                    "animate-pulse",
-                  )}
-                />
-                <div className="courses-block-cap">
-                  <div className="h-3.5 w-[72%] max-w-[140px] animate-pulse rounded bg-zinc-200/70" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         <div className="px-3">
           <div className="mb-3 flex items-center gap-2">
             <div className="h-3 w-20 animate-pulse rounded bg-zinc-200/80" />

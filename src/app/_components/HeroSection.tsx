@@ -70,7 +70,7 @@ export default function HeroSection() {
               <PencilIcon />
               Học thử miễn phí
             </Link>
-            <Link href="/#khoa-hoc" className="btn-g">
+            <Link href="/khoa-hoc" className="btn-g">
               <BookIcon />
               Xem khoá học
             </Link>

@@ -1487,16 +1487,38 @@ button.mi {
 }
 
 .rv-selector {
-  display:flex; gap:6px; margin-bottom:8px;
-  overflow-x:auto; scrollbar-width:none; padding-right:8px;
+  position: relative;
+  margin-bottom: 10px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
 }
-.rv-selector::-webkit-scrollbar { display:none; }
+.rv-track {
+  display: flex;
+  gap: 6px;
+  width: max-content;
+  animation: rv-ticker var(--rv-ticker-duration, 80s) linear infinite;
+}
+.rv-track:hover,
+.rv-track:focus-within {
+  animation-play-state: paused;
+}
+@keyframes rv-ticker {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv-track { animation: none; }
+  .rv-selector { overflow-x: auto; scrollbar-width: none; }
+  .rv-selector::-webkit-scrollbar { display: none; }
+}
 .rv-pill {
   flex-shrink:0; display:flex; align-items:center; gap:6px;
   background:white; border:1.5px solid rgba(45,32,32,.1);
   padding:6px 12px; border-radius:100px; cursor:pointer;
-  transition:all .2s; -webkit-tap-highlight-color:transparent;
-  font-size:13px; font-weight:700;
+  transition:background .2s, color .2s, border-color .2s;
+  -webkit-tap-highlight-color:transparent;
+  font-size:13px; font-weight:700; white-space: nowrap;
 }
 .rv-pill.active { background:var(--grad); color:white; border-color:transparent; }
 .rp-av {
@@ -1971,7 +1993,6 @@ button.mi {
   .rv-text-big { font-size: 16px; min-height: 9em; line-height: 1.75; }
   .rv-big { padding: 22px 22px 26px; }
   .rv-artwork { height: 130px; }
-  .rv-selector { flex-wrap: wrap; overflow-x: visible; }
 
   .home-gallery {
     width: 100%;

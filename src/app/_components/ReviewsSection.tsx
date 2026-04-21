@@ -103,23 +103,47 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
           <span style={{ opacity: 0.55, fontWeight: 600 }}>· Google</span>
         </div>
       </div>
-      <div className="rv-selector">
-        {reviews.map((r, i) => (
-          <button
-            key={r.id}
-            type="button"
-            className={`rv-pill${i === idx ? " active" : ""}`}
-            onClick={() => {
-              clearTimer();
-              runTyping(i);
-            }}
-          >
-            <span className="rp-av" aria-hidden="true">
-              {reviewInitials(r.name)}
-            </span>{" "}
-            {r.name.split(" ").pop()}
-          </button>
-        ))}
+      <div className="rv-selector" aria-label="Danh sách học viên đánh giá">
+        <div
+          className="rv-track"
+          style={{ ["--rv-ticker-duration" as string]: `${Math.max(40, reviews.length * 2.4)}s` }}
+        >
+          {reviews.map((r, i) => (
+            <button
+              key={`a-${r.id}`}
+              type="button"
+              className={`rv-pill${i === idx ? " active" : ""}`}
+              onClick={() => {
+                clearTimer();
+                runTyping(i);
+              }}
+            >
+              <span className="rp-av" aria-hidden="true">
+                {reviewInitials(r.name)}
+              </span>
+              {r.name}
+            </button>
+          ))}
+          {/* Bản copy để loop liền mạch — aria-hidden để screen reader không đọc trùng */}
+          {reviews.map((r, i) => (
+            <button
+              key={`b-${r.id}`}
+              type="button"
+              tabIndex={-1}
+              aria-hidden
+              className={`rv-pill${i === idx ? " active" : ""}`}
+              onClick={() => {
+                clearTimer();
+                runTyping(i);
+              }}
+            >
+              <span className="rp-av" aria-hidden="true">
+                {reviewInitials(r.name)}
+              </span>
+              {r.name}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="rv-big">
         <div className="rv-head">

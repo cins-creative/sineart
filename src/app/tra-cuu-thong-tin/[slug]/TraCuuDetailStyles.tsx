@@ -57,6 +57,30 @@ const css = `
 
   /* Khoảng cách tối thiểu giữa các section block con trực tiếp. */
   .bd-tc-body > * + *{margin-top:14px}
+
+  /* ─── Album gallery đầu bài ───
+     Ảnh thông tin tuyển sinh thường tỉ lệ 1:1 → dùng khung vuông đều + object-fit:contain
+     để KHÔNG bị crop; phần trống dùng background nhẹ. */
+  .bd-tc-album{display:grid;gap:10px;margin:14px 0 22px}
+  .bd-tc-album-fig{margin:0;padding:0;overflow:hidden;border-radius:12px;background:#faf6f2;aspect-ratio:1/1}
+  .bd-tc-album-link{display:flex;align-items:center;justify-content:center;width:100%;height:100%;line-height:0}
+  .bd-tc-album-img{display:block;max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;transition:transform .35s ease}
+  .bd-tc-album-link:hover .bd-tc-album-img{transform:scale(1.03)}
+
+  /* 1 ảnh: giới hạn bề ngang để không quá to */
+  .bd-tc-album--one{justify-content:center}
+  .bd-tc-album--one .bd-tc-album-fig{max-width:420px;width:100%}
+
+  /* 2 ảnh: 2 cột đều */
+  .bd-tc-album--two{grid-template-columns:1fr 1fr}
+
+  /* 3+ ảnh: grid 3 cột đều, mỗi ô vuông — fit trọn ảnh 1:1 */
+  .bd-tc-album--grid{grid-template-columns:repeat(3,1fr)}
+
+  @media (max-width:640px){
+    .bd-tc-album--two{grid-template-columns:1fr 1fr;gap:8px}
+    .bd-tc-album--grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  }
 `;
 
 export function TraCuuDetailStyles() {

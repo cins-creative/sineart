@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import NavBar from "../../_components/NavBar";
 import { BlogDetailStyles } from "../../blogs/[slug]/BlogDetailStyles";
 import { BlogToc } from "../../blogs/[slug]/BlogToc";
+import { TraCuuAlbumGallery } from "./TraCuuAlbumGallery";
 import { TraCuuDetailStyles } from "./TraCuuDetailStyles";
 
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
@@ -124,6 +125,14 @@ export default async function TraCuuDetailPage({ params }: Props) {
 
             {/* Title */}
             <h1 className="bd-h1">{post.title ?? "Bài tra cứu"}</h1>
+
+            {/* Album gallery — SEO ảnh, alt auto theo tiêu đề bài viết */}
+            {post.album.length > 0 && (
+              <TraCuuAlbumGallery
+                images={post.album}
+                title={post.title ?? "Bài tra cứu"}
+              />
+            )}
 
             {/* Meta row */}
             <div className="bd-tc-meta">

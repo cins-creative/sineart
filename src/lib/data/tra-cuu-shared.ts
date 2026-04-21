@@ -26,6 +26,7 @@ export type TraCuuListItem = {
 export type TraCuuDetail = TraCuuListItem & {
   body_html: string | null;
   updated_at: string | null;
+  album: string[];
 };
 
 export type TruongLookup = {

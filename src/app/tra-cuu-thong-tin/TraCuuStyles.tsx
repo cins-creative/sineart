@@ -34,8 +34,9 @@ const css = `
   .sa-tracuu .ph-stat .l{font-size:13px;font-weight:600;color:var(--ink-2)}
   .sa-tracuu .ph-stat .l span{color:var(--ink-muted);font-weight:500}
 
-  /* FILTER BAR */
-  .sa-tracuu .filter-section{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.88);backdrop-filter:blur(14px);border-top:1px solid rgba(45,32,32,.06);border-bottom:1px solid rgba(45,32,32,.06)}
+  /* FILTER BAR — offset top=70px để né navbar fixed trên desktop (≥900px).
+     Mobile (<900px) navbar ở đáy nên top:0 hợp lý — override trong media query. */
+  .sa-tracuu .filter-section{position:sticky;top:70px;z-index:20;background:rgba(255,255,255,.88);backdrop-filter:blur(14px);border-top:1px solid rgba(45,32,32,.06);border-bottom:1px solid rgba(45,32,32,.06)}
   .sa-tracuu .filter-bar{padding:16px 0;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .sa-tracuu .search-input{display:flex;gap:10px;align-items:center;padding:10px 18px;border-radius:999px;border:1.5px solid rgba(45,32,32,.12);background:#fff;min-width:260px;flex:1;max-width:340px}
   .sa-tracuu .search-input input{border:0;outline:none;background:transparent;flex:1;min-width:0;font-size:13px;font-family:inherit}

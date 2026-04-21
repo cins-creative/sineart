@@ -68,7 +68,7 @@ export default async function TraCuuListPage() {
             <div className="ph-stat">
               <div className="n">{totalTruong || "—"}</div>
               <div className="l">
-                Trường đại học đối tác
+                Thông tin từ các trường đại học
                 <br />
                 <span>Nguồn tin chính thức</span>
               </div>

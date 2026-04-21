@@ -34,7 +34,7 @@ export type {
 
 const LIST_COLS =
   "id, slug, title, thumbnail_url, thumbnail_alt, nam, excerpt, is_featured, published_at, truong_ids, type";
-const DETAIL_COLS = `${LIST_COLS}, body_html, updated_at`;
+const DETAIL_COLS = `${LIST_COLS}, body_html, updated_at, album`;
 
 const TYPE_VALUES: ReadonlySet<string> = new Set(TRA_CUU_TYPE_OPTIONS.map((o) => o.value));
 
@@ -73,11 +73,45 @@ function mapListRow(raw: Record<string, unknown>): TraCuuListItem {
   };
 }
 
+/**
+ * Parse album: hỗ trợ cả 3 dạng lưu trong DB:
+ *   1. Postgres `text[]` → JS array
+ *   2. `jsonb` array → JS array
+ *   3. `text` chứa JSON-encoded array (legacy từ form admin)
+ */
+function asStrArray(v: unknown): string[] {
+  if (v == null) return [];
+  let arr: unknown = v;
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return [];
+    if (t.startsWith("[")) {
+      try {
+        arr = JSON.parse(t);
+      } catch {
+        return [];
+      }
+    } else {
+      return [t];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  const out: string[] = [];
+  for (const it of arr) {
+    if (typeof it === "string") {
+      const t = it.trim();
+      if (t) out.push(t);
+    }
+  }
+  return out;
+}
+
 function mapDetail(raw: Record<string, unknown>): TraCuuDetail {
   return {
     ...mapListRow(raw),
     body_html: (raw.body_html as string | null) ?? null,
     updated_at: (raw.updated_at as string | null) ?? null,
+    album: asStrArray(raw.album),
   };
 }
 

@@ -165,9 +165,6 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
         <div className="rv-text-big">
           {rv.text}
         </div>
-        <div className="rv-artwork">
-          <div className="rv-aw-tag">{rv.artTag}</div>
-        </div>
       </div>
     </div>
   );

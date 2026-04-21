@@ -1575,19 +1575,6 @@ button.mi {
   font-size:14px; line-height:1.75; color:rgba(45,32,32,.88);
   font-weight:600; min-height:4.5em; font-style:italic;
 }
-.rv-artwork {
-  width:100%; height:84px; border-radius:12px; margin-top:14px;
-  background:linear-gradient(135deg,rgba(248,166,104,.15),rgba(238,91,159,.15));
-  position:relative; overflow:hidden;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid rgba(248,166,104,.2);
-}
-.rv-aw-tag {
-  position:absolute; bottom:8px; left:8px;
-  background:rgba(45,32,32,.45); color:white;
-  font-size:10px; font-weight:700; padding:3px 9px; border-radius:100px;
-}
-
 /* ─────────────────────────────
   9. FOOTER (CTA + thông tin)
 ───────────────────────────── */
@@ -1988,7 +1975,6 @@ button.mi {
   .reviews-wrap { padding: 0; margin-bottom: 0; }
   .rv-text-big { font-size: 16px; min-height: 9em; line-height: 1.75; }
   .rv-big { padding: 22px 22px 26px; }
-  .rv-artwork { height: 130px; }
 
   .home-gallery {
     width: 100%;

@@ -112,14 +112,6 @@ function IconStar({ className }: { className?: string }) {
     </svg>
   );
 }
-function IconCheck() {
-  return (
-    <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
-  );
-}
-
 export default function KhoaHocDetailView({
   detail,
   fallbackTitle,
@@ -603,7 +595,6 @@ export default function KhoaHocDetailView({
               <div className="kd-cta-band-stats">
                 <div className="kd-cta-stat"><div className="kd-cta-stat-n">347</div><div className="kd-cta-stat-l">Học viên đã hoàn thành</div></div>
                 <div className="kd-cta-stat"><div className="kd-cta-stat-n">4.9/5</div><div className="kd-cta-stat-l">128 đánh giá</div></div>
-                <div className="kd-cta-stat"><div className="kd-cta-stat-n">92%</div><div className="kd-cta-stat-l">Đỗ ĐH Mỹ thuật top</div></div>
               </div>
             </div>
           </section>
@@ -677,22 +668,6 @@ export default function KhoaHocDetailView({
             <a href="tel:+842838123456" className="kd-sb-btn kd-sb-btn--alt">
               Đăng ký qua tư vấn
             </a>
-          </div>
-
-          {/* Perks */}
-          <div className="kd-sb-perks">
-            {["1 buổi học thử", "Chứng chỉ Sine Art", "Vật tư đầy đủ", "Chat 24/7"].map((p) => (
-              <div key={p} className="kd-sb-perk">
-                <span className="kd-sb-perk-ok" aria-hidden><IconCheck /></span>
-                {p}
-              </div>
-            ))}
-          </div>
-
-          {/* Trust */}
-          <div className="kd-sb-trust">
-            <span className="kd-sb-trust-stars" aria-hidden>★★★★★</span>
-            <span>347 HV đã hoàn thành · 92% đỗ ĐH Mỹ thuật</span>
           </div>
 
           {/* Mon-html fallback (giới thiệu môn) */}

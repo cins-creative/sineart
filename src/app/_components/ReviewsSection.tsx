@@ -1,6 +1,7 @@
 "use client";
 
 import type { HomeReview } from "@/types/homepage";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const GoogleIcon = () => (
@@ -45,6 +46,7 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -140,31 +142,39 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
         onFocus={() => setPaused(true)}
         onBlur={() => setPaused(false)}
       >
-        <div className="rv-head">
-          <div
-            className="rv-avatar overflow-hidden"
-            style={{ background: rv.grad }}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={rv.id}
+            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 14 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -14 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           >
-            {rv.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={rv.avatarUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <span className="rv-avatar-initials">{reviewInitials(rv.name)}</span>
-            )}
-          </div>
-          <div className="rv-meta">
-            <div className="rv-name">{rv.name}</div>
-            <div className="rv-course">{rv.course}</div>
-            <div className="rv-stars">{stars(rv.stars)}</div>
-          </div>
-          <div className="rv-source">
-            <GoogleIcon />
-            {rv.source}
-          </div>
-        </div>
-        <div className="rv-text-big">
-          {rv.text}
-        </div>
+            <div className="rv-head">
+              <div
+                className="rv-avatar overflow-hidden"
+                style={{ background: rv.grad }}
+              >
+                {rv.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={rv.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="rv-avatar-initials">{reviewInitials(rv.name)}</span>
+                )}
+              </div>
+              <div className="rv-meta">
+                <div className="rv-name">{rv.name}</div>
+                <div className="rv-course">{rv.course}</div>
+                <div className="rv-stars">{stars(rv.stars)}</div>
+              </div>
+              <div className="rv-source">
+                <GoogleIcon />
+                {rv.source}
+              </div>
+            </div>
+            <div className="rv-text-big">{rv.text}</div>
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -43,45 +43,39 @@ function reviewInitials(name: string): string {
 
 export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
   const [idx, setIdx] = useState(0);
-  const [typed, setTyped] = useState("");
+  const [paused, setPaused] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const charRef = useRef(0);
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
   };
 
-  const runTyping = useCallback(
-    (startIdx: number) => {
+  // Thời gian đọc dựa trên độ dài: ~70ms/ký tự, min 6s, max 18s
+  const readingDurationMs = useCallback((text: string) => {
+    return Math.min(18000, Math.max(6000, text.length * 70));
+  }, []);
+
+  const scheduleNext = useCallback(
+    (currentIdx: number) => {
       clearTimer();
-      const rv = reviews[startIdx];
+      const rv = reviews[currentIdx];
       if (!rv) return;
-      setIdx(startIdx);
-      setTyped("");
-      charRef.current = 0;
-      const text = rv.text;
-      const step = () => {
-        if (charRef.current < text.length) {
-          charRef.current += 1;
-          setTyped(text.slice(0, charRef.current));
-          timerRef.current = setTimeout(step, 26);
-        } else {
-          timerRef.current = setTimeout(() => {
-            const next = (startIdx + 1) % reviews.length;
-            runTyping(next);
-          }, 3500);
-        }
-      };
-      step();
+      timerRef.current = setTimeout(() => {
+        setIdx((prev) => (prev + 1) % reviews.length);
+      }, readingDurationMs(rv.text));
     },
-    [reviews]
+    [reviews, readingDurationMs]
   );
 
   useEffect(() => {
-    runTyping(0);
+    if (paused) {
+      clearTimer();
+      return;
+    }
+    scheduleNext(idx);
     return () => clearTimer();
-  }, [runTyping]);
+  }, [idx, paused, scheduleNext]);
 
   const rv = reviews[idx];
   if (!reviews.length || !rv) return null;
@@ -113,10 +107,7 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
               key={`a-${r.id}`}
               type="button"
               className={`rv-pill${i === idx ? " active" : ""}`}
-              onClick={() => {
-                clearTimer();
-                runTyping(i);
-              }}
+              onClick={() => setIdx(i)}
             >
               <span className="rp-av" aria-hidden="true">
                 {reviewInitials(r.name)}
@@ -132,10 +123,7 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
               tabIndex={-1}
               aria-hidden
               className={`rv-pill${i === idx ? " active" : ""}`}
-              onClick={() => {
-                clearTimer();
-                runTyping(i);
-              }}
+              onClick={() => setIdx(i)}
             >
               <span className="rp-av" aria-hidden="true">
                 {reviewInitials(r.name)}
@@ -145,7 +133,13 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
           ))}
         </div>
       </div>
-      <div className="rv-big">
+      <div
+        className="rv-big"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onFocus={() => setPaused(true)}
+        onBlur={() => setPaused(false)}
+      >
         <div className="rv-head">
           <div
             className="rv-avatar overflow-hidden"
@@ -169,8 +163,7 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
           </div>
         </div>
         <div className="rv-text-big">
-          <span>{typed}</span>
-          <span className="cursor" />
+          {rv.text}
         </div>
         <div className="rv-artwork">
           <div className="rv-aw-tag">{rv.artTag}</div>

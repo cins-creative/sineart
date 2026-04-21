@@ -41,4 +41,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
+# temp files dùng cho git commit message (HEREDOC workaround trên PowerShell)
+.git-commit-msg.txt

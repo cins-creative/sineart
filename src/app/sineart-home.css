@@ -1973,8 +1973,8 @@ button.mi {
 
   /* reviews — tall */
   .reviews-wrap { padding: 0; margin-bottom: 0; }
-  .rv-text-big { font-size: 16px; min-height: 9em; line-height: 1.75; }
-  .rv-big { padding: 22px 22px 26px; }
+  .rv-text-big { font-size: 16px; min-height: 5em; line-height: 1.75; }
+  .rv-big { padding: 20px 22px 22px; }
 
   .home-gallery {
     width: 100%;
@@ -1982,7 +1982,7 @@ button.mi {
   }
 
   .gallery-wrap {
-    padding: 24px 0 0;
+    padding: 8px 0 0;
     margin-bottom: 0;
   }
 

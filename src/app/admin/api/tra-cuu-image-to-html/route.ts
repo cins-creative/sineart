@@ -4,7 +4,7 @@ import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { traCuuImagesToHtml, type TraCuuImagePayload } from "@/lib/admin/tra-cuu-image-to-html";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 type ReqBody = { images?: unknown; note?: unknown };
 

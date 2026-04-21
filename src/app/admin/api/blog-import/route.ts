@@ -4,7 +4,7 @@ import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { importBlogFromUrl } from "@/lib/admin/blog-import";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   const session = await getAdminSessionOrNull();

@@ -108,9 +108,16 @@ export default function CtaSection() {
 
         <div className="sf-bottom">
           <div className="sf-brand-col">
-            <Link href="/" className="sf-logo">
-              <span className="sf-logo-sine">Sine</span>
-              <span className="sf-logo-art">Art</span>
+            <Link href="/" className="sf-logo" aria-label="Sine Art — Trang chủ">
+              <img
+                src="/brand/sine-art-logo.png"
+                alt="Sine Art"
+                className="sf-logo-img"
+                width={150}
+                height={60}
+                decoding="async"
+                loading="lazy"
+              />
             </Link>
             <p className="sf-about">
               SineArt là trung tâm luyện thi vẽ với lộ trình chi tiết cho từng ngành và từng

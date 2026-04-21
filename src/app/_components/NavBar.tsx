@@ -398,9 +398,15 @@ export default function NavBar({
     <>
       <div className="nav-bottom-fixed">
         <div className="sticky">
-          <Link href="/" className="sticky-logo">
-            <span className="sticky-logo-sine">Sine</span>
-            <span className="sticky-logo-art">Art</span>
+          <Link href="/" className="sticky-logo" aria-label="Sine Art — Trang chủ">
+            <img
+              src="/brand/sine-art-logo.png"
+              alt="Sine Art"
+              className="sticky-logo-img"
+              width={140}
+              height={56}
+              decoding="async"
+            />
           </Link>
           <nav className="nav-links" aria-label="Điều hướng chính">
             {NAV_ITEMS.map((item) =>

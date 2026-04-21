@@ -150,26 +150,16 @@
 .sticky-logo {
   grid-area: logo;
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.12em;
-  font-weight: 800;
-  font-size: 19px;
-  letter-spacing: -0.03em;
-  color: var(--nav-text);
+  align-items: center;
   text-decoration: none;
   justify-self: start;
-  line-height: 1.15;
+  line-height: 0;
 }
-.sticky-logo-sine {
-  color: var(--nav-text);
-}
-.sticky-logo-art {
-  font-weight: 800;
-  background: var(--grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+.sticky-logo-img {
+  display: block;
+  height: 36px;
+  width: auto;
+  object-fit: contain;
 }
 /* Nút Vào học — mobile: fixed góc phải, cao hơn dock để không đè navigation */
 .nav-cta-fixed {
@@ -1729,27 +1719,17 @@ button.mi {
 
 .sf-logo {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.12em;
-  font-weight: 800;
-  font-size: 22px;
-  letter-spacing: -0.03em;
+  align-items: center;
   text-decoration: none;
-  line-height: 1.15;
-  margin-bottom: 8px;
+  line-height: 0;
+  margin-bottom: 12px;
 }
 
-.sf-logo-sine {
-  color: var(--ink);
-}
-
-.sf-logo-art {
-  font-weight: 800;
-  background: var(--grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+.sf-logo-img {
+  display: block;
+  height: 44px;
+  width: auto;
+  object-fit: contain;
 }
 
 .sf-about {
@@ -1914,9 +1894,11 @@ button.mi {
     overflow: visible;
   }
   .sticky-logo {
-    font-size: 21px;
     justify-self: unset;
     margin-right: 8px;
+  }
+  .sticky-logo-img {
+    height: 32px;
   }
   .sbtn {
     font-size: 13px;

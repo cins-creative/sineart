@@ -110,7 +110,7 @@ export default function CtaSection() {
           <div className="sf-brand-col">
             <Link href="/" className="sf-logo" aria-label="Sine Art — Trang chủ">
               <img
-                src="/brand/sine-art-logo.png"
+                src="https://imagedelivery.net/PtnQ1mNuCedkboD0kJ2_4w/65b0e187-cbc0-42f6-4978-b3da96efe300/public"
                 alt="Sine Art"
                 className="sf-logo-img"
                 width={150}

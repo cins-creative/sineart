@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import CtaBandSection from "./_components/CtaBandSection";
+import LuuBaiHocVienFab from "./_components/LuuBaiHocVienFab";
 import HeroSection from "./_components/HeroSection";
 import VideoSection from "./_components/VideoSection";
 import WhySection from "./_components/WhySection";
@@ -53,6 +54,8 @@ export default function Home() {
       </Suspense>
 
       <CtaBandSection />
+
+      <LuuBaiHocVienFab />
     </div>
   );
 }

@@ -1,0 +1,550 @@
+/* ───────────────────────────────────────────────────────────────
+   LuuBaiHocVienFab — FAB "Lưu bài" cho học viên đã sign-in
+   Prefix: .luubai-*
+   Brand: F8A568 → EE5CA2 · font: --font (Quicksand)
+   ─────────────────────────────────────────────────────────────── */
+
+.luubai-root {
+  font-family: var(--font);
+}
+
+/* ───── FAB ───── */
+.luubai-fab {
+  position: fixed;
+  z-index: 89; /* dưới nav-bottom-fixed (102), trên nav-cta-fixed (88) */
+  right: max(14px, env(safe-area-inset-right, 0px));
+  /* Mobile: chồng lên TRÊN nút "Vào học" (nav-cta-fixed bottom ~100px). */
+  bottom: max(170px, calc(150px + env(safe-area-inset-bottom, 0px) + 16px));
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #f8a568, #ee5ca2);
+  box-shadow:
+    0 10px 28px rgba(238, 92, 162, 0.38),
+    0 2px 8px rgba(0, 0, 0, 0.16);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.2s;
+}
+.luubai-fab:hover {
+  box-shadow:
+    0 14px 34px rgba(238, 92, 162, 0.5),
+    0 3px 10px rgba(0, 0, 0, 0.18);
+}
+
+/* Desktop: nav-cta-fixed bottom = 24px → FAB lưu bài nằm trên nó */
+@media (min-width: 800px) {
+  .luubai-fab {
+    right: max(24px, env(safe-area-inset-right, 0px));
+    bottom: max(96px, calc(76px + env(safe-area-inset-bottom, 0px) + 16px));
+    width: 58px;
+    height: 58px;
+  }
+}
+
+/* ───── Picker bottom sheet ───── */
+.luubai-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.luubai-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  padding: 0 0 calc(24px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.15);
+  max-width: 560px;
+  margin: 0 auto;
+  font-family: var(--font);
+}
+.luubai-sheet-grip {
+  width: 36px;
+  height: 4px;
+  border-radius: 99px;
+  background: #e5e7eb;
+  margin: 10px auto 4px;
+}
+.luubai-sheet-head {
+  padding: 8px 20px 14px;
+}
+.luubai-sheet-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 0 20px;
+}
+.luubai-sheet-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: #f5f7f7;
+  color: #6b7280;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.luubai-sheet-close:hover {
+  background: #eef0f0;
+  color: #1a1a1a;
+}
+
+.luubai-opt {
+  padding: 18px 14px;
+  border-radius: 16px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font);
+  transition:
+    transform 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.luubai-opt:hover {
+  transform: translateY(-2px);
+  border-color: #f8a568;
+  box-shadow: 0 6px 18px rgba(248, 165, 104, 0.18);
+}
+.luubai-opt-ico {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.luubai-opt-ico--accent {
+  color: #f8a568;
+  background: linear-gradient(135deg, #fff7ed, #fff0f6);
+}
+.luubai-opt-ico--purple {
+  color: #bc8af9;
+  background: linear-gradient(135deg, #f5f3ff, #faf0ff);
+}
+.luubai-opt-label {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+.luubai-opt-sub {
+  margin: 0;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* ───── Eyebrow + headings ───── */
+.luubai-eyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  color: #f8a568;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.luubai-h {
+  margin: 2px 0 4px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+.luubai-h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+.luubai-sub {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+.luubai-sub strong {
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+/* ───── Form modal ───── */
+.luubai-form {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font);
+}
+.luubai-form-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f5f7f7;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.luubai-back {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.luubai-back:hover {
+  background: #f5f7f7;
+  color: #1a1a1a;
+}
+.luubai-form-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+}
+.luubai-form-foot {
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #f5f7f7;
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+  background: #fff;
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* ───── Student chip ───── */
+.luubai-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff7ed, #fff0f6);
+  border: 1px solid rgba(248, 165, 104, 0.2);
+  margin-bottom: 14px;
+}
+.luubai-who-av {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #fff;
+  flex-shrink: 0;
+}
+.luubai-who-av--blank {
+  background: linear-gradient(135deg, #f8a568, #ee5ca2);
+}
+.luubai-who-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.luubai-who-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.luubai-who-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ───── Preview + upload ───── */
+.luubai-preview {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  background: #f5f7f7;
+  border: 1.5px solid #e5e7eb;
+  transition: border-color 0.25s;
+}
+.luubai-preview--done {
+  border-color: #86efac;
+}
+.luubai-preview--error {
+  border-color: #fecaca;
+}
+.luubai-preview img {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  display: block;
+}
+.luubai-uploading {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.luubai-uploading p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f8a568;
+}
+.luubai-spin {
+  width: 26px;
+  height: 26px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #f8a568;
+  border-radius: 50%;
+  animation: luubai_spin 0.7s linear infinite;
+}
+.luubai-spin--sm {
+  width: 16px;
+  height: 16px;
+  border-width: 2.5px;
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+@keyframes luubai_spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.luubai-bar {
+  width: 140px;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.luubai-bar-fill {
+  height: 100%;
+  background: linear-gradient(135deg, #f8a568, #ee5ca2);
+  transition: width 0.3s;
+}
+
+.luubai-status {
+  padding: 8px 12px;
+  background: #f5f7f7;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.luubai-preview--done .luubai-status {
+  background: #f0fdf4;
+}
+.luubai-preview--error .luubai-status {
+  background: #fef2f2;
+}
+.luubai-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #9ca3af;
+}
+.luubai-preview--uploading .luubai-status-dot {
+  background: #f8a568;
+}
+.luubai-preview--done .luubai-status-dot {
+  background: #10b981;
+}
+.luubai-preview--error .luubai-status-dot {
+  background: #ef4444;
+}
+.luubai-status-text {
+  flex: 1;
+  font-size: 12px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.luubai-preview--done .luubai-status-text {
+  color: #10b981;
+}
+.luubai-preview--error .luubai-status-text {
+  color: #ef4444;
+}
+.luubai-status-swap {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  font-family: var(--font);
+}
+.luubai-status-swap:hover {
+  color: #f8a568;
+}
+
+/* ───── Fields ───── */
+.luubai-field {
+  margin-bottom: 12px;
+}
+.luubai-lbl {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.luubai-select {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1.5px solid #e5e7eb;
+  outline: none;
+  font-size: 14px;
+  font-family: var(--font);
+  color: #1a1a1a;
+  background: #fff;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.luubai-select:focus {
+  border-color: #f8a568;
+}
+.luubai-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.luubai-field-err {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #ef4444;
+}
+
+/* ───── Bai mau toggle ───── */
+.luubai-baimau {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid #e5e7eb;
+  background: #f5f7f7;
+  cursor: pointer;
+  color: #6b7280;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.luubai-baimau.is-on {
+  border-color: rgba(248, 165, 104, 0.55);
+  background: linear-gradient(135deg, #fff7ed, #fff0f6);
+  color: #f8a568;
+}
+.luubai-baimau-box {
+  width: 20px;
+  height: 20px;
+  border-radius: 7px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+  transition: all 0.15s;
+}
+.luubai-baimau.is-on .luubai-baimau-box {
+  background: linear-gradient(135deg, #f8a568, #ee5ca2);
+  border-color: #f8a568;
+}
+
+/* ───── Error box ───── */
+.luubai-err {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #fff1f1;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #ef4444;
+}
+
+/* ───── Footer buttons ───── */
+.luubai-btn {
+  height: 46px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+  border: none;
+}
+.luubai-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.luubai-btn--ghost {
+  background: #fff;
+  color: #6b7280;
+  border: 1.5px solid #e5e7eb;
+}
+.luubai-btn--ghost:hover {
+  background: #f5f7f7;
+  color: #1a1a1a;
+}
+.luubai-btn--primary {
+  flex: 1;
+  color: #fff;
+  background: linear-gradient(135deg, #f8a568, #ee5ca2);
+}
+.luubai-btn--primary[data-state="saved"] {
+  background: #10b981;
+}
+.luubai-btn--primary[data-state="saving"] {
+  background: linear-gradient(135deg, #f8a568aa, #ee5ca2aa);
+}
+
+/* ───── Hidden file input ───── */
+.luubai-hidden {
+  display: none !important;
+}

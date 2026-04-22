@@ -3,6 +3,7 @@
 import HocVienAvatarEditor, {
   AVATAR_MAX_BYTES,
 } from "@/components/hoc-vien/HocVienAvatarEditor";
+import LuuBaiHocVienFab from "@/app/_components/LuuBaiHocVienFab";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarDays, Clock, GraduationCap, Palette, User } from "lucide-react";
@@ -1451,6 +1452,8 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
           </div>
         </div>
       ) : null}
+
+      <LuuBaiHocVienFab />
     </div>
   );
 }

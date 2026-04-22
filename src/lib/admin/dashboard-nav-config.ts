@@ -25,6 +25,7 @@ export const NAV_HR: { label: string; href: string; disabled?: boolean }[] = [
 
 export const NAV_MARKETING: { label: string; href: string; disabled?: boolean }[] = [
   { label: "Marketing analytics", href: "/admin/dashboard/report-mkt" },
+  { label: "Quản lý trang chủ", href: "/admin/dashboard/quan-ly-trang-chu" },
   { label: "Quản lý media", href: "/admin/dashboard/quan-ly-media" },
   { label: "Quản lý bài học viên", href: "/admin/dashboard/quan-ly-bai-hoc-vien" },
   { label: "Quản lý Blogs", href: "/admin/dashboard/quan-ly-blog" },

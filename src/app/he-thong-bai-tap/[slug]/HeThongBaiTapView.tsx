@@ -192,11 +192,38 @@ export default function HeThongBaiTapView({
 
           <div className="htbt-left-bottom">
             <div className="htbt-bai-sticky">
-              <h3 className="htbt-sec-label">Các bài trong khoá</h3>
-              <nav
-                className="htbt-bai-list"
-                aria-label="Danh sách bài trong môn"
-              >
+              <details className="htbt-bai-details">
+                <summary className="htbt-bai-summary">
+                  <span className="htbt-sec-label htbt-bai-summary-label">
+                    Xem bài tập khác
+                  </span>
+                  {totalBai > 0 ? (
+                    <span className="htbt-bai-summary-count">
+                      {totalBai} bài
+                    </span>
+                  ) : null}
+                  <svg
+                    className="htbt-bai-summary-chev"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </summary>
+                <h3 className="htbt-sec-label htbt-bai-nav-label">
+                  Xem bài tập khác
+                </h3>
+                <nav
+                  className="htbt-bai-list"
+                  aria-label="Danh sách bài trong môn"
+                >
                 {[...siblingsSorted].reverse().map((row) => {
                   const href = buildHeThongBaiTapHref(
                     row.bai_so,
@@ -252,7 +279,8 @@ export default function HeThongBaiTapView({
                     </Link>
                   );
                 })}
-              </nav>
+                </nav>
+              </details>
             </div>
           </div>
         </div>

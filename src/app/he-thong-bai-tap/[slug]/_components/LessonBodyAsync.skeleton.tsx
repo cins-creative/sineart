@@ -62,12 +62,24 @@ export function LessonBodyAsyncSkeleton() {
 
           <div className="htbt-left-bottom">
             <div className="htbt-bai-sticky">
-              <div className="htbt-sec-label">Các bài trong khoá</div>
-              <nav
-                className="htbt-bai-list"
-                aria-label="Đang tải danh sách bài"
-                aria-hidden
-              >
+              <details className="htbt-bai-details" aria-hidden>
+                <summary
+                  className="htbt-bai-summary"
+                  style={{ cursor: "default" }}
+                >
+                  <span className="htbt-sec-label htbt-bai-summary-label">
+                    Xem bài tập khác
+                  </span>
+                  <Skeleton className="ml-auto h-5 w-14 rounded-full" />
+                </summary>
+                <div className="htbt-sec-label htbt-bai-nav-label">
+                  Xem bài tập khác
+                </div>
+                <nav
+                  className="htbt-bai-list"
+                  aria-label="Đang tải danh sách bài"
+                  aria-hidden
+                >
                 {Array.from({ length: 6 }, (_, i) => (
                   <div
                     key={i}
@@ -81,7 +93,8 @@ export function LessonBodyAsyncSkeleton() {
                     </div>
                   </div>
                 ))}
-              </nav>
+                </nav>
+              </details>
             </div>
           </div>
         </div>

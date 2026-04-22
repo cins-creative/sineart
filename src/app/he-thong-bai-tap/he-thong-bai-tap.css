@@ -387,6 +387,107 @@
   }
 }
 
+/* ──────────────────────────────────────────────
+   «Xem bài tập khác» — <details> collapsible
+   - Mobile: default collapsed, summary = accordion head.
+   - Desktop: summary ẩn, nav luôn hiện (force visible, bỏ qua [open]).
+────────────────────────────────────────────── */
+
+.htbt-bai-details {
+  margin: 0;
+  padding: 0;
+}
+
+.htbt-bai-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--htbt-r-sm);
+  border: 1.5px solid var(--htbt-border);
+  background: #fff;
+  transition: background 0.18s var(--htbt-ease),
+    border-color 0.18s var(--htbt-ease), box-shadow 0.18s var(--htbt-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.htbt-bai-summary::-webkit-details-marker {
+  display: none;
+}
+
+.htbt-bai-summary:hover,
+.htbt-bai-summary:focus-visible {
+  border-color: var(--htbt-border-strong);
+  background: var(--htbt-tint);
+  outline: none;
+}
+
+.htbt-bai-summary-label {
+  margin: 0 !important;
+  flex: 0 1 auto;
+  gap: 0;
+}
+
+/* Summary label: không có divider dạng `::after` kéo dài như .htbt-sec-label gốc */
+.htbt-bai-summary-label::after {
+  display: none !important;
+}
+
+.htbt-bai-summary-count {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: var(--htbt-r-pill);
+  background: var(--htbt-tint);
+  color: var(--htbt-ink2);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.htbt-bai-summary-chev {
+  flex-shrink: 0;
+  color: var(--htbt-muted);
+  transition: transform 0.22s var(--htbt-ease);
+}
+
+.htbt-bai-details[open] > .htbt-bai-summary .htbt-bai-summary-chev {
+  transform: rotate(180deg);
+  color: var(--htbt-magenta);
+}
+
+.htbt-bai-details[open] > .htbt-bai-summary {
+  border-color: var(--htbt-border-strong);
+  background: var(--htbt-tint);
+  margin-bottom: 12px;
+}
+
+/* Label hiển thị trên desktop (thay cho summary) */
+.htbt-bai-nav-label {
+  display: none;
+}
+
+/* Desktop: summary ẩn, nav luôn bung (bỏ qua [open]) */
+@media (min-width: 900px) {
+  .htbt-bai-details > .htbt-bai-summary {
+    display: none !important;
+  }
+  .htbt-bai-details > .htbt-bai-nav-label {
+    display: flex !important;
+  }
+  /* Force nav visible bất kể state [open] — override UA hide */
+  .htbt-bai-details > .htbt-bai-list {
+    display: flex !important;
+  }
+  /* Chrome 131+ dùng ::details-content slot để ẩn; unlock content-visibility */
+  .htbt-bai-details::details-content {
+    content-visibility: visible;
+    display: block;
+  }
+}
+
 .htbt-bai-list {
   display: flex;
   flex-direction: column;

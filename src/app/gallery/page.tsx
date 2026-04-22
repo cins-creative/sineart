@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
+
 import NavBar from "../_components/NavBar";
-import GallerySection from "../_components/GallerySection";
-import TeachersSection from "../_components/TeachersSection";
+import GalleryClient from "./GalleryClient";
+import { GalleryStyles } from "./GalleryStyles";
+
 import { getGalleryPagePayload } from "@/lib/data/home";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
-import "../sineart-home.css";
 
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Bài học viên — Sine Art",
+  title: "Thư viện tác phẩm học viên — Sine Art",
   description:
-    "Tác phẩm học viên từ các lớp — lọc theo môn (Hình họa, Trang trí màu, Bố cục màu…). Cùng phong cách trang chủ.",
+    "Bộ sưu tập bài vẽ từ lớp học tại Sine Art — không chỉnh sửa. Lọc theo môn học (Hình họa, Trang trí màu, Bố cục màu…) hoặc xem các bài mẫu chuẩn.",
   alternates: { canonical: "https://sineart.vn/gallery" },
 };
 
@@ -23,23 +24,74 @@ export default async function GalleryPage() {
   ]);
   const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 
+  const total = payload.gallery.length;
+  const totalMon = payload.galleryMonHocTabs.length;
+  const totalBaiMau = payload.gallery.filter((g) => g.baiMau).length;
+  const totalStudents = new Set(
+    payload.gallery.map((g) => g.studentName.trim()).filter(Boolean),
+  ).size;
+
   return (
-    <div className="sa-root gallery-page">
+    <div className="sa-root sa-gallery">
       <NavBar khoaHocGroups={khoaHocGroups} />
-      <div className="page-inner gallery-page-inner">
-        <h1 className="sr-only">Bài học viên — Sine Art</h1>
-        <GallerySection
-          items={payload.gallery}
-          monHocTabs={payload.galleryMonHocTabs}
-          sectionTitle="Bài học viên"
-          galleryWrapId="bai-hoc-vien"
-          layoutVariant="justified"
-          itemsPerPage={40}
-          showFooterCta={false}
-          showSectionTitle={false}
-        />
-      </div>
-      <TeachersSection slides={payload.teacherArtSlides} />
+
+      {/* ── HERO ─────────────────────────────────────────────────────── */}
+      <section className="page-hero">
+        <div className="page-hero-bg" />
+        <span className="blob blob-a" aria-hidden />
+        <span className="blob blob-b" aria-hidden />
+        <span className="blob blob-c" aria-hidden />
+        <div className="page-hero-inner">
+          <div>
+            <div className="ph-eyebrow">
+              <span className="dot">✦</span>
+              Sine Art · {total > 0 ? `${total}+ tác phẩm` : "Thư viện tác phẩm"}
+            </div>
+            <h1>
+              Sản phẩm từ <em>học viên</em> đã và đang học tại Sine Art
+            </h1>
+          </div>
+          <div className="ph-side">
+            <div className="ph-stat">
+              <div className="n">
+                <em>{total > 0 ? `${total}+` : "300+"}</em>
+              </div>
+              <div className="l">
+                Tác phẩm học viên
+                <br />
+                <span>Từ các lớp Sine Art</span>
+              </div>
+            </div>
+            <div className="ph-stat">
+              <div className="n">{totalMon > 0 ? totalMon : 4}</div>
+              <div className="l">
+                Môn học
+                <br />
+                <span>Hình họa, trang trí màu…</span>
+              </div>
+            </div>
+            <div className="ph-stat">
+              <div className="n">
+                {totalBaiMau > 0 ? totalBaiMau : totalStudents || "—"}
+              </div>
+              <div className="l">
+                Bài mẫu chuẩn
+                <br />
+                <span>Được chọn làm tiêu chí</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── TOOLBAR + GRID + LIGHTBOX ────────────────────────────────── */}
+      <GalleryClient
+        items={payload.gallery}
+        monHocTabs={payload.galleryMonHocTabs}
+        itemsPerPage={40}
+      />
+
+      <GalleryStyles />
     </div>
   );
 }

@@ -10,6 +10,10 @@ export type BaiTap = {
   /** Hướng dẫn / mô tả chi tiết — `hv_he_thong_bai_tap.mo_ta_bai_tap` */
   mo_ta_bai_tap: string | null;
   video_bai_giang: string | null;
+  /** Lý thuyết nên xem trước khi làm bài — mảng URL YouTube (16:9). */
+  video_ly_thuyet: string[];
+  /** Các lỗi sai thường gặp — textarea URL YouTube Shorts (9:16), mỗi dòng 1 video (có thể "Nhãn - URL"). */
+  loi_sai: string | null;
   is_visible: boolean;
   so_buoi: number;
   muc_do_quan_trong: MucDoQuanTrong;

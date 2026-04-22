@@ -11,11 +11,23 @@ const BAI_TAP_SELECT = `
   noi_dung_liet_ke,
   mo_ta_bai_tap,
   video_bai_giang,
+  video_ly_thuyet,
+  loi_sai,
   is_visible,
   so_buoi,
   muc_do_quan_trong,
   mon_hoc ( id, ten_mon_hoc )
 `;
+
+function extractStringArr(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    const s = v == null ? "" : String(v).trim();
+    if (s) out.push(s);
+  }
+  return out;
+}
 
 function normalizeMucDo(raw: unknown): MucDoQuanTrong {
   const s = String(raw ?? "")
@@ -71,6 +83,11 @@ function mapRow(row: Record<string, unknown>): BaiTap {
       row.video_bai_giang == null
         ? null
         : String(row.video_bai_giang).trim() || null,
+    video_ly_thuyet: extractStringArr(row.video_ly_thuyet),
+    loi_sai:
+      row.loi_sai == null || String(row.loi_sai).trim() === ""
+        ? null
+        : String(row.loi_sai),
     is_visible: visible,
     so_buoi: Math.max(0, Number(row.so_buoi ?? 0) || 0),
     muc_do_quan_trong: normalizeMucDo(row.muc_do_quan_trong),
@@ -100,6 +117,8 @@ async function getBaiTapListForMonFallback(
     noi_dung_liet_ke: null,
     mo_ta_bai_tap: null,
     video_bai_giang: null,
+    video_ly_thuyet: [],
+    loi_sai: null,
     is_visible: false,
     so_buoi: 1,
     muc_do_quan_trong: "Bắt buộc" as MucDoQuanTrong,
@@ -132,19 +151,32 @@ export async function getBaiTapListForMon(monId: number): Promise<BaiTap[]> {
 /**
  * Trang công khai `/he-thong-bai-tap/[slug]` — khớp `bai_so` + `slugify(ten_bai_tap)`.
  * Không lọc `is_visible` (danh sách bài & trang chi tiết dùng mọi bản ghi hợp lệ).
- * Nếu trùng slug tên: ưu tiên bản `is_visible` khi có.
+ *
+ * Disambiguation giữa các môn có cùng `bai_so` + slug tên:
+ * - Nếu `opts.monId` > 0: chỉ trả bản ghi khớp đúng `mon_hoc`.
+ * - Nếu không có `monId`: ưu tiên bản `is_visible`, fallback bản đầu tiên.
  */
-export async function getBaiTapByHeThongSlug(slugPath: string): Promise<BaiTap | null> {
+export async function getBaiTapByHeThongSlug(
+  slugPath: string,
+  opts?: { monId?: number | null }
+): Promise<BaiTap | null> {
   const parsed = parseHeThongBaiTapSlug(slugPath);
   if (!parsed) return null;
 
   const supabase = await createClient();
   if (!supabase) return null;
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("hv_he_thong_bai_tap")
     .select(BAI_TAP_SELECT)
     .eq("bai_so", parsed.baiSo);
+
+  const monHint = Number(opts?.monId);
+  if (Number.isFinite(monHint) && monHint > 0) {
+    query = query.eq("mon_hoc", monHint);
+  }
+
+  const { data, error } = await query;
 
   if (error || !data?.length) {
     if (process.env.NODE_ENV === "development" && error) {

@@ -15,17 +15,21 @@ export type LopCurriculumExercise = {
 export async function fetchLopCurriculumExercises(
   supabase: SupabaseClient,
   lopHocId: number
-): Promise<{ exercises: LopCurriculumExercise[]; subjectName: string | null }> {
+): Promise<{
+  exercises: LopCurriculumExercise[];
+  subjectName: string | null;
+  monHocId: number | null;
+}> {
   const { data: lop, error: e1 } = await supabase
     .from("ql_lop_hoc")
     .select("mon_hoc")
     .eq("id", lopHocId)
     .maybeSingle();
 
-  if (e1 || !lop) return { exercises: [], subjectName: null };
+  if (e1 || !lop) return { exercises: [], subjectName: null, monHocId: null };
 
   const monId = Number((lop as { mon_hoc?: unknown }).mon_hoc);
-  if (!Number.isFinite(monId)) return { exercises: [], subjectName: null };
+  if (!Number.isFinite(monId)) return { exercises: [], subjectName: null, monHocId: null };
 
   const { data: mh } = await supabase
     .from("ql_mon_hoc")
@@ -71,7 +75,7 @@ export async function fetchLopCurriculumExercises(
     return a.id - b.id;
   });
 
-  return { exercises, subjectName };
+  return { exercises, subjectName, monHocId: monId };
 }
 
 /**

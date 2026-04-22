@@ -1,19 +1,45 @@
 import Link from "next/link";
-import { Fragment } from "react";
+import { Fragment, Suspense } from "react";
 
-import GallerySection from "@/app/_components/GallerySection";
 import type { HeThongBaiTapAccess } from "@/lib/data/hoc-vien-bai-tap-access";
-import type { GalleryDisplayItem } from "@/types/homepage";
 import type { BaiTap } from "@/types/baiTap";
-import { buildHeThongBaiTapSlug } from "@/lib/he-thong-bai-tap/slug";
+import { buildHeThongBaiTapHref } from "@/lib/he-thong-bai-tap/slug";
+import { parseVideoBaiGiangEntries } from "@/lib/utils/youtube";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import HeThongBaiTapVideoPanel from "./HeThongBaiTapVideoPanel";
+import HeThongBaiTapLyThuyetList from "./HeThongBaiTapLyThuyetList";
+import HeThongBaiTapLoiSaiList from "./HeThongBaiTapLoiSaiList";
+import WorkGalleryAsync from "./_components/WorkGalleryAsync";
+import { WorkGalleryAsyncSkeleton } from "./_components/WorkGalleryAsync.skeleton";
 
 function LockIconSmall() {
   return (
-    <svg className="htbt-bai-lock" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" strokeWidth="1.5" />
+    <svg
+      className="htbt-bai-lock"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+    >
+      <rect
+        x="3"
+        y="11"
+        width="18"
+        height="11"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7 11V7a5 5 0 0 1 10 0v4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -41,7 +67,10 @@ function renderMoTaHighlighted(text: string) {
     return (
       <Fragment key={lineIdx}>
         {m[1]}
-        <span className="htbt-r-mo-ta-kw">{m[2]}{m[3] ?? ""}</span>
+        <span className="htbt-r-mo-ta-kw">
+          {m[2]}
+          {m[3] ?? ""}
+        </span>
         {m[4]}
         {tailNl}
       </Fragment>
@@ -56,7 +85,7 @@ function mucDoShort(m: BaiTap["muc_do_quan_trong"]): string {
     case "Tuỳ chọn":
       return "Tuỳ chọn";
     default:
-      return "Quan trọng";
+      return "Bắt buộc";
   }
 }
 
@@ -64,55 +93,121 @@ export default function HeThongBaiTapView({
   bai,
   siblingsSorted,
   access,
-  workGalleryItems,
 }: {
   bai: BaiTap;
   siblingsSorted: BaiTap[];
   access: HeThongBaiTapAccess;
-  workGalleryItems: GalleryDisplayItem[];
 }) {
-  const maxI = access.maxAccessibleIndex;
   const huongDan = bai.mo_ta_bai_tap?.trim() ?? "";
+  const totalBai = siblingsSorted.length;
+  const lyThuyetCount = bai.video_ly_thuyet.length;
+  const hasLyThuyet = lyThuyetCount > 0;
+  const loiSaiCount = parseVideoBaiGiangEntries(bai.loi_sai).length;
+  const hasLoiSai = loiSaiCount > 0;
 
   return (
     <article className="htbt-shell">
+      {/* Hero header — eyebrow + title có gradient "Bài X" + meta pills */}
+      <header className="htbt-header">
+        <p className="htbt-header-eyebrow">
+          Hệ thống bài tập ·{" "}
+          <span className="htbt-header-eyebrow-strong">
+            {bai.mon_hoc.ten_mon_hoc}
+          </span>
+        </p>
+        <h2 className="htbt-header-title">
+          <span className="htbt-header-bai-no">Bài {bai.bai_so}</span>
+          <span className="htbt-header-title-main">{bai.ten_bai_tap}</span>
+        </h2>
+        <div className="htbt-header-meta">
+          <span className="htbt-meta-chip">
+            <strong>{bai.so_buoi || 1}</strong>&nbsp;buổi
+          </span>
+          <span className="htbt-meta-chip htbt-meta-chip--accent">
+            {mucDoShort(bai.muc_do_quan_trong)}
+          </span>
+          {totalBai > 0 ? (
+            <span className="htbt-meta-chip">
+              Bài&nbsp;<strong>{bai.bai_so}</strong>&nbsp;/ {totalBai}
+            </span>
+          ) : null}
+        </div>
+      </header>
+
+      {/* Video hướng dẫn — full-width hero, lớn nhất và đứng ngoài grid */}
+      <section
+        className="htbt-hero-video"
+        aria-label={`Video hướng dẫn bài ${bai.bai_so} — ${bai.ten_bai_tap}`}
+      >
+        <div className="htbt-hero-video-stage">
+          <HeThongBaiTapVideoPanel
+            videoBaiGiang={bai.video_bai_giang}
+            iframeTitle={`Video bài ${bai.bai_so} — ${bai.ten_bai_tap}`}
+          />
+        </div>
+      </section>
+
       <div className="htbt-split">
         <div className="htbt-left-panel">
-          <div className="htbt-video-stack">
-            <HeThongBaiTapVideoPanel
-              videoBaiGiang={bai.video_bai_giang}
-              iframeTitle={`Video bài ${bai.bai_so} — ${bai.ten_bai_tap}`}
-            />
-          </div>
+          {hasLyThuyet ? (
+            <section
+              className="htbt-lt-callout"
+              aria-labelledby="htbt-lt-callout-title"
+            >
+              <div className="htbt-lt-callout-head">
+                <span className="htbt-lt-callout-badge" aria-hidden>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" />
+                  </svg>
+                  Bắt buộc xem trước
+                </span>
+                <span className="htbt-lt-callout-count">
+                  <strong>{lyThuyetCount}</strong>
+                  &nbsp;video
+                </span>
+              </div>
+              <h3
+                id="htbt-lt-callout-title"
+                className="htbt-lt-callout-title"
+              >
+                Lý thuyết cần nắm để làm được bài này
+              </h3>
+              <p className="htbt-lt-callout-sub">
+                Xem các video dưới đây trước khi bắt đầu bài tập để hiểu cơ sở lý
+                thuyết. Bấm vào từng video để mở YouTube.
+              </p>
+              <HeThongBaiTapLyThuyetList videos={bai.video_ly_thuyet} />
+            </section>
+          ) : null}
 
           <div className="htbt-left-bottom">
-            <div>
-              <div className="htbt-left-section-title">Thông tin bài</div>
-              <div className="htbt-info-chips">
-                <div className="htbt-chip">
-                  <div className="htbt-chip-label">Số buổi</div>
-                  <div className="htbt-chip-val">{bai.so_buoi || "—"}</div>
-                </div>
-                <div className="htbt-chip" style={{ flex: 1, minWidth: 120 }}>
-                  <div className="htbt-chip-label">Mức độ quan trọng</div>
-                  <div className="htbt-chip-val htbt-chip-val--accent">{mucDoShort(bai.muc_do_quan_trong)}</div>
-                </div>
-                <div className="htbt-chip">
-                  <div className="htbt-chip-label">Bài số</div>
-                  <div className="htbt-chip-val">{bai.bai_so}</div>
-                </div>
-              </div>
-            </div>
-
             <div className="htbt-bai-sticky">
-              <div className="htbt-left-section-title">Các bài trong khoá</div>
-              <nav className="htbt-bai-list" aria-label="Danh sách bài trong môn">
+              <h3 className="htbt-sec-label">Các bài trong khoá</h3>
+              <nav
+                className="htbt-bai-list"
+                aria-label="Danh sách bài trong môn"
+              >
                 {[...siblingsSorted].reverse().map((row) => {
-                  const href = `/he-thong-bai-tap/${buildHeThongBaiTapSlug(row.bai_so, row.ten_bai_tap)}`;
+                  const href = buildHeThongBaiTapHref(
+                    row.bai_so,
+                    row.ten_bai_tap,
+                    bai.mon_hoc.id,
+                  );
                   const thumb = cfImageForThumbnail(row.thumbnail);
                   const active = row.id === bai.id;
                   const ascIdx = siblingsSorted.findIndex((x) => x.id === row.id);
-                  const locked = ascIdx >= 0 && ascIdx > access.maxAccessibleIndex;
+                  const locked =
+                    ascIdx >= 0 && ascIdx > access.maxAccessibleIndex;
 
                   const rowInner = (
                     <>
@@ -164,37 +259,84 @@ export default function HeThongBaiTapView({
 
         <div className="htbt-right-panel">
           <div className="htbt-right-scroll">
-            <div className="htbt-r-section">
-              <div className="htbt-r-title">Hướng dẫn bài tập</div>
+            <section className="htbt-r-section">
+              <h3 className="htbt-sec-label">Hướng dẫn bài tập</h3>
               {huongDan ? (
-                <div className="htbt-r-mo-ta">{renderMoTaHighlighted(huongDan)}</div>
+                <div className="htbt-r-mo-ta">
+                  {renderMoTaHighlighted(huongDan)}
+                </div>
               ) : (
                 <p className="htbt-placeholder">
-                  Chưa có hướng dẫn — nhập mô tả tại <code>mo_ta_bai_tap</code> (quản trị / Hệ thống bài
-                  tập).
+                  Chưa có hướng dẫn — nhập mô tả tại{" "}
+                  <code>mo_ta_bai_tap</code> (quản trị / Hệ thống bài tập).
                 </p>
               )}
-            </div>
+            </section>
 
-            <div className="htbt-r-section">
-              <div className="htbt-r-title">Mở rộng</div>
-              <p className="htbt-r-gallery-lead">
-                Tranh theo bài {bai.bai_so} — <strong>{bai.ten_bai_tap}</strong>. Lọc theo
-                loại: bài mẫu của trung tâm, hoặc bài tham khảo (tác phẩm học viên trước đã
-                hoàn thiện cho đúng bài tập này).
-              </p>
-              <GallerySection
-                items={workGalleryItems}
-                monHocTabs={[]}
-                tabMode="work_kind"
-                sectionTitle="Tranh bài tập"
-                showSectionTitle={false}
-                sectionTitleAs="div"
-                galleryWrapId="htbt-tranh-bai"
-                showFooterCta={false}
-                rootClassName="htbt-work-gallery"
-              />
-            </div>
+            {hasLoiSai ? (
+              <section className="htbt-r-section">
+                <details className="htbt-ls-details">
+                  <summary className="htbt-ls-summary">
+                    <span
+                      className="htbt-ls-summary-icon"
+                      aria-hidden
+                    >
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12 9v4" />
+                        <path d="M12 17h.01" />
+                        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      </svg>
+                    </span>
+                    <span className="htbt-ls-summary-body">
+                      <span className="htbt-ls-summary-label">
+                        Lỗi sai thường gặp
+                      </span>
+                      <span className="htbt-ls-summary-meta">
+                        {loiSaiCount} video Shorts · bấm để xem
+                      </span>
+                    </span>
+                    <svg
+                      className="htbt-ls-summary-chev"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </summary>
+                  <div className="htbt-ls-body">
+                    <HeThongBaiTapLoiSaiList raw={bai.loi_sai} />
+                  </div>
+                </details>
+              </section>
+            ) : null}
+
+            <section className="htbt-r-section">
+              <div className="htbt-r-sec-head">
+                <h3 className="htbt-sec-label">Tranh tham khảo</h3>
+                <span className="htbt-r-sec-hint">
+                  Bài mẫu & học viên trước
+                </span>
+              </div>
+              <Suspense fallback={<WorkGalleryAsyncSkeleton />}>
+                <WorkGalleryAsync baiTapId={bai.id} />
+              </Suspense>
+            </section>
           </div>
         </div>
       </div>

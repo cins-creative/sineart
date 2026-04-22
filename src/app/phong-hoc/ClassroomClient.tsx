@@ -52,7 +52,7 @@ import {
   persistTeacherSavedChatMessageId,
   readTeacherSavedChatMessageIds,
 } from "@/lib/phong-hoc/chat-saved-student-work-ids";
-import { buildHeThongBaiTapSlug } from "@/lib/he-thong-bai-tap/slug";
+import { buildHeThongBaiTapHref } from "@/lib/he-thong-bai-tap/slug";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { classroomGalleryEmoji, fetchClassroomGalleryForLop } from "@/lib/phong-hoc/classroom-gallery";
 import ClassroomSignInOverlay from "@/app/_components/ClassroomSignInOverlay";
@@ -608,6 +608,7 @@ export default function ClassroomClient({
   /** Tab «Bài tập» (học viên): chương trình môn lớp + `tien_do_hoc` để khóa bài. */
   const [stuCurrExercises, setStuCurrExercises] = useState<LopCurriculumExercise[]>([]);
   const [stuCurrSubject, setStuCurrSubject] = useState<string | null>(null);
+  const [stuCurrMonId, setStuCurrMonId] = useState<number | null>(null);
   const [stuCurrLoading, setStuCurrLoading] = useState(false);
   const [stuCurrErr, setStuCurrErr] = useState<string | null>(null);
   const [stuCurrTienDo, setStuCurrTienDo] = useState<number | null>(null);
@@ -1177,7 +1178,7 @@ export default function ClassroomClient({
 
     void (async () => {
       try {
-        const { exercises, subjectName } = await fetchLopCurriculumExercises(browserSb, lopHocIdForDb);
+        const { exercises, subjectName, monHocId } = await fetchLopCurriculumExercises(browserSb, lopHocIdForDb);
         if (cancelled) return;
 
         let tienDo: number | null = null;
@@ -1204,12 +1205,14 @@ export default function ClassroomClient({
         if (cancelled) return;
         setStuCurrExercises(exercises);
         setStuCurrSubject(subjectName);
+        setStuCurrMonId(monHocId ?? null);
         setStuCurrTienDo(tienDo);
       } catch (e: unknown) {
         if (!cancelled) {
           setStuCurrErr(e instanceof Error ? e.message : "Không tải được danh sách bài.");
           setStuCurrExercises([]);
           setStuCurrSubject(null);
+          setStuCurrMonId(null);
           setStuCurrTienDo(null);
         }
       } finally {
@@ -2392,10 +2395,11 @@ export default function ClassroomClient({
                             const expanded = taskDetailOpenId === ex.id && unlocked;
                             const baiSoSlug =
                               ex.bai_so != null && Number.isFinite(ex.bai_so) ? ex.bai_so : i + 1;
-                            const baiTapHref = `/he-thong-bai-tap/${buildHeThongBaiTapSlug(
+                            const baiTapHref = buildHeThongBaiTapHref(
                               baiSoSlug,
-                              ex.ten_bai_tap
-                            )}`;
+                              ex.ten_bai_tap,
+                              stuCurrMonId
+                            );
                             const thumbSrc = cfImageForThumbnail(ex.thumbnail) ?? ex.thumbnail?.trim() ?? null;
                             return (
                               <div

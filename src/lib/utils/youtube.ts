@@ -8,6 +8,15 @@ export function youtubeLineToEmbed(trimmed: string): string | null {
   return match ? `https://www.youtube.com/embed/${match[1]}` : null;
 }
 
+/** Trích `videoId` (11 ký tự) từ URL YouTube — dùng để build thumbnail `img.youtube.com/vi/{id}/...`. */
+export function youtubeVideoId(url: string): string | null {
+  if (!url) return null;
+  const m = url.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/
+  );
+  return m ? m[1] : null;
+}
+
 /** Chuyển URL YouTube watch/short → embed. Nhiều dòng: thử lần lượt (dòng đầu hợp lệ được dùng làm video chính). */
 export function toEmbedUrl(url: string | null): string | null {
   if (!url || typeof url !== "string") return null;

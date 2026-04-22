@@ -6,6 +6,7 @@ import NavBar from "../../_components/NavBar";
 import { EbookDetailFlipbook } from "./EbookDetailFlipbook";
 import { EbookDetailReadCTA } from "./EbookDetailReadCTA";
 import { EbookDetailStyles } from "./EbookDetailStyles";
+import { EbookFlipbook } from "./EbookFlipbook";
 
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import {
@@ -204,10 +205,16 @@ export default async function EbookDetailPage({ params }: Props) {
               </div>
             </header>
 
-            {/* FLIPBOOK */}
-            {hasEmbed && ebook.html_embed && (
+            {/* READER — ưu tiên custom flipbook (pages từ img_src_link);
+                fallback iframe flipbook khi ebook chỉ có html_embed. */}
+            {hasPages ? (
+              <EbookFlipbook
+                pages={ebook.img_src_link}
+                title={ebook.title}
+              />
+            ) : hasEmbed && ebook.html_embed ? (
               <EbookDetailFlipbook htmlEmbed={ebook.html_embed} />
-            )}
+            ) : null}
 
             {/* SUMMARY */}
             {contentSafe && (
@@ -228,29 +235,6 @@ export default async function EbookDetailPage({ params }: Props) {
                   className="ebd-prose"
                   dangerouslySetInnerHTML={{ __html: detailedSafe }}
                 />
-              </section>
-            )}
-
-            {/* PAGES grid */}
-            {hasPages && (
-              <section id="reader-pages" className="ebd-section">
-                <h2 className="ebd-sec-title">
-                  Trang sách ({ebook.img_src_link.length})
-                </h2>
-                <div className="ebd-pages">
-                  {ebook.img_src_link.map((src, i) => (
-                    <div key={`${src}-${i}`} className="ebd-page">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={src}
-                        alt={`${ebook.title} — trang ${i + 1}`}
-                        className="ebd-pages-img"
-                        loading={i < 4 ? "eager" : "lazy"}
-                        decoding="async"
-                      />
-                    </div>
-                  ))}
-                </div>
               </section>
             )}
 

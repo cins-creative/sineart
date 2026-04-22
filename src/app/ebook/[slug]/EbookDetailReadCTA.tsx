@@ -1,14 +1,14 @@
 "use client";
 
-import { BookOpen, Images, Share2 } from "lucide-react";
+import { BookOpen, Share2 } from "lucide-react";
 import { useCallback } from "react";
 
 /**
- * CTA chính cho trang chi tiết:
- *   - "Đọc sách" → scroll tới `#flipbook` (nếu có `html_embed`) hoặc tới
- *     `#reader-pages` (nếu chỉ có `img_src_link`).
- *   - "Xem ảnh"  → scroll tới `#reader-pages` (chỉ hiện khi có `img_src_link`).
- *   - "Chia sẻ"  → Web Share API (fallback copy link).
+ * CTA ở header detail page:
+ * - **Đọc sách**: scroll tới `#flipbook` — cả `EbookFlipbook` (khi có
+ *   `img_src_link`) và `EbookDetailFlipbook` iframe (fallback) đều dùng
+ *   cùng id này.
+ * - **Chia sẻ**: Web Share API + fallback copy link.
  */
 export function EbookDetailReadCTA({
   slug,
@@ -21,16 +21,11 @@ export function EbookDetailReadCTA({
   hasEmbed: boolean;
   hasPages: boolean;
 }) {
-  const scrollTo = useCallback((id: string) => {
-    const el = document.getElementById(id);
+  const handleRead = useCallback(() => {
+    const el = document.getElementById("flipbook");
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
-
-  const handleRead = useCallback(() => {
-    if (hasEmbed) scrollTo("flipbook");
-    else if (hasPages) scrollTo("reader-pages");
-  }, [hasEmbed, hasPages, scrollTo]);
 
   const handleShare = useCallback(async () => {
     const url = `https://sineart.vn/ebook/${slug}`;
@@ -40,7 +35,7 @@ export function EbookDetailReadCTA({
         await navigator.share(data);
         return;
       } catch {
-        /* user hủy → fallthrough */
+        /* user hủy → fallthrough sang copy */
       }
     }
     try {
@@ -64,16 +59,6 @@ export function EbookDetailReadCTA({
         <BookOpen size={16} strokeWidth={2.4} />
         Đọc sách
       </button>
-      {hasPages && hasEmbed && (
-        <button
-          type="button"
-          className="ebd-btn ebd-btn--ghost"
-          onClick={() => scrollTo("reader-pages")}
-        >
-          <Images size={16} strokeWidth={2.4} />
-          Xem ảnh
-        </button>
-      )}
       <button
         type="button"
         className="ebd-btn ebd-btn--ghost"

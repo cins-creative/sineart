@@ -2,6 +2,9 @@
 
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   BookOpen,
   Check,
   Edit3,
@@ -52,6 +55,23 @@ type ModalMode =
   | { kind: "create" }
   | { kind: "edit"; id: number; initial: FullEbook };
 
+type SortBy =
+  | "created_desc"
+  | "created_asc"
+  | "updated_desc"
+  | "updated_asc"
+  | "title_asc"
+  | "title_desc";
+
+const SORT_OPTIONS: Array<{ value: SortBy; label: string }> = [
+  { value: "created_desc", label: "Mới tạo trước" },
+  { value: "created_asc", label: "Cũ tạo trước" },
+  { value: "updated_desc", label: "Mới cập nhật" },
+  { value: "updated_asc", label: "Lâu chưa sửa" },
+  { value: "title_asc", label: "Tiêu đề A → Z" },
+  { value: "title_desc", label: "Tiêu đề Z → A" },
+];
+
 const PAGE_SIZE = 20;
 
 function fmtDate(iso: string | null): string {
@@ -69,12 +89,53 @@ function fmtDate(iso: string | null): string {
   }
 }
 
+function SortTh({
+  label,
+  sortBy,
+  asc,
+  desc,
+  onChange,
+}: {
+  label: string;
+  sortBy: SortBy;
+  asc: SortBy;
+  desc: SortBy;
+  onChange: (next: SortBy) => void;
+}) {
+  const isActive = sortBy === asc || sortBy === desc;
+  const dir: "asc" | "desc" | "none" =
+    sortBy === asc ? "asc" : sortBy === desc ? "desc" : "none";
+  function handleClick() {
+    if (dir === "none") onChange(desc);
+    else if (dir === "desc") onChange(asc);
+    else onChange(desc);
+  }
+  return (
+    <button
+      type="button"
+      className={`qle-sort-th ${isActive ? "is-active" : ""}`}
+      onClick={handleClick}
+      aria-label={`Sắp xếp theo ${label}`}
+    >
+      <span>{label}</span>
+      {dir === "asc" ? (
+        <ArrowUp size={12} />
+      ) : dir === "desc" ? (
+        <ArrowDown size={12} />
+      ) : (
+        <ArrowUpDown size={12} className="qle-sort-th-dim" />
+      )}
+    </button>
+  );
+}
+
 export default function QuanLyEbookView({ initialEbooks, missingServiceRole, loadError }: Props) {
   const [ebooks, setEbooks] = useState<AdminEbookRow[]>(initialEbooks);
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [catFilter, setCatFilter] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>("created_desc");
 
   const [modal, setModal] = useState<ModalMode | null>(null);
   const [loadingFull, setLoadingFull] = useState<number | null>(null);
@@ -92,13 +153,36 @@ export default function QuanLyEbookView({ initialEbooks, missingServiceRole, loa
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return ebooks.filter((e) => {
+    const list = ebooks.filter((e) => {
       if (catFilter && !e.categories.includes(catFilter)) return false;
       if (!q) return true;
       const hay = `${e.title} ${e.slug} ${e.categories.join(" ")}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [ebooks, query, catFilter]);
+    const byDate = (iso: string | null) => (iso ? new Date(iso).getTime() : 0);
+    const sorted = [...list];
+    switch (sortBy) {
+      case "created_asc":
+        sorted.sort((a, b) => byDate(a.created_at) - byDate(b.created_at));
+        break;
+      case "created_desc":
+        sorted.sort((a, b) => byDate(b.created_at) - byDate(a.created_at));
+        break;
+      case "updated_asc":
+        sorted.sort((a, b) => byDate(a.updated_at) - byDate(b.updated_at));
+        break;
+      case "updated_desc":
+        sorted.sort((a, b) => byDate(b.updated_at) - byDate(a.updated_at));
+        break;
+      case "title_asc":
+        sorted.sort((a, b) => a.title.localeCompare(b.title, "vi"));
+        break;
+      case "title_desc":
+        sorted.sort((a, b) => b.title.localeCompare(a.title, "vi"));
+        break;
+    }
+    return sorted;
+  }, [ebooks, query, catFilter, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const curPage = Math.min(page, totalPages);
@@ -198,9 +282,6 @@ export default function QuanLyEbookView({ initialEbooks, missingServiceRole, loa
       <header className="qle-header">
         <div>
           <h1 className="qle-h1">Quản lý Ebook</h1>
-          <p className="qle-sub">
-            Quản lý kho ebook hiển thị tại <code>/ebook</code>. Mỗi bản ghi là 1 row trong bảng <code>mkt_ebooks</code>.
-          </p>
         </div>
       </header>
 
@@ -254,6 +335,22 @@ export default function QuanLyEbookView({ initialEbooks, missingServiceRole, loa
                 </option>
               ))}
             </select>
+            <select
+              className="qle-select"
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value as SortBy);
+                setPage(1);
+              }}
+              aria-label="Sắp xếp"
+              title="Sắp xếp"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               className="qle-btn qle-btn-primary qle-btn-sm2"
@@ -270,11 +367,33 @@ export default function QuanLyEbookView({ initialEbooks, missingServiceRole, loa
             <thead>
               <tr>
                 <th className="qle-col-thumb">Bìa</th>
-                <th className="qle-col-title">Tiêu đề</th>
+                <th className="qle-col-title">
+                  <SortTh
+                    label="Tiêu đề"
+                    sortBy={sortBy}
+                    asc="title_asc"
+                    desc="title_desc"
+                    onChange={(next) => {
+                      setSortBy(next);
+                      setPage(1);
+                    }}
+                  />
+                </th>
                 <th className="qle-col-cat">Chủ đề</th>
                 <th className="qle-col-pages">Trang</th>
                 <th className="qle-col-feat">Nổi bật</th>
-                <th className="qle-col-date">Ngày tạo</th>
+                <th className="qle-col-date">
+                  <SortTh
+                    label="Ngày tạo"
+                    sortBy={sortBy}
+                    asc="created_asc"
+                    desc="created_desc"
+                    onChange={(next) => {
+                      setSortBy(next);
+                      setPage(1);
+                    }}
+                  />
+                </th>
                 <th className="qle-col-act">Hành động</th>
               </tr>
             </thead>
@@ -991,8 +1110,6 @@ const QLE_CSS = `
   .qle-root{display:flex;flex-direction:column;gap:20px;padding:4px 0 48px;font-family:'Be Vietnam Pro',system-ui,-apple-system,sans-serif;color:#2d2020}
   .qle-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:4px 4px 0}
   .qle-h1{font-size:22px;font-weight:700;margin:0 0 4px;color:#1a1a1a;letter-spacing:-.01em}
-  .qle-sub{font-size:13px;color:#6b5c5c;margin:0;max-width:640px;line-height:1.5}
-  .qle-sub code{background:#fff4ec;padding:1px 6px;border-radius:6px;font-size:12px;color:#c45127}
 
   .qle-warn{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;background:#fff4e8;border:1px solid #f8d4a8;color:#a54b0b;font-size:13px}
   .qle-warn code{background:rgba(255,255,255,.6);padding:1px 6px;border-radius:6px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px}
@@ -1013,6 +1130,11 @@ const QLE_CSS = `
   .qle-select{background:#fafafa;border:1px solid rgba(45,32,32,.1);border-radius:10px;padding:9px 12px;font-size:13px;color:#2d2020;font-family:inherit;cursor:pointer;transition:all .15s ease}
   .qle-select:hover{background:#fff;border-color:#f8a668}
   .qle-select:focus{outline:none;border-color:#f8a668;box-shadow:0 0 0 3px rgba(248,166,104,.12)}
+
+  .qle-sort-th{display:inline-flex;align-items:center;gap:5px;background:none;border:none;cursor:pointer;padding:0;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit}
+  .qle-sort-th:hover{color:#c45127}
+  .qle-sort-th.is-active{color:#c45127}
+  .qle-sort-th-dim{opacity:.4}
 
   .qle-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:10px;border:1px solid transparent;font-size:13.5px;font-weight:600;cursor:pointer;transition:all .15s ease;white-space:nowrap;font-family:inherit}
   .qle-btn:disabled{opacity:.6;cursor:not-allowed}

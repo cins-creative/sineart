@@ -171,10 +171,6 @@ export default function QuanLyTraCuuView({
       <header className="qlt-header">
         <div>
           <h1 className="qlt-h1">Tra cứu thông tin đại học</h1>
-          <p className="qlt-sub">
-            Quản lý bài tra cứu: phương thức tuyển sinh, điểm chuẩn, cách tính điểm, chương trình học, kinh nghiệm thi, tỉ lệ chọi.
-            Hỗ trợ <strong>đọc ảnh → HTML</strong> tự động bằng Claude để nhập nội dung nhanh.
-          </p>
         </div>
       </header>
 
@@ -1285,9 +1281,6 @@ const QLT_CSS = `
   .qlt-root{display:flex;flex-direction:column;gap:20px;padding:4px 0 48px;font-family:'Be Vietnam Pro',system-ui,-apple-system,sans-serif;color:#2d2020}
   .qlt-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:4px 4px 0}
   .qlt-h1{font-size:22px;font-weight:700;margin:0 0 4px;color:#1a1a1a;letter-spacing:-.01em}
-  .qlt-sub{font-size:13px;color:#6b5c5c;margin:0;max-width:720px;line-height:1.55}
-  .qlt-sub code{background:#fff4ec;padding:1px 6px;border-radius:6px;font-size:12px;color:#c45127}
-  .qlt-sub strong{color:#c45127}
 
   .qlt-warn{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;background:#fff4e8;border:1px solid #f8d4a8;color:#a54b0b;font-size:13px}
   .qlt-warn code{background:rgba(255,255,255,.6);padding:1px 6px;border-radius:6px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px}

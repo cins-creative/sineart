@@ -28,6 +28,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -251,6 +253,8 @@ export function EbookFlipbook({
   title: string;
 }) {
   const [mode, setMode] = useState<"flipbook" | "grid">("flipbook");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const rootRef = useRef<HTMLElement | null>(null);
 
   // Spread layout: spread 0 = [null, page1], spread k>=1 = [page(2k), page(2k+1)]
   // Trang 1 luôn đứng 1 mình ở bên phải (mô phỏng bìa sách).
@@ -258,6 +262,27 @@ export function EbookFlipbook({
   const [spread, setSpread] = useState(0);
   const [flipping, setFlipping] = useState<FlippingState | null>(null);
   const [midpointReached, setMidpointReached] = useState(false);
+
+  // Fullscreen API: request/exit + lắng nghe fullscreenchange (Esc tự thoát).
+  const toggleFullscreen = useCallback(() => {
+    if (typeof document === "undefined") return;
+    const el = rootRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    } else {
+      void el.requestFullscreen().catch(() => undefined);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onChange = () => {
+      setIsFullscreen(document.fullscreenElement === rootRef.current);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
 
   const getSpreadPages = useCallback(
     (k: number) => {
@@ -397,8 +422,13 @@ export function EbookFlipbook({
   if (pages.length === 0) return null;
 
   return (
-    <section id="flipbook" className="ebd-fb" aria-label="Đọc sách">
-      {/* Toolbar: flipbook / grid toggle */}
+    <section
+      id="flipbook"
+      ref={rootRef}
+      className={`ebd-fb${isFullscreen ? " is-fullscreen" : ""}`}
+      aria-label="Đọc sách"
+    >
+      {/* Toolbar: flipbook / grid toggle + fullscreen */}
       <div className="ebd-fb-toolbar">
         <div className="ebd-fb-modes" role="tablist" aria-label="Chế độ đọc">
           <button
@@ -422,7 +452,25 @@ export function EbookFlipbook({
             Dạng lưới
           </button>
         </div>
-        <div className="ebd-fb-count">{pages.length} trang</div>
+        <div className="ebd-fb-toolbar-right">
+          <span className="ebd-fb-count">{pages.length} trang</span>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="ebd-fb-fs"
+            aria-label={isFullscreen ? "Thoát toàn màn hình" : "Xem toàn màn hình"}
+            title={isFullscreen ? "Thoát (Esc)" : "Toàn màn hình"}
+          >
+            {isFullscreen ? (
+              <Minimize2 size={15} strokeWidth={2.4} />
+            ) : (
+              <Maximize2 size={15} strokeWidth={2.4} />
+            )}
+            <span className="ebd-fb-fs-label">
+              {isFullscreen ? "Thoát" : "Toàn màn hình"}
+            </span>
+          </button>
+        </div>
       </div>
 
       <AnimatePresence mode="wait">

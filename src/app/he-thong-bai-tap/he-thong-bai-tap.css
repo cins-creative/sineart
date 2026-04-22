@@ -210,6 +210,30 @@
   gap: 6px;
 }
 
+/* Sticky danh sách «Các bài trong khoá» khi scroll cột phải (masonry dài).
+   Chỉ áp dụng ở desktop ≥900px — mobile stack dọc nên không cần sticky.
+   `align-self: start` ngăn flex column stretch chiều cao; cần `width: 100%`
+   để bù cross-axis shrink do align-self start gây ra. Scrollbar ẩn nhưng
+   vẫn cuộn được bằng wheel / trackpad / phím mũi tên. */
+@media (min-width: 900px) {
+  .htbt-bai-sticky {
+    position: sticky;
+    top: 88px;
+    align-self: start;
+    width: 100%;
+    max-height: calc(100vh - 104px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .htbt-bai-sticky::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+}
+
 .htbt-bai-item {
   display: flex;
   align-items: center;
@@ -377,12 +401,17 @@
   font-weight: 700;
 }
 
-/* Masonry trang bài tập — vừa khít cột phải (không tràn ~600px), chiều cao theo nội dung */
+/* Masonry trang bài tập — vừa khít cột phải (không tràn ~600px), chiều cao theo nội dung.
+   Phải RESET full-bleed mà `.home-gallery` nhận ở breakpoint ≥900px (sineart-home.css:
+   `width: 100vw; margin-left/right: calc(50% - 50vw)` — tính theo container 415px sẽ
+   kéo gallery lệch ra ngoài cột phải). */
 .htbt-work-gallery.home-gallery {
   --gallery-gap: 7px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  margin-left: 0;
+  margin-right: 0;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;

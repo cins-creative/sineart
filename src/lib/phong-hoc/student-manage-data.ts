@@ -245,15 +245,35 @@ export async function fetchStudentUniMajor(
   };
 }
 
-export async function patchEnrollmentProgress(
-  supabase: SupabaseClient,
-  enrollmentId: number,
-  baiTapId: number | null
-): Promise<void> {
-  const { error } = await supabase
-    .from("ql_quan_ly_hoc_vien")
-    .update({ tien_do_hoc: baiTapId })
-    .eq("id", enrollmentId);
-
-  if (error) throw new Error(error.message);
+/**
+ * Giáo viên cập nhật `ql_quan_ly_hoc_vien.tien_do_hoc` — đi qua API service role
+ * vì RLS chỉ cho anon SELECT. API tự verify `teacherHrId` là chủ nhiệm lớp + bài
+ * tập cùng môn với lớp. Truyền `baiTapId = null` để xoá tiến độ.
+ */
+export async function patchEnrollmentProgress(args: {
+  lopHocId: number;
+  enrollmentId: number;
+  teacherHrId: number;
+  baiTapId: number | null;
+}): Promise<void> {
+  const res = await fetch("/api/phong-hoc/save-student-progress", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      lopHocId: args.lopHocId,
+      enrollmentQlhvId: args.enrollmentId,
+      teacherHrId: args.teacherHrId,
+      baiTapId: args.baiTapId,
+    }),
+  });
+  type SaveProgressResponse = { ok?: boolean; error?: string };
+  let payload: SaveProgressResponse | null = null;
+  try {
+    payload = (await res.json()) as SaveProgressResponse;
+  } catch {
+    /* ignore */
+  }
+  if (!res.ok || !payload?.ok) {
+    throw new Error(payload?.error || `Lưu tiến độ thất bại (HTTP ${res.status}).`);
+  }
 }

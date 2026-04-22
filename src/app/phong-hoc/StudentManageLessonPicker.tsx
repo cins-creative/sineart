@@ -7,7 +7,6 @@ import {
   patchEnrollmentProgress,
   resolveExerciseSubjectKey,
 } from "@/lib/phong-hoc/student-manage-data";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 const DS = {
   font: "var(--font-geist-sans), 'Be Vietnam Pro', system-ui, sans-serif",
@@ -38,7 +37,6 @@ function getColor(n: string) {
 }
 
 type Props = {
-  supabase: SupabaseClient;
   student: StudentManageRow;
   exBySubject: Record<string, ExerciseItem[]>;
   allSubjects: string[];
@@ -46,17 +44,22 @@ type Props = {
   lopTenMonHoc: string | null;
   /** Chỉ dùng khi không đọc được môn lớp (gợi ý khớp tên môn). */
   filterSubjectFallback: string;
+  /** `ql_lop_hoc.id` hiện tại — API server dùng để verify ghi danh + quyền GV. */
+  lopHocId: number;
+  /** `hr_nhan_su.id` của GV đang đăng nhập — API verify `ql_lop_hoc.teacher`. */
+  teacherHrId: number;
   onSave: (newIds: number[]) => void;
   onBack: () => void;
 };
 
 export default function StudentManageLessonPicker({
-  supabase,
   student,
   exBySubject,
   allSubjects,
   lopTenMonHoc,
   filterSubjectFallback,
+  lopHocId,
+  teacherHrId,
   onSave,
   onBack,
 }: Props) {
@@ -98,7 +101,12 @@ export default function StudentManageLessonPicker({
     setErr(null);
     try {
       const baiTapId = selected.size > 0 ? [...selected][0]! : null;
-      await patchEnrollmentProgress(supabase, student.enrollmentId, baiTapId);
+      await patchEnrollmentProgress({
+        lopHocId,
+        enrollmentId: student.enrollmentId,
+        teacherHrId,
+        baiTapId,
+      });
       onSave(baiTapId != null ? [baiTapId] : []);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Lỗi lưu");

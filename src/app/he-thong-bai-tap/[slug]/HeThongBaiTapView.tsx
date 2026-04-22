@@ -104,7 +104,7 @@ export default function HeThongBaiTapView({
               </div>
             </div>
 
-            <div>
+            <div className="htbt-bai-sticky">
               <div className="htbt-left-section-title">Các bài trong khoá</div>
               <nav className="htbt-bai-list" aria-label="Danh sách bài trong môn">
                 {[...siblingsSorted].reverse().map((row) => {

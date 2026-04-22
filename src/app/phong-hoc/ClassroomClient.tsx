@@ -807,6 +807,15 @@ export default function ClassroomClient({
     return NaN;
   }, [storedSession, d.lop_hoc_id]);
 
+  /** `hr_nhan_su.id` của GV — chỉ có khi session là Teacher. Dùng để gọi API ghi
+   * tiến độ học viên (bypass RLS + verify chủ nhiệm phía server). */
+  const teacherHrIdForDb = useMemo(() => {
+    if (storedSession?.userType === "Teacher" && Number.isFinite(storedSession.data.id)) {
+      return storedSession.data.id;
+    }
+    return NaN;
+  }, [storedSession]);
+
   useEffect(() => {
     if (!mounted) return;
     if (!storedSession) {
@@ -1088,9 +1097,7 @@ export default function ClassroomClient({
   const liveChatEnabled =
     mounted && storedSession !== null && Number.isFinite(lopHocIdForDb);
 
-  useEffect(() => {
-    if (isTeacher && tab === "third") setTab("lop");
-  }, [isTeacher, tab]);
+  /** GV giờ cũng có tab «Bài giảng» (tab id `third`) — không còn redirect về `lop`. */
 
   useEffect(() => {
     if (storedSession?.userType === "Student" && Number.isFinite(storedSession.data.qlhv_id)) {
@@ -1160,7 +1167,7 @@ export default function ClassroomClient({
   }, [browserSb, lopHocIdForDb, storedSession, d.staff_avatar_url]);
 
   useEffect(() => {
-    if (tab !== "third" || isTeacher || !liveChatEnabled || !browserSb || !Number.isFinite(lopHocIdForDb)) {
+    if (tab !== "third" || !liveChatEnabled || !browserSb || !Number.isFinite(lopHocIdForDb)) {
       return;
     }
 
@@ -1808,17 +1815,15 @@ export default function ClassroomClient({
             >
               Chat
             </button>
-            {!isTeacher ? (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === "third"}
-                className={cx("tb", "ttt", tab === "third" && "active")}
-                onClick={() => setTab("third")}
-              >
-                Bài tập
-              </button>
-            ) : null}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "third"}
+              className={cx("tb", "ttt", tab === "third" && "active")}
+              onClick={() => setTab("third")}
+            >
+              {isTeacher ? "Bài giảng" : "Bài tập"}
+            </button>
             <button
               type="button"
               role="tab"
@@ -2265,13 +2270,13 @@ export default function ClassroomClient({
               </div>
             </div>
 
-            {!isTeacher ? (
-              <div className={cx("tc", tab === "third" && "active")} role="tabpanel">
+            <div className={cx("tc", tab === "third" && "active")} role="tabpanel">
                 <div className="task-panel">
                   {!liveChatEnabled ? (
                     <div className="task-curr-nologin">
-                      Đăng nhập lớp để xem danh sách bài tập theo môn và tiến độ mở bài (đồng bộ với hệ
-                      thống).
+                      {isTeacher
+                        ? "Đăng nhập lớp để xem hệ thống bài giảng theo môn của lớp."
+                        : "Đăng nhập lớp để xem danh sách bài tập theo môn và tiến độ mở bài (đồng bộ với hệ thống)."}
                     </div>
                   ) : stuCurrLoading && stuCurrExercises.length === 0 ? (
                     <div className="task-curr-loading">Đang tải chương trình bài…</div>
@@ -2284,6 +2289,27 @@ export default function ClassroomClient({
                           Đang cập nhật…
                         </div>
                       ) : null}
+                      {isTeacher ? (
+                        <div className="task-progress-card">
+                          <div className="task-progress-head">
+                            <h3 className="task-progress-title">Hệ thống bài giảng</h3>
+                            {stuCurrSubject ? (
+                              <span className="task-progress-mon">{stuCurrSubject}</span>
+                            ) : null}
+                          </div>
+                          <div className="task-progress-body">
+                            <p className="task-progress-note">
+                              Toàn bộ bài giảng thuộc môn của lớp. Bấm vào bài để xem hướng dẫn giảng dạy.
+                            </p>
+                            <div className="task-progress-bar">
+                              <div className="prog-lbl">
+                                <span>Tổng số bài</span>
+                                <span>{stuCurrExercises.length}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
                       <div className="task-progress-card">
                         <div className="task-progress-head">
                           <h3 className="task-progress-title">Tiến độ hiện tại</h3>
@@ -2347,15 +2373,22 @@ export default function ClassroomClient({
                           </div>
                         </div>
                       </div>
+                      )}
                       {stuCurrExercises.length === 0 ? (
-                        <div className="task-curr-empty">Chưa có bài tập nào cho môn của lớp này.</div>
+                        <div className="task-curr-empty">
+                          {isTeacher
+                            ? "Chưa có bài giảng nào cho môn của lớp này."
+                            : "Chưa có bài tập nào cho môn của lớp này."}
+                        </div>
                       ) : (
                         <div className="task-curr-list-wrap">
-                          <div className="task-curr-list-heading">Danh sách bài theo môn</div>
+                          <div className="task-curr-list-heading">
+                            {isTeacher ? "Danh sách bài giảng theo môn" : "Danh sách bài theo môn"}
+                          </div>
                           <div className="task-curr-list" role="list">
                           {stuCurrExercises.map((ex, i) => {
-                            const unlocked = stuCurProgressIdx >= 0 && i <= stuCurProgressIdx;
-                            const isCurrent = i === stuCurProgressIdx;
+                            const unlocked = isTeacher ? true : stuCurProgressIdx >= 0 && i <= stuCurProgressIdx;
+                            const isCurrent = !isTeacher && i === stuCurProgressIdx;
                             const expanded = taskDetailOpenId === ex.id && unlocked;
                             const baiSoSlug =
                               ex.bai_so != null && Number.isFinite(ex.bai_so) ? ex.bai_so : i + 1;
@@ -2382,7 +2415,9 @@ export default function ClassroomClient({
                                     unlocked
                                       ? expanded
                                         ? "Thu gọn"
-                                        : "Mở xem tóm tắt và nút hướng dẫn"
+                                        : isTeacher
+                                          ? "Mở xem nút mở hướng dẫn giảng dạy"
+                                          : "Mở xem tóm tắt và nút hướng dẫn"
                                       : "Giáo viên sẽ mở bài này khi bạn hoàn thành các bài trước"
                                   }
                                   onClick={() => {
@@ -2420,7 +2455,7 @@ export default function ClassroomClient({
                                       rel="noopener noreferrer"
                                       onClick={(e) => e.stopPropagation()}
                                     >
-                                      Xem hướng dẫn bài tập
+                                      {isTeacher ? "Xem bài giảng" : "Xem hướng dẫn bài tập"}
                                     </Link>
                                   </div>
                                 ) : null}
@@ -2434,7 +2469,6 @@ export default function ClassroomClient({
                   )}
                 </div>
               </div>
-            ) : null}
 
             <div className={cx("tc", tab === "gallery" && "active")} role="tabpanel">
               <div className="gallery-panel">
@@ -2718,15 +2752,19 @@ export default function ClassroomClient({
                 </button>
               </div>
             ) : null}
-            {chatProgressPicker.phase === "ready" && browserSb ? (
+            {chatProgressPicker.phase === "ready" &&
+            browserSb &&
+            Number.isFinite(lopHocIdForDb) &&
+            Number.isFinite(teacherHrIdForDb) ? (
               <StudentManageLessonPicker
                 key={chatProgressPicker.data.student.enrollmentId}
-                supabase={browserSb}
                 student={chatProgressPicker.data.student}
                 exBySubject={chatProgressPicker.data.exBySubject}
                 allSubjects={chatProgressPicker.data.allSubjects}
                 lopTenMonHoc={chatProgressPicker.data.lopTenMonHoc}
                 filterSubjectFallback={chatProgressPicker.data.filterSubjectFallback}
+                lopHocId={lopHocIdForDb}
+                teacherHrId={teacherHrIdForDb}
                 onSave={() => {
                   if (browserSb && Number.isFinite(lopHocIdForDb)) {
                     void fetchChatStudentMapByQlhv(browserSb, lopHocIdForDb).then(setChatStudentByQlhv);
@@ -2746,6 +2784,7 @@ export default function ClassroomClient({
         onClose={() => setStudentManageOpen(false)}
         lopHocId={d.lop_hoc_id}
         classDisplayName={d.class_name}
+        teacherHrId={Number.isFinite(teacherHrIdForDb) ? teacherHrIdForDb : 0}
         onAfterProgressSave={refetchTeacherClassmates}
       />
     </div>

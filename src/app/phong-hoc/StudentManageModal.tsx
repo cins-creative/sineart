@@ -283,6 +283,8 @@ export type StudentManageModalProps = {
   onClose: () => void;
   lopHocId: number;
   classDisplayName: string;
+  /** `hr_nhan_su.id` của GV đang đăng nhập — cần cho API lưu tiến độ (service role verify chủ nhiệm). */
+  teacherHrId: number;
   /** Lọc gợi ý cột tiến độ (tên môn, substring). */
   filterSubject?: string;
   /** Gọi sau khi lưu tiến độ bài (để sidebar đồng bộ). */
@@ -313,6 +315,7 @@ export default function StudentManageModal({
   onClose,
   lopHocId,
   classDisplayName,
+  teacherHrId,
   filterSubject = "",
   onAfterProgressSave,
 }: StudentManageModalProps) {
@@ -1554,12 +1557,13 @@ export default function StudentManageModal({
           >
             {picker ? (
               <StudentManageLessonPicker
-                supabase={supabase}
                 student={picker}
                 exBySubject={exBySubject}
                 allSubjects={allSubjects}
                 lopTenMonHoc={lopTenMonHoc}
                 filterSubjectFallback={localFilterSubject}
+                lopHocId={lopHocId}
+                teacherHrId={teacherHrId}
                 onSave={(newIds) => savePicker(picker.enrollmentId, newIds)}
                 onBack={() => setPicker(null)}
               />

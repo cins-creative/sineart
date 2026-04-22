@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getGvHrIdFromSyncedCookie } from "@/lib/phong-hoc/gv-session-cookie";
 import { getHvIdFromSyncedCookie } from "@/lib/phong-hoc/hv-session-cookie";
 
 /**
@@ -28,6 +29,16 @@ export async function getHeThongBaiTapAccess(
   if (!Number.isFinite(monHocId) || sortedAscByBaiSo.length === 0) return empty;
 
   const ids = sortedAscByBaiSo.map((e) => e.id);
+
+  /** Phòng học chỉ lưu session GV trong localStorage — cookie ký `sine_gv_sync`
+   * được sync qua `HvSessionFromClassroomSync` để SSR nhận diện GV mà không cần
+   * Supabase Auth. Nếu cookie hợp lệ → GV xem mọi bài, không có lock. */
+  const gvHrId = await getGvHrIdFromSyncedCookie();
+  if (gvHrId != null && Number.isFinite(gvHrId)) {
+    const last = sortedAscByBaiSo.length - 1;
+    return { viewer: "gv", maxAccessibleIndex: last >= 0 ? last : -1 };
+  }
+
   const supabase = await createClient();
   if (!supabase) return empty;
 

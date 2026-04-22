@@ -4,15 +4,17 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   BookOpen,
   Calendar,
+  ChevronDown,
   ExternalLink,
   FileText,
+  Filter,
   Search,
   Star,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   buildEbookHref,
@@ -51,7 +53,9 @@ function FeaturedBadge() {
 export default function EbookListClient({ items, categories }: Props) {
   const [q, setQ] = useState("");
   const [activeCat, setActiveCat] = useState<string>(""); // "" = tất cả
+  const [catOpen, setCatOpen] = useState(false);
   const [previewId, setPreviewId] = useState<number | null>(null);
+  const catDdRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -78,6 +82,30 @@ export default function EbookListClient({ items, categories }: Props) {
     ? items.find((e) => e.id === previewId) ?? null
     : null;
 
+  // Outside click + Escape để đóng dropdown chủ đề.
+  useEffect(() => {
+    if (!catOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (catDdRef.current && !catDdRef.current.contains(e.target as Node)) {
+        setCatOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCatOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [catOpen]);
+
+  const activeLabel = activeCat || "Tất cả";
+  const activeCount = activeCat
+    ? (countByCat.get(activeCat) ?? 0)
+    : items.length;
+
   return (
     <div className="eb-body">
       <div className="eb-toolbar">
@@ -103,33 +131,93 @@ export default function EbookListClient({ items, categories }: Props) {
         </div>
 
         {categories.length > 0 && (
-          <div className="eb-pillrow" role="tablist" aria-label="Lọc theo chủ đề">
+          <div className="eb-catdd" ref={catDdRef}>
             <button
               type="button"
-              role="tab"
-              aria-selected={!activeCat}
-              className={`eb-pill${!activeCat ? " is-active" : ""}`}
-              onClick={() => setActiveCat("")}
+              className={`eb-catdd-trigger${catOpen ? " is-open" : ""}${
+                activeCat ? " has-value" : ""
+              }`}
+              onClick={() => setCatOpen((v) => !v)}
+              aria-haspopup="listbox"
+              aria-expanded={catOpen}
+              aria-label="Lọc theo chủ đề"
             >
-              Tất cả
-              <span className="eb-pill-count">· {items.length}</span>
-            </button>
-            {categories.map((c) => {
-              const count = countByCat.get(c) ?? 0;
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeCat === c}
-                  className={`eb-pill${activeCat === c ? " is-active" : ""}`}
-                  onClick={() => setActiveCat(activeCat === c ? "" : c)}
+              <Filter size={15} strokeWidth={2.4} />
+              <span className="eb-catdd-label">
+                Chủ đề: <strong>{activeLabel}</strong>
+              </span>
+              <span className="eb-catdd-count">· {activeCount}</span>
+              {activeCat && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="eb-catdd-clear"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveCat("");
+                    setCatOpen(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setActiveCat("");
+                      setCatOpen(false);
+                    }
+                  }}
+                  aria-label="Bỏ lọc chủ đề"
                 >
-                  {c}
-                  <span className="eb-pill-count">· {count}</span>
+                  <X size={12} strokeWidth={2.6} />
+                </span>
+              )}
+              <ChevronDown
+                size={15}
+                strokeWidth={2.6}
+                className="eb-catdd-chev"
+              />
+            </button>
+
+            {catOpen && (
+              <div
+                className="eb-catdd-panel"
+                role="listbox"
+                aria-label="Danh sách chủ đề"
+              >
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={!activeCat}
+                  className={`eb-catdd-item${!activeCat ? " is-active" : ""}`}
+                  onClick={() => {
+                    setActiveCat("");
+                    setCatOpen(false);
+                  }}
+                >
+                  <span>Tất cả</span>
+                  <span className="eb-catdd-item-count">{items.length}</span>
                 </button>
-              );
-            })}
+                {categories.map((c) => {
+                  const count = countByCat.get(c) ?? 0;
+                  const active = activeCat === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      className={`eb-catdd-item${active ? " is-active" : ""}`}
+                      onClick={() => {
+                        setActiveCat(active ? "" : c);
+                        setCatOpen(false);
+                      }}
+                    >
+                      <span>{c}</span>
+                      <span className="eb-catdd-item-count">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

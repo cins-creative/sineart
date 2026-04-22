@@ -1514,14 +1514,14 @@ function RowEditor({
           onChange={(id) => onDraftChange({ hoc_vien_id: id })}
         />
       </td>
-      <td className="max-w-[160px] px-3 py-2 align-middle">
+      <td className="min-w-[240px] max-w-[280px] px-3 py-2 align-middle">
         <BhvSelectWithFilter
           valueId={row.lop_id}
           onPick={(id) => onDraftChange({ lop_id: id })}
           disabled={disabled}
           emptyLabel="— Chưa gán lớp —"
           options={lopSelectOpts}
-          selectClassName="max-w-[160px]"
+          selectClassName="w-full max-w-[280px]"
         />
       </td>
       <td className="min-w-[200px] px-3 py-2 align-middle">
@@ -1539,7 +1539,7 @@ function RowEditor({
           disabled={disabled}
           type="text"
           inputMode="decimal"
-          className="w-20 rounded-lg border border-[#EAEAEA] px-2 py-1.5 text-right text-[13px] outline-none focus:border-[#BC8AF9]"
+          className="w-16 rounded-lg border border-[#EAEAEA] px-2 py-1.5 text-right text-[13px] outline-none focus:border-[#BC8AF9]"
           value={scoreLocal}
           onChange={(e) => setScoreLocal(e.target.value.replace(/[^\d.,-]/g, ""))}
           onBlur={() => {
@@ -1554,7 +1554,7 @@ function RowEditor({
         <select
           disabled={disabled}
           className={cn(
-            "max-w-[200px] rounded-lg px-2 py-1.5 text-[12px] font-semibold ring-1 ring-inset outline-none",
+            "max-w-[160px] rounded-lg px-2 py-1.5 text-[12px] font-semibold ring-1 ring-inset outline-none",
             statusBadgeClass(row.status),
           )}
           value={row.status}

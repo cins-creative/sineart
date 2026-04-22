@@ -125,7 +125,8 @@
   border-top: var(--nav-glass-border);
   box-shadow: var(--nav-glass-shadow);
   border-radius: 22px 22px 0 0;
-  overflow: hidden;
+  /* Cho dropdown avatar + tooltip thoát lên trên dock, nhưng border-radius vẫn giữ nguyên vì `.sticky` có background transparent. */
+  overflow: visible;
 }
 .nav-bottom-fixed .sticky {
   position: relative;
@@ -134,11 +135,11 @@
   right: auto;
   width: 100%;
   min-width: 0;
-  padding: 15px 18px 16px;
+  padding: 14px 16px 14px;
   display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-areas: "logo menu";
-  column-gap: 14px;
+  grid-template-columns: 1fr auto auto;
+  grid-template-areas: "logo user menu";
+  column-gap: 10px;
   align-items: center;
   background: transparent;
   border: none;
@@ -265,16 +266,135 @@
   display: none;
 }
 
+/* Mobile: nút Đăng nhập nhỏ gọn trong dock */
 .nav-login-btn {
-  display: none;
+  grid-area: user;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(45, 32, 32, 0.14);
+  background: #fff;
+  color: var(--nav-text);
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+    background 0.15s ease;
+}
+.nav-login-btn:active {
+  transform: scale(0.96);
+  border-color: rgba(238, 91, 159, 0.35);
+  color: #b64384;
 }
 
+/* Mobile: avatar học viên đã đăng nhập */
 .nav-user-avatar-wrap {
-  display: none;
+  grid-area: user;
+  display: inline-flex;
+  position: relative;
+  flex-shrink: 0;
+  align-items: center;
+  vertical-align: middle;
 }
 
 .nav-user-avatar {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  padding: 2px;
+  border: none;
+  border-radius: 50%;
+  background: var(--grad, linear-gradient(135deg, #f8a568, #ee5ca2));
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(238, 91, 159, 0.22);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.nav-user-avatar:active {
+  transform: scale(0.94);
+}
+
+/* Dropdown mobile — mở LÊN TRÊN vì dock nằm ở đáy màn hình */
+.nav-user-avatar-dd {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  top: auto;
+  z-index: 160;
+  min-width: 208px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  box-shadow: 0 18px 40px rgba(45, 32, 32, 0.18);
+  border: 1px solid rgba(45, 32, 32, 0.06);
+}
+.nav-user-avatar-dd-item {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(45, 32, 32, 0.88);
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-user-avatar-dd-item:active {
+  background: rgba(248, 166, 104, 0.12);
+  color: #b64384;
+}
+.nav-user-avatar-dd-item--logout {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(45, 32, 32, 0.08);
+  color: #ee5b9f;
+}
+
+.nav-user-avatar-ring {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #fff;
+  align-items: center;
+  justify-content: center;
+}
+.nav-user-avatar-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.nav-user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.nav-user-avatar-fallback {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--tt, #bb89f8);
+  letter-spacing: -0.02em;
 }
 
 /* Mobile menu — chỉ icon, không nền tròn */
@@ -2105,6 +2225,7 @@ a.rv-source:focus-visible { outline:2px solid #4285F4; outline-offset:2px; borde
   .nav-user-avatar-dd {
     position: absolute;
     top: calc(100% + 8px);
+    bottom: auto;
     right: 0;
     z-index: 160;
     min-width: 208px;

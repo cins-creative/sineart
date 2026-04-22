@@ -27,6 +27,7 @@
 
 import { cache } from "react";
 
+import { cfImageNormalizeAccount } from "@/lib/cfImageUrl";
 import { createStaticClient } from "@/lib/supabase/static";
 
 import type { EbookItem } from "./ebook-shared";
@@ -75,7 +76,10 @@ function asUrlArray(v: unknown): string[] {
         /* fall through → treat as plain string */
       }
     }
-    return [t];
+    // Rewrite account hash về Sine Art — fix ảnh bị 403 err=9426 vì legacy
+    // admin paste URL với account hash cũ.
+    const normalized = cfImageNormalizeAccount(t);
+    return normalized ? [normalized] : [t];
   }
   return [];
 }

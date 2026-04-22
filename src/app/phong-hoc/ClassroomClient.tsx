@@ -542,9 +542,14 @@ type PanelData = {
 type ClassroomClientProps = {
   /** `ql_lop_hoc.class_name` → slug đường dẫn (vd. `ttm_03`). Bỏ trống = `/phong-hoc`. */
   classSlug?: string;
+  /** HTML quảng cáo đến từ `mkt_home_content.ads`. Rỗng = ẩn hẳn banner. */
+  adHtml?: string;
 };
 
-export default function ClassroomClient({ classSlug }: ClassroomClientProps = {}) {
+export default function ClassroomClient({
+  classSlug,
+  adHtml = "",
+}: ClassroomClientProps = {}) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [role, setRole] = useState<Role>("student");
@@ -2591,47 +2596,46 @@ export default function ClassroomClient({ classSlug }: ClassroomClientProps = {}
         </LayoutGroup>
       </div>
 
-      <div className={cx("adb", adDismissal !== "banner" && "hid")}>
-        <div className="adinner">
-          <div className="adline-v" />
-          <div className="adph">🎨</div>
-          <div className="adbody">
-            <div className="adey">Ưu đãi học viên</div>
-            <div className="adttl">Khóa Vẽ Kỹ Thuật Số — Khai giảng sắp tới</div>
-            <div className="addsc">Theo dõi sineart.vn để cập nhật lịch khai giảng.</div>
-            <Link href="/khoa-hoc" className="adcta" style={{ textDecoration: "none" }}>
-              Xem ngay →
-            </Link>
+      {adHtml.trim() ? (
+        <div className={cx("adb", adDismissal !== "banner" && "hid")}>
+          <div className="adinner">
+            <div className="adline-v" />
+            <div
+              className="adbody adbody--html"
+              dangerouslySetInnerHTML={{ __html: adHtml }}
+            />
+            <button
+              type="button"
+              className="adx"
+              onClick={() => setAdDismissal("pill")}
+              aria-label="Thu gọn quảng cáo"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            type="button"
-            className="adx"
-            onClick={() => setAdDismissal("pill")}
-            aria-label="Thu gọn quảng cáo"
-          >
-            ✕
-          </button>
         </div>
-      </div>
-      <div className={cx("adpw", adDismissal === "pill" && "vis")}>
-        <div className="ad-pill-wrap">
-          <button
-            type="button"
-            className="adpill"
-            onClick={() => setAdDismissal("banner")}
-          >
-            📢 Quảng cáo
-          </button>
-          <button
-            type="button"
-            className="adpill-dismiss"
-            onClick={() => setAdDismissal("none")}
-            aria-label="Ẩn quảng cáo"
-          >
-            ✕
-          </button>
+      ) : null}
+      {adHtml.trim() ? (
+        <div className={cx("adpw", adDismissal === "pill" && "vis")}>
+          <div className="ad-pill-wrap">
+            <button
+              type="button"
+              className="adpill"
+              onClick={() => setAdDismissal("banner")}
+            >
+              📢 Quảng cáo
+            </button>
+            <button
+              type="button"
+              className="adpill-dismiss"
+              onClick={() => setAdDismissal("none")}
+              aria-label="Ẩn quảng cáo"
+            >
+              ✕
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {chatFullImg ? (
         <div

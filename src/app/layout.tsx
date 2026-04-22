@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro, Quicksand } from "next/font/google";
 import ConditionalCta from "./_components/ConditionalCta";
+import ConditionalHomeAdBanner from "./_components/ConditionalHomeAdBanner";
 import "./globals.css";
 import "./sineart-home.css";
 import "./sineart-home-v2.css";
@@ -38,6 +39,7 @@ export default function RootLayout({
       <body className="min-h-full flex w-full min-w-0 flex-col overflow-x-clip" suppressHydrationWarning>
         <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
         <ConditionalCta />
+        <ConditionalHomeAdBanner />
       </body>
     </html>
   );

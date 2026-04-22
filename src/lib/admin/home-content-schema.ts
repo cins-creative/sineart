@@ -17,6 +17,17 @@ export type CtaLink = {
   href: string;
 };
 
+export type HeroCardImage = {
+  imageUrl: string;
+  alt: string;
+};
+
+export type HeroCardsContent = {
+  top: HeroCardImage;
+  main: HeroCardImage;
+  bottom: HeroCardImage;
+};
+
 export type HeroContent = {
   eyebrow: string;
   headlineBefore: string;
@@ -33,6 +44,7 @@ export type HeroContent = {
     { emoji: string; title: string; sub: string },
     { emoji: string; title: string; sub: string },
   ];
+  cards: HeroCardsContent;
 };
 
 export type StatStripContent = {
@@ -121,6 +133,43 @@ export type CtaBandContent = {
   sticks: [CtaBandStick, CtaBandStick, CtaBandStick, CtaBandStick];
 };
 
+// ── Ad banner (cột riêng trên bảng mkt_home_content, không phải JSONB) ─────
+
+export type AdVisibleWhere = "home" | "class" | "both";
+
+export const AD_VISIBLE_WHERE_VALUES = ["home", "class", "both"] as const;
+
+export type HomeAdConfig = {
+  ads: string;
+  visibleWhere: AdVisibleWhere;
+};
+
+export const DEFAULT_HOME_AD: HomeAdConfig = {
+  ads: "",
+  visibleWhere: "home",
+};
+
+export function normalizeAdConfig(raw: {
+  ads?: unknown;
+  visible_where?: unknown;
+  visibleWhere?: unknown;
+}): HomeAdConfig {
+  const vwRaw =
+    typeof raw.visibleWhere === "string"
+      ? raw.visibleWhere
+      : typeof raw.visible_where === "string"
+        ? raw.visible_where
+        : "";
+  const visibleWhere: AdVisibleWhere =
+    vwRaw === "home" || vwRaw === "class" || vwRaw === "both"
+      ? vwRaw
+      : "home";
+  return {
+    ads: typeof raw.ads === "string" ? raw.ads : "",
+    visibleWhere,
+  };
+}
+
 // ── Root shape ────────────────────────────────────────────────────────────────
 
 export type HomeContent = {
@@ -154,6 +203,11 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
       { emoji: "🎨", title: "Hình họa", sub: "Lớp mới · T5" },
       { emoji: "✨", title: "Digital Art", sub: "Procreate" },
     ],
+    cards: {
+      top: { imageUrl: "", alt: "Ảnh nhỏ phía trên — hero" },
+      main: { imageUrl: "", alt: "Ảnh lớn chính — hero" },
+      bottom: { imageUrl: "", alt: "Ảnh nhỏ phía dưới — hero" },
+    },
   },
   statStrip: {
     cards: [
@@ -319,6 +373,25 @@ function mergeHero(v: unknown): HeroContent {
       mergeSticker(stickersRaw[0], d.stickers[0]),
       mergeSticker(stickersRaw[1], d.stickers[1]),
     ],
+    cards: mergeHeroCards(o.cards),
+  };
+}
+
+function mergeHeroCards(v: unknown): HeroCardsContent {
+  const d = DEFAULT_HOME_CONTENT.hero.cards;
+  const o = isObj(v) ? v : {};
+  return {
+    top: mergeHeroCard(o.top, d.top),
+    main: mergeHeroCard(o.main, d.main),
+    bottom: mergeHeroCard(o.bottom, d.bottom),
+  };
+}
+
+function mergeHeroCard(v: unknown, d: HeroCardImage): HeroCardImage {
+  const o = isObj(v) ? v : {};
+  return {
+    imageUrl: str(o.imageUrl, d.imageUrl),
+    alt: str(o.alt, d.alt),
   };
 }
 

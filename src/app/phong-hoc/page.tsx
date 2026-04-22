@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+
+import { getHomeAdConfig, shouldShowAd } from "@/lib/data/home-ad";
+
 import ClassroomClient from "./ClassroomClient";
 
 export const metadata: Metadata = {
@@ -6,6 +9,8 @@ export const metadata: Metadata = {
   description: "Không gian học trực tuyến Sine Art — video, chat và tài nguyên lớp.",
 };
 
-export default function PhongHocPage() {
-  return <ClassroomClient />;
+export default async function PhongHocPage() {
+  const adConfig = await getHomeAdConfig();
+  const adHtml = shouldShowAd(adConfig, "class") ? adConfig.ads : "";
+  return <ClassroomClient adHtml={adHtml} />;
 }

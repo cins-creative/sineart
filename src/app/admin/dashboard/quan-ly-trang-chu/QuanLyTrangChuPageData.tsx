@@ -1,6 +1,9 @@
 import {
+  DEFAULT_HOME_AD,
   DEFAULT_HOME_CONTENT,
   mergeHomeContent,
+  normalizeAdConfig,
+  type HomeAdConfig,
   type HomeContent,
 } from "@/lib/admin/home-content-schema";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -13,6 +16,7 @@ export default async function QuanLyTrangChuPageData() {
     return (
       <QuanLyTrangChuView
         initialContent={DEFAULT_HOME_CONTENT}
+        initialAd={DEFAULT_HOME_AD}
         initialUpdatedAt={null}
         missingServiceRole
       />
@@ -21,7 +25,7 @@ export default async function QuanLyTrangChuPageData() {
 
   const { data, error } = await supabase
     .from("mkt_home_content")
-    .select("content, updated_at")
+    .select("content, ads, visible_where, updated_at")
     .eq("id", 1)
     .maybeSingle();
 
@@ -29,6 +33,7 @@ export default async function QuanLyTrangChuPageData() {
     return (
       <QuanLyTrangChuView
         initialContent={DEFAULT_HOME_CONTENT}
+        initialAd={DEFAULT_HOME_AD}
         initialUpdatedAt={null}
         loadError={error.message}
       />
@@ -36,9 +41,19 @@ export default async function QuanLyTrangChuPageData() {
   }
 
   const content: HomeContent = mergeHomeContent(data?.content ?? {});
+  const ad: HomeAdConfig = data
+    ? normalizeAdConfig({
+        ads: (data as Record<string, unknown>).ads,
+        visible_where: (data as Record<string, unknown>).visible_where,
+      })
+    : DEFAULT_HOME_AD;
   const updatedAt = (data?.updated_at as string | null) ?? null;
 
   return (
-    <QuanLyTrangChuView initialContent={content} initialUpdatedAt={updatedAt} />
+    <QuanLyTrangChuView
+      initialContent={content}
+      initialAd={ad}
+      initialUpdatedAt={updatedAt}
+    />
   );
 }

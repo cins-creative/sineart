@@ -35,6 +35,11 @@ create policy "mkt_home_content anon select"
   to anon
   using (true);
 
+-- GRANT: Supabase yeu cau role co base privilege ngoai RLS policy.
+grant usage on schema public to anon, authenticated, service_role;
+grant select on public.mkt_home_content to anon, authenticated;
+grant all on public.mkt_home_content to service_role;
+
 -- Tu dong cap nhat updated_at khi update.
 create or replace function public.set_mkt_home_content_updated_at()
 returns trigger

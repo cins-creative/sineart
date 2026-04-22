@@ -1,46 +1,39 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import Image from "next/image";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  BookOpen,
   Check,
-  ChevronDown,
-  ChevronUp,
-  Edit3,
-  ExternalLink,
   Film,
-  Heart,
-  Image as ImageIcon,
+  ImageIcon,
   Info,
-  Layers,
   Loader2,
-  Menu as MenuIcon,
+  Megaphone,
   Save,
   Sparkles,
-  Star,
-  UserRound,
+  Trash2,
+  Upload,
 } from "lucide-react";
 
 import {
+  AD_VISIBLE_WHERE_VALUES,
+  DEFAULT_HOME_AD,
   DEFAULT_HOME_CONTENT,
-  type CareerContent,
-  type CtaBandContent,
-  type CtaLink,
-  type GalleryContent,
+  type AdVisibleWhere,
+  type HeroCardImage,
+  type HeroCardsContent,
   type HeroContent,
+  type HomeAdConfig,
   type HomeContent,
-  type ReviewsContent,
-  type StatStripContent,
-  type TeachersContent,
   type VideoContent,
   type WhyContent,
-  type WhyPillarIconKey,
+  type WhyPillar,
 } from "@/lib/admin/home-content-schema";
 
 type Props = {
   initialContent: HomeContent;
+  initialAd: HomeAdConfig;
   initialUpdatedAt: string | null;
   missingServiceRole?: boolean;
   loadError?: string;
@@ -48,17 +41,28 @@ type Props = {
 
 type Toast = { ok: boolean; msg: string } | null;
 
-type BlockId =
-  | "nav"
-  | "hero"
-  | "statStrip"
-  | "why"
-  | "video"
-  | "reviews"
-  | "gallery"
-  | "career"
-  | "teachers"
-  | "ctaBand";
+type HeroCardKey = "top" | "main" | "bottom";
+
+const HERO_CARD_ORDER: { key: HeroCardKey; label: string; hint: string; ratio: string }[] = [
+  {
+    key: "top",
+    label: "Ảnh nhỏ phía trên (hero-card--top)",
+    hint: "Khung nhỏ 3:4 góc trên phải — thường dùng ảnh chân dung / minh họa.",
+    ratio: "3 / 4",
+  },
+  {
+    key: "main",
+    label: "Ảnh lớn chính (hero-card--main)",
+    hint: "Khung lớn giữa — ảnh nổi bật nhất đại diện cho trường.",
+    ratio: "4 / 5",
+  },
+  {
+    key: "bottom",
+    label: "Ảnh nhỏ phía dưới (hero-card--bottom)",
+    hint: "Khung nhỏ 4:3 góc dưới trái — ảnh lớp học hoặc tác phẩm phụ.",
+    ratio: "4 / 3",
+  },
+];
 
 function fmtUpdatedAt(iso: string | null): string {
   if (!iso) return "—";
@@ -77,68 +81,46 @@ function fmtUpdatedAt(iso: string | null): string {
 
 export default function QuanLyTrangChuView({
   initialContent,
+  initialAd,
   initialUpdatedAt,
   missingServiceRole,
   loadError,
 }: Props) {
   const [content, setContent] = useState<HomeContent>(initialContent);
+  const [ad, setAd] = useState<HomeAdConfig>(initialAd);
   const [initialSnapshot, setInitialSnapshot] = useState<HomeContent>(initialContent);
+  const [initialAdSnapshot, setInitialAdSnapshot] = useState<HomeAdConfig>(initialAd);
   const [updatedAt, setUpdatedAt] = useState<string | null>(initialUpdatedAt);
-  const [expanded, setExpanded] = useState<BlockId | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
 
   const dirty = useMemo(
-    () => JSON.stringify(content) !== JSON.stringify(initialSnapshot),
-    [content, initialSnapshot],
+    () =>
+      JSON.stringify(content) !== JSON.stringify(initialSnapshot) ||
+      JSON.stringify(ad) !== JSON.stringify(initialAdSnapshot),
+    [content, initialSnapshot, ad, initialAdSnapshot],
   );
 
-  const toggleExpand = useCallback((id: BlockId) => {
-    setExpanded((prev) => (prev === id ? null : id));
+  const setHero = useCallback((hero: HeroContent) => {
+    setContent((c) => ({ ...c, hero }));
+  }, []);
+  const setWhy = useCallback((why: WhyContent) => {
+    setContent((c) => ({ ...c, why }));
+  }, []);
+  const setVideo = useCallback((video: VideoContent) => {
+    setContent((c) => ({ ...c, video }));
   }, []);
 
-  const updateHero = useCallback(
-    (hero: HeroContent) => setContent((c) => ({ ...c, hero })),
-    [],
-  );
-  const updateStat = useCallback(
-    (statStrip: StatStripContent) => setContent((c) => ({ ...c, statStrip })),
-    [],
-  );
-  const updateWhy = useCallback(
-    (why: WhyContent) => setContent((c) => ({ ...c, why })),
-    [],
-  );
-  const updateVideo = useCallback(
-    (video: VideoContent) => setContent((c) => ({ ...c, video })),
-    [],
-  );
-  const updateReviews = useCallback(
-    (reviews: ReviewsContent) => setContent((c) => ({ ...c, reviews })),
-    [],
-  );
-  const updateGallery = useCallback(
-    (gallery: GalleryContent) => setContent((c) => ({ ...c, gallery })),
-    [],
-  );
-  const updateCareer = useCallback(
-    (career: CareerContent) => setContent((c) => ({ ...c, career })),
-    [],
-  );
-  const updateTeachers = useCallback(
-    (teachers: TeachersContent) => setContent((c) => ({ ...c, teachers })),
-    [],
-  );
-  const updateCta = useCallback(
-    (ctaBand: CtaBandContent) => setContent((c) => ({ ...c, ctaBand })),
-    [],
-  );
-
   const handleReset = useCallback(() => {
-    if (!confirm("Khôi phục về nội dung mặc định (hardcode gốc)? Phải bấm Lưu để áp dụng.")) {
+    if (
+      !confirm(
+        "Khôi phục về nội dung mặc định (hardcode gốc)? Phải bấm Lưu để áp dụng.",
+      )
+    ) {
       return;
     }
     setContent(DEFAULT_HOME_CONTENT);
+    setAd(DEFAULT_HOME_AD);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -148,7 +130,7 @@ export default function QuanLyTrangChuView({
       const res = await fetch("/admin/api/home-content-save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, ad }),
       });
       const json = (await res.json()) as {
         ok?: boolean;
@@ -159,15 +141,19 @@ export default function QuanLyTrangChuView({
         throw new Error(json.error || "Lưu thất bại.");
       }
       setInitialSnapshot(content);
+      setInitialAdSnapshot(ad);
       setUpdatedAt(json.updated_at ?? new Date().toISOString());
       setToast({ ok: true, msg: "Đã lưu nội dung trang chủ." });
     } catch (e) {
-      setToast({ ok: false, msg: e instanceof Error ? e.message : "Lưu thất bại." });
+      setToast({
+        ok: false,
+        msg: e instanceof Error ? e.message : "Lưu thất bại.",
+      });
     } finally {
       setSaving(false);
       setTimeout(() => setToast(null), 4500);
     }
-  }, [content]);
+  }, [content, ad]);
 
   return (
     <div className="qlh-root">
@@ -179,7 +165,11 @@ export default function QuanLyTrangChuView({
           </p>
         </div>
         <div className="qlh-actions">
-          <button type="button" className="qlh-btn qlh-btn-ghost" onClick={handleReset}>
+          <button
+            type="button"
+            className="qlh-btn qlh-btn-ghost"
+            onClick={handleReset}
+          >
             Khôi phục mặc định
           </button>
           <button
@@ -203,8 +193,8 @@ export default function QuanLyTrangChuView({
         <div className="qlh-warn">
           <AlertTriangle size={16} />
           <span>
-            Thiếu <code>SUPABASE_SERVICE_ROLE_KEY</code> trên server. Dashboard chỉ hiện nội
-            dung mặc định, không lưu được.
+            Thiếu <code>SUPABASE_SERVICE_ROLE_KEY</code> trên server. Dashboard
+            chỉ hiện nội dung mặc định, không lưu được.
           </span>
         </div>
       ) : null}
@@ -219,12 +209,11 @@ export default function QuanLyTrangChuView({
       <div className="qlh-note">
         <Info size={16} />
         <span>
-          Dashboard này mockup lại layout trang chủ public để bạn quản lý các element TĨNH
-          (Cover, thumbnail, nội dung). Các block ĐỘNG (khóa học, review, gallery, giáo
-          viên, ngành học) lấy từ bảng riêng — click để chuyển tới trang quản lý.
-          <br />
-          <b>Lưu ý:</b> Thay đổi được lưu vào <code>mkt_home_content</code>. Public site sẽ đọc
-          từ bảng này khi phần wiring hoàn tất ở phase 2.
+          Chỉ quản lý 3 nhóm phần tử tĩnh trên trang chủ:{" "}
+          <b>ảnh Hero (3 khung)</b>, <b>nội dung</b> (đoạn mô tả Hero + 3 trụ
+          cột <em>Tại sao Sine Art</em>), và <b>URL video</b> (2 tab Online /
+          Offline). Các block động (khóa học, review, giáo viên, gallery) quản
+          lý ở trang riêng.
         </span>
       </div>
 
@@ -235,201 +224,15 @@ export default function QuanLyTrangChuView({
         </div>
       ) : null}
 
-      {/* ============ BLOCK 1: NAV (dynamic) ============ */}
-      <BlockCard
-        index={1}
-        tag="dynamic"
-        icon={<MenuIcon size={18} />}
-        title="Thanh điều hướng (Nav)"
-      >
-        <p className="qlh-preview-note">
-          Cấu trúc menu được config trong mã nguồn
-          <code>src/constants/navigation.ts</code>. Danh sách khóa học con tự động build từ
-          bảng <code>ql_mon_hoc</code>.
-        </p>
-        <div className="qlh-dyn-links">
-          <Link href="/admin/dashboard/khoa-hoc" className="qlh-dyn-link">
-            <ExternalLink size={13} />
-            Quản lý Khóa học
-          </Link>
-        </div>
-      </BlockCard>
-
-      {/* ============ BLOCK 2: HERO ============ */}
-      <BlockCard
-        index={2}
-        tag="static"
-        icon={<Sparkles size={18} />}
-        title="Cover / Hero"
-        onEdit={() => toggleExpand("hero")}
-        editOpen={expanded === "hero"}
-      >
-        <HeroPreview data={content.hero} />
-        {expanded === "hero" ? (
-          <HeroEditor data={content.hero} onChange={updateHero} />
-        ) : null}
-      </BlockCard>
-
-      {/* ============ BLOCK 3: STAT STRIP ============ */}
-      <BlockCard
-        index={3}
-        tag="mixed"
-        icon={<Layers size={18} />}
-        title="Số liệu (Stat strip)"
-        onEdit={() => toggleExpand("statStrip")}
-        editOpen={expanded === "statStrip"}
-      >
-        <StatPreview data={content.statStrip} />
-        {expanded === "statStrip" ? (
-          <StatEditor data={content.statStrip} onChange={updateStat} />
-        ) : null}
-      </BlockCard>
-
-      {/* ============ BLOCK 4: WHY ============ */}
-      <BlockCard
-        index={4}
-        tag="static"
-        icon={<Star size={18} />}
-        title="Tại sao Sine Art (3 trụ cột)"
-        onEdit={() => toggleExpand("why")}
-        editOpen={expanded === "why"}
-      >
-        <WhyPreview data={content.why} />
-        {expanded === "why" ? (
-          <WhyEditor data={content.why} onChange={updateWhy} />
-        ) : null}
-      </BlockCard>
-
-      {/* ============ BLOCK 5: VIDEO ============ */}
-      <BlockCard
-        index={5}
-        tag="static"
-        icon={<Film size={18} />}
-        title="Video giới thiệu"
-        onEdit={() => toggleExpand("video")}
-        editOpen={expanded === "video"}
-      >
-        <VideoPreview data={content.video} />
-        {expanded === "video" ? (
-          <VideoEditor data={content.video} onChange={updateVideo} />
-        ) : null}
-      </BlockCard>
-
-      {/* ============ BLOCK 6: REVIEWS ============ */}
-      <BlockCard
-        index={6}
-        tag="mixed"
-        icon={<Heart size={18} />}
-        title="Đánh giá học viên"
-        onEdit={() => toggleExpand("reviews")}
-        editOpen={expanded === "reviews"}
-        dynamicLink={{
-          label: "Quản lý bình luận / đánh giá",
-          href: "/admin/dashboard/binh-luan",
-        }}
-      >
-        <SectionHeaderPreview
-          sectionLabel={content.reviews.sectionLabel}
-          titleBefore={content.reviews.titleBefore}
-          titleEmphasis={content.reviews.titleEmphasis}
-          titleAfter={content.reviews.titleAfter}
-          subtitle={content.reviews.subtitle}
-        />
-        <p className="qlh-preview-note">
-          Google Maps URL: <code>{content.reviews.googleMapsUrl}</code>
-        </p>
-        {expanded === "reviews" ? (
-          <ReviewsEditor data={content.reviews} onChange={updateReviews} />
-        ) : null}
-      </BlockCard>
-
-      {/* ============ BLOCK 7: GALLERY ============ */}
-      <BlockCard
-        index={7}
-        tag="mixed"
-        icon={<ImageIcon size={18} />}
-        title="Tác phẩm học viên (Gallery)"
-        onEdit={() => toggleExpand("gallery")}
-        editOpen={expanded === "gallery"}
-        dynamicLink={{
-          label: "Quản lý bài học viên",
-          href: "/admin/dashboard/quan-ly-bai-hoc-vien",
-        }}
-      >
-        <SectionHeaderPreview
-          sectionLabel={content.gallery.sectionLabel}
-          titleBefore={content.gallery.titleBefore}
-          titleEmphasis={content.gallery.titleEmphasis}
-          titleAfter={content.gallery.titleAfter}
-          subtitle={content.gallery.subtitle}
-        />
-        {expanded === "gallery" ? (
-          <GalleryEditor data={content.gallery} onChange={updateGallery} />
-        ) : null}
-      </BlockCard>
-
-      {/* ============ BLOCK 8: CAREER ============ */}
-      <BlockCard
-        index={8}
-        tag="mixed"
-        icon={<BookOpen size={18} />}
-        title="Ngành học (Career)"
-        onEdit={() => toggleExpand("career")}
-        editOpen={expanded === "career"}
-        dynamicLink={{
-          label: "Dữ liệu ngành đồng bộ từ CINS.vn",
-          href: "https://cins.vn",
-          external: true,
-        }}
-      >
-        <CareerPreview data={content.career} />
-        {expanded === "career" ? (
-          <CareerEditor data={content.career} onChange={updateCareer} />
-        ) : null}
-      </BlockCard>
-
-      {/* ============ BLOCK 9: TEACHERS ============ */}
-      <BlockCard
-        index={9}
-        tag="mixed"
-        icon={<UserRound size={18} />}
-        title="Giáo viên (Teachers)"
-        onEdit={() => toggleExpand("teachers")}
-        editOpen={expanded === "teachers"}
-        dynamicLink={{
-          label: "Quản lý nhân sự (portfolio)",
-          href: "/admin/dashboard/quan-ly-nhan-su",
-        }}
-      >
-        <SectionHeaderPreview
-          sectionLabel={content.teachers.sectionLabel}
-          titleBefore={content.teachers.titleBefore}
-          titleEmphasis={content.teachers.titleEmphasis}
-          titleAfter={content.teachers.titleAfter}
-          subtitle={content.teachers.subtitle}
-        />
-        <p className="qlh-preview-note">
-          Slideshow portfolio tự động lấy từ <code>hr_nhan_su.portfolio</code>.
-        </p>
-        {expanded === "teachers" ? (
-          <TeachersEditor data={content.teachers} onChange={updateTeachers} />
-        ) : null}
-      </BlockCard>
-
-      {/* ============ BLOCK 10: CTA BAND ============ */}
-      <BlockCard
-        index={10}
-        tag="static"
-        icon={<Sparkles size={18} />}
-        title="CTA cuối trang"
-        onEdit={() => toggleExpand("ctaBand")}
-        editOpen={expanded === "ctaBand"}
-      >
-        <CtaBandPreview data={content.ctaBand} />
-        {expanded === "ctaBand" ? (
-          <CtaBandEditor data={content.ctaBand} onChange={updateCta} />
-        ) : null}
-      </BlockCard>
+      <HeroImagesSection data={content.hero} onChange={setHero} />
+      <ContentSection
+        hero={content.hero}
+        why={content.why}
+        onChangeHero={setHero}
+        onChangeWhy={setWhy}
+      />
+      <VideoSection data={content.video} onChange={setVideo} />
+      <AdSection data={ad} onChange={setAd} />
 
       <div className="qlh-footer-save">
         <button
@@ -438,7 +241,11 @@ export default function QuanLyTrangChuView({
           onClick={handleSave}
           disabled={!dirty || saving}
         >
-          {saving ? <Loader2 size={16} className="qlh-spin" /> : <Save size={16} />}
+          {saving ? (
+            <Loader2 size={16} className="qlh-spin" />
+          ) : (
+            <Save size={16} />
+          )}
           {saving ? "Đang lưu…" : "Lưu thay đổi"}
         </button>
       </div>
@@ -449,970 +256,579 @@ export default function QuanLyTrangChuView({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BlockCard — wrapper chung cho mỗi section
+// Section 1: Hero images
 // ═══════════════════════════════════════════════════════════════════════════
 
-type BlockTag = "static" | "mixed" | "dynamic";
-
-function BlockCard({
-  index,
-  tag,
-  icon,
-  title,
-  onEdit,
-  editOpen,
-  dynamicLink,
-  children,
-}: {
-  index: number;
-  tag: BlockTag;
-  icon: React.ReactNode;
-  title: string;
-  onEdit?: () => void;
-  editOpen?: boolean;
-  dynamicLink?: { label: string; href: string; external?: boolean };
-  children: React.ReactNode;
-}) {
-  const tagLabel: Record<BlockTag, string> = {
-    static: "Tĩnh",
-    mixed: "Hỗn hợp",
-    dynamic: "Động",
-  };
-  return (
-    <section className={`qlh-block qlh-block--${tag}`}>
-      <header className="qlh-block-head">
-        <div className="qlh-block-head-left">
-          <span className="qlh-block-idx">{String(index).padStart(2, "0")}</span>
-          <span className="qlh-block-icon">{icon}</span>
-          <h2 className="qlh-block-title">{title}</h2>
-          <span className={`qlh-tag qlh-tag--${tag}`}>{tagLabel[tag]}</span>
-        </div>
-        <div className="qlh-block-head-right">
-          {dynamicLink ? (
-            dynamicLink.external ? (
-              <a
-                href={dynamicLink.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="qlh-dyn-link"
-              >
-                <ExternalLink size={13} />
-                {dynamicLink.label}
-              </a>
-            ) : (
-              <Link href={dynamicLink.href} className="qlh-dyn-link">
-                <ExternalLink size={13} />
-                {dynamicLink.label}
-              </Link>
-            )
-          ) : null}
-          {onEdit ? (
-            <button
-              type="button"
-              className={`qlh-btn qlh-btn-sm qlh-btn-ghost ${editOpen ? "is-open" : ""}`}
-              onClick={onEdit}
-            >
-              <Edit3 size={13} />
-              {editOpen ? "Thu gọn" : "Sửa"}
-              {editOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            </button>
-          ) : null}
-        </div>
-      </header>
-      <div className="qlh-block-body">{children}</div>
-    </section>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Previews — hiển thị nội dung hiện tại, typography gần với trang chủ
-// ═══════════════════════════════════════════════════════════════════════════
-
-function HeroPreview({ data }: { data: HeroContent }) {
-  return (
-    <div className="qlh-prev qlh-prev-hero">
-      <p className="qlh-prev-eyebrow">
-        <span className="qlh-prev-dot" />
-        {data.eyebrow}
-      </p>
-      <h3 className="qlh-prev-headline">
-        {data.headlineBefore}
-        <em>{data.headlineEmphasis}</em>
-        <br />
-        <span className="qlh-prev-underline">{data.headlineAfter}</span>
-        {data.headlineSuffix}
-      </h3>
-      <p className="qlh-prev-lead">{data.lead}</p>
-      <div className="qlh-prev-cta-row">
-        <span className="qlh-prev-btn-p">{data.ctaPrimary.label}</span>
-        <span className="qlh-prev-btn-g">{data.ctaGhost.label}</span>
-      </div>
-      <div className="qlh-prev-trust">
-        <span className="qlh-prev-stars">★★★★★</span>
-        <span>
-          <b>{data.ratingScore}</b> · {data.ratingSource}
-        </span>
-        <span className="qlh-prev-dot-sep">·</span>
-        <span>
-          <b>{data.studentsTrust}</b> tin tưởng
-        </span>
-      </div>
-      <div className="qlh-prev-stickers">
-        {data.stickers.map((s, i) => (
-          <span key={i} className="qlh-prev-sticker">
-            <span className="qlh-prev-sticker-emoji">{s.emoji}</span>
-            <span>
-              <b>{s.title}</b>
-              <small>{s.sub}</small>
-            </span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StatPreview({ data }: { data: StatStripContent }) {
-  return (
-    <div className="qlh-prev qlh-prev-stat">
-      {data.cards.map((c, i) => (
-        <div key={i} className="qlh-prev-stat-card">
-          <span className="qlh-prev-stat-n">123</span>
-          <span className="qlh-prev-stat-l">{c.label}</span>
-          <span className="qlh-prev-stat-s">{c.sublabel}</span>
-        </div>
-      ))}
-      <p className="qlh-prev-note qlh-span-3">
-        Số hiển thị trong card là động (count học viên, năm hoạt động, nhóm khoá) — chỉ label
-        + sublabel là tĩnh.
-      </p>
-    </div>
-  );
-}
-
-function WhyPreview({ data }: { data: WhyContent }) {
-  return (
-    <div className="qlh-prev qlh-prev-why">
-      <SectionHeaderPreview
-        sectionLabel={data.sectionLabel}
-        titleBefore={data.titleBefore}
-        titleEmphasis={data.titleEmphasis}
-        titleAfter={data.titleAfter}
-        subtitle={data.subtitle}
-      />
-      <div className="qlh-prev-pillars">
-        {data.pillars.map((p, i) => (
-          <div key={i} className="qlh-prev-pillar">
-            <span className="qlh-prev-pillar-num">{p.num}</span>
-            <h4>{p.title}</h4>
-            <p>{p.text}</p>
-            <span className="qlh-prev-pillar-icon">icon: {p.iconKey}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function VideoPreview({ data }: { data: VideoContent }) {
-  return (
-    <div className="qlh-prev qlh-prev-video">
-      <SectionHeaderPreview
-        sectionLabel={data.sectionLabel}
-        titleBefore={data.titleBefore}
-        titleEmphasis={data.titleEmphasis}
-        titleAfter={data.titleAfter}
-        subtitle={data.subtitle}
-      />
-      <div className="qlh-prev-video-tabs">
-        {data.tabs.map((t, i) => (
-          <div key={i} className="qlh-prev-video-card">
-            <div
-              className="qlh-prev-video-thumb"
-              style={{
-                backgroundImage: `url(https://img.youtube.com/vi/${t.youtubeId}/hqdefault.jpg)`,
-              }}
-            />
-            <div className="qlh-prev-video-info">
-              <b>{t.label}</b>
-              <small>{t.desc}</small>
-              <code>ID: {t.youtubeId}</code>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CareerPreview({ data }: { data: CareerContent }) {
-  return (
-    <div className="qlh-prev qlh-prev-career">
-      <div className="qlh-prev-sec-label">{data.sectionLabel}</div>
-      <div className="qlh-prev-career-intro">
-        <div className="qlh-prev-career-eyebrow">{data.introEyebrow}</div>
-        <h4>{data.introTitle}</h4>
-        <p>{data.introText}</p>
-        <a href={data.introLinkUrl} className="qlh-prev-career-link">
-          {data.introLinkLabel}
-        </a>
-      </div>
-    </div>
-  );
-}
-
-function CtaBandPreview({ data }: { data: CtaBandContent }) {
-  return (
-    <div className="qlh-prev qlh-prev-cta">
-      <h3 className="qlh-prev-headline">
-        {data.titleBefore}
-        <em>{data.titleEmphasis}</em>
-      </h3>
-      <p className="qlh-prev-lead">{data.text}</p>
-      <div className="qlh-prev-cta-row">
-        <span className="qlh-prev-btn-p">{data.ctaPrimary.label}</span>
-        <span className="qlh-prev-btn-g">{data.ctaGhost.label}</span>
-      </div>
-      <div className="qlh-prev-sticks">
-        {data.sticks.map((s, i) => (
-          <span key={i} className="qlh-prev-stick">
-            <b>{s.n}</b>
-            <small>{s.l}</small>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SectionHeaderPreview({
-  sectionLabel,
-  titleBefore,
-  titleEmphasis,
-  titleAfter,
-  subtitle,
-}: {
-  sectionLabel: string;
-  titleBefore: string;
-  titleEmphasis: string;
-  titleAfter: string;
-  subtitle: string;
-}) {
-  return (
-    <div className="qlh-prev-sec">
-      <div className="qlh-prev-sec-label">{sectionLabel}</div>
-      <h4 className="qlh-prev-sec-title">
-        {titleBefore}
-        <em>{titleEmphasis}</em>
-        {titleAfter}
-      </h4>
-      <p className="qlh-prev-sec-sub">{subtitle}</p>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Field helpers
-// ═══════════════════════════════════════════════════════════════════════════
-
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="qlh-field">
-      <span className="qlh-field-label">{label}</span>
-      <input
-        type="text"
-        className="qlh-field-input"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-      />
-    </label>
-  );
-}
-
-function TextArea({
-  label,
-  value,
-  onChange,
-  rows = 3,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  rows?: number;
-  placeholder?: string;
-}) {
-  return (
-    <label className="qlh-field">
-      <span className="qlh-field-label">{label}</span>
-      <textarea
-        className="qlh-field-input qlh-field-ta"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={rows}
-        placeholder={placeholder}
-      />
-    </label>
-  );
-}
-
-function CtaFieldGroup({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: CtaLink;
-  onChange: (v: CtaLink) => void;
-}) {
-  return (
-    <fieldset className="qlh-fieldset">
-      <legend>{label}</legend>
-      <div className="qlh-fg-row">
-        <Field
-          label="Chữ nút"
-          value={value.label}
-          onChange={(v) => onChange({ ...value, label: v })}
-        />
-        <Field
-          label="Link"
-          value={value.href}
-          onChange={(v) => onChange({ ...value, href: v })}
-          placeholder="/dang-ky"
-        />
-      </div>
-    </fieldset>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Editors
-// ═══════════════════════════════════════════════════════════════════════════
-
-function HeroEditor({
+function HeroImagesSection({
   data,
   onChange,
 }: {
   data: HeroContent;
   onChange: (v: HeroContent) => void;
 }) {
+  const setCard = useCallback(
+    (key: HeroCardKey, card: HeroCardImage) => {
+      const next: HeroCardsContent = { ...data.cards, [key]: card };
+      onChange({ ...data, cards: next });
+    },
+    [data, onChange],
+  );
+
   return (
-    <div className="qlh-editor">
-      <Field
-        label="Eyebrow (dòng nhỏ phía trên headline)"
-        value={data.eyebrow}
-        onChange={(v) => onChange({ ...data, eyebrow: v })}
-      />
-      <fieldset className="qlh-fieldset">
-        <legend>Headline (chia 4 đoạn để render đúng em / br / underline)</legend>
-        <div className="qlh-fg-row">
-          <Field
-            label="Trước em"
-            value={data.headlineBefore}
-            onChange={(v) => onChange({ ...data, headlineBefore: v })}
-          />
-          <Field
-            label="Em (in nghiêng gradient)"
-            value={data.headlineEmphasis}
-            onChange={(v) => onChange({ ...data, headlineEmphasis: v })}
-          />
+    <section className="qlh-section">
+      <header className="qlh-section-head">
+        <span className="qlh-section-icon">
+          <ImageIcon size={18} />
+        </span>
+        <div>
+          <h2 className="qlh-section-title">Ảnh Hero</h2>
+          <p className="qlh-section-sub">
+            3 khung ảnh trong vùng cover của trang chủ. Upload ảnh hoặc dán URL
+            Cloudflare Images.
+          </p>
         </div>
-        <div className="qlh-fg-row">
-          <Field
-            label="Sau xuống dòng (gạch chân)"
-            value={data.headlineAfter}
-            onChange={(v) => onChange({ ...data, headlineAfter: v })}
+      </header>
+
+      <div className="qlh-hero-grid">
+        {HERO_CARD_ORDER.map(({ key, label, hint, ratio }) => (
+          <HeroImageCard
+            key={key}
+            label={label}
+            hint={hint}
+            ratio={ratio}
+            card={data.cards[key]}
+            onChange={(v) => setCard(key, v)}
           />
-          <Field
-            label="Hậu tố (vd '.')"
-            value={data.headlineSuffix}
-            onChange={(v) => onChange({ ...data, headlineSuffix: v })}
-          />
-        </div>
-      </fieldset>
-      <TextArea
-        label="Lead (đoạn mô tả dưới headline)"
-        value={data.lead}
-        onChange={(v) => onChange({ ...data, lead: v })}
-        rows={3}
-      />
-      <CtaFieldGroup
-        label="Nút chính (primary)"
-        value={data.ctaPrimary}
-        onChange={(v) => onChange({ ...data, ctaPrimary: v })}
-      />
-      <CtaFieldGroup
-        label="Nút phụ (ghost)"
-        value={data.ctaGhost}
-        onChange={(v) => onChange({ ...data, ctaGhost: v })}
-      />
-      <fieldset className="qlh-fieldset">
-        <legend>Trust row (dưới CTA)</legend>
-        <div className="qlh-fg-row">
-          <Field
-            label="Điểm review"
-            value={data.ratingScore}
-            onChange={(v) => onChange({ ...data, ratingScore: v })}
-          />
-          <Field
-            label="Nguồn review"
-            value={data.ratingSource}
-            onChange={(v) => onChange({ ...data, ratingSource: v })}
-          />
-        </div>
-        <Field
-          label="Số học viên tin tưởng"
-          value={data.studentsTrust}
-          onChange={(v) => onChange({ ...data, studentsTrust: v })}
-        />
-      </fieldset>
-      <fieldset className="qlh-fieldset">
-        <legend>Stickers (2 tem nhãn visual)</legend>
-        {data.stickers.map((s, i) => (
-          <div key={i} className="qlh-fg-row">
-            <Field
-              label={`Sticker ${i + 1} — emoji`}
-              value={s.emoji}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  stickers: data.stickers.map((x, j) =>
-                    j === i ? { ...x, emoji: v } : x,
-                  ) as typeof data.stickers,
-                })
-              }
-            />
-            <Field
-              label="Tiêu đề"
-              value={s.title}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  stickers: data.stickers.map((x, j) =>
-                    j === i ? { ...x, title: v } : x,
-                  ) as typeof data.stickers,
-                })
-              }
-            />
-            <Field
-              label="Phụ đề"
-              value={s.sub}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  stickers: data.stickers.map((x, j) =>
-                    j === i ? { ...x, sub: v } : x,
-                  ) as typeof data.stickers,
-                })
-              }
-            />
-          </div>
         ))}
-      </fieldset>
-    </div>
+      </div>
+    </section>
   );
 }
 
-function StatEditor({
-  data,
+function HeroImageCard({
+  label,
+  hint,
+  ratio,
+  card,
   onChange,
 }: {
-  data: StatStripContent;
-  onChange: (v: StatStripContent) => void;
+  label: string;
+  hint: string;
+  ratio: string;
+  card: HeroCardImage;
+  onChange: (v: HeroCardImage) => void;
 }) {
-  return (
-    <div className="qlh-editor">
-      {data.cards.map((c, i) => (
-        <fieldset key={i} className="qlh-fieldset">
-          <legend>Card {i + 1}</legend>
-          <div className="qlh-fg-row">
-            <Field
-              label="Label (dòng chính)"
-              value={c.label}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  cards: data.cards.map((x, j) =>
-                    j === i ? { ...x, label: v } : x,
-                  ) as typeof data.cards,
-                })
-              }
-            />
-            <Field
-              label="Sublabel (dòng phụ)"
-              value={c.sublabel}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  cards: data.cards.map((x, j) =>
-                    j === i ? { ...x, sublabel: v } : x,
-                  ) as typeof data.cards,
-                })
-              }
-            />
-          </div>
-        </fieldset>
-      ))}
-    </div>
-  );
-}
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-function WhyEditor({
-  data,
-  onChange,
-}: {
-  data: WhyContent;
-  onChange: (v: WhyContent) => void;
-}) {
-  const iconOptions: { value: WhyPillarIconKey; label: string }[] = [
-    { value: "book", label: "📖 Book" },
-    { value: "users", label: "👥 Users" },
-    { value: "pulse", label: "💓 Pulse" },
-  ];
+  const handlePickFile = useCallback(() => {
+    fileRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setUploading(true);
+      setError(null);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/admin/api/upload-cf-image", {
+          method: "POST",
+          body: form,
+        });
+        const json = (await res.json()) as { ok?: boolean; url?: string; error?: string };
+        if (!res.ok || !json.ok || !json.url) {
+          throw new Error(json.error || "Upload thất bại.");
+        }
+        onChange({ ...card, imageUrl: json.url });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Upload thất bại.");
+      } finally {
+        setUploading(false);
+        if (fileRef.current) fileRef.current.value = "";
+      }
+    },
+    [card, onChange],
+  );
+
+  const handleClear = useCallback(() => {
+    if (!card.imageUrl) return;
+    if (!confirm("Xoá ảnh này? (chỉ xoá khỏi dashboard, không xoá trên Cloudflare)")) return;
+    onChange({ ...card, imageUrl: "" });
+  }, [card, onChange]);
+
   return (
-    <div className="qlh-editor">
-      <Field
-        label="Section label"
-        value={data.sectionLabel}
-        onChange={(v) => onChange({ ...data, sectionLabel: v })}
-      />
-      <fieldset className="qlh-fieldset">
-        <legend>Tiêu đề section</legend>
-        <Field
-          label="Trước em"
-          value={data.titleBefore}
-          onChange={(v) => onChange({ ...data, titleBefore: v })}
-        />
-        <Field
-          label="Em (gradient)"
-          value={data.titleEmphasis}
-          onChange={(v) => onChange({ ...data, titleEmphasis: v })}
-        />
-        <Field
-          label="Sau em"
-          value={data.titleAfter}
-          onChange={(v) => onChange({ ...data, titleAfter: v })}
-        />
-      </fieldset>
-      <TextArea
-        label="Subtitle"
-        value={data.subtitle}
-        onChange={(v) => onChange({ ...data, subtitle: v })}
-      />
-      {data.pillars.map((p, i) => (
-        <fieldset key={i} className="qlh-fieldset">
-          <legend>Trụ cột {i + 1}</legend>
-          <div className="qlh-fg-row">
-            <Field
-              label="Số thứ tự (vd 01)"
-              value={p.num}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  pillars: data.pillars.map((x, j) =>
-                    j === i ? { ...x, num: v } : x,
-                  ) as typeof data.pillars,
-                })
-              }
-            />
-            <Field
-              label="Tiêu đề"
-              value={p.title}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  pillars: data.pillars.map((x, j) =>
-                    j === i ? { ...x, title: v } : x,
-                  ) as typeof data.pillars,
-                })
-              }
-            />
-            <label className="qlh-field">
-              <span className="qlh-field-label">Icon</span>
-              <select
-                className="qlh-field-input"
-                value={p.iconKey}
-                onChange={(e) =>
-                  onChange({
-                    ...data,
-                    pillars: data.pillars.map((x, j) =>
-                      j === i
-                        ? { ...x, iconKey: e.target.value as WhyPillarIconKey }
-                        : x,
-                    ) as typeof data.pillars,
-                  })
-                }
-              >
-                {iconOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <TextArea
-            label="Nội dung"
-            value={p.text}
-            onChange={(v) =>
-              onChange({
-                ...data,
-                pillars: data.pillars.map((x, j) =>
-                  j === i ? { ...x, text: v } : x,
-                ) as typeof data.pillars,
-              })
-            }
+    <div className="qlh-hero-card">
+      <div className="qlh-hero-card-head">
+        <div>
+          <h3>{label}</h3>
+          <p>{hint}</p>
+        </div>
+      </div>
+
+      <div className="qlh-hero-preview" style={{ aspectRatio: ratio }}>
+        {card.imageUrl ? (
+          <Image
+            src={card.imageUrl}
+            alt={card.alt || label}
+            fill
+            sizes="(max-width: 720px) 100vw, 33vw"
+            style={{ objectFit: "cover" }}
+            unoptimized
           />
-        </fieldset>
-      ))}
+        ) : (
+          <div className="qlh-hero-preview-empty">
+            <ImageIcon size={28} />
+            <span>Chưa có ảnh</span>
+          </div>
+        )}
+        {uploading ? (
+          <div className="qlh-hero-preview-loading">
+            <Loader2 size={20} className="qlh-spin" />
+            <span>Đang upload…</span>
+          </div>
+        ) : null}
+      </div>
+
+      {error ? <div className="qlh-hero-err">{error}</div> : null}
+
+      <div className="qlh-hero-actions">
+        <button
+          type="button"
+          className="qlh-btn qlh-btn-sm qlh-btn-primary"
+          onClick={handlePickFile}
+          disabled={uploading}
+        >
+          <Upload size={13} />
+          {card.imageUrl ? "Đổi ảnh" : "Upload ảnh"}
+        </button>
+        {card.imageUrl ? (
+          <button
+            type="button"
+            className="qlh-btn qlh-btn-sm qlh-btn-danger"
+            onClick={handleClear}
+            disabled={uploading}
+          >
+            <Trash2 size={13} />
+            Xoá
+          </button>
+        ) : null}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          style={{ display: "none" }}
+        />
+      </div>
+
+      <label className="qlh-field">
+        <span className="qlh-field-label">URL ảnh</span>
+        <input
+          type="text"
+          className="qlh-field-input"
+          value={card.imageUrl}
+          onChange={(e) => onChange({ ...card, imageUrl: e.target.value })}
+          placeholder="https://imagedelivery.net/..."
+        />
+      </label>
+
+      <label className="qlh-field">
+        <span className="qlh-field-label">Alt text (SEO / accessibility)</span>
+        <input
+          type="text"
+          className="qlh-field-input"
+          value={card.alt}
+          onChange={(e) => onChange({ ...card, alt: e.target.value })}
+          placeholder="Mô tả ngắn về nội dung ảnh"
+        />
+      </label>
     </div>
   );
 }
 
-function VideoEditor({
+// ═══════════════════════════════════════════════════════════════════════════
+// Section 2: Content (hero lead + 3 why cards)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function ContentSection({
+  hero,
+  why,
+  onChangeHero,
+  onChangeWhy,
+}: {
+  hero: HeroContent;
+  why: WhyContent;
+  onChangeHero: (v: HeroContent) => void;
+  onChangeWhy: (v: WhyContent) => void;
+}) {
+  const setPillar = useCallback(
+    (index: 0 | 1 | 2, pillar: WhyPillar) => {
+      const pillars = [...why.pillars] as WhyContent["pillars"];
+      pillars[index] = pillar;
+      onChangeWhy({ ...why, pillars });
+    },
+    [why, onChangeWhy],
+  );
+
+  return (
+    <section className="qlh-section">
+      <header className="qlh-section-head">
+        <span className="qlh-section-icon">
+          <Sparkles size={18} />
+        </span>
+        <div>
+          <h2 className="qlh-section-title">Nội dung</h2>
+          <p className="qlh-section-sub">
+            Đoạn mô tả Hero và 3 trụ cột <em>Tại sao Sine Art</em>.
+          </p>
+        </div>
+      </header>
+
+      <div className="qlh-content-block">
+        <div className="qlh-content-block-head">
+          <span className="qlh-block-pill">Hero · lead paragraph</span>
+          <code>p.hero-lead</code>
+        </div>
+        <label className="qlh-field">
+          <span className="qlh-field-label">
+            Đoạn giới thiệu ngắn dưới tiêu đề Hero
+          </span>
+          <textarea
+            className="qlh-field-input qlh-field-ta"
+            rows={3}
+            value={hero.lead}
+            onChange={(e) => onChangeHero({ ...hero, lead: e.target.value })}
+            placeholder="Sine Art xây dựng nền tảng Mỹ thuật bài bản và khoa học…"
+          />
+        </label>
+      </div>
+
+      <div className="qlh-content-block">
+        <div className="qlh-content-block-head">
+          <span className="qlh-block-pill">Tại sao Sine Art · 3 trụ cột</span>
+          <code>article.why-card</code>
+        </div>
+        <div className="qlh-pillars-grid">
+          {why.pillars.map((p, i) => (
+            <PillarCard
+              key={i}
+              index={i as 0 | 1 | 2}
+              data={p}
+              onChange={(v) => setPillar(i as 0 | 1 | 2, v)}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PillarCard({
+  index,
+  data,
+  onChange,
+}: {
+  index: 0 | 1 | 2;
+  data: WhyPillar;
+  onChange: (v: WhyPillar) => void;
+}) {
+  return (
+    <div className="qlh-pillar-card">
+      <div className="qlh-pillar-card-head">
+        <span className="qlh-pillar-idx">0{index + 1}</span>
+        <code>why-card--c{index + 1}</code>
+      </div>
+      <label className="qlh-field">
+        <span className="qlh-field-label">Số hiển thị</span>
+        <input
+          type="text"
+          className="qlh-field-input"
+          value={data.num}
+          onChange={(e) => onChange({ ...data, num: e.target.value })}
+          placeholder="01"
+        />
+      </label>
+      <label className="qlh-field">
+        <span className="qlh-field-label">Tiêu đề</span>
+        <input
+          type="text"
+          className="qlh-field-input"
+          value={data.title}
+          onChange={(e) => onChange({ ...data, title: e.target.value })}
+          placeholder="Giáo trình khoa học"
+        />
+      </label>
+      <label className="qlh-field">
+        <span className="qlh-field-label">Nội dung</span>
+        <textarea
+          className="qlh-field-input qlh-field-ta"
+          rows={4}
+          value={data.text}
+          onChange={(e) => onChange({ ...data, text: e.target.value })}
+          placeholder="Từ hình họa cơ bản đến digital painting chuyên sâu…"
+        />
+      </label>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Section 3: Video URLs
+// ═══════════════════════════════════════════════════════════════════════════
+
+function VideoSection({
   data,
   onChange,
 }: {
   data: VideoContent;
   onChange: (v: VideoContent) => void;
 }) {
+  const setTab = useCallback(
+    (index: 0 | 1, tab: VideoContent["tabs"][number]) => {
+      const tabs = [...data.tabs] as VideoContent["tabs"];
+      tabs[index] = tab;
+      onChange({ ...data, tabs });
+    },
+    [data, onChange],
+  );
+
   return (
-    <div className="qlh-editor">
-      <Field
-        label="Section label"
-        value={data.sectionLabel}
-        onChange={(v) => onChange({ ...data, sectionLabel: v })}
-      />
-      <fieldset className="qlh-fieldset">
-        <legend>Tiêu đề section</legend>
-        <Field
-          label="Trước em"
-          value={data.titleBefore}
-          onChange={(v) => onChange({ ...data, titleBefore: v })}
-        />
-        <Field
-          label="Em (gradient)"
-          value={data.titleEmphasis}
-          onChange={(v) => onChange({ ...data, titleEmphasis: v })}
-        />
-        <Field
-          label="Sau em"
-          value={data.titleAfter}
-          onChange={(v) => onChange({ ...data, titleAfter: v })}
-        />
-      </fieldset>
-      <TextArea
-        label="Subtitle"
-        value={data.subtitle}
-        onChange={(v) => onChange({ ...data, subtitle: v })}
-      />
-      {data.tabs.map((t, i) => (
-        <fieldset key={i} className="qlh-fieldset">
-          <legend>Video tab {i + 1}</legend>
-          <div className="qlh-fg-row">
-            <Field
-              label="Nhãn tab"
-              value={t.label}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  tabs: data.tabs.map((x, j) =>
-                    j === i ? { ...x, label: v } : x,
-                  ) as typeof data.tabs,
-                })
-              }
-            />
-            <Field
-              label="YouTube ID"
-              value={t.youtubeId}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  tabs: data.tabs.map((x, j) =>
-                    j === i ? { ...x, youtubeId: v } : x,
-                  ) as typeof data.tabs,
-                })
-              }
-              placeholder="6LKT_E8XGu0"
-            />
-          </div>
-          <TextArea
-            label="Mô tả tab"
-            value={t.desc}
-            onChange={(v) =>
-              onChange({
-                ...data,
-                tabs: data.tabs.map((x, j) =>
-                  j === i ? { ...x, desc: v } : x,
-                ) as typeof data.tabs,
-              })
-            }
+    <section className="qlh-section">
+      <header className="qlh-section-head">
+        <span className="qlh-section-icon">
+          <Film size={18} />
+        </span>
+        <div>
+          <h2 className="qlh-section-title">URL video</h2>
+          <p className="qlh-section-sub">
+            2 tab video giới thiệu — Online và Offline. Dán YouTube ID (phần
+            sau <code>v=</code>).
+          </p>
+        </div>
+      </header>
+
+      <div className="qlh-video-grid">
+        {data.tabs.map((t, i) => (
+          <VideoTabCard
+            key={i}
+            index={i as 0 | 1}
+            data={t}
+            onChange={(v) => setTab(i as 0 | 1, v)}
           />
-        </fieldset>
-      ))}
-    </div>
-  );
-}
-
-function ReviewsEditor({
-  data,
-  onChange,
-}: {
-  data: ReviewsContent;
-  onChange: (v: ReviewsContent) => void;
-}) {
-  return (
-    <div className="qlh-editor">
-      <Field
-        label="Section label"
-        value={data.sectionLabel}
-        onChange={(v) => onChange({ ...data, sectionLabel: v })}
-      />
-      <fieldset className="qlh-fieldset">
-        <legend>Tiêu đề section</legend>
-        <Field
-          label="Trước em"
-          value={data.titleBefore}
-          onChange={(v) => onChange({ ...data, titleBefore: v })}
-        />
-        <Field
-          label="Em (gradient)"
-          value={data.titleEmphasis}
-          onChange={(v) => onChange({ ...data, titleEmphasis: v })}
-        />
-        <Field
-          label="Sau em"
-          value={data.titleAfter}
-          onChange={(v) => onChange({ ...data, titleAfter: v })}
-        />
-      </fieldset>
-      <TextArea
-        label="Subtitle"
-        value={data.subtitle}
-        onChange={(v) => onChange({ ...data, subtitle: v })}
-      />
-      <Field
-        label="Google Maps URL (dùng cho nút 'Xem tất cả review')"
-        value={data.googleMapsUrl}
-        onChange={(v) => onChange({ ...data, googleMapsUrl: v })}
-        placeholder="https://maps.app.goo.gl/..."
-      />
-    </div>
-  );
-}
-
-function GalleryEditor({
-  data,
-  onChange,
-}: {
-  data: GalleryContent;
-  onChange: (v: GalleryContent) => void;
-}) {
-  return (
-    <div className="qlh-editor">
-      <Field
-        label="Section label"
-        value={data.sectionLabel}
-        onChange={(v) => onChange({ ...data, sectionLabel: v })}
-      />
-      <fieldset className="qlh-fieldset">
-        <legend>Tiêu đề section</legend>
-        <Field
-          label="Trước em"
-          value={data.titleBefore}
-          onChange={(v) => onChange({ ...data, titleBefore: v })}
-        />
-        <Field
-          label="Em (gradient)"
-          value={data.titleEmphasis}
-          onChange={(v) => onChange({ ...data, titleEmphasis: v })}
-        />
-        <Field
-          label="Sau em"
-          value={data.titleAfter}
-          onChange={(v) => onChange({ ...data, titleAfter: v })}
-        />
-      </fieldset>
-      <TextArea
-        label="Subtitle"
-        value={data.subtitle}
-        onChange={(v) => onChange({ ...data, subtitle: v })}
-      />
-    </div>
-  );
-}
-
-function CareerEditor({
-  data,
-  onChange,
-}: {
-  data: CareerContent;
-  onChange: (v: CareerContent) => void;
-}) {
-  return (
-    <div className="qlh-editor">
-      <Field
-        label="Section label"
-        value={data.sectionLabel}
-        onChange={(v) => onChange({ ...data, sectionLabel: v })}
-      />
-      <Field
-        label="Eyebrow"
-        value={data.introEyebrow}
-        onChange={(v) => onChange({ ...data, introEyebrow: v })}
-      />
-      <Field
-        label="Tiêu đề intro"
-        value={data.introTitle}
-        onChange={(v) => onChange({ ...data, introTitle: v })}
-      />
-      <TextArea
-        label="Mô tả intro"
-        value={data.introText}
-        onChange={(v) => onChange({ ...data, introText: v })}
-      />
-      <div className="qlh-fg-row">
-        <Field
-          label="Link label"
-          value={data.introLinkLabel}
-          onChange={(v) => onChange({ ...data, introLinkLabel: v })}
-        />
-        <Field
-          label="Link URL"
-          value={data.introLinkUrl}
-          onChange={(v) => onChange({ ...data, introLinkUrl: v })}
-        />
-      </div>
-    </div>
-  );
-}
-
-function TeachersEditor({
-  data,
-  onChange,
-}: {
-  data: TeachersContent;
-  onChange: (v: TeachersContent) => void;
-}) {
-  return (
-    <div className="qlh-editor">
-      <Field
-        label="Section label"
-        value={data.sectionLabel}
-        onChange={(v) => onChange({ ...data, sectionLabel: v })}
-      />
-      <fieldset className="qlh-fieldset">
-        <legend>Tiêu đề section</legend>
-        <Field
-          label="Trước em"
-          value={data.titleBefore}
-          onChange={(v) => onChange({ ...data, titleBefore: v })}
-        />
-        <Field
-          label="Em (gradient)"
-          value={data.titleEmphasis}
-          onChange={(v) => onChange({ ...data, titleEmphasis: v })}
-        />
-        <Field
-          label="Sau em"
-          value={data.titleAfter}
-          onChange={(v) => onChange({ ...data, titleAfter: v })}
-        />
-      </fieldset>
-      <TextArea
-        label="Subtitle"
-        value={data.subtitle}
-        onChange={(v) => onChange({ ...data, subtitle: v })}
-      />
-    </div>
-  );
-}
-
-function CtaBandEditor({
-  data,
-  onChange,
-}: {
-  data: CtaBandContent;
-  onChange: (v: CtaBandContent) => void;
-}) {
-  return (
-    <div className="qlh-editor">
-      <fieldset className="qlh-fieldset">
-        <legend>Tiêu đề</legend>
-        <Field
-          label="Trước em"
-          value={data.titleBefore}
-          onChange={(v) => onChange({ ...data, titleBefore: v })}
-        />
-        <Field
-          label="Em (gradient)"
-          value={data.titleEmphasis}
-          onChange={(v) => onChange({ ...data, titleEmphasis: v })}
-        />
-      </fieldset>
-      <TextArea
-        label="Đoạn text mô tả"
-        value={data.text}
-        onChange={(v) => onChange({ ...data, text: v })}
-      />
-      <CtaFieldGroup
-        label="Nút chính"
-        value={data.ctaPrimary}
-        onChange={(v) => onChange({ ...data, ctaPrimary: v })}
-      />
-      <CtaFieldGroup
-        label="Nút phụ"
-        value={data.ctaGhost}
-        onChange={(v) => onChange({ ...data, ctaGhost: v })}
-      />
-      <fieldset className="qlh-fieldset">
-        <legend>Sticks (4 điểm nhấn)</legend>
-        {data.sticks.map((s, i) => (
-          <div key={i} className="qlh-fg-row">
-            <Field
-              label={`Stick ${i + 1} — số (n)`}
-              value={s.n}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  sticks: data.sticks.map((x, j) =>
-                    j === i ? { ...x, n: v } : x,
-                  ) as typeof data.sticks,
-                })
-              }
-            />
-            <Field
-              label="Mô tả (l)"
-              value={s.l}
-              onChange={(v) =>
-                onChange({
-                  ...data,
-                  sticks: data.sticks.map((x, j) =>
-                    j === i ? { ...x, l: v } : x,
-                  ) as typeof data.sticks,
-                })
-              }
-            />
-          </div>
         ))}
-      </fieldset>
+      </div>
+    </section>
+  );
+}
+
+function VideoTabCard({
+  index,
+  data,
+  onChange,
+}: {
+  index: 0 | 1;
+  data: VideoContent["tabs"][number];
+  onChange: (v: VideoContent["tabs"][number]) => void;
+}) {
+  const thumb = data.youtubeId
+    ? `https://img.youtube.com/vi/${data.youtubeId}/hqdefault.jpg`
+    : null;
+
+  return (
+    <div className="qlh-video-card">
+      <div className="qlh-video-card-head">
+        <span className="qlh-block-pill">Tab {index + 1}</span>
+      </div>
+      <div className="qlh-video-thumb" style={{ aspectRatio: "16 / 9" }}>
+        {thumb ? (
+          <Image
+            src={thumb}
+            alt={data.label || `Video tab ${index + 1}`}
+            fill
+            sizes="(max-width: 720px) 100vw, 50vw"
+            style={{ objectFit: "cover" }}
+            unoptimized
+          />
+        ) : (
+          <div className="qlh-hero-preview-empty">
+            <Film size={28} />
+            <span>Chưa có video</span>
+          </div>
+        )}
+      </div>
+      <label className="qlh-field">
+        <span className="qlh-field-label">Nhãn tab (hiển thị trên nút)</span>
+        <input
+          type="text"
+          className="qlh-field-input"
+          value={data.label}
+          onChange={(e) => onChange({ ...data, label: e.target.value })}
+          placeholder="📡 Lớp Online"
+        />
+      </label>
+      <label className="qlh-field">
+        <span className="qlh-field-label">YouTube ID</span>
+        <input
+          type="text"
+          className="qlh-field-input"
+          value={data.youtubeId}
+          onChange={(e) => onChange({ ...data, youtubeId: e.target.value })}
+          placeholder="6LKT_E8XGu0"
+        />
+      </label>
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CSS — scoped .qlh-*
+// Section 4: Ad banner (HTML content + visibility)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const VISIBLE_WHERE_OPTIONS: {
+  value: AdVisibleWhere;
+  label: string;
+  desc: string;
+}[] = [
+  {
+    value: "home",
+    label: "Home",
+    desc: "Trang chủ và các trang con public (trừ phòng học).",
+  },
+  {
+    value: "class",
+    label: "Class",
+    desc: "Chỉ hiển thị trong phòng học online (/phong-hoc).",
+  },
+  {
+    value: "both",
+    label: "Both",
+    desc: "Hiển thị cả trang public lẫn phòng học.",
+  },
+];
+
+function AdSection({
+  data,
+  onChange,
+}: {
+  data: HomeAdConfig;
+  onChange: (v: HomeAdConfig) => void;
+}) {
+  return (
+    <section className="qlh-section qlh-section--ad">
+      <header className="qlh-section-head">
+        <span className="qlh-section-icon">
+          <Megaphone size={18} />
+        </span>
+        <div>
+          <h2 className="qlh-section-title">Quảng cáo (Ad banner)</h2>
+          <p className="qlh-section-sub">
+            Nội dung HTML sẽ được render trực tiếp trong khung banner nổi ở góc
+            trái màn hình. Để trống để ẩn hoàn toàn.
+          </p>
+        </div>
+      </header>
+
+      <div className="qlh-ad-wrap">
+        <div className="qlh-ad-editor">
+          <label className="qlh-field">
+            <span className="qlh-field-label">HTML nội dung quảng cáo</span>
+            <textarea
+              className="qlh-field-input qlh-field-ta qlh-ad-html"
+              rows={10}
+              value={data.ads}
+              onChange={(e) => onChange({ ...data, ads: e.target.value })}
+              placeholder={SAMPLE_AD_HTML}
+              spellCheck={false}
+            />
+          </label>
+          <p className="qlh-ad-hint">
+            Ví dụ markup gợi ý (bạn có thể copy &amp; chỉnh):
+            <button
+              type="button"
+              className="qlh-ad-fill"
+              onClick={() => onChange({ ...data, ads: SAMPLE_AD_HTML })}
+            >
+              Dán mẫu
+            </button>
+          </p>
+
+          <fieldset className="qlh-fieldset qlh-vw-fieldset">
+            <legend>Hiển thị ở đâu</legend>
+            <div className="qlh-vw-grid">
+              {VISIBLE_WHERE_OPTIONS.map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`qlh-vw-option ${
+                    data.visibleWhere === opt.value ? "is-on" : ""
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="visible_where"
+                    value={opt.value}
+                    checked={data.visibleWhere === opt.value}
+                    onChange={() =>
+                      onChange({
+                        ...data,
+                        visibleWhere: AD_VISIBLE_WHERE_VALUES.includes(
+                          opt.value as AdVisibleWhere,
+                        )
+                          ? opt.value
+                          : "home",
+                      })
+                    }
+                  />
+                  <div>
+                    <span className="qlh-vw-label">{opt.label}</span>
+                    <span className="qlh-vw-desc">{opt.desc}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
+
+        <div className="qlh-ad-preview-col">
+          <div className="qlh-ad-preview-label">Preview (theo đúng UI thật)</div>
+          <div className="qlh-ad-preview-frame">
+            {data.ads.trim() ? (
+              <div
+                className="qlh-ad-preview-render"
+                dangerouslySetInnerHTML={{ __html: data.ads }}
+              />
+            ) : (
+              <div className="qlh-ad-preview-empty">
+                <Megaphone size={28} />
+                <span>Chưa có nội dung</span>
+              </div>
+            )}
+          </div>
+          <p className="qlh-ad-preview-note">
+            Render HTML trực tiếp — hãy kiểm tra kỹ mã bạn dán. Tránh inline
+            script hoặc iframe không rõ nguồn.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const SAMPLE_AD_HTML = `<div style="display:flex;gap:12px;align-items:center;padding:14px;font-family:'Be Vietnam Pro',sans-serif;">
+  <div style="font-size:28px;">🎨</div>
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:11px;font-weight:700;color:#ee5b9f;text-transform:uppercase;letter-spacing:.04em;">Ưu đãi học viên</div>
+    <div style="font-size:14px;font-weight:700;color:#1a1a1a;margin:2px 0;">Khóa Vẽ Kỹ Thuật Số — Khai giảng sắp tới</div>
+    <div style="font-size:12px;color:#6b5c5c;margin-bottom:8px;">Theo dõi sineart.vn để cập nhật lịch khai giảng.</div>
+    <a href="/khoa-hoc" style="display:inline-block;padding:6px 14px;border-radius:999px;background:linear-gradient(135deg,#f8a668,#ee5b9f);color:#fff;font-size:12px;font-weight:700;text-decoration:none;">Xem ngay →</a>
+  </div>
+</div>`;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Scoped CSS
 // ═══════════════════════════════════════════════════════════════════════════
 
 const QLH_CSS = `
@@ -1428,7 +844,8 @@ const QLH_CSS = `
 .qlh-btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 16px rgba(238,91,159,.3)}
 .qlh-btn-ghost{background:#fafafa;color:#5a4a4a;border-color:rgba(45,32,32,.1)}
 .qlh-btn-ghost:hover:not(:disabled){background:#f0ece8;color:#2d2020}
-.qlh-btn-ghost.is-open{background:#fff4ec;border-color:#f8d4a8;color:#c45127}
+.qlh-btn-danger{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+.qlh-btn-danger:hover:not(:disabled){background:#fee2e2}
 .qlh-btn-sm{padding:7px 12px;font-size:12.5px}
 .qlh-spin{animation:qlh-spin .8s linear infinite}
 @keyframes qlh-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
@@ -1444,110 +861,85 @@ const QLH_CSS = `
 .qlh-toast.ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#047857}
 .qlh-toast.err{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
 
-.qlh-block{background:#fff;border:1px solid rgba(45,32,32,.08);border-radius:16px;padding:18px 20px;box-shadow:0 6px 18px rgba(45,32,32,.04);display:flex;flex-direction:column;gap:14px}
-.qlh-block--static{border-left:4px solid #ee5b9f}
-.qlh-block--mixed{border-left:4px solid #bb89f8}
-.qlh-block--dynamic{border-left:4px solid #9ca3af;background:#fafafa}
+/* Section */
+.qlh-section{background:#fff;border:1px solid rgba(45,32,32,.08);border-radius:16px;padding:20px 22px;box-shadow:0 6px 18px rgba(45,32,32,.04);display:flex;flex-direction:column;gap:16px;border-left:4px solid #ee5b9f}
+.qlh-section-head{display:flex;align-items:flex-start;gap:12px}
+.qlh-section-icon{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;color:#ee5b9f;background:rgba(238,91,159,.08);border-radius:10px;flex-shrink:0}
+.qlh-section-title{font-size:16.5px;font-weight:700;margin:0 0 3px;color:#1a1a1a;letter-spacing:-.005em}
+.qlh-section-sub{font-size:12.5px;color:#6b5c5c;margin:0;line-height:1.5}
+.qlh-section-sub code{background:#f5f0ec;padding:1px 5px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11.5px}
+.qlh-section-sub em{font-style:italic;color:#ee5b9f;font-weight:600}
 
-.qlh-block-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.qlh-block-head-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.qlh-block-head-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.qlh-block-idx{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#9c8a8a;background:#f5f0ec;border-radius:8px;font-variant-numeric:tabular-nums}
-.qlh-block-icon{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;color:#ee5b9f;background:rgba(238,91,159,.08);border-radius:8px}
-.qlh-block-title{font-size:15.5px;font-weight:700;margin:0;color:#1a1a1a;letter-spacing:-.005em}
-.qlh-tag{padding:2px 9px;border-radius:100px;font-size:10.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
-.qlh-tag--static{background:rgba(238,91,159,.12);color:#b31e62}
-.qlh-tag--mixed{background:rgba(187,137,248,.14);color:#7439cc}
-.qlh-tag--dynamic{background:rgba(100,116,139,.12);color:#475569}
+/* Hero grid */
+.qlh-hero-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.qlh-hero-card{display:flex;flex-direction:column;gap:10px;padding:14px;background:#fafafa;border:1px solid rgba(45,32,32,.08);border-radius:12px}
+.qlh-hero-card-head h3{font-size:13px;font-weight:700;margin:0 0 3px;color:#1a1a1a}
+.qlh-hero-card-head p{font-size:11.5px;color:#6b5c5c;margin:0;line-height:1.45}
 
-.qlh-dyn-link{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:#3b82f6;text-decoration:none;padding:5px 10px;border-radius:8px;background:rgba(59,130,246,.08);font-weight:600}
-.qlh-dyn-link:hover{background:rgba(59,130,246,.14)}
-.qlh-dyn-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.qlh-hero-preview{position:relative;width:100%;border-radius:10px;overflow:hidden;background:repeating-conic-gradient(#e8e1db 0% 25%,#f5f0ec 0% 50%) 50%/14px 14px;border:1px solid rgba(45,32,32,.1)}
+.qlh-hero-preview-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#9c8a8a;font-size:11.5px;font-weight:600;background:#fafafa}
+.qlh-hero-preview-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#fff;font-size:12px;font-weight:600;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
+.qlh-hero-err{font-size:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:7px 10px}
+.qlh-hero-actions{display:flex;gap:6px;flex-wrap:wrap}
 
-.qlh-block-body{display:flex;flex-direction:column;gap:12px}
+/* Content */
+.qlh-content-block{background:#fafafa;border:1px solid rgba(45,32,32,.06);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.qlh-content-block-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.qlh-block-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:700;background:rgba(238,91,159,.1);color:#b31e62;letter-spacing:.02em;text-transform:uppercase}
+.qlh-content-block-head code{font-size:11.5px;color:#6b5c5c;background:#fff;border:1px solid rgba(45,32,32,.1);padding:2px 8px;border-radius:6px;font-family:ui-monospace,SFMono-Regular,monospace}
 
-/* Previews */
-.qlh-prev{display:flex;flex-direction:column;gap:10px;padding:16px 18px;background:linear-gradient(180deg,#fff9f4,#fff);border:1px dashed rgba(238,91,159,.2);border-radius:12px}
-.qlh-prev-note{font-size:12px;color:#6b5c5c;font-style:italic;margin:0}
-.qlh-preview-note{font-size:12.5px;color:#6b5c5c;margin:0;line-height:1.5}
-.qlh-preview-note code{background:#f5f0ec;padding:1px 5px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11.5px}
+.qlh-pillars-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.qlh-pillar-card{background:#fff;border:1px solid rgba(45,32,32,.08);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.qlh-pillar-card-head{display:flex;align-items:center;gap:8px}
+.qlh-pillar-idx{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#f8a668,#ee5b9f);color:#fff;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.qlh-pillar-card-head code{font-size:11px;color:#6b5c5c;background:#f5f0ec;padding:2px 7px;border-radius:5px;font-family:ui-monospace,SFMono-Regular,monospace}
 
-.qlh-prev-eyebrow{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#6b5c5c;letter-spacing:.03em;text-transform:uppercase;margin:0}
-.qlh-prev-dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,#f8a668,#ee5b9f)}
-.qlh-prev-headline{font-size:26px;font-weight:800;margin:2px 0 4px;line-height:1.15;color:#1a1a1a;letter-spacing:-.02em}
-.qlh-prev-headline em{font-style:italic;background:linear-gradient(135deg,#f8a668,#ee5b9f);-webkit-background-clip:text;background-clip:text;color:transparent}
-.qlh-prev-underline{background:linear-gradient(180deg,transparent 65%,rgba(248,166,104,.4) 65%);padding:0 3px}
-.qlh-prev-lead{font-size:13.5px;line-height:1.55;color:#2d2020;margin:0}
-.qlh-prev-cta-row{display:flex;gap:8px;flex-wrap:wrap}
-.qlh-prev-btn-p{display:inline-flex;align-items:center;padding:9px 16px;border-radius:100px;font-size:12.5px;font-weight:700;background:linear-gradient(135deg,#f8a668,#ee5b9f);color:#fff}
-.qlh-prev-btn-g{display:inline-flex;align-items:center;padding:9px 16px;border-radius:100px;font-size:12.5px;font-weight:700;background:rgba(45,32,32,.06);color:#2d2020}
-.qlh-prev-trust{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:#5a4a4a;padding-top:6px;border-top:1px dashed rgba(45,32,32,.08)}
-.qlh-prev-stars{color:#fbbf24;letter-spacing:.06em}
-.qlh-prev-dot-sep{color:#c8bcbc}
-.qlh-prev-stickers{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
-.qlh-prev-sticker{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;background:#fff;border:1px solid rgba(45,32,32,.1);border-radius:100px;font-size:12px;box-shadow:0 2px 6px rgba(45,32,32,.04)}
-.qlh-prev-sticker-emoji{font-size:14px}
-.qlh-prev-sticker b{font-weight:700;color:#1a1a1a}
-.qlh-prev-sticker small{display:block;font-size:10.5px;color:#6b5c5c;font-weight:500}
+/* Video */
+.qlh-video-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.qlh-video-card{display:flex;flex-direction:column;gap:10px;padding:14px;background:#fafafa;border:1px solid rgba(45,32,32,.08);border-radius:12px}
+.qlh-video-card-head{display:flex;align-items:center}
+.qlh-video-thumb{position:relative;width:100%;border-radius:10px;overflow:hidden;background:#000;border:1px solid rgba(45,32,32,.1)}
 
-.qlh-prev-stat{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px 16px}
-.qlh-prev-stat-card{display:flex;flex-direction:column;gap:2px;padding:12px 14px;background:#fff;border:1px solid rgba(45,32,32,.08);border-radius:12px}
-.qlh-prev-stat-n{font-size:28px;font-weight:800;color:#1a1a1a;line-height:1.1;letter-spacing:-.02em;opacity:.45}
-.qlh-prev-stat-l{font-size:12.5px;font-weight:700;color:#2d2020}
-.qlh-prev-stat-s{font-size:11px;color:#6b5c5c}
-.qlh-span-3{grid-column:1 / -1}
-
-.qlh-prev-sec{display:flex;flex-direction:column;gap:4px}
-.qlh-prev-sec-label{display:inline-block;font-size:11px;font-weight:700;color:#6b5c5c;letter-spacing:.04em;text-transform:uppercase}
-.qlh-prev-sec-title{font-size:20px;font-weight:800;margin:0;color:#1a1a1a;letter-spacing:-.015em;line-height:1.25}
-.qlh-prev-sec-title em{font-style:italic;background:linear-gradient(135deg,#f8a668,#ee5b9f);-webkit-background-clip:text;background-clip:text;color:transparent}
-.qlh-prev-sec-sub{font-size:13px;color:#6b5c5c;margin:0;line-height:1.5}
-
-.qlh-prev-pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
-.qlh-prev-pillar{padding:12px 14px;background:#fff;border:1px solid rgba(45,32,32,.08);border-radius:12px;display:flex;flex-direction:column;gap:4px;min-width:0}
-.qlh-prev-pillar-num{font-size:20px;font-weight:800;color:#ee5b9f;letter-spacing:-.02em}
-.qlh-prev-pillar h4{font-size:14px;font-weight:700;margin:2px 0 2px}
-.qlh-prev-pillar p{font-size:12px;color:#5a4a4a;margin:0;line-height:1.5}
-.qlh-prev-pillar-icon{font-size:10.5px;color:#9c8a8a;margin-top:4px;font-family:ui-monospace,SFMono-Regular,monospace}
-
-.qlh-prev-video-tabs{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:6px}
-.qlh-prev-video-card{display:flex;gap:10px;padding:10px;background:#fff;border:1px solid rgba(45,32,32,.08);border-radius:12px;align-items:center;min-width:0}
-.qlh-prev-video-thumb{width:100px;height:60px;border-radius:8px;background:#000 center/cover;flex-shrink:0}
-.qlh-prev-video-info{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
-.qlh-prev-video-info b{font-size:12.5px;color:#1a1a1a}
-.qlh-prev-video-info small{font-size:11.5px;color:#6b5c5c;line-height:1.45}
-.qlh-prev-video-info code{font-size:10.5px;color:#9c8a8a;background:#f5f0ec;padding:1px 5px;border-radius:4px;align-self:flex-start;font-family:ui-monospace,SFMono-Regular,monospace;margin-top:2px}
-
-.qlh-prev-career{padding:14px 16px}
-.qlh-prev-career-intro{margin-top:6px}
-.qlh-prev-career-eyebrow{font-size:11.5px;color:#bb89f8;font-weight:700;margin-bottom:3px}
-.qlh-prev-career h4{font-size:16px;font-weight:700;margin:0 0 4px;color:#1a1a1a}
-.qlh-prev-career p{font-size:12.5px;color:#5a4a4a;margin:0 0 6px;line-height:1.5}
-.qlh-prev-career-link{font-size:12.5px;color:#ee5b9f;font-weight:700;text-decoration:none}
-
-.qlh-prev-sticks{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px}
-.qlh-prev-stick{padding:8px 10px;background:#fff;border:1px solid rgba(45,32,32,.08);border-radius:10px;display:flex;flex-direction:column;align-items:flex-start;gap:0}
-.qlh-prev-stick b{font-size:14px;font-weight:800;color:#ee5b9f}
-.qlh-prev-stick small{font-size:11px;color:#6b5c5c;line-height:1.3}
-
-/* Editor forms */
-.qlh-editor{display:flex;flex-direction:column;gap:12px;padding:16px 18px;background:#fafafa;border:1px solid rgba(45,32,32,.06);border-radius:12px;margin-top:2px}
+/* Field */
 .qlh-field{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
 .qlh-field-label{font-size:11.5px;font-weight:700;color:#6b5c5c;text-transform:uppercase;letter-spacing:.03em}
-.qlh-field-input{width:100%;padding:9px 11px;border:1px solid rgba(45,32,32,.12);border-radius:8px;background:#fff;font-size:13.5px;color:#2d2020;font-family:inherit;outline:none;transition:border-color .15s, box-shadow .15s}
+.qlh-field-input{width:100%;padding:9px 11px;border:1px solid rgba(45,32,32,.12);border-radius:8px;background:#fff;font-size:13.5px;color:#2d2020;font-family:inherit;outline:none;transition:border-color .15s, box-shadow .15s;box-sizing:border-box}
 .qlh-field-input:focus{border-color:#f8a668;box-shadow:0 0 0 3px rgba(248,166,104,.15)}
-.qlh-field-ta{resize:vertical;min-height:60px;line-height:1.55}
+.qlh-field-ta{resize:vertical;min-height:66px;line-height:1.55}
 
-.qlh-fieldset{border:1px solid rgba(45,32,32,.1);border-radius:10px;padding:12px 14px;margin:0;display:flex;flex-direction:column;gap:10px;background:#fff}
-.qlh-fieldset>legend{padding:0 6px;font-size:12px;font-weight:700;color:#1a1a1a;letter-spacing:-.005em}
-.qlh-fg-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.qlh-footer-save{display:flex;justify-content:flex-end;padding-top:4px}
 
-.qlh-footer-save{display:flex;justify-content:flex-end;padding-top:8px}
+/* Ad section */
+.qlh-section--ad{border-left-color:#bb89f8}
+.qlh-section--ad .qlh-section-icon{color:#bb89f8;background:rgba(187,137,248,.1)}
+.qlh-ad-wrap{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:flex-start}
+.qlh-ad-editor{display:flex;flex-direction:column;gap:12px}
+.qlh-ad-html{font-family:ui-monospace,SFMono-Regular,'Courier New',monospace;font-size:12px;min-height:200px;line-height:1.5}
+.qlh-ad-hint{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#6b5c5c;margin:0}
+.qlh-ad-fill{border:1px solid rgba(45,32,32,.12);background:#fff;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;color:#7439cc;cursor:pointer}
+.qlh-ad-fill:hover{background:rgba(187,137,248,.08);border-color:rgba(187,137,248,.3)}
 
-@media (max-width:720px){
-  .qlh-prev-stat,.qlh-prev-pillars,.qlh-prev-video-tabs{grid-template-columns:1fr}
-  .qlh-prev-sticks{grid-template-columns:repeat(2,1fr)}
-  .qlh-prev-headline{font-size:22px}
-  .qlh-prev-sec-title{font-size:17px}
+.qlh-vw-fieldset{background:#fff}
+.qlh-vw-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.qlh-vw-option{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid rgba(45,32,32,.12);border-radius:10px;background:#fafafa;cursor:pointer;transition:all .15s}
+.qlh-vw-option:hover{border-color:rgba(187,137,248,.45)}
+.qlh-vw-option.is-on{background:rgba(187,137,248,.08);border-color:#bb89f8;box-shadow:0 0 0 2px rgba(187,137,248,.15)}
+.qlh-vw-option input{margin-top:3px;accent-color:#bb89f8;flex-shrink:0}
+.qlh-vw-label{display:block;font-size:12.5px;font-weight:700;color:#1a1a1a;text-transform:uppercase;letter-spacing:.02em}
+.qlh-vw-desc{display:block;font-size:11px;color:#6b5c5c;line-height:1.4;margin-top:2px}
+
+.qlh-ad-preview-col{display:flex;flex-direction:column;gap:8px}
+.qlh-ad-preview-label{font-size:11.5px;font-weight:700;color:#6b5c5c;text-transform:uppercase;letter-spacing:.03em}
+.qlh-ad-preview-frame{background:#fff;border:1px solid rgba(45,32,32,.1);border-radius:12px;overflow:hidden;min-height:140px;box-shadow:0 6px 18px rgba(45,32,32,.08)}
+.qlh-ad-preview-render{max-width:100%;overflow:auto}
+.qlh-ad-preview-render *{max-width:100%}
+.qlh-ad-preview-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#9c8a8a;font-size:11.5px;font-weight:600;padding:28px 16px}
+.qlh-ad-preview-note{font-size:11px;color:#9c8a8a;margin:0;line-height:1.5;font-style:italic}
+
+@media (max-width:900px){
+  .qlh-hero-grid,.qlh-pillars-grid{grid-template-columns:1fr}
+  .qlh-video-grid{grid-template-columns:1fr}
+  .qlh-ad-wrap{grid-template-columns:1fr}
+  .qlh-vw-grid{grid-template-columns:1fr}
 }
 `;

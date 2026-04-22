@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
-import { mergeHomeContent } from "@/lib/admin/home-content-schema";
+import {
+  mergeHomeContent,
+  normalizeAdConfig,
+} from "@/lib/admin/home-content-schema";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
@@ -19,8 +22,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Body JSON không hợp lệ." }, { status: 400 });
   }
 
-  const body = (raw as { content?: unknown }) ?? {};
+  const body = (raw as { content?: unknown; ad?: unknown }) ?? {};
   const normalized = mergeHomeContent(body.content);
+  const adRaw = (body.ad ?? {}) as { ads?: unknown; visibleWhere?: unknown; visible_where?: unknown };
+  const adConfig = normalizeAdConfig(adRaw);
 
   const supabase = createServiceRoleClient();
   if (!supabase) {
@@ -41,11 +46,13 @@ export async function POST(req: Request) {
       {
         id: 1,
         content: normalized,
+        ads: adConfig.ads,
+        visible_where: adConfig.visibleWhere,
         updated_by: updatedBy,
       },
       { onConflict: "id" },
     )
-    .select("content, updated_at")
+    .select("content, ads, visible_where, updated_at")
     .single();
 
   if (error || !data) {
@@ -58,6 +65,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     ok: true,
     content: normalized,
+    ad: adConfig,
     updated_at: (data.updated_at as string | null) ?? null,
   });
 }

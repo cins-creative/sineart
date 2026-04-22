@@ -97,43 +97,55 @@ const css = `
   .sa-ebook-detail .ebd-fb-nav{width:48px;height:48px;border:2px solid rgba(45,32,32,.10);border-radius:50%;background:#fff;color:#2d2020;display:grid;place-items:center;cursor:pointer;transition:transform .15s,opacity .15s;padding:0}
   .sa-ebook-detail .ebd-fb-nav:hover:not(:disabled){transform:scale(1.05)}
   .sa-ebook-detail .ebd-fb-nav:disabled{opacity:.4;cursor:not-allowed}
-  .sa-ebook-detail .ebd-fb-meter{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0}
-  .sa-ebook-detail .ebd-fb-label{margin:0;font:800 13.5px/1 "Be Vietnam Pro",Quicksand;color:#2d2020;white-space:nowrap}
-  .sa-ebook-detail .ebd-fb-dots{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:100%}
-  .sa-ebook-detail .ebd-fb-dot{height:6px;border:0;border-radius:999px;cursor:pointer;transition:width .22s,background .22s;padding:0;flex-shrink:0}
-  .sa-ebook-detail .ebd-fb-dot:disabled{cursor:not-allowed}
+  .sa-ebook-detail .ebd-fb-meter{display:flex;align-items:center;justify-content:center;gap:10px;flex:1;min-width:0;padding:8px 18px;border-radius:999px;background:rgba(45,32,32,.04);border:1.5px solid rgba(45,32,32,.06)}
+  .sa-ebook-detail .ebd-fb-label{margin:0;font:800 14px/1 "Be Vietnam Pro",Quicksand;color:#2d2020;white-space:nowrap;letter-spacing:.02em}
 
   .sa-ebook-detail .ebd-fb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;max-width:880px;margin:0 auto}
   .sa-ebook-detail .ebd-fb-card{position:relative;overflow:hidden;border:2px solid rgba(45,32,32,.06);border-radius:14px;background:#fbf7f2}
   .sa-ebook-detail .ebd-fb-card-img{width:100%;height:auto;display:block;object-fit:contain}
 
-  /* Fullscreen mode — khi section được Fullscreen API đưa lên top layer */
-  .sa-ebook-detail .ebd-fb.is-fullscreen{background:#1a1414;padding:20px 24px;overflow-y:auto;display:flex;flex-direction:column;min-height:100vh}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-toolbar{margin:0 0 16px;padding:8px 12px;background:rgba(255,255,255,.06);border-radius:14px;backdrop-filter:blur(8px);position:sticky;top:0;z-index:5}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-modes{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14)}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-mode{color:rgba(255,255,255,.65)}
+  /* Fullscreen mode — CSS-based, position:fixed phủ kín viewport.
+     Toolbar + ctrl tối giản để dành diện tích tối đa cho book. */
+  .sa-ebook-detail .ebd-fb.is-fullscreen{position:fixed;inset:0;z-index:9999;background:#1a1414;padding:10px 16px 14px;overflow-y:auto;display:flex;flex-direction:column;margin-top:0;animation:ebdFbFsIn .2s ease}
+  @keyframes ebdFbFsIn{from{opacity:0}to{opacity:1}}
+
+  /* Toolbar: chip nhỏ, no background, icon-only option */
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-toolbar{margin:0 0 6px;padding:0;background:transparent;border-radius:0;backdrop-filter:none;position:static;gap:10px}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-modes{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10);padding:3px;gap:2px;box-shadow:none}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-mode{padding:5px 11px;font-size:12px;color:rgba(255,255,255,.55)}
   .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-mode:hover:not(.is-active){color:#fff}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-count{color:rgba(255,255,255,.8)}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-fs{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#fff}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-count{color:rgba(255,255,255,.55);font-size:11px}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-fs{padding:6px 10px;font-size:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10);color:#fff}
   .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-fs:hover{background:var(--grad);border-color:transparent}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-stage-wrap{flex:1;display:flex;flex-direction:column;justify-content:center;max-width:none}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-stage{margin:0 auto}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-book{max-width:min(1400px,92vw)}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-label{color:#fff}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-nav{background:rgba(255,255,255,.94);border-color:transparent}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-dot{background:rgba(255,255,255,.3)!important}
-  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-dot[aria-current="true"]{background:var(--grad)!important}
+
+  /* Stage: chiếm toàn bộ diện tích còn lại */
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-stage-wrap{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;max-width:none;min-height:0;padding:6px 0;gap:10px;width:100%}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-stage{width:100%;max-width:min(1700px,97vw);margin:0;flex:0 1 auto}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-book{width:100%;max-width:100%;max-height:calc(100vh - 120px);margin:0 auto}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-shadow{display:none}
+
+  /* Ctrl nhỏ lại — nav 36px, meter compact */
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-ctrl{width:auto;max-width:none;margin:0 auto;gap:10px}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-nav{width:36px;height:36px;background:rgba(255,255,255,.92);border-color:transparent;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-nav svg{width:16px;height:16px}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-meter{padding:6px 14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);flex:0 0 auto;min-width:auto}
+  .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-label{color:#fff;font-size:12.5px}
+
   .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-grid{max-width:1200px}
   .sa-ebook-detail .ebd-fb.is-fullscreen .ebd-fb-card{background:#fbf7f2}
 
   /* Adjacent (prev/next) */
   .sa-ebook-detail .ebd-navpn{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:48px}
-  .sa-ebook-detail .ebd-navpn-item{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1.5px solid rgba(45,32,32,.1);border-radius:14px;background:#fff;transition:border-color .18s,box-shadow .18s}
-  .sa-ebook-detail .ebd-navpn-item:hover{border-color:#ee5ca2;box-shadow:0 6px 18px rgba(238,92,162,.14)}
-  .sa-ebook-detail .ebd-navpn-item--next{justify-content:flex-end;text-align:right}
+  .sa-ebook-detail .ebd-navpn-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1.5px solid rgba(45,32,32,.1);border-radius:14px;background:#fff;transition:border-color .18s,box-shadow .18s,transform .18s;min-width:0}
+  .sa-ebook-detail .ebd-navpn-item:hover{border-color:#ee5ca2;box-shadow:0 6px 18px rgba(238,92,162,.14);transform:translateY(-1px)}
+  .sa-ebook-detail .ebd-navpn-item:hover .ebd-navpn-thumb-img{transform:scale(1.04)}
+  .sa-ebook-detail .ebd-navpn-item--next{text-align:right}
+  .sa-ebook-detail .ebd-navpn-thumb{position:relative;width:52px;height:68px;flex-shrink:0;border-radius:8px;overflow:hidden;background:#f2ece5;box-shadow:0 3px 8px rgba(45,32,32,.14)}
+  .sa-ebook-detail .ebd-navpn-thumb-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s cubic-bezier(.22,.61,.36,1)}
+  .sa-ebook-detail .ebd-navpn-text{min-width:0;flex:1;display:flex;flex-direction:column}
   .sa-ebook-detail .ebd-navpn-label{font:700 11px/1 Quicksand;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);margin-bottom:6px}
   .sa-ebook-detail .ebd-navpn-title{font:800 14px/1.35 "Be Vietnam Pro",Quicksand;color:#2d2020;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
-  .sa-ebook-detail .ebd-navpn-icon{color:#ee5ca2;flex-shrink:0}
+  .sa-ebook-detail .ebd-navpn-icon{color:#ee5ca2;flex-shrink:0;display:inline-flex}
 
   /* Sidebar */
   .sa-ebook-detail .ebd-sidebar{position:sticky;top:24px;align-self:start;display:flex;flex-direction:column;gap:18px}

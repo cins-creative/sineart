@@ -5,6 +5,15 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },
+  async redirects() {
+    return [
+      {
+        source: "/tinh-diem",
+        destination: "/tra-cuu-thong-tin",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

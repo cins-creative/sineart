@@ -86,18 +86,10 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    kind: "dropdown",
+    kind: "link",
     id: "thong-tin-dh",
     label: "Thông tin đại học",
     href: "/tra-cuu-thong-tin",
-    children: [
-      {
-        emoji: "🟪",
-        label: "Thông tin đại học",
-        href: "/tra-cuu-thong-tin",
-      },
-      { emoji: "🟩", label: "Tính điểm", href: "/tinh-diem" },
-    ],
   },
   { kind: "link", id: "thi-thu", label: "Thi thử", href: "/thi-thu" },
   { kind: "link", id: "blogs", label: "Blogs", href: "/blogs" },

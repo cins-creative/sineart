@@ -18,7 +18,7 @@
 | Mẫu vẽ | `/mau-ve` | ~55 | CMS/Dynamic |
 | Ebook | `/ebook` | ~150+ | CMS/Dynamic |
 | Thì thử | `/thi-thu` | 5 | Static/Dynamic |
-| Tiện ích | `/tra-cuu-thong-tin`, `/tinh-diem`, `/donghocphi` | 3 | Tool |
+| Tiện ích | `/tra-cuu-thong-tin`, `/donghocphi` | 2 | Tool |
 | HR nội bộ | `/hr/*` | 6 | Protected |
 | Tuyển dụng | `/hiring/*` | 1 | Static |
 | Kiến thức nền tảng | `/kien-thuc-nen-tang` | 1 | CMS |
@@ -194,12 +194,6 @@ app/kien-thuc-nen-tang/page.tsx
 > Đây là trang **tool tra cứu điểm/thông tin học viên**, khác với section bài viết cùng tên.
 > Cần xác nhận URL có trùng không hay là 2 trang riêng.
 
-### `/tinh-diem` — Tính điểm
-```
-app/tinh-diem/page.tsx
-```
-Tool tính điểm tuyển sinh. Static hoặc client component.
-
 ### `/donghocphi` — Đóng học phí
 ```
 app/donghocphi/page.tsx
@@ -279,7 +273,6 @@ module.exports = {
 ### 🟢 Thấp — Có thể rebuild từ đầu
 - `/hr/*` (nội bộ, không index)
 - `/hiring/*`
-- `/tinh-diem`
 - `/donghocphi`
 
 ---

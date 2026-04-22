@@ -3,13 +3,13 @@ import { Suspense } from "react";
 import AdminSessionGate from "@/app/admin/dashboard/_components/AdminSessionGate";
 import { AdminDashboardTableSkeleton } from "@/components/skeletons";
 
-import LopHocPageData from "./LopHocPageData";
+import QuanLyEbookPageData from "./QuanLyEbookPageData";
 
-export default async function LopHocSessionAndData() {
+export default async function QuanLyEbookSessionAndData() {
   return (
     <AdminSessionGate>
       <Suspense fallback={<AdminDashboardTableSkeleton />}>
-        <LopHocPageData />
+        <QuanLyEbookPageData />
       </Suspense>
     </AdminSessionGate>
   );

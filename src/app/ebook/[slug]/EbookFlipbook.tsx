@@ -42,7 +42,6 @@ const tokens = {
   brandStart: "#F8A568",
   brandEnd: "#EE5CA2",
 };
-const gradientBrand = `linear-gradient(135deg,${tokens.brandStart},${tokens.brandEnd})`;
 const shadowWarm =
   "0 2px 8px rgba(45,32,32,0.06), 0 1px 2px rgba(45,32,32,0.04)";
 const shadowBook =
@@ -110,7 +109,6 @@ function PagePanel({
         [side]: 0,
         width: "50%",
         background: tokens.paper,
-        borderRadius: side === "left" ? "16px 0 0 16px" : "0 16px 16px 0",
       }}
     >
       <PageContent src={src} alt={alt} eager={eager} />
@@ -180,9 +178,6 @@ function FlippingPage({
   const displayAlt = isBack ? backAlt : frontAlt;
   const contentTransform = isBack ? "scaleX(-1)" : "none";
 
-  const borderRadius =
-    (direction > 0) === isBack ? "16px 0 0 16px" : "0 16px 16px 0";
-
   const shadowOpacity = useTransform(
     rotation,
     direction > 0 ? [0, -90, -170, -180] : [0, 90, 170, 180],
@@ -212,7 +207,7 @@ function FlippingPage({
     >
       <div
         className="absolute inset-0 overflow-hidden"
-        style={{ background: tokens.paper, borderRadius }}
+        style={{ background: tokens.paper }}
       >
         <div
           className="absolute inset-0"
@@ -254,7 +249,6 @@ export function EbookFlipbook({
 }) {
   const [mode, setMode] = useState<"flipbook" | "grid">("flipbook");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const rootRef = useRef<HTMLElement | null>(null);
 
   // Spread layout: spread 0 = [null, page1], spread k>=1 = [page(2k), page(2k+1)]
   // Trang 1 luôn đứng 1 mình ở bên phải (mô phỏng bìa sách).
@@ -263,26 +257,28 @@ export function EbookFlipbook({
   const [flipping, setFlipping] = useState<FlippingState | null>(null);
   const [midpointReached, setMidpointReached] = useState(false);
 
-  // Fullscreen API: request/exit + lắng nghe fullscreenchange (Esc tự thoát).
+  /**
+   * Fullscreen CSS-based: tránh native Fullscreen API vì bị block trong
+   * iframe preview + conflict với perspective ancestor transform. Dùng
+   * position:fixed inset:0 cộng lock body scroll.
+   */
   const toggleFullscreen = useCallback(() => {
-    if (typeof document === "undefined") return;
-    const el = rootRef.current;
-    if (!el) return;
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => undefined);
-    } else {
-      void el.requestFullscreen().catch(() => undefined);
-    }
+    setIsFullscreen((v) => !v);
   }, []);
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    const onChange = () => {
-      setIsFullscreen(document.fullscreenElement === rootRef.current);
+    if (!isFullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsFullscreen(false);
     };
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [isFullscreen]);
 
   const getSpreadPages = useCallback(
     (k: number) => {
@@ -424,7 +420,6 @@ export function EbookFlipbook({
   return (
     <section
       id="flipbook"
-      ref={rootRef}
       className={`ebd-fb${isFullscreen ? " is-fullscreen" : ""}`}
       aria-label="Đọc sách"
     >
@@ -494,7 +489,6 @@ export function EbookFlipbook({
                 style={{
                   aspectRatio: "3/2",
                   boxShadow: shadowBook,
-                  borderRadius: "18px",
                   background: tokens.paperShade,
                   transformStyle: "preserve-3d",
                 }}
@@ -537,24 +531,6 @@ export function EbookFlipbook({
 
               <div className="ebd-fb-meter">
                 <p className="ebd-fb-label">{pageLabel}</p>
-                <div className="ebd-fb-dots" role="tablist">
-                  {Array.from({ length: totalSpreads }).map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => go(i)}
-                      disabled={!!flipping}
-                      className="ebd-fb-dot"
-                      aria-label={`Đến spread ${i + 1}`}
-                      aria-current={i === spread ? "true" : undefined}
-                      style={{
-                        width: i === spread ? 24 : 6,
-                        background:
-                          i === spread ? gradientBrand : `${tokens.ink}33`,
-                      }}
-                    />
-                  ))}
-                </div>
               </div>
 
               <button

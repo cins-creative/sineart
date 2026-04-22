@@ -246,7 +246,7 @@ export default async function EbookDetailPage({ params }: Props) {
                     href={buildEbookHref(prev.slug)}
                     className="ebd-navpn-item"
                   >
-                    <span className="ebd-navpn-icon">
+                    <span className="ebd-navpn-icon" aria-hidden>
                       <svg
                         width="14"
                         height="14"
@@ -255,12 +255,30 @@ export default async function EbookDetailPage({ params }: Props) {
                         stroke="currentColor"
                         strokeWidth="2"
                         strokeLinecap="round"
-                        aria-hidden
                       >
                         <polyline points="15 18 9 12 15 6" />
                       </svg>
                     </span>
-                    <div>
+                    <div
+                      className="ebd-navpn-thumb"
+                      style={
+                        prev.thumbnail
+                          ? undefined
+                          : { background: ebookGradFor(prev.id) }
+                      }
+                    >
+                      {prev.thumbnail && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={prev.thumbnail}
+                          alt=""
+                          className="ebd-navpn-thumb-img"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      )}
+                    </div>
+                    <div className="ebd-navpn-text">
                       <div className="ebd-navpn-label">Ebook trước</div>
                       <div className="ebd-navpn-title">{prev.title}</div>
                     </div>
@@ -274,11 +292,30 @@ export default async function EbookDetailPage({ params }: Props) {
                     href={buildEbookHref(next.slug)}
                     className="ebd-navpn-item ebd-navpn-item--next"
                   >
-                    <div>
+                    <div className="ebd-navpn-text">
                       <div className="ebd-navpn-label">Ebook kế</div>
                       <div className="ebd-navpn-title">{next.title}</div>
                     </div>
-                    <span className="ebd-navpn-icon">
+                    <div
+                      className="ebd-navpn-thumb"
+                      style={
+                        next.thumbnail
+                          ? undefined
+                          : { background: ebookGradFor(next.id) }
+                      }
+                    >
+                      {next.thumbnail && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={next.thumbnail}
+                          alt=""
+                          className="ebd-navpn-thumb-img"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      )}
+                    </div>
+                    <span className="ebd-navpn-icon" aria-hidden>
                       <svg
                         width="14"
                         height="14"
@@ -287,7 +324,6 @@ export default async function EbookDetailPage({ params }: Props) {
                         stroke="currentColor"
                         strokeWidth="2"
                         strokeLinecap="round"
-                        aria-hidden
                       >
                         <polyline points="9 18 15 12 9 6" />
                       </svg>

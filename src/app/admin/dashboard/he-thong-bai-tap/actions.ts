@@ -158,6 +158,128 @@ export async function updateHeThongBaiTap(id: number, input: BaiTapSaveInput): P
   return { ok: true, message: "Đã cập nhật." };
 }
 
+/**
+ * Cho phép patch một tập nhỏ các field từ list view (inline edit / bulk action).
+ * Dùng key khớp `hv_he_thong_bai_tap` để server tin tưởng trực tiếp mà không cần full payload.
+ */
+export type BaiTapBulkPatch = {
+  ten_bai_tap?: string;
+  bai_so?: number | null;
+  mon_hoc?: number | null;
+  is_visible?: boolean;
+  so_buoi?: number | null;
+  muc_do_quan_trong?: string | null;
+};
+
+export type BaiTapBulkUpdateResult =
+  | { ok: true; updated: number; message?: string }
+  | { ok: false; error: string; updated?: number };
+
+function sanitizeBulkPatch(raw: BaiTapBulkPatch): {
+  ok: true;
+  patch: Record<string, unknown>;
+} | { ok: false; error: string } {
+  const patch: Record<string, unknown> = {};
+
+  if (raw.ten_bai_tap !== undefined) {
+    const t = String(raw.ten_bai_tap ?? "").trim();
+    if (!t) return { ok: false, error: "Tên bài tập không được để trống." };
+    patch.ten_bai_tap = t;
+  }
+
+  if (raw.bai_so !== undefined) {
+    if (raw.bai_so == null) {
+      patch.bai_so = null;
+    } else {
+      const n = Math.trunc(Number(raw.bai_so));
+      if (!Number.isFinite(n) || n < 0) return { ok: false, error: "Bài số không hợp lệ." };
+      patch.bai_so = n === 0 ? null : n;
+    }
+  }
+
+  if (raw.mon_hoc !== undefined) {
+    if (raw.mon_hoc == null) {
+      patch.mon_hoc = null;
+    } else {
+      const n = Math.trunc(Number(raw.mon_hoc));
+      if (!Number.isFinite(n) || n <= 0) return { ok: false, error: "Môn học không hợp lệ." };
+      patch.mon_hoc = n;
+    }
+  }
+
+  if (raw.is_visible !== undefined) {
+    patch.is_visible = Boolean(raw.is_visible);
+  }
+
+  if (raw.so_buoi !== undefined) {
+    if (raw.so_buoi == null) {
+      patch.so_buoi = null;
+    } else {
+      const n = Math.trunc(Number(raw.so_buoi));
+      if (!Number.isFinite(n) || n < 0) return { ok: false, error: "Số buổi không hợp lệ." };
+      patch.so_buoi = n === 0 ? null : n;
+    }
+  }
+
+  if (raw.muc_do_quan_trong !== undefined) {
+    const m = String(raw.muc_do_quan_trong ?? "").trim();
+    patch.muc_do_quan_trong = m === "Tùy chọn" ? "Tuỳ chọn" : m || null;
+  }
+
+  return { ok: true, patch };
+}
+
+/**
+ * Cập nhật hàng loạt — mỗi row chỉ nhận patch gồm các field đã đổi ở list view.
+ * Trả về `updated` = số row chạy update thành công. Khi có lỗi thì giữ lại
+ * danh sách lỗi để UI show toast (không rollback các row đã lưu trước đó).
+ */
+export async function bulkUpdateHeThongBaiTap(
+  updates: Array<{ id: number; patch: BaiTapBulkPatch }>,
+): Promise<BaiTapBulkUpdateResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return { ok: false, error: "Không có thay đổi để lưu." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const clean: { id: number; patch: Record<string, unknown> }[] = [];
+  for (const u of updates) {
+    const id = Number(u.id);
+    if (!Number.isFinite(id) || id <= 0) continue;
+    const san = sanitizeBulkPatch(u.patch ?? {});
+    if (!san.ok) return { ok: false, error: `Bài #${id}: ${san.error}` };
+    if (Object.keys(san.patch).length === 0) continue;
+    clean.push({ id, patch: san.patch });
+  }
+
+  if (clean.length === 0) return { ok: false, error: "Không có thay đổi hợp lệ." };
+
+  let updated = 0;
+  const errs: string[] = [];
+  for (const u of clean) {
+    const { error } = await supabase
+      .from("hv_he_thong_bai_tap")
+      .update(u.patch)
+      .eq("id", u.id);
+    if (error) errs.push(`#${u.id}: ${error.message}`);
+    else updated++;
+  }
+
+  revalidateHeThongPublic();
+  if (errs.length > 0) {
+    return {
+      ok: false,
+      error: errs.join("; "),
+      updated,
+    };
+  }
+  return { ok: true, updated, message: `Đã lưu ${updated} bài.` };
+}
+
 export async function deleteHeThongBaiTap(id: number): Promise<BaiTapMutResult> {
   const session = await getAdminSessionOrNull();
   if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };

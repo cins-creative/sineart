@@ -3,13 +3,26 @@
 import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import {
+  BookOpen,
+  LayoutGrid,
+  List as ListIcon,
+  Loader2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { createHeThongBaiTap, deleteHeThongBaiTap, updateHeThongBaiTap } from "@/app/admin/dashboard/he-thong-bai-tap/actions";
+import BaiTapListEditable from "@/app/admin/dashboard/he-thong-bai-tap/BaiTapListEditable";
 import type { AdminBaiTapRow, AdminHeThongBaiTapBundle, AdminMonHocOpt } from "@/lib/data/admin-he-thong-bai-tap";
 import { cn } from "@/lib/utils";
+
+type ViewMode = "grid" | "list";
 
 const DS = { teacher: "#BC8AF9", border: "#EAEAEA" };
 
@@ -43,6 +56,7 @@ export default function HeThongBaiTapView({ bundle }: Props) {
   const { canDelete } = useAdminDashboardAbilities();
   const router = useRouter();
   const [filterMon, setFilterMon] = useState<number | "">("");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [panel, setPanel] = useState<"none" | "create" | "edit">("none");
   const [editing, setEditing] = useState<AdminBaiTapRow | null>(null);
   const [drawerKey, setDrawerKey] = useState(0);
@@ -103,6 +117,42 @@ export default function HeThongBaiTapView({ bundle }: Props) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <div
+            role="tablist"
+            aria-label="Chế độ hiển thị"
+            className="flex h-10 items-center overflow-hidden rounded-xl border border-[#EAEAEA] bg-white p-0.5"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "grid"}
+              onClick={() => setViewMode("grid")}
+              title="Dạng lưới"
+              className={cn(
+                "flex h-full w-9 items-center justify-center rounded-lg text-[#888] transition",
+                viewMode === "grid"
+                  ? "bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] text-white shadow-sm"
+                  : "hover:bg-[#fafafa]",
+              )}
+            >
+              <LayoutGrid size={16} />
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "list"}
+              onClick={() => setViewMode("list")}
+              title="Dạng danh sách (sửa inline, shift-select)"
+              className={cn(
+                "flex h-full w-9 items-center justify-center rounded-lg text-[#888] transition",
+                viewMode === "list"
+                  ? "bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] text-white shadow-sm"
+                  : "hover:bg-[#fafafa]",
+              )}
+            >
+              <ListIcon size={16} />
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => router.refresh()}
@@ -158,6 +208,20 @@ export default function HeThongBaiTapView({ bundle }: Props) {
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
         {filtered.length === 0 ? (
           <p className="m-0 pt-8 text-center text-sm text-[#888]">Không có bài tập khớp bộ lọc.</p>
+        ) : viewMode === "list" ? (
+          <BaiTapListEditable
+            rows={filtered}
+            monList={bundle.monHoc}
+            canDelete={canDelete}
+            onEditFull={(row) => {
+              setEditing(row);
+              setDrawerKey((k) => k + 1);
+              setPanel("edit");
+            }}
+            onDeleteOne={(row) => setDelTarget(row)}
+            onToast={notify}
+            onDataChanged={() => router.refresh()}
+          />
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
             {filtered.map((item, i) => (

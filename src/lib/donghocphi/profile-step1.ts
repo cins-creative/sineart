@@ -12,49 +12,17 @@ export type QlHocVienStep1Fields = {
 };
 
 /**
- * Các domain email «cá nhân» được chấp nhận (Gmail, Yahoo, Outlook, …).
- * Không chấp nhận email doanh nghiệp / tên miền tùy chỉnh — bổ sung domain tại đây nếu cần.
+ * Chỉ chấp nhận email Gmail — thống nhất với luồng đăng nhập học viên và
+ * gợi ý trên placeholder («vd. tenban@gmail.com»).
  */
 const STUDENT_EMAIL_ALLOWED_DOMAINS = new Set([
   "gmail.com",
   "googlemail.com",
-  "hotmail.com",
-  "outlook.com",
-  "live.com",
-  "msn.com",
-  "yahoo.com",
-  "yahoo.co.uk",
-  "yahoo.fr",
-  "yahoo.de",
-  "yahoo.it",
-  "yahoo.es",
-  "yahoo.ca",
-  "yahoo.com.br",
-  "yahoo.com.au",
-  "yahoo.co.jp",
-  "yahoo.com.vn",
-  "ymail.com",
-  "rocketmail.com",
-  "icloud.com",
-  "me.com",
-  "mac.com",
-  "proton.me",
-  "protonmail.com",
-  "aol.com",
-  "mail.com",
-  "gmx.com",
-  "gmx.de",
-  "gmx.net",
-  "zoho.com",
-  "tutanota.com",
-  "tutamail.com",
-  "fastmail.com",
-  "hey.com",
 ]);
 
-/** Thông báo hiển thị khi email sai định dạng hoặc không thuộc nhà cung cấp được hỗ trợ. */
+/** Thông báo hiển thị khi email sai định dạng hoặc không phải Gmail. */
 export const STUDENT_EMAIL_REQUIREMENT_VI =
-  "Vui lòng dùng email cá nhân phổ biến (Gmail, Hotmail/Outlook, Yahoo, iCloud, Proton, …). Không dùng email doanh nghiệp hoặc tên miền riêng.";
+  "Vui lòng dùng email Gmail (ví dụ: tenban@gmail.com). Các nhà cung cấp khác hiện không được hỗ trợ.";
 
 export function isValidStudentEmail(s: string): boolean {
   const t = s.trim().toLowerCase();

@@ -665,9 +665,16 @@ export default function DongHocPhiClient({
   }, [initialCourseName, monHoc]);
 
   const skipStep1Boot = useMemo(() => {
-    if (!existingHocVien || !profileCompleteForSkipStep1(existingHocVien)) return null;
+    if (!existingHocVien) return null;
+    /**
+     * Bỏ qua bước 1 khi:
+     *  - hồ sơ đã đủ thông tin, hoặc
+     *  - user đi từ menu «Gia hạn học phí» (có `?email=` trên URL) — pre-fill từ DB,
+     *    sang thẳng bước chọn lớp; thiếu field vẫn có thể quay lại bước 1 để bổ sung.
+     */
+    if (!profileCompleteForSkipStep1(existingHocVien) && !initialEmail) return null;
     return applyStep1FieldsToState(existingHocVien);
-  }, [existingHocVien]);
+  }, [existingHocVien, initialEmail]);
 
   const enrollmentBootstrap = useMemo(
     () =>
@@ -1892,9 +1899,17 @@ export default function DongHocPhiClient({
                   placeholder="vd. tenban@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  readOnly={!!existingHocVien?.email}
-                  className={existingHocVien?.email ? "opacity-60 cursor-default select-all" : undefined}
-                  title={existingHocVien?.email ? "Email đăng nhập — không thể đổi tại đây" : undefined}
+                  readOnly={!!initialEmail || !!existingHocVien?.email}
+                  className={
+                    initialEmail || existingHocVien?.email
+                      ? "opacity-60 cursor-default select-all"
+                      : undefined
+                  }
+                  title={
+                    initialEmail || existingHocVien?.email
+                      ? "Email đăng nhập — không thể đổi tại đây"
+                      : undefined
+                  }
                 />
               </div>
 

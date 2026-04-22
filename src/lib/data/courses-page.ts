@@ -15,6 +15,7 @@ import type {
   HocPhiGoiRow,
   KhoaHocCourseCard,
   KhoaHocDetailData,
+  KhoaHocReviewStats,
   KhoaHocTeacher,
   OngoingClassCard,
   TeacherPortfolioSlide,
@@ -257,6 +258,13 @@ function mapMonToDetail(
   const loai = row.loai_khoa_hoc?.trim() ?? null;
   const ten = row.ten_mon_hoc?.trim() || "Môn học";
   const { tag } = resolveHinhThucFromMon(row);
+  const siRaw = row.si_so;
+  const siNum =
+    siRaw == null || siRaw === ""
+      ? null
+      : Number.isFinite(Number(siRaw))
+        ? Number(siRaw)
+        : null;
   return {
     id: Number(row.id),
     tenMonHoc: ten,
@@ -278,8 +286,54 @@ function mapMonToDetail(
       row.gioi_thieu_mon_hoc != null && String(row.gioi_thieu_mon_hoc).trim()
         ? String(row.gioi_thieu_mon_hoc).trim()
         : null,
+    siSo: siNum != null && siNum > 0 ? siNum : null,
   };
 }
+
+/**
+ * Tổng hợp đánh giá từ `ql_danh_gia` cho sidebar `/khoa-hoc/[slug]`.
+ * Nếu có ≥1 đánh giá gắn trực tiếp với `monId` → ưu tiên số liệu theo môn.
+ * Nếu không → fallback về tổng số đánh giá toàn site (anon SELECT where `hien_thi = true`).
+ */
+async function getKhoaHocReviewStatsUncached(
+  monId: number | null,
+): Promise<KhoaHocReviewStats> {
+  const supabase = await createClient();
+  if (!supabase) return { avg: 0, count: 0 };
+
+  const aggregate = (rows: { so_sao: number | null }[]): KhoaHocReviewStats => {
+    const nums = rows
+      .map((r) => Number(r.so_sao))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (!nums.length) return { avg: 0, count: 0 };
+    const sum = nums.reduce((acc, n) => acc + n, 0);
+    return {
+      avg: sum / nums.length,
+      count: nums.length,
+    };
+  };
+
+  if (monId != null && Number.isFinite(monId)) {
+    const { data, error } = await supabase
+      .from("ql_danh_gia")
+      .select("so_sao")
+      .eq("hien_thi", true)
+      .eq("khoa_hoc", monId);
+    if (!error && data && data.length > 0) {
+      const res = aggregate(data as { so_sao: number | null }[]);
+      if (res.count > 0) return res;
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("ql_danh_gia")
+    .select("so_sao")
+    .eq("hien_thi", true);
+  if (error || !data) return { avg: 0, count: 0 };
+  return aggregate(data as { so_sao: number | null }[]);
+}
+
+export const getKhoaHocReviewStats = cache(getKhoaHocReviewStatsUncached);
 
 async function fetchTeachersForMon(
   supabase: SupabaseClient,

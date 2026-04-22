@@ -4,6 +4,7 @@ import BaiTapList from "@/components/course/BaiTapList";
 import type {
   HocPhiBlockData,
   KhoaHocDetailData,
+  KhoaHocReviewStats,
   OngoingClassCard,
 } from "@/types/khoa-hoc";
 import HocPhiBlock from "@/components/courses/HocPhiBlock";
@@ -71,11 +72,7 @@ const KD_OC_BADGE: Record<
   },
 };
 
-function sbNextMonthFirstDateVi(): string {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return d.toLocaleDateString("vi-VN");
-}
+const DEFAULT_REVIEW_STATS: KhoaHocReviewStats = { avg: 0, count: 0 };
 
 function IconClock({ className }: { className?: string }) {
   return (
@@ -122,6 +119,7 @@ export default function KhoaHocDetailView({
   teacherPortfolioSlides = [],
   baiTapList = [],
   ongoingClasses = [],
+  reviewStats = DEFAULT_REVIEW_STATS,
 }: {
   detail: KhoaHocDetailData | null;
   fallbackTitle?: string;
@@ -132,6 +130,7 @@ export default function KhoaHocDetailView({
   teacherPortfolioSlides?: TeacherPortfolioSlide[];
   baiTapList?: BaiTap[];
   ongoingClasses?: OngoingClassCard[];
+  reviewStats?: KhoaHocReviewStats;
 }) {
   const d = detail;
   const title = d?.tenMonHoc ?? fallbackTitle ?? "Khóa học";
@@ -199,8 +198,24 @@ export default function KhoaHocDetailView({
       .map((s) => ({ id: s.id, src: s.src }));
   }, [teacherPortfolioSlides, effectiveTeacherMonTab]);
 
-  const khaiGiangDisplay = useMemo(() => sbNextMonthFirstDateVi(), []);
-  const isOnline = d?.hinhThucTag === "Online";
+  /** Thời lượng — lấy `lich_hoc` của lớp đầu tiên (đã trim trong `OngoingClassCard.lich`). */
+  const lichHocDisplay = useMemo(() => {
+    const firstLich = ongoingClasses.find((c) => c.lich.trim().length > 0)?.lich;
+    return firstLich?.trim() || "Theo lịch lớp";
+  }, [ongoingClasses]);
+
+  /** Sỉ số — ưu tiên `ql_mon_hoc.si_so`; null → "Theo lớp". */
+  const siSoDisplay = useMemo(() => {
+    const si = d?.siSo;
+    return si != null && si > 0 ? `${si} HV / lớp` : "Theo lớp";
+  }, [d?.siSo]);
+
+  /** Đánh giá — từ `ql_danh_gia` (avg so_sao · count). */
+  const reviewDisplay = useMemo(() => {
+    if (reviewStats.count <= 0) return "Chưa có đánh giá";
+    const avg = reviewStats.avg.toFixed(1);
+    return `${avg} · ${reviewStats.count} đánh giá`;
+  }, [reviewStats]);
 
   const gradStyle =
     d?.gradientStart && d?.gradientEnd
@@ -619,39 +634,35 @@ export default function KhoaHocDetailView({
               <div className="kd-sb-stat-ic kd-sb-stat-ic--purple"><IconClock /></div>
               <div>
                 <div className="kd-sb-stat-k">Thời lượng</div>
-                <div className="kd-sb-stat-v">
-                  {baiTapList.length > 0 ? `${baiTapList.length} buổi · ${baiTapList.length * 3}h` : "Theo khoá học"}
-                </div>
+                <div className="kd-sb-stat-v">{lichHocDisplay}</div>
               </div>
             </div>
             <div className="kd-sb-stat-row">
               <div className="kd-sb-stat-ic kd-sb-stat-ic--yellow"><IconUsers /></div>
               <div>
                 <div className="kd-sb-stat-k">Sỉ số</div>
-                <div className="kd-sb-stat-v">8–12 HV / lớp</div>
+                <div className="kd-sb-stat-v">{siSoDisplay}</div>
               </div>
             </div>
             <div className="kd-sb-stat-row">
               <div className="kd-sb-stat-ic kd-sb-stat-ic--peach"><IconCalendar /></div>
               <div>
-                <div className="kd-sb-stat-k">Khai giảng</div>
-                <div className="kd-sb-stat-v kd-sb-stat-v--accent">{khaiGiangDisplay}</div>
+                <div className="kd-sb-stat-k">Lịch khai giảng</div>
+                <div className="kd-sb-stat-v kd-sb-stat-v--accent">Hàng tuần</div>
               </div>
             </div>
             <div className="kd-sb-stat-row">
-              <div className="kd-sb-stat-ic kd-sb-stat-ic--screen">
-                {isOnline ? <IconScreen /> : <IconScreen />}
-              </div>
+              <div className="kd-sb-stat-ic kd-sb-stat-ic--screen"><IconScreen /></div>
               <div>
                 <div className="kd-sb-stat-k">Học tại</div>
-                <div className="kd-sb-stat-v">{isOnline ? "Google Meet" : "TP.HCM — theo chi nhánh"}</div>
+                <div className="kd-sb-stat-v">Website Sine Art</div>
               </div>
             </div>
             <div className="kd-sb-stat-row">
               <div className="kd-sb-stat-ic kd-sb-stat-ic--mint"><IconStar /></div>
               <div>
                 <div className="kd-sb-stat-k">Đánh giá</div>
-                <div className="kd-sb-stat-v">4.9 · 128 đánh giá</div>
+                <div className="kd-sb-stat-v">{reviewDisplay}</div>
               </div>
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/utils";
 
 /** Skeleton khu vực bảng / danh sách admin — Suspense + loading.tsx trong từng route admin */
@@ -87,7 +88,7 @@ export function KhoaHocPageSkeleton({ className }: { className?: string }) {
 }
 
 
-/** Skeleton trang chủ (`/`) — Suspense + `app/loading.tsx` */
+/** Skeleton trang chủ (`/`) — Suspense + `app/loading.tsx`; ink + peach shimmer */
 export function HomePageSkeleton({ className }: { className?: string }) {
   return (
     <div
@@ -96,9 +97,9 @@ export function HomePageSkeleton({ className }: { className?: string }) {
       aria-label="Đang tải trang chủ"
     >
       <div className="flex h-14 items-center border-b border-black/[0.06] px-3 sm:px-4">
-        <div className="h-8 w-28 animate-pulse rounded-lg bg-zinc-200/80" />
+        <Skeleton className="h-8 w-28 rounded-xl" />
         <div className="ml-auto flex gap-2">
-          <div className="h-9 w-9 animate-pulse rounded-full bg-zinc-200/80" />
+          <Skeleton className="size-9 rounded-full" />
         </div>
       </div>
 
@@ -109,10 +110,10 @@ export function HomePageSkeleton({ className }: { className?: string }) {
           aria-hidden
         />
         <div className="hero-body">
-          <div className="mb-2.5 h-3 w-40 max-w-[85%] animate-pulse rounded bg-white/30" />
-          <div className="mb-3.5 h-10 w-full max-w-[min(100%,22rem)] animate-pulse rounded-lg bg-white/20" />
-          <div className="mb-2 h-3.5 w-full max-w-[34ch] animate-pulse rounded bg-white/22" />
-          <div className="mb-2 h-3.5 w-full max-w-[32ch] animate-pulse rounded bg-white/18" />
+          <div className="mb-2.5 h-3 w-40 max-w-[85%] animate-pulse rounded-[12px] bg-white/30" />
+          <div className="mb-3.5 h-10 w-full max-w-[min(100%,22rem)] animate-pulse rounded-[12px] bg-white/20" />
+          <div className="mb-2 h-3.5 w-full max-w-[34ch] animate-pulse rounded-[12px] bg-white/22" />
+          <div className="mb-2 h-3.5 w-full max-w-[32ch] animate-pulse rounded-[12px] bg-white/18" />
           <div className="mt-5 flex gap-2">
             <div className="h-11 flex-1 max-w-[200px] animate-pulse rounded-full bg-white/25" />
             <div className="h-11 w-[8.5rem] animate-pulse rounded-full bg-white/15" />
@@ -122,11 +123,11 @@ export function HomePageSkeleton({ className }: { className?: string }) {
 
       <div className="stat-strip">
         {Array.from({ length: 3 }, (_, i) => (
-          <div key={i} className="stat-card bg-zinc-50">
-            <div className="h-8 w-14 animate-pulse rounded-md bg-zinc-200/90" />
+          <div key={i} className="stat-card bg-[rgba(45,32,32,0.04)]">
+            <Skeleton className="h-8 w-14 rounded-[12px]" />
             <div className="stat-l mt-2 space-y-1.5">
-              <div className="h-3 w-24 animate-pulse rounded bg-zinc-200/70" />
-              <div className="h-3 w-16 animate-pulse rounded bg-zinc-200/50" />
+              <Skeleton className="h-3 w-24 rounded-[12px]" />
+              <Skeleton className="h-3 w-16 rounded-[12px]" />
             </div>
           </div>
         ))}
@@ -135,30 +136,30 @@ export function HomePageSkeleton({ className }: { className?: string }) {
       <div className="page-inner">
         <div className="px-3">
           <div className="mb-3 flex items-center gap-2">
-            <div className="h-3 w-20 animate-pulse rounded bg-zinc-200/80" />
-            <div className="h-px flex-1 bg-black/10" />
+            <Skeleton className="h-3 w-20 rounded-[12px]" />
+            <div className="h-px flex-1 bg-[rgba(45,32,32,0.08)]" />
           </div>
-          <div className="h-48 w-full animate-pulse rounded-2xl bg-zinc-100" />
+          <Skeleton className="h-48 w-full rounded-[20px]" />
         </div>
 
         <div className="px-3">
           <div className="mb-3 flex items-center gap-2">
-            <div className="h-3 w-24 animate-pulse rounded bg-zinc-200/80" />
-            <div className="h-px flex-1 bg-black/10" />
+            <Skeleton className="h-3 w-24 rounded-[12px]" />
+            <div className="h-px flex-1 bg-[rgba(45,32,32,0.08)]" />
           </div>
           <div className="flex gap-3 overflow-hidden pb-1">
             {Array.from({ length: 3 }, (_, i) => (
               <div
                 key={i}
-                className="min-w-[min(100%,280px)] flex-1 shrink-0 rounded-2xl border border-black/[0.06] bg-zinc-50 p-4"
+                className="min-w-[min(100%,280px)] flex-1 shrink-0 rounded-[16px] border border-[rgba(45,32,32,0.08)] bg-[rgba(45,32,32,0.03)] p-4 shadow-[0_8px_24px_rgba(45,32,32,0.06)]"
               >
                 <div className="mb-3 flex items-center gap-2">
-                  <div className="h-10 w-10 animate-pulse rounded-full bg-zinc-200/80" />
-                  <div className="h-3 w-24 animate-pulse rounded bg-zinc-200/70" />
+                  <Skeleton className="size-10 shrink-0 rounded-full" />
+                  <Skeleton className="h-3 w-24 rounded-[12px]" />
                 </div>
                 <div className="space-y-2">
-                  <div className="h-3 w-full animate-pulse rounded bg-zinc-200/60" />
-                  <div className="h-3 w-[90%] animate-pulse rounded bg-zinc-200/50" />
+                  <Skeleton className="h-3 w-full rounded-[12px]" />
+                  <Skeleton className="h-3 max-w-[90%] rounded-[12px]" />
                 </div>
               </div>
             ))}
@@ -167,49 +168,40 @@ export function HomePageSkeleton({ className }: { className?: string }) {
 
         <div className="px-3">
           <div className="mb-3 flex items-center gap-2">
-            <div className="h-3 w-28 animate-pulse rounded bg-zinc-200/80" />
-            <div className="h-px flex-1 bg-black/10" />
+            <Skeleton className="h-3 w-28 rounded-[12px]" />
+            <div className="h-px flex-1 bg-[rgba(45,32,32,0.08)]" />
           </div>
           <div className="mb-3 flex gap-2">
             {Array.from({ length: 4 }, (_, i) => (
-              <div
-                key={i}
-                className="h-8 w-16 shrink-0 animate-pulse rounded-full bg-zinc-200/70"
-              />
+              <Skeleton key={i} className="h-8 w-16 shrink-0 rounded-full" />
             ))}
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {Array.from({ length: 6 }, (_, i) => (
-              <div
-                key={i}
-                className="aspect-square animate-pulse rounded-xl bg-zinc-200/50"
-              />
+              <Skeleton key={i} className="aspect-square rounded-[16px]" />
             ))}
           </div>
         </div>
 
         <div className="px-3">
           <div className="mb-3 flex items-center gap-2">
-            <div className="h-3 w-32 animate-pulse rounded bg-zinc-200/80" />
-            <div className="h-px flex-1 bg-black/10" />
+            <Skeleton className="h-3 w-32 rounded-[12px]" />
+            <div className="h-px flex-1 bg-[rgba(45,32,32,0.08)]" />
           </div>
           <div className="space-y-3">
-            <div className="h-16 w-full animate-pulse rounded-xl bg-zinc-100" />
-            <div className="h-16 w-full animate-pulse rounded-xl bg-zinc-100" />
+            <Skeleton className="h-16 w-full rounded-[16px]" />
+            <Skeleton className="h-16 w-full rounded-[16px]" />
           </div>
         </div>
 
         <div className="px-3 pb-4">
           <div className="mb-3 flex items-center gap-2">
-            <div className="h-3 w-36 animate-pulse rounded bg-zinc-200/80" />
-            <div className="h-px flex-1 bg-black/10" />
+            <Skeleton className="h-3 w-36 rounded-[12px]" />
+            <div className="h-px flex-1 bg-[rgba(45,32,32,0.08)]" />
           </div>
           <div className="flex gap-3 overflow-hidden">
             {Array.from({ length: 4 }, (_, i) => (
-              <div
-                key={i}
-                className="h-40 min-w-[140px] flex-1 animate-pulse rounded-xl bg-zinc-200/45"
-              />
+              <Skeleton key={i} className="h-40 min-w-[140px] flex-1 rounded-[16px]" />
             ))}
           </div>
         </div>

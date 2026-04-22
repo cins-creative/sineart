@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowLeft,
   ArrowRight,
   Check,
   ChevronDown,
@@ -29,6 +30,7 @@ import {
   listHpGoiHocPhiForDhp,
   listHrNhanSuOptions,
 } from "@/app/admin/dashboard/quan-ly-hoc-vien/actions";
+import { deleteHpDonThu } from "@/app/admin/dashboard/quan-ly-hoa-don/actions";
 import { firstApplicableComboDiscountDong } from "@/lib/donghocphi/combo-discount";
 import type { AdminQlhvEnrollment, AdminQlhvStudent } from "@/lib/data/admin-quan-ly-hoc-vien";
 import { buildVietQrImageUrl, resolveQrPaymentAmounts } from "@/lib/payment/vietqr";
@@ -135,6 +137,7 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
   const [ngayTT, setNgayTT] = useState("");
   const [saving, setSaving] = useState(false);
   const [savingTm, setSavingTm] = useState(false);
+  const [deletingDon, setDeletingDon] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const syncedChiRef = useRef(false);
 
@@ -341,6 +344,28 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
     setMaDonSo(res.maDonSo);
     setInvoiceTotal(res.invoiceTotalDong);
     setSessionStep("s2");
+  };
+
+  const handleQuayLaiSua = async () => {
+    if (trangThai === "Đã thanh toán" || deletingDon) return;
+    setErr(null);
+    if (createdDonId != null) {
+      setDeletingDon(true);
+      const r = await deleteHpDonThu(createdDonId);
+      setDeletingDon(false);
+      if (!r.ok) {
+        setErr(r.error || "Không xoá được đơn tạm để quay lại.");
+        return;
+      }
+    }
+    setCreatedDonId(null);
+    setMaDon("");
+    setMaDonSo("");
+    setInvoiceTotal(0);
+    setTrangThai("Chờ thanh toán");
+    setNgayTT("");
+    syncedChiRef.current = false;
+    setSessionStep("s1");
   };
 
   const handleConfirmTm = async () => {
@@ -823,16 +848,32 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
                 </>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      reset();
-                      setSessionStep("s1");
-                    }}
-                    className="rounded-[10px] border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] font-semibold text-black/55"
-                  >
-                    + Tạo đơn mới
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={deletingDon || trangThai === "Đã thanh toán"}
+                      onClick={() => void handleQuayLaiSua()}
+                      title={
+                        trangThai === "Đã thanh toán"
+                          ? "Đơn đã thanh toán — không thể sửa"
+                          : "Xoá đơn tạm và quay lại bước sửa thông tin"
+                      }
+                      className="inline-flex items-center gap-1 rounded-[10px] border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] font-semibold text-black/55 disabled:opacity-50"
+                    >
+                      {deletingDon ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowLeft className="h-3.5 w-3.5" />}
+                      Quay lại sửa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        reset();
+                        setSessionStep("s1");
+                      }}
+                      className="rounded-[10px] border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] font-semibold text-black/55"
+                    >
+                      + Tạo đơn mới
+                    </button>
+                  </div>
                   <div className="flex gap-2">
                     {hinhThuc === "Tiền mặt" && trangThai !== "Đã thanh toán" ? (
                       <button

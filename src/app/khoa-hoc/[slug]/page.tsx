@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { KhoaHocDetailPageSkeleton } from "@/components/skeletons";
 import { getKhoaHocDetailBySlug } from "@/lib/data/courses-page";
 import "../khoa-hoc.css";
 import "../khoa-hoc-detail.css";
-import { KhoaHocSlugPageContent } from "./KhoaHocSlugPageContent";
+import { KhoaHocSlugDetailSection } from "./_components/KhoaHocSlugDetailSection";
+import { KhoaHocSlugDetailSectionSkeleton } from "./_components/KhoaHocSlugDetailSection.skeleton";
+import { KhoaHocSlugNavSection } from "./_components/KhoaHocSlugNavSection";
+import { KhoaHocSlugNavSectionSkeleton } from "./_components/KhoaHocSlugNavSection.skeleton";
 import { SLUG_LABELS } from "./slug-labels";
 
 export const revalidate = 300;
@@ -25,14 +27,20 @@ export async function generateMetadata({
   };
 }
 
-export default function KhoaHocSlugPage({
+export default async function KhoaHocSlugPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const { slug } = await params;
   return (
-    <Suspense fallback={<KhoaHocDetailPageSkeleton />}>
-      <KhoaHocSlugPageContent params={params} />
-    </Suspense>
+    <>
+      <Suspense fallback={<KhoaHocSlugNavSectionSkeleton />}>
+        <KhoaHocSlugNavSection />
+      </Suspense>
+      <Suspense fallback={<KhoaHocSlugDetailSectionSkeleton />}>
+        <KhoaHocSlugDetailSection slug={slug} />
+      </Suspense>
+    </>
   );
 }

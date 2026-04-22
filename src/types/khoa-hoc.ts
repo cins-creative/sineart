@@ -149,4 +149,14 @@ export type KhoaHocDetailData = {
   videoGioiThieu: string | null;
   /** HTML từ `ql_mon_hoc.gioi_thieu_mon_hoc` — «Nội dung môn học» */
   gioiThieuMonHocHtml: string | null;
+  /** `ql_mon_hoc.si_so` — sỉ số tối đa / lớp */
+  siSo: number | null;
+};
+
+/** Tổng hợp đánh giá cho sidebar — từ `ql_danh_gia` */
+export type KhoaHocReviewStats = {
+  /** Trung bình `so_sao`, 0 nếu chưa có đánh giá */
+  avg: number;
+  /** Tổng số đánh giá đang hiện thị (`hien_thi = true`) */
+  count: number;
 };

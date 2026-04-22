@@ -4,6 +4,8 @@ import type { HomeReview } from "@/types/homepage";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+const GOOGLE_MAPS_URL = "https://maps.app.goo.gl/LeKBd5WVyH6EtKjo9";
+
 const GoogleIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden>
     <path
@@ -94,10 +96,16 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
             Review thực, không chỉnh sửa — lấy trực tiếp từ Google Reviews và Facebook.
           </p>
         </div>
-        <div className="gmap-badge">
+        <a
+          className="gmap-badge"
+          href={GOOGLE_MAPS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Xem đánh giá Sine Art trên Google Maps (mở tab mới)"
+        >
           <span className="gmap-stars">★★★★★</span> 4.9/5{" "}
           <span style={{ opacity: 0.55, fontWeight: 600 }}>· Google</span>
-        </div>
+        </a>
       </div>
       <div className="rv-selector" aria-label="Danh sách học viên đánh giá">
         <div
@@ -112,7 +120,12 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
               onClick={() => setIdx(i)}
             >
               <span className="rp-av" aria-hidden="true">
-                {reviewInitials(r.name)}
+                {r.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.avatarUrl} alt="" loading="lazy" decoding="async" />
+                ) : (
+                  reviewInitials(r.name)
+                )}
               </span>
               {r.name}
             </button>
@@ -128,7 +141,12 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
               onClick={() => setIdx(i)}
             >
               <span className="rp-av" aria-hidden="true">
-                {reviewInitials(r.name)}
+                {r.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.avatarUrl} alt="" loading="lazy" decoding="async" />
+                ) : (
+                  reviewInitials(r.name)
+                )}
               </span>
               {r.name}
             </button>
@@ -167,10 +185,16 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
                 <div className="rv-course">{rv.course}</div>
                 <div className="rv-stars">{stars(rv.stars)}</div>
               </div>
-              <div className="rv-source">
+              <a
+                className="rv-source"
+                href={GOOGLE_MAPS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Xem đánh giá trên ${rv.source} (mở tab mới)`}
+              >
                 <GoogleIcon />
                 {rv.source}
-              </div>
+              </a>
             </div>
             <div className="rv-text-big">{rv.text}</div>
           </motion.div>

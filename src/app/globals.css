@@ -124,3 +124,33 @@ table.bcc-fin-table tbody tr:hover td.bcc-num-cell {
 table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
   background: #dfe6ff !important;
 }
+
+/* Streaming skeletons — ink 6% + peach shimmer (trang chủ / design brief) */
+.skeleton-base {
+  background: rgba(45, 32, 32, 0.06);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-base::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(248, 166, 104, 0.15) 50%,
+    transparent 100%
+  );
+  animation: sine-shimmer 1.8s ease-in-out infinite;
+}
+
+@keyframes sine-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

@@ -303,7 +303,7 @@ export default function DongHocPhiEmailGateModal({
             type="email"
             name="dhp-email"
             autoComplete="email"
-            placeholder="vd. tenban@gmail.com — Outlook/Hotmail, Yahoo…"
+            placeholder="vd. tenban@gmail.com"
             value={email}
             disabled={checkingEmail}
             onChange={(e) => {

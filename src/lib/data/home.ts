@@ -330,6 +330,162 @@ async function getHomePageDataUncached(): Promise<HomePagePayload> {
 /** Một request = một lần fetch (dedupe metadata + page nếu có). */
 export const getHomePageData = cache(getHomePageDataUncached);
 
+/** Dữ liệu stat strip — cùng câu query như trong `getHomePageDataUncached`. */
+async function getHomeStatStripFieldsUncached(): Promise<HomePagePayload["stats"]> {
+  const supabase = await createClient();
+  if (!supabase) return FALLBACK_STATS;
+
+  try {
+    const [lopOpenRes, monCountRes] = await Promise.all([
+      supabase.from("ql_lop_hoc").select("id").not("mon_hoc", "is", null),
+      supabase.from("ql_mon_hoc").select("*", { count: "exact", head: true }),
+    ]);
+
+    const activeLopIds = new Set<number>(
+      (lopOpenRes.data ?? [])
+        .map((r) => Number((r as { id?: unknown }).id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    );
+    let activeEnrollCount = 0;
+    if (!lopOpenRes.error && activeLopIds.size > 0) {
+      const { count, error: enrErr } = await supabase
+        .from("ql_quan_ly_hoc_vien")
+        .select("*", { count: "exact", head: true })
+        .in("lop_hoc", [...activeLopIds]);
+      if (!enrErr && typeof count === "number") {
+        activeEnrollCount = count;
+      }
+    }
+    const students =
+      activeEnrollCount > 0 ? `${activeEnrollCount}+` : FALLBACK_STATS.students;
+    const groups =
+      !monCountRes.error &&
+      typeof monCountRes.count === "number" &&
+      monCountRes.count > 0
+        ? String(monCountRes.count)
+        : FALLBACK_STATS.groups;
+
+    return {
+      students,
+      years: FALLBACK_STATS.years,
+      groups,
+    };
+  } catch {
+    return FALLBACK_STATS;
+  }
+}
+
+export const getHomeStatStripData = cache(getHomeStatStripFieldsUncached);
+
+/** Reviews — cùng select / filter như `getHomePageDataUncached`. */
+async function getHomeReviewsUncached(): Promise<HomeReview[]> {
+  const supabase = await createClient();
+  if (!supabase) return FALLBACK_REVIEWS;
+
+  try {
+    const reviewRes = await supabase
+      .from("ql_danh_gia")
+      .select(
+        `
+          id, ten_nguoi, avatar_url, noi_dung,
+          so_sao, thoi_gian_hoc, nguon,
+          khoa_hoc:ql_mon_hoc(ten_mon_hoc)
+        `,
+      )
+      .eq("hien_thi", true)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    const reviewsRaw = (reviewRes.error
+      ? []
+      : (reviewRes.data ?? [])) as unknown as DanhGia[];
+    return reviewsRaw.length > 0 ? mapReviews(reviewsRaw) : FALLBACK_REVIEWS;
+  } catch {
+    return FALLBACK_REVIEWS;
+  }
+}
+
+export const getHomeReviewsData = cache(getHomeReviewsUncached);
+
+/** Gallery + tab môn trên trang chủ — cùng logic `getHomePageDataUncached` (không lọc như `/gallery`). */
+async function getHomeGallerySectionUncached(): Promise<
+  Pick<HomePagePayload, "gallery" | "galleryMonHocTabs">
+> {
+  const base = {
+    gallery: FALLBACK_GALLERY,
+    galleryMonHocTabs: FALLBACK_GALLERY_MON_HOC_TABS,
+  };
+
+  const supabase = await createClient();
+  if (!supabase) return toJSONSafe(base);
+
+  try {
+    const [monRes, galleryItems] = await Promise.all([
+      supabase
+        .from("ql_mon_hoc")
+        .select(MON_HOC_HOME_SELECT)
+        .order("thu_tu_hien_thi", { ascending: true }),
+      fetchHvBaiHocVienGalleryItems(supabase, 48, { onlyStudentWork: true }),
+    ]);
+
+    const mon = (monRes.error ? [] : (monRes.data ?? [])) as MonHoc[];
+    const gallery =
+      galleryItems.length > 0 ? galleryItems : FALLBACK_GALLERY;
+
+    const galleryMonHocTabs: GalleryMonHocTab[] = mon.length
+      ? mon
+          .map((m) => {
+            const label = m.ten_mon_hoc?.trim() ?? "";
+            return { tenMonHoc: label, label };
+          })
+          .filter((t) => t.tenMonHoc.length > 0)
+      : FALLBACK_GALLERY_MON_HOC_TABS;
+
+    return toJSONSafe({ gallery, galleryMonHocTabs });
+  } catch {
+    return toJSONSafe(base);
+  }
+}
+
+export const getHomeGallerySectionData = cache(getHomeGallerySectionUncached);
+
+/** Giáo viên / portfolio — cùng query như trong `getHomePageDataUncached`. */
+async function getHomeTeacherArtSlidesUncached(): Promise<TeacherArtSlide[]> {
+  const supabase = await createClient();
+  if (!supabase) return [];
+
+  try {
+    const teacherRes = await supabase
+      .from("hr_nhan_su")
+      .select("id, portfolio")
+      .not("portfolio", "is", null);
+
+    const staffRows = (teacherRes.error ? [] : teacherRes.data ?? []) as unknown as {
+      id: number | string;
+      portfolio: unknown;
+    }[];
+    return buildTeacherArtSlides(staffRows);
+  } catch {
+    return [];
+  }
+}
+
+export const getHomeTeacherArtSlidesData = cache(getHomeTeacherArtSlidesUncached);
+
+/** Ngành học — cùng `fetchNganhHocCardsFromCins` + fallback như `getHomePageDataUncached`. */
+async function getHomeCareersUncached(): Promise<CareerCard[]> {
+  try {
+    const cinsCareers = await fetchNganhHocCardsFromCins().catch(
+      (): CareerCard[] => [],
+    );
+    return cinsCareers.length > 0 ? cinsCareers : CAREER_CARDS;
+  } catch {
+    return CAREER_CARDS;
+  }
+}
+
+export const getHomeCareersData = cache(getHomeCareersUncached);
+
 async function getGalleryPagePayloadUncached(): Promise<{
   gallery: GalleryDisplayItem[];
   galleryMonHocTabs: GalleryMonHocTab[];

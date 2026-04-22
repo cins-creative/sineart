@@ -169,7 +169,7 @@
 .hpb-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
@@ -177,7 +177,7 @@
 .hpb-row-label {
   font-size: 13px;
   color: #6b6860;
-  min-width: 130px;
+  min-width: 100px;
   flex-shrink: 0;
 }
 
@@ -197,13 +197,13 @@ a.hpb-row-label--link:hover {
 .hpb-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .hpb-pill {
   display: inline-flex;
   align-items: center;
-  padding: 5px 13px;
+  padding: 5px 10px;
   border-radius: 99px;
   border: 1.5px solid rgba(0, 0, 0, 0.14);
   background: #fff;

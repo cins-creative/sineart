@@ -8,6 +8,8 @@ import { buildLyThuyetHref } from "@/lib/data/ly-thuyet-shared";
 import type { LyThuyetCard } from "@/types/ly-thuyet";
 import { GROUP_ACCENT } from "@/types/ly-thuyet";
 
+import LibNavLink from "./_components/LibNavLink";
+
 /**
  * Client view cho landing `/kien-thuc-nen-tang`:
  *   - Left sidebar: ô tìm bài + danh sách bài group theo nhóm (anchor tới
@@ -81,13 +83,13 @@ export default function KienThucNenTangView({ groups }: { groups: LandingGroup[]
               <div className="lnav-section" key={g.nhom}>
                 <p className="lnav-cat">{g.nhom}</p>
                 {g.items.map((it) => (
-                  <Link
+                  <LibNavLink
                     key={it.id}
                     href={buildLyThuyetHref(it.slug)}
                     className="lnav-item"
                   >
                     {it.ten}
-                  </Link>
+                  </LibNavLink>
                 ))}
                 {/* Anchor link tới section trong main khi user muốn scroll xem lưới */}
                 <a className="lnav-item" href={`#nhom-${idx}`} style={{ fontStyle: "italic", opacity: 0.7 }}>

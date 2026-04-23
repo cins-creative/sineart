@@ -18,6 +18,9 @@ import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 import type { LyThuyet } from "@/types/ly-thuyet";
 import { GROUP_ACCENT, NHOM_ORDER } from "@/types/ly-thuyet";
 
+import LibNavLink from "../_components/LibNavLink";
+import TocScrollSpy from "../_components/TocScrollSpy";
+
 import "../kien-thuc-library.css";
 
 /**
@@ -252,23 +255,21 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                 <div className="lnav-section" key={g.nhom}>
                   <p className="lnav-cat">{g.nhom}</p>
                   {g.items.map((it) => (
-                    <Link
+                    <LibNavLink
                       key={it.id}
                       href={buildLyThuyetHref(it.slug)}
-                      className={
-                        it.id === current.id ? "lnav-item on" : "lnav-item"
-                      }
-                      aria-current={it.id === current.id ? "page" : undefined}
+                      className="lnav-item"
+                      isActive={it.id === current.id}
                     >
                       {it.ten}
-                    </Link>
+                    </LibNavLink>
                   ))}
                 </div>
               ))}
             </aside>
 
             {/* ───────── MAIN ───────── */}
-            <main>
+            <main key={current.slug} className="ktn-main-enter">
               <nav className="bc" aria-label="Breadcrumb">
                 <Link href="/kien-thuc-nen-tang">Thư viện</Link>
                 {current.nhom ? (
@@ -287,11 +288,13 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                 style={{ ["--hero-accent" as string]: accent }}
               >
                 <div className="hero-glow" />
-                <div className="hero-content">
+                <div
+                  className="hero-content"
+                  data-issue={`N°${String(current.id).padStart(2, "0")}`}
+                >
                   <p className="hero-issue">
                     Thư viện
                     {current.nhom ? ` · ${current.nhom}` : ""}
-                    {` · N° ${String(current.id).padStart(2, "0")}`}
                   </p>
                   <h1 className="hero-title">
                     {heroSplit.a ? (
@@ -409,41 +412,37 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                     </>
                   ) : null}
 
-                  <div className="pn">
-                    {prev ? (
-                      <Link
-                        href={buildLyThuyetHref(prev.slug)}
-                        className="pn-a pn-prev-c"
-                      >
-                        <p className="pn-l">← Bài trước</p>
-                        <p className="pn-t">{prev.ten}</p>
-                      </Link>
-                    ) : (
-                      <div className="pn-a pn-prev-c" aria-disabled>
-                        <p className="pn-l">← Bài trước</p>
-                        <p className="pn-t">Đây là bài đầu tiên</p>
-                      </div>
-                    )}
-                    {next ? (
-                      <Link
-                        href={buildLyThuyetHref(next.slug)}
-                        className="pn-a pn-next-c"
-                      >
-                        <p className="pn-l">Bài tiếp theo →</p>
-                        <p
-                          className="pn-t"
-                          style={{ color: "#fff", fontStyle: "normal" }}
+                  {prev || next ? (
+                    <div
+                      className="pn"
+                      data-only-prev={!next && prev ? "" : undefined}
+                      data-only-next={!prev && next ? "" : undefined}
+                    >
+                      {prev ? (
+                        <Link
+                          href={buildLyThuyetHref(prev.slug)}
+                          className="pn-a pn-prev-c"
                         >
-                          {next.ten}
-                        </p>
-                      </Link>
-                    ) : (
-                      <div className="pn-a pn-prev-c" aria-disabled>
-                        <p className="pn-l">Bài tiếp theo →</p>
-                        <p className="pn-t">Đây là bài cuối trong nhóm</p>
-                      </div>
-                    )}
-                  </div>
+                          <p className="pn-l">← Bài trước</p>
+                          <p className="pn-t">{prev.ten}</p>
+                        </Link>
+                      ) : null}
+                      {next ? (
+                        <Link
+                          href={buildLyThuyetHref(next.slug)}
+                          className="pn-a pn-next-c"
+                        >
+                          <p className="pn-l">Bài tiếp theo →</p>
+                          <p
+                            className="pn-t"
+                            style={{ color: "#fff", fontStyle: "normal" }}
+                          >
+                            {next.ten}
+                          </p>
+                        </Link>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </main>
@@ -461,6 +460,7 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                       </a>
                     ))}
                   </nav>
+                  <TocScrollSpy ids={toc.map((t) => t.id)} />
                 </>
               ) : null}
 

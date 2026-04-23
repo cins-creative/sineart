@@ -16,6 +16,64 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;700;800;900&family=Quicksand:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,700&display=swap");
 
+/* Smooth anchor scroll (TOC → section). Chỉ apply khi trang đang render
+   thư viện để không ảnh hưởng page khác. */
+html:has(.ktn-lib) { scroll-behavior: smooth; }
+
+/* Scroll offset — tránh NavBar sticky đè tiêu đề khi click anchor. */
+.ktn-lib h2[id],
+.ktn-lib h3[id],
+.ktn-lib [id^="sec-"],
+.ktn-lib [id^="nhom-"] { scroll-margin-top: 96px; }
+
+/* ═══════════════ PAGE ENTRANCE + LINK PENDING ANIMATIONS ═══════════════ */
+@keyframes ktnFadeSlideUp {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes ktnFadeInStagger {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes ktnShimmerSweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@keyframes ktnPulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.35); opacity: 0.6; }
+}
+@keyframes ktnLinkUnderline {
+  0%   { background-size: 0% 100%; }
+  100% { background-size: 100% 100%; }
+}
+
+/* Main content mount animation — key={slug} forces React re-mount trên
+   server component route change → keyframe replay mỗi bài mới. */
+.ktn-lib .ktn-main-enter {
+  animation: ktnFadeSlideUp 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ktn-lib .ktn-main-enter > .hero {
+  animation: ktnFadeSlideUp 620ms 60ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ktn-lib .ktn-main-enter > .body {
+  animation: ktnFadeInStagger 560ms 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ktn-lib .ktn-main-enter > .related-section {
+  animation: ktnFadeInStagger 560ms 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Giảm motion nếu user prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  html:has(.ktn-lib) { scroll-behavior: auto; }
+  .ktn-lib .ktn-main-enter,
+  .ktn-lib .ktn-main-enter > .hero,
+  .ktn-lib .ktn-main-enter > .body,
+  .ktn-lib .ktn-main-enter > .related-section {
+    animation: none;
+  }
+}
+
 .ktn-lib {
   --ink: #2d2020;
   --ink-2: rgba(45, 32, 32, 0.75);
@@ -29,9 +87,14 @@
   --hh: #fde859;
   --bc: #6efec0;
   --tt: #bb89f8;
-  --fd: "Be Vietnam Pro", sans-serif;
-  --fb: "Quicksand", sans-serif;
-  --fs: "Fraunces", Georgia, serif;
+  /* Type system:
+     - --fs: serif editorial cho tiêu đề, quote, số to (Lora + italic).
+     - --fd: serif display cho uppercase labels / eyebrow (Lora).
+     - --fb: sans-serif body — Quicksand (loaded ở root layout), dễ đọc,
+       full Vietnamese subset. Tránh Georgia/Windows bug combining marks NFD. */
+  --fd: var(--font-lora), var(--font-montserrat), Georgia, "Times New Roman", serif;
+  --fb: var(--font-quicksand), var(--font-montserrat), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fs: var(--font-lora), var(--font-montserrat), Georgia, "Times New Roman", serif;
   --sh-card: 0 2px 12px rgba(45, 32, 32, 0.04),
     0 1px 3px rgba(45, 32, 32, 0.04);
   --sh-cta: 0 6px 24px rgba(232, 72, 150, 0.35),
@@ -128,26 +191,101 @@
   background: var(--ink-d);
 }
 .ktn-lib .lnav-item {
-  display: block;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--ink-m);
-  padding: 6px 12px;
+  padding: 8px 12px;
   border-left: 2px solid transparent;
   margin-left: -2px;
-  transition: all 0.15s;
   cursor: pointer;
   text-decoration: none;
   line-height: 1.45;
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 10px 10px 0;
+  overflow: hidden;
+  isolation: isolate;
+  transition: color 0.2s ease, background-color 0.25s ease,
+    border-left-color 0.25s ease, transform 0.12s ease;
 }
-.ktn-lib .lnav-item:hover { color: var(--ink-2); background: var(--ink-t); }
+/* Shimmer sweep overlay — chạy khi hover */
+.ktn-lib .lnav-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(238, 91, 159, 0.12) 45%,
+    rgba(248, 166, 104, 0.12) 55%,
+    transparent 80%
+  );
+  transform: translateX(-105%);
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  z-index: -1;
+}
+.ktn-lib .lnav-item:hover {
+  color: var(--ink-2);
+  background: var(--ink-t);
+  border-left-color: var(--ink-d);
+}
+.ktn-lib .lnav-item:hover::before { transform: translateX(105%); }
+.ktn-lib .lnav-item:active { transform: translateX(1px) scale(0.995); }
 .ktn-lib .lnav-item.on {
   color: var(--mag);
   border-left-color: var(--mag);
   font-weight: 700;
   font-family: var(--fd);
-  background: rgba(238, 91, 159, 0.05);
+  background: linear-gradient(90deg,
+    rgba(238, 91, 159, 0.10) 0%,
+    rgba(238, 91, 159, 0.02) 100%);
+}
+/* Đang active + đang pending navigation → thêm dấu nhấn chevron bên phải */
+.ktn-lib .lnav-item .lib-link-label { flex: 1; min-width: 0; }
+
+/* Pending state: cha component set class `.is-pending` khi useLinkStatus
+   báo pending. CSS hiện dot pulsing + progress bar top. */
+.ktn-lib .lnav-item .lib-link-pending {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mag);
+  flex-shrink: 0;
+  animation: ktnPulseDot 0.9s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(238, 91, 159, 0.18);
+}
+/* Khi bất kỳ `.lnav-item` nào có descendant `.lib-link-pending` → style
+   parent link với progress bar shimmer overlay. Dùng `:has()` modern browsers. */
+.ktn-lib .lnav-item:has(.lib-link-pending) {
+  color: var(--mag);
+  background: rgba(238, 91, 159, 0.08);
+  border-left-color: var(--mag);
+}
+.ktn-lib .lnav-item:has(.lib-link-pending)::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--mag) 50%,
+    transparent 100%
+  );
+  animation: ktnShimmerSweep 1.1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ktn-lib .lnav-item::before { display: none; }
+  .ktn-lib .lnav-item .lib-link-pending { animation: none; opacity: 0.8; }
+  .ktn-lib .lnav-item:has(.lib-link-pending)::after { animation: none; }
 }
 
 .ktn-lib .lnav-empty {
@@ -185,41 +323,99 @@
 .ktn-lib .hero {
   position: relative;
   width: 100%;
-  aspect-ratio: 16/9;
-  background: linear-gradient(135deg, #2d2020 0%, #3d1f2f 60%, #2d1520 100%);
+  min-height: 440px;
+  background:
+    radial-gradient(
+      120% 80% at 85% 15%,
+      color-mix(in oklab, var(--hero-accent, #ee5b9f) 38%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      90% 70% at 10% 90%,
+      rgba(248, 166, 104, 0.32) 0%,
+      transparent 55%
+    ),
+    linear-gradient(135deg, #1a1210 0%, #2d1a25 45%, #3d1f2f 75%, #1f1418 100%);
   display: flex;
   align-items: flex-end;
-  padding: 40px 48px;
+  padding: 48px 52px 44px;
   overflow: hidden;
-  border-bottom: 4px solid var(--mag);
+  isolation: isolate;
+  border-bottom: 4px solid var(--hero-accent, var(--mag));
   margin-top: 18px;
+  color: #fff;
 }
+/* Grid overlay — thin, warm, subtle */
 .ktn-lib .hero::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(rgba(248, 166, 104, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(248, 166, 104, 0.07) 1px, transparent 1px);
-  background-size: 48px 48px;
+  background-image:
+    linear-gradient(rgba(248, 166, 104, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(248, 166, 104, 0.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.15) 70%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.15) 70%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
 }
+/* Halftone dots in top-right — editorial magazine vibe */
 .ktn-lib .hero::after {
   content: "";
   position: absolute;
-  bottom: -40px;
+  top: -60px;
   right: -40px;
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, rgba(238, 91, 159, 0.35) 0%, transparent 65%);
-  border-radius: 50%;
+  width: 360px;
+  height: 360px;
+  background:
+    radial-gradient(
+      circle at center,
+      color-mix(in oklab, var(--hero-accent, #ee5b9f) 55%, transparent) 0%,
+      transparent 35%
+    ),
+    radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.28) 1.4px, transparent 2px);
+  background-size: 100% 100%, 14px 14px;
+  background-position: center center;
+  filter: blur(0.2px);
+  mask-image: radial-gradient(circle at center, #000 0%, #000 40%, transparent 68%);
+  -webkit-mask-image: radial-gradient(circle at center, #000 0%, #000 40%, transparent 68%);
+  pointer-events: none;
+  z-index: 1;
 }
+/* Accent diagonal stripe (tuỳ accent) — “art direction mark” */
 .ktn-lib .hero-glow {
   position: absolute;
-  top: -40px;
-  left: 60px;
-  width: 240px;
-  height: 240px;
-  background: radial-gradient(circle, rgba(248, 166, 104, 0.25) 0%, transparent 65%);
+  bottom: -80px;
+  left: -60px;
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--hero-accent, #ee5b9f) 45%, transparent) 0%,
+    transparent 60%
+  );
   border-radius: 50%;
+  filter: blur(6px);
+  pointer-events: none;
+  z-index: 1;
+}
+/* Numeric watermark (N° xx) lặng ở phải dưới */
+.ktn-lib .hero-content::before {
+  content: attr(data-issue);
+  position: absolute;
+  right: -6px;
+  bottom: -22px;
+  font-family: var(--fs);
+  font-size: clamp(140px, 18vw, 220px);
+  font-weight: 900;
+  font-style: italic;
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.06);
+  letter-spacing: -0.04em;
+  pointer-events: none;
+  z-index: 0;
+  user-select: none;
 }
 .ktn-lib .hero-kw {
   position: absolute;
@@ -239,20 +435,36 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.24em;
-  color: var(--peach);
+  color: color-mix(in oklab, var(--hero-accent, var(--peach)) 70%, #fff 30%);
   text-transform: uppercase;
-  margin-bottom: 14px;
+  margin: 0 0 14px;
+  position: relative;
+  padding-left: 22px;
+}
+/* Small tick marker cho eyebrow */
+.ktn-lib .hero-issue::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 14px;
+  height: 2px;
+  background: var(--hero-accent, var(--peach));
+  transform: translateY(-50%);
 }
 .ktn-lib .hero-title {
   font-family: var(--fs);
-  font-size: clamp(34px, 5vw, 64px);
+  font-size: clamp(36px, 5.2vw, 68px);
   font-weight: 900;
-  line-height: 1;
+  line-height: 1.02;
   letter-spacing: -0.02em;
   color: #fff;
-  margin-bottom: 18px;
-  max-width: 90%;
-  padding: 4px 8px 4px 0;
+  margin: 0 0 18px;
+  max-width: min(90%, 720px);
+  padding: 0;
+  text-wrap: balance;
+  word-break: break-word;
+  hyphens: auto;
 }
 .ktn-lib .hero-title em {
   font-style: italic;
@@ -578,9 +790,10 @@
 .ktn-lib .subj.bc { background: linear-gradient(180deg, rgba(45, 32, 32, 0.1) 0%, rgba(45, 32, 32, 0.7) 100%), var(--bc); }
 .ktn-lib .subj.tt { background: linear-gradient(180deg, rgba(45, 32, 32, 0.1) 0%, rgba(45, 32, 32, 0.75) 100%), var(--tt); }
 .ktn-lib .subj-kw { position: absolute; top: 14px; left: 16px; font-family: var(--fd); font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(45, 32, 32, 0.7); background: rgba(255, 255, 255, 0.7); padding: 5px 9px; border-radius: 999px; backdrop-filter: blur(4px); }
-.ktn-lib .subj-tag { font-family: var(--fd); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); margin-bottom: 6px; position: relative; z-index: 1; }
-.ktn-lib .subj h4 { font-family: var(--fs); font-size: 28px; font-weight: 900; font-style: italic; color: #fff; margin-bottom: 8px; letter-spacing: -0.02em; line-height: 1.05; position: relative; z-index: 1; padding: 2px 6px 2px 0; }
-.ktn-lib .subj p { font-size: 12px; line-height: 1.55; color: rgba(255, 255, 255, 0.85); font-weight: 500; margin: 0; position: relative; z-index: 1; }
+.ktn-lib .body article .subj .subj-tag { font-family: var(--fd); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255, 255, 255, 0.8); margin: 0 0 6px; position: relative; z-index: 1; }
+.ktn-lib .body article .subj h4 { font-family: var(--fs); font-size: 28px; font-weight: 900; font-style: italic; color: #fff; margin: 0 0 8px; letter-spacing: -0.02em; line-height: 1.05; position: relative; z-index: 1; padding: 2px 6px 2px 0; }
+.ktn-lib .body article .subj p { font-size: 12px; line-height: 1.55; color: rgba(255, 255, 255, 0.9); font-weight: 500; margin: 0; position: relative; z-index: 1; }
+.ktn-lib .body article .subj p strong { color: #fff; }
 
 /* Compare */
 .ktn-lib .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 28px 0 40px; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
@@ -641,13 +854,16 @@
 .ktn-lib .gls-def { font-size: 12.5px; line-height: 1.6; color: var(--ink-2); font-weight: 500; margin-top: 6px; }
 
 /* Key takeaway */
-.ktn-lib .key { margin: 52px 0; padding: 44px 52px; background: linear-gradient(135deg, #2d2020 0%, #3d1f2f 100%); color: #fff; position: relative; overflow: hidden; border-top: 4px solid var(--mag); }
-.ktn-lib .key::before { content: ""; position: absolute; top: -40px; right: -40px; width: 280px; height: 280px; background: radial-gradient(circle, rgba(238, 91, 159, 0.4) 0%, transparent 65%); border-radius: 50%; }
-.ktn-lib .key::after { content: ""; position: absolute; bottom: -30px; left: -20px; width: 180px; height: 180px; background: radial-gradient(circle, rgba(248, 166, 104, 0.3) 0%, transparent 65%); border-radius: 50%; }
-.ktn-lib .key-lbl { font-family: var(--fd); font-size: 10px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: var(--peach); margin-bottom: 16px; position: relative; z-index: 1; }
-.ktn-lib .key-t { font-family: var(--fs); font-size: 36px; font-weight: 900; font-style: italic; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 14px; position: relative; z-index: 1; max-width: 80%; padding: 4px 0; }
-.ktn-lib .key-t em { font-style: italic; background: linear-gradient(135deg, #fde859, #f8a668); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-.ktn-lib .key-d { font-size: 14.5px; line-height: 1.7; color: rgba(255, 255, 255, 0.8); font-weight: 500; position: relative; z-index: 1; max-width: 540px; }
+.ktn-lib .body article .key { margin: 52px 0; padding: 44px 52px; background: linear-gradient(135deg, #2d2020 0%, #3d1f2f 100%); color: #fff; position: relative; overflow: hidden; border-top: 4px solid var(--mag); }
+.ktn-lib .body article .key::before { content: ""; position: absolute; top: -40px; right: -40px; width: 280px; height: 280px; background: radial-gradient(circle, rgba(238, 91, 159, 0.4) 0%, transparent 65%); border-radius: 50%; }
+.ktn-lib .body article .key::after { content: ""; position: absolute; bottom: -30px; left: -20px; width: 180px; height: 180px; background: radial-gradient(circle, rgba(248, 166, 104, 0.3) 0%, transparent 65%); border-radius: 50%; }
+.ktn-lib .body article .key .key-lbl { font-family: var(--fd); font-size: 10px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: var(--peach); margin: 0 0 16px; position: relative; z-index: 1; }
+.ktn-lib .body article .key .key-t { font-family: var(--fs); font-size: 36px; font-weight: 900; font-style: italic; line-height: 1.15; letter-spacing: -0.02em; color: #fff; margin: 0 0 14px; position: relative; z-index: 1; max-width: 80%; padding: 4px 0; }
+.ktn-lib .body article .key .key-t em { font-style: italic; color: #fde859; background: linear-gradient(135deg, #fde859, #f8a668); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.ktn-lib .body article .key .key-t strong { color: #fff; }
+.ktn-lib .body article .key .key-d { font-size: 14.5px; line-height: 1.7; color: rgba(255, 255, 255, 0.88); font-weight: 500; margin: 0; position: relative; z-index: 1; max-width: 540px; }
+.ktn-lib .body article .key .key-d strong { color: #fff; }
+.ktn-lib .body article .key .key-d em { color: rgba(255, 255, 255, 0.75); }
 
 /* FAQ */
 .ktn-lib .faq { margin: 28px 0 0; border-top: 2px solid var(--ink); }
@@ -698,6 +914,8 @@
 .ktn-lib .rel-t { font-family: var(--fd); font-size: 13px; font-weight: 900; color: var(--ink); margin-bottom: 2px; letter-spacing: -0.01em; }
 .ktn-lib .rel-s { font-size: 11.5px; color: var(--ink-m); font-weight: 600; }
 .ktn-lib .pn { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--ink-b); }
+.ktn-lib .pn[data-only-prev],
+.ktn-lib .pn[data-only-next] { grid-template-columns: 1fr; }
 .ktn-lib .pn-a { padding: 14px 16px; border-radius: 12px; text-decoration: none; transition: transform 0.15s; }
 .ktn-lib .pn-prev-c { border: 1.5px solid var(--ink-b); background: #fff; }
 .ktn-lib .pn-prev-c:hover { border-color: var(--ink-2); }
@@ -1037,7 +1255,8 @@
   .ktn-lib .cmp-col.l, .ktn-lib .dd-col.good { border-right: 0; border-bottom: 1px solid var(--ink-d); }
   .ktn-lib .gls-body { grid-template-columns: 1fr; }
   .ktn-lib .rel-grid, .ktn-lib .pn { grid-template-columns: 1fr; }
-  .ktn-lib .hero { padding: 32px 28px; aspect-ratio: auto; min-height: 320px; }
+  .ktn-lib .hero { padding: 40px 32px 36px; min-height: 380px; }
+  .ktn-lib .hero-content::before { font-size: clamp(120px, 22vw, 180px); right: -12px; bottom: -18px; }
   .ktn-lib .body { padding: 36px 24px 48px; }
   .ktn-lib .body .break { margin-left: -24px !important; margin-right: -24px !important; }
   .ktn-lib .lib-landing-hero, .ktn-lib .lib-landing-body, .ktn-lib .related-section { padding-left: 24px; padding-right: 24px; }
@@ -1046,12 +1265,13 @@
   .ktn-lib .stat:last-child { border-bottom: 0; }
 }
 @media (max-width: 520px) {
-  .ktn-lib .hero { padding: 24px 18px; min-height: 260px; }
-  .ktn-lib .hero-title { font-size: 34px; }
+  .ktn-lib .hero { padding: 28px 20px 24px; min-height: 320px; }
+  .ktn-lib .hero-title { font-size: 36px; line-height: 1.05; }
+  .ktn-lib .hero-content::before { font-size: clamp(100px, 28vw, 150px); right: -8px; bottom: -10px; }
   .ktn-lib .div-num { font-size: 60px; min-width: 90px; }
   .ktn-lib .div-title { font-size: 20px; }
-  .ktn-lib .key { padding: 32px 24px; margin: 36px 0; }
-  .ktn-lib .key-t { font-size: 26px; max-width: 100%; }
+  .ktn-lib .body article .key { padding: 32px 24px; margin: 36px 0; }
+  .ktn-lib .body article .key .key-t { font-size: 26px; max-width: 100%; }
   .ktn-lib .pr-row { grid-template-columns: 40px 1fr; grid-template-areas: "i n" ". d"; gap: 8px 14px; }
   .ktn-lib .pr-i { grid-area: i; }
   .ktn-lib .pr-n { grid-area: n; }

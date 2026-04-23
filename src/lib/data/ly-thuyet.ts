@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { createStaticClient } from "@/lib/supabase/static";
 import type {
   LyThuyet,
@@ -66,7 +68,7 @@ const FULL_COLUMNS =
  * `ADD COLUMN slug text UNIQUE`). Nếu lỗi (schema cache cũ / role thiếu
  * grant / cột chưa tồn tại) → retry bỏ `slug` và log để debug.
  */
-export async function fetchAllLyThuyet(): Promise<LyThuyet[]> {
+async function fetchAllLyThuyetImpl(): Promise<LyThuyet[]> {
   const supabase = createStaticClient();
   if (!supabase) {
     console.error(
@@ -121,7 +123,9 @@ export async function fetchAllLyThuyet(): Promise<LyThuyet[]> {
  * fetch all + match slug JS-side (đã được `enrichLyThuyet` sinh ra từ
  * `slug` DB hoặc slugify `ten_ly_thuyet`).
  */
-export async function fetchLyThuyetBySlug(slug: string): Promise<LyThuyet | null> {
+async function fetchLyThuyetBySlugImpl(
+  slug: string
+): Promise<LyThuyet | null> {
   if (!slug) return null;
   const supabase = createStaticClient();
   if (!supabase) return null;
@@ -161,6 +165,13 @@ export async function fetchLyThuyetBySlug(slug: string): Promise<LyThuyet | null
   const items = (all.data as unknown as LyThuyetRow[]).map(enrichLyThuyet);
   return items.find((r) => r.slug === slug) ?? null;
 }
+
+/* React `cache()` wrappers: dedupe nhiều call trùng argument trong cùng một
+   request. Tối ưu cho streaming — khi nhiều Suspense boundary cùng fetch
+   `fetchAllLyThuyet()` / `fetchLyThuyetBySlug(slug)` thì chỉ có 1 round-trip
+   tới Supabase, các boundary còn lại re-use Promise cache. */
+export const fetchAllLyThuyet = cache(fetchAllLyThuyetImpl);
+export const fetchLyThuyetBySlug = cache(fetchLyThuyetBySlugImpl);
 
 /** Prev / Next trong cùng nhóm theo thứ tự `id`. */
 export function computePrevNext(

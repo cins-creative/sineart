@@ -79,24 +79,35 @@ export default function KienThucNenTangView({ groups }: { groups: LandingGroup[]
           {filteredGroups.length === 0 ? (
             <p className="lnav-empty">Không có bài khớp.</p>
           ) : (
-            filteredGroups.map((g, idx) => (
-              <div className="lnav-section" key={g.nhom}>
-                <p className="lnav-cat">{g.nhom}</p>
-                {g.items.map((it) => (
-                  <LibNavLink
-                    key={it.id}
-                    href={buildLyThuyetHref(it.slug)}
+            filteredGroups.map((g, idx) => {
+              const groupAccent = GROUP_ACCENT[g.nhom] ?? "#ee5b9f";
+              return (
+                <div
+                  className="lnav-section"
+                  key={g.nhom}
+                  style={{ ["--lnav-cat-accent" as string]: groupAccent }}
+                >
+                  <p className="lnav-cat">{g.nhom}</p>
+                  {g.items.map((it) => (
+                    <LibNavLink
+                      key={it.id}
+                      href={buildLyThuyetHref(it.slug)}
+                      className="lnav-item"
+                    >
+                      {it.ten}
+                    </LibNavLink>
+                  ))}
+                  {/* Anchor link tới section trong main khi user muốn scroll xem lưới */}
+                  <a
                     className="lnav-item"
+                    href={`#nhom-${idx}`}
+                    style={{ fontStyle: "italic", opacity: 0.7 }}
                   >
-                    {it.ten}
-                  </LibNavLink>
-                ))}
-                {/* Anchor link tới section trong main khi user muốn scroll xem lưới */}
-                <a className="lnav-item" href={`#nhom-${idx}`} style={{ fontStyle: "italic", opacity: 0.7 }}>
-                  ↓ Xem lưới nhóm
-                </a>
-              </div>
-            ))
+                    ↓ Xem lưới nhóm
+                  </a>
+                </div>
+              );
+            })
           )}
         </aside>
 

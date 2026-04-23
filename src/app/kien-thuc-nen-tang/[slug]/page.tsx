@@ -2,23 +2,23 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Script from "next/script";
+import { Suspense } from "react";
 
-import NavBar from "../../_components/NavBar";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import {
   buildLyThuyetHref,
-  computePrevNext,
-  computeRelated,
-  fetchAllLyThuyet,
   fetchAllLyThuyetSlugs,
   fetchLyThuyetBySlug,
 } from "@/lib/data/ly-thuyet";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
-import type { LyThuyet } from "@/types/ly-thuyet";
-import { GROUP_ACCENT, NHOM_ORDER } from "@/types/ly-thuyet";
+import { GROUP_ACCENT } from "@/types/ly-thuyet";
 
-import LibNavLink from "../_components/LibNavLink";
+import HeroFocusToggle from "../_components/HeroFocusToggle";
+import LibSidebarNav from "../_components/LibSidebarNav";
+import { LibSidebarNavSkeleton } from "../_components/LibSidebarNav.skeleton";
+import NavBarBoundary from "../_components/NavBarBoundary";
+import { NavBarBoundarySkeleton } from "../_components/NavBarBoundary.skeleton";
+import RelatedNav from "../_components/RelatedNav";
+import { RelatedNavSkeleton } from "../_components/RelatedNav.skeleton";
 import TocScrollSpy from "../_components/TocScrollSpy";
 
 import "../kien-thuc-library.css";
@@ -45,13 +45,11 @@ function injectH2Ids(
     /<h2([^>]*)>([\s\S]*?)<\/h2>/gi,
     (_m, attrs: string, inner: string) => {
       counter += 1;
-      // Parse existing id (nếu admin đã gắn) → ưu tiên.
       const idMatch = /id\s*=\s*["']([^"']+)["']/i.exec(attrs);
       const id = idMatch ? idMatch[1] : `sec-${counter}`;
       const newAttrs = idMatch
         ? attrs
         : `${attrs} id="${id}"`.replace(/\s+/g, " ");
-      // Label: strip tag bên trong (vd `.div-title` chứa text đơn giản).
       const label = inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
       toc.push({ id, label });
       return `<h2${newAttrs}>${inner}</h2>`;
@@ -66,7 +64,6 @@ function splitHeroTitle(ten: string): { a: string; b: string } {
   const clean = ten.replace(/\s+/g, " ").trim();
   if (clean.length <= 14 || !clean.includes(" ")) return { a: "", b: clean };
   const mid = Math.floor(clean.length / 2);
-  // Tìm space gần midpoint nhất (ưu tiên trước midpoint để phần em kéo dài hơn).
   let splitAt = clean.lastIndexOf(" ", mid);
   if (splitAt < clean.length / 4) splitAt = clean.indexOf(" ", mid);
   if (splitAt <= 0) return { a: "", b: clean };
@@ -117,48 +114,33 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+/**
+ * Streaming strategy (xem STREAMING_REFACTOR.md):
+ *
+ * 1. Top-level `await fetchLyThuyetBySlug(slug)` — single-row lookup, rất
+ *    nhanh. Cần thiết cho:
+ *    - 404 check (`notFound()` phải ở top level để trả status HTTP đúng).
+ *    - `generateMetadata` (đã await riêng).
+ *    - Render critical content ngay: hero title, body HTML, toc, tags, JSON-LD.
+ *
+ * 2. Phần còn lại stream qua 3 Suspense boundary độc lập:
+ *    - `<NavBarBoundary />` — fetch `courses` cho navbar (không liên quan bài).
+ *    - `<LibSidebarNav />` — fetch toàn bộ bài lý thuyết cho sidebar trái.
+ *    - `<RelatedNav />` — fetch toàn bộ bài cho prev/next + related ở cuối.
+ *
+ * Các fetch ở data layer đều được `React.cache()` wrap → `fetchAllLyThuyet()`
+ * gọi từ `LibSidebarNav` + `RelatedNav` chỉ gây 1 round-trip Supabase thật
+ * sự, boundary còn lại share promise qua request-scoped cache.
+ */
 export default async function LyThuyetDetailPage({ params }: Props) {
   const { slug } = await params;
-
-  const [current, allItems, { courses }] = await Promise.all([
-    fetchLyThuyetBySlug(slug),
-    fetchAllLyThuyet(),
-    getKhoaHocPageData(),
-  ]);
-
+  const current = await fetchLyThuyetBySlug(slug);
   if (!current) notFound();
 
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
-
-  /* ────────────────── Derived data ────────────────── */
+  /* ────────────────── Derived data (từ current, không DB) ────────────────── */
   const { html: contentHtml, toc } = injectH2Ids(current.content ?? "");
-  const { prev, next } = computePrevNext(allItems, current);
-  const related = computeRelated(allItems, current, 4);
   const heroSplit = splitHeroTitle(current.ten);
   const accent = GROUP_ACCENT[current.nhom ?? ""] ?? "#ee5b9f";
-
-  /* Sidebar nav: tất cả bài, group theo nhóm, highlight bài current. */
-  const sidebarGroups: Array<{ nhom: string; items: LyThuyet[] }> = NHOM_ORDER
-    .map((nhom) => ({
-      nhom: nhom as string,
-      items: allItems.filter((r) => r.nhom === nhom),
-    }))
-    .filter((g) => g.items.length > 0);
-  // Nhóm khác không thuộc enum — append cuối.
-  const knownNhom = new Set<string>(NHOM_ORDER);
-  const otherNhoms = Array.from(
-    new Set(
-      allItems
-        .map((r) => r.nhom)
-        .filter((n): n is string => !!n && !knownNhom.has(n))
-    )
-  );
-  for (const nhom of otherNhoms) {
-    sidebarGroups.push({
-      nhom,
-      items: allItems.filter((r) => r.nhom === nhom),
-    });
-  }
 
   /* JSON-LD Article + BreadcrumbList */
   const jsonLdArticle = {
@@ -224,17 +206,18 @@ export default async function LyThuyetDetailPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdBreadcrumb) }}
       />
       <div className="sa-root kien-thuc-nen-tang-root">
-        <NavBar khoaHocGroups={khoaHocGroups} />
+        {/* Suspense #1: NavBar (cần fetch courses) — stream độc lập, không
+            chặn hero/body. Skeleton giữ đúng chiều cao để tránh CLS. */}
+        <Suspense fallback={<NavBarBoundarySkeleton />}>
+          <NavBarBoundary />
+        </Suspense>
 
         <div className="ktn-lib">
           <div className="page">
             {/* ───────── LEFT NAV ───────── */}
             <aside className="lnav" aria-label="Danh mục thư viện">
               <div className="lnav-search">
-                {/* Search ở detail chỉ là shortcut trở về landing — search
-                    thật được implement ở landing (client state). Dùng <Link>
-                    bao `<input readOnly>` để giữ visual giống search bar mà
-                    không cần mount client component riêng. */}
+                {/* Search chỉ là shortcut về landing — static, render ngay. */}
                 <Link
                   href="/kien-thuc-nen-tang"
                   aria-label="Mở tìm kiếm ở trang thư viện"
@@ -251,21 +234,10 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                 </Link>
               </div>
 
-              {sidebarGroups.map((g) => (
-                <div className="lnav-section" key={g.nhom}>
-                  <p className="lnav-cat">{g.nhom}</p>
-                  {g.items.map((it) => (
-                    <LibNavLink
-                      key={it.id}
-                      href={buildLyThuyetHref(it.slug)}
-                      className="lnav-item"
-                      isActive={it.id === current.id}
-                    >
-                      {it.ten}
-                    </LibNavLink>
-                  ))}
-                </div>
-              ))}
+              {/* Suspense #2: Danh mục bài (cần fetchAllLyThuyet). */}
+              <Suspense fallback={<LibSidebarNavSkeleton />}>
+                <LibSidebarNav currentId={current.id} />
+              </Suspense>
             </aside>
 
             {/* ───────── MAIN ───────── */}
@@ -282,11 +254,12 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                 <span className="bc-cur">{current.ten}</span>
               </nav>
 
-              {/* HERO */}
+              {/* HERO — render ngay từ `current` (top-level fetch). */}
               <div
                 className="hero"
                 style={{ ["--hero-accent" as string]: accent }}
               >
+                <HeroFocusToggle />
                 <div className="hero-glow" />
                 <div
                   className="hero-content"
@@ -316,11 +289,8 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                 </div>
               </div>
 
-              {/* BODY — render HTML content từ DB.
-                 Admin trust content → OK để dangerouslySetInnerHTML
-                 (xem brief §7: HTML Content Safety). */}
+              {/* BODY — render HTML content từ DB. Static từ top-level fetch. */}
               <div className="body">
-                {/* Video chính (nếu có): hiển thị trên đầu body, trên drop-cap. */}
                 {current.video ? (
                   <div
                     className="bleed break"
@@ -349,7 +319,6 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                   </p>
                 )}
 
-                {/* Video tham khảo khác (nếu có) */}
                 {current.video_tham_khao_khac ? (
                   <div
                     className="bleed break"
@@ -367,84 +336,10 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                 ) : null}
               </div>
 
-              {/* Related + Prev/Next */}
-              {related.length > 0 || prev || next ? (
-                <div className="related-section">
-                  {related.length > 0 ? (
-                    <>
-                      <p className="sec-lbl">Bài cùng chủ đề</p>
-                      <div className="rel-grid">
-                        {related.map((r, i) => {
-                          const thumb = r.thumbnail
-                            ? cfImageForThumbnail(r.thumbnail) ?? r.thumbnail
-                            : null;
-                          return (
-                            <Link
-                              key={r.id}
-                              href={buildLyThuyetHref(r.slug)}
-                              className="rel-card"
-                            >
-                              <div className="rel-th">
-                                {thumb ? (
-                                  /* eslint-disable-next-line @next/next/no-img-element */
-                                  <img
-                                    src={thumb}
-                                    alt={r.ten}
-                                    loading="lazy"
-                                    decoding="async"
-                                  />
-                                ) : (
-                                  <span>
-                                    {String(i + 1).padStart(2, "0")}
-                                  </span>
-                                )}
-                              </div>
-                              <div>
-                                <p className="rel-t">{r.ten}</p>
-                                <p className="rel-s">
-                                  {r.nhom ?? "Thư viện"} · {r.readingMin} phút
-                                </p>
-                              </div>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </>
-                  ) : null}
-
-                  {prev || next ? (
-                    <div
-                      className="pn"
-                      data-only-prev={!next && prev ? "" : undefined}
-                      data-only-next={!prev && next ? "" : undefined}
-                    >
-                      {prev ? (
-                        <Link
-                          href={buildLyThuyetHref(prev.slug)}
-                          className="pn-a pn-prev-c"
-                        >
-                          <p className="pn-l">← Bài trước</p>
-                          <p className="pn-t">{prev.ten}</p>
-                        </Link>
-                      ) : null}
-                      {next ? (
-                        <Link
-                          href={buildLyThuyetHref(next.slug)}
-                          className="pn-a pn-next-c"
-                        >
-                          <p className="pn-l">Bài tiếp theo →</p>
-                          <p
-                            className="pn-t"
-                            style={{ color: "#fff", fontStyle: "normal" }}
-                          >
-                            {next.ten}
-                          </p>
-                        </Link>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+              {/* Suspense #3: Related + Prev/Next (cần fetchAllLyThuyet). */}
+              <Suspense fallback={<RelatedNavSkeleton />}>
+                <RelatedNav slug={current.slug} />
+              </Suspense>
             </main>
 
             {/* ───────── RIGHT SIDEBAR ───────── */}

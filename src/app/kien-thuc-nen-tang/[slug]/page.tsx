@@ -13,6 +13,7 @@ import {
 import { GROUP_ACCENT } from "@/types/ly-thuyet";
 
 import HeroFocusToggle from "../_components/HeroFocusToggle";
+import LibraryContent from "../_components/LibraryContent";
 import LibSidebarNav from "../_components/LibSidebarNav";
 import { LibSidebarNavSkeleton } from "../_components/LibSidebarNav.skeleton";
 import NavBarBoundary from "../_components/NavBarBoundary";
@@ -308,10 +309,11 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                 ) : null}
 
                 {contentHtml ? (
-                  <article
-                    className="ktn-lib-content"
-                    dangerouslySetInnerHTML={{ __html: contentHtml }}
-                  />
+                  /* Wrap qua Client Component để đăng ký `window.showPanel`
+                     cho inline handler của `.el-list-hover` (admin nhập HTML
+                     có `onmouseover="showPanel('elXX')"`). Xem
+                     `_components/LibraryContent.tsx`. */
+                  <LibraryContent html={contentHtml} />
                 ) : (
                   <p className="intro">
                     {current.short_content ??

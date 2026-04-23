@@ -26,7 +26,7 @@ type EnrollRow = { lop_hoc: number | null };
 
 /** Cột tối thiểu cho danh sách / aggregate — tránh `select('*')`. */
 const MON_HOC_CARD_SELECT =
-  "id, ten_mon_hoc, loai_khoa_hoc, thumbnail, is_featured, hinh_thuc, thu_tu_hien_thi, si_so, video_gioi_thieu, gioi_thieu_mon_hoc";
+  "id, ten_mon_hoc, loai_khoa_hoc, thumbnail, is_featured, hinh_thuc, thu_tu_hien_thi, si_so, video_gioi_thieu, gioi_thieu_mon_hoc, ket_qua_dat_duoc";
 
 function normalizeClassSlug(urlClass: string | null | undefined): string {
   const raw = String(urlClass ?? "").trim();
@@ -287,7 +287,38 @@ function mapMonToDetail(
         ? String(row.gioi_thieu_mon_hoc).trim()
         : null,
     siSo: siNum != null && siNum > 0 ? siNum : null,
+    ketQuaDatDuoc: normalizeKetQuaDatDuoc(row.ket_qua_dat_duoc),
   };
+}
+
+/** Parse `ql_mon_hoc.ket_qua_dat_duoc` (JSONB) → `LearnOutcome[]`.
+ *  Phòng trường hợp dữ liệu cũ lưu dạng string[] hoặc object không chuẩn. */
+function normalizeKetQuaDatDuoc(
+  raw: MonHoc["ket_qua_dat_duoc"] | unknown
+): KhoaHocDetailData["ketQuaDatDuoc"] {
+  if (!Array.isArray(raw)) return null;
+  const items = raw
+    .map((it): { title: string; desc?: string } | null => {
+      if (typeof it === "string") {
+        const t = it.trim();
+        if (!t) return null;
+        const [title, ...rest] = t.split(/\s+[—–-]\s+/);
+        const desc = rest.join(" — ").trim();
+        return desc
+          ? { title: title.trim(), desc }
+          : { title: title.trim() };
+      }
+      if (it && typeof it === "object") {
+        const obj = it as { title?: unknown; desc?: unknown };
+        const title = String(obj.title ?? "").trim();
+        if (!title) return null;
+        const desc = String(obj.desc ?? "").trim();
+        return desc ? { title, desc } : { title };
+      }
+      return null;
+    })
+    .filter((x): x is { title: string; desc?: string } => x !== null);
+  return items.length ? items : null;
 }
 
 /**

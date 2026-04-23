@@ -5,6 +5,7 @@ import type {
   HocPhiBlockData,
   KhoaHocDetailData,
   KhoaHocReviewStats,
+  LearnOutcome,
   OngoingClassCard,
 } from "@/types/khoa-hoc";
 import HocPhiBlock from "@/components/courses/HocPhiBlock";
@@ -17,7 +18,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   KD_DANH_CHO_AI,
-  KD_DEFAULT_LEARN,
+  KD_DEFAULT_LEARN_BY_GROUP,
   KD_FAQ,
   KD_REVIEWS,
   KD_THREE_SUBJECTS,
@@ -32,14 +33,20 @@ const GROUP_CRUMB: Record<KhoaHocDetailData["group"], string> = {
   botro: "Bổ trợ",
 };
 
-function learnBullets(tinh: string | null): string[] {
-  if (!tinh?.trim()) return [...KD_DEFAULT_LEARN];
-  const parts = tinh
-    .split(/[.•\n]+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length >= 12); // loại bỏ fragment quá ngắn (vd: "Online", "Tại lớp")
-  if (parts.length >= 3) return parts.slice(0, 8);
-  return [...KD_DEFAULT_LEARN.slice(0, 8 - parts.length), ...parts].slice(0, 8);
+/**
+ * Tạo danh sách năng lực cho section «Bạn sẽ học được gì».
+ * Ưu tiên DB (`ketQuaDatDuoc`), nếu chưa có thì fallback theo nhóm.
+ * Luôn giới hạn 4–8 item để giữ cân đối grid.
+ */
+function learnBullets(
+  dbOutcomes: KhoaHocDetailData["ketQuaDatDuoc"],
+  group: KhoaHocDetailData["group"]
+): LearnOutcome[] {
+  const src =
+    dbOutcomes && dbOutcomes.length
+      ? dbOutcomes
+      : KD_DEFAULT_LEARN_BY_GROUP[group];
+  return src.slice(0, 8);
 }
 
 function normalizeMonLabel(s: string): string {
@@ -109,6 +116,12 @@ function IconStar({ className }: { className?: string }) {
     </svg>
   );
 }
+export type BaiTapGroup = {
+  monHocId: number;
+  monHocName: string;
+  items: BaiTap[];
+};
+
 export default function KhoaHocDetailView({
   detail,
   fallbackTitle,
@@ -118,6 +131,7 @@ export default function KhoaHocDetailView({
   hocPhiAllowCapToc = false,
   teacherPortfolioSlides = [],
   baiTapList = [],
+  baiTapGroups = [],
   ongoingClasses = [],
   reviewStats = DEFAULT_REVIEW_STATS,
 }: {
@@ -129,6 +143,7 @@ export default function KhoaHocDetailView({
   hocPhiAllowCapToc?: boolean;
   teacherPortfolioSlides?: TeacherPortfolioSlide[];
   baiTapList?: BaiTap[];
+  baiTapGroups?: BaiTapGroup[];
   ongoingClasses?: OngoingClassCard[];
   reviewStats?: KhoaHocReviewStats;
 }) {
@@ -145,7 +160,10 @@ export default function KhoaHocDetailView({
   const group = d?.group ?? "lthi";
   const crumbMid = GROUP_CRUMB[group];
 
-  const bullets = useMemo(() => learnBullets(d?.tinhChat ?? null), [d?.tinhChat]);
+  const bullets = useMemo(
+    () => learnBullets(d?.ketQuaDatDuoc ?? null, group),
+    [d?.ketQuaDatDuoc, group]
+  );
 
   const introVideoEmbedSrc = useMemo(
     () => toEmbedUrl(d?.videoGioiThieu ?? null),
@@ -155,6 +173,58 @@ export default function KhoaHocDetailView({
   const [hvGalIdx, setHvGalIdx] = useState(0);
   const [faqOpen, setFaqOpen] = useState<number | null>(0);
   const [dhpEmailModalOpen, setDhpEmailModalOpen] = useState(false);
+
+  /** Tabs giáo trình — mặc định ưu tiên "Hình họa" → "Trang trí màu" → "Bố cục màu"
+   * → fallback môn đầu tiên. Sắp xếp theo thứ tự sư phạm của Luyện thi. */
+  const hasCurriculumTabs = baiTapGroups.length > 0;
+  const sortedBaiTapGroups = useMemo(() => {
+    if (baiTapGroups.length === 0) return baiTapGroups;
+    const norm = (s: string) =>
+      s
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")
+        .toLowerCase();
+    const priority = (name: string): number => {
+      const n = norm(name);
+      if (n.includes("hinh hoa")) return 0;
+      if (n.includes("trang tri mau") || n.includes("trang tri")) return 1;
+      if (n.includes("bo cuc mau") || n.includes("bo cuc")) return 2;
+      return 10;
+    };
+    return [...baiTapGroups].sort((a, b) => {
+      const pa = priority(a.monHocName);
+      const pb = priority(b.monHocName);
+      if (pa !== pb) return pa - pb;
+      return a.monHocName.localeCompare(b.monHocName, "vi");
+    });
+  }, [baiTapGroups]);
+  const defaultMonTabId = hasCurriculumTabs
+    ? sortedBaiTapGroups[0]!.monHocId
+    : null;
+  const [activeMonTab, setActiveMonTab] = useState<number | null>(defaultMonTabId);
+  useEffect(() => {
+    if (!hasCurriculumTabs) {
+      setActiveMonTab(null);
+      return;
+    }
+    const ids = sortedBaiTapGroups.map((g) => g.monHocId);
+    if (activeMonTab == null || !ids.includes(activeMonTab)) {
+      setActiveMonTab(sortedBaiTapGroups[0]!.monHocId);
+    }
+  }, [sortedBaiTapGroups, hasCurriculumTabs, activeMonTab]);
+
+  const activeGroup = useMemo(
+    () =>
+      hasCurriculumTabs
+        ? (sortedBaiTapGroups.find((g) => g.monHocId === activeMonTab) ??
+          sortedBaiTapGroups[0])
+        : null,
+    [sortedBaiTapGroups, activeMonTab, hasCurriculumTabs]
+  );
+
+  const curriculumCount = hasCurriculumTabs
+    ? (activeGroup?.items.length ?? 0)
+    : baiTapList.length;
 
   useEffect(() => {
     setHvGalIdx((i) => {
@@ -412,10 +482,10 @@ export default function KhoaHocDetailView({
                 <div key={i} className="kd-out-cell">
                   <div className="kd-out-num">{String(i + 1).padStart(2, "0")}</div>
                   <div>
-                    <div className="kd-out-title">{b.split("—")[0]?.trim() ?? b}</div>
-                    {b.includes("—") && (
-                      <div className="kd-out-desc">{b.split("—").slice(1).join("—").trim()}</div>
-                    )}
+                    <div className="kd-out-title">{b.title}</div>
+                    {b.desc ? (
+                      <div className="kd-out-desc">{b.desc}</div>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -424,18 +494,68 @@ export default function KhoaHocDetailView({
 
           {/* ── 04 CURRICULUM ── */}
           <section className="kd-block" id="curriculum">
-            <div className="kd-sec-label">Giáo trình {baiTapList.length > 0 ? `${baiTapList.length} buổi` : ""}</div>
+            <div className="kd-sec-label">
+              Giáo trình{curriculumCount > 0 ? ` ${curriculumCount} buổi` : ""}
+            </div>
             <h2 className="kd-sec-title">
-              Lộ trình <em>tuần tự, có kiểm tra</em>
+              {hasCurriculumTabs ? (
+                <>
+                  Lộ trình <em>từng môn Luyện thi</em>
+                </>
+              ) : (
+                <>
+                  Lộ trình <em>tuần tự, có kiểm tra</em>
+                </>
+              )}
             </h2>
             <p className="kd-sec-sub">
-              Mỗi buổi 3 giờ, bắt đầu bằng demo giáo viên, kết thúc bằng bài tập chấm 1-1.
+              {hasCurriculumTabs
+                ? "Khóa Luyện thi tại lớp gồm 3 môn chính — chọn môn để xem chi tiết giáo trình."
+                : "Mỗi buổi 3 giờ, bắt đầu bằng demo giáo viên, kết thúc bằng bài tập chấm 1-1."}
             </p>
-            <BaiTapList
-              monHocId={hocPhiMonId ?? undefined}
-              initialData={baiTapList}
-              enrollUrl={autoRegisterHref}
-            />
+
+            {hasCurriculumTabs ? (
+              <div className="kd-curr-tabs-wrap">
+                <div
+                  className="kd-curr-tabs"
+                  role="tablist"
+                  aria-label="Môn học Luyện thi"
+                >
+                  {sortedBaiTapGroups.map((g) => {
+                    const sel = g.monHocId === activeMonTab;
+                    return (
+                      <button
+                        key={g.monHocId}
+                        type="button"
+                        role="tab"
+                        aria-selected={sel}
+                        className={`kd-curr-tab${sel ? " kd-curr-tab--active" : ""}`}
+                        onClick={() => setActiveMonTab(g.monHocId)}
+                      >
+                        <span className="kd-curr-tab-name">{g.monHocName}</span>
+                        <span className="kd-curr-tab-count">
+                          {g.items.length} bài
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {activeGroup ? (
+                  <BaiTapList
+                    key={`group-${activeGroup.monHocId}`}
+                    monHocId={activeGroup.monHocId}
+                    initialData={activeGroup.items}
+                    enrollUrl={autoRegisterHref}
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <BaiTapList
+                monHocId={hocPhiMonId ?? undefined}
+                initialData={baiTapList}
+                enrollUrl={autoRegisterHref}
+              />
+            )}
           </section>
 
           {/* ── 05 INTRO VIDEO ── */}
@@ -493,8 +613,10 @@ export default function KhoaHocDetailView({
                           <span aria-hidden>⚡</span> Cấp tốc
                         </span>
                       )}
+                      <div className="kd-sch-name" title={c.title}>
+                        {c.title}
+                      </div>
                       <div className="kd-sch-day">{c.lich}</div>
-                      <div className="kd-sch-time">{c.gio}</div>
                       <div className="kd-sch-meta">GV: {c.gvNames}</div>
                       <div className="kd-oc-seats">
                         {hetCho ? "Hết chỗ" : `Còn chỗ`} · {c.filled}/{c.total}

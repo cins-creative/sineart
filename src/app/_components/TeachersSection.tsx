@@ -1,8 +1,9 @@
 "use client";
 
-import { cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
 import type { TeacherArtSlide } from "@/types/homepage";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /** Chỉ cuộn ngang trong container — không dùng scrollIntoView (tránh kéo cả trang dọc tới section). */
 function scrollCardCentered(
@@ -28,6 +29,22 @@ export default function TeachersSection({
   const scrollRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef(0);
   const [activeDot, setActiveDot] = useState(0);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  /** Đóng lightbox bằng Esc, lock scroll body khi mở */
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxSrc(null);
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [lightboxSrc]);
 
   const slideKey = useMemo(
     () => slides.map((s) => s.id).join("\0"),
@@ -113,14 +130,19 @@ export default function TeachersSection({
       ) : slides.length === 1 ? (
         <div className="teacher-scroll teacher-scroll--single" ref={scrollRef}>
           <div className="tc">
-            <div className="tc-art-full">
+            <button
+              type="button"
+              className="tc-art-full tc-art-btn"
+              aria-label="Xem toàn màn hình tác phẩm của giáo viên"
+              onClick={() => setLightboxSrc(slides[0]!.src)}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={cfImageForThumbnail(slides[0]!.src) || slides[0]!.src}
                 alt=""
                 className="tc-art-img"
               />
-            </div>
+            </button>
           </div>
         </div>
       ) : (
@@ -128,14 +150,19 @@ export default function TeachersSection({
           <div className="teacher-scroll" ref={scrollRef}>
             {loopSlides.map((s, i) => (
               <div key={`${s.id}-${i}`} className="tc">
-                <div className="tc-art-full">
+                <button
+                  type="button"
+                  className="tc-art-full tc-art-btn"
+                  aria-label="Xem toàn màn hình tác phẩm của giáo viên"
+                  onClick={() => setLightboxSrc(s.src)}
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={cfImageForThumbnail(s.src) || s.src}
                     alt=""
                     className="tc-art-img"
                   />
-                </div>
+                </button>
               </div>
             ))}
           </div>
@@ -149,6 +176,43 @@ export default function TeachersSection({
           </div>
         </>
       )}
+
+      {lightboxSrc && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="gallery-lightbox"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Tác phẩm giáo viên — toàn màn hình"
+              onClick={() => setLightboxSrc(null)}
+            >
+              <button
+                type="button"
+                className="gallery-lightbox-close"
+                aria-label="Đóng"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxSrc(null);
+                }}
+              >
+                ×
+              </button>
+              <div
+                className="gallery-lightbox-body"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={cfImageForLightbox(lightboxSrc) || lightboxSrc}
+                  alt=""
+                  className="gallery-lightbox-img"
+                  decoding="async"
+                />
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

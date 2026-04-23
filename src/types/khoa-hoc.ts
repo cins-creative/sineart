@@ -130,6 +130,9 @@ export type HocPhiBlockData = {
 };
 
 /** Chi tiết trang /khoa-hoc/[slug] */
+/** Một gạch đầu dòng của khối «Bạn sẽ học được gì» (section #outcomes) */
+export type LearnOutcome = { title: string; desc?: string };
+
 export type KhoaHocDetailData = {
   id: number;
   tenMonHoc: string;
@@ -151,6 +154,9 @@ export type KhoaHocDetailData = {
   gioiThieuMonHocHtml: string | null;
   /** `ql_mon_hoc.si_so` — sỉ số tối đa / lớp */
   siSo: number | null;
+  /** `ql_mon_hoc.ket_qua_dat_duoc` (JSONB) — section #outcomes.
+   *  Nếu `null` thì UI dùng fallback theo nhóm tại `KD_DEFAULT_LEARN_BY_GROUP`. */
+  ketQuaDatDuoc: LearnOutcome[] | null;
 };
 
 /** Tổng hợp đánh giá cho sidebar — từ `ql_danh_gia` */

@@ -82,7 +82,6 @@ export const NAV_ITEMS: NavItem[] = [
       },
       { emoji: "🟪", label: "Free ebook", href: "/ebook" },
       { emoji: "🟨", label: "Đề thi", href: "/tong-hop-de-thi" },
-      { emoji: "🟪", label: "Mẫu vẽ hình họa", href: "/mau-ve" },
     ],
   },
   {

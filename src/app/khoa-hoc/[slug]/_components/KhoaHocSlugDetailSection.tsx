@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
 import KhoaHocDetailView from "../../_components/KhoaHocDetailView";
 import { SLUG_LABELS } from "../slug-labels";
-import { getBaiTapListForMon } from "@/lib/data/bai-tap";
+import {
+  getBaiTapGroupsForLoaiKhoaHoc,
+  getBaiTapListForMon,
+} from "@/lib/data/bai-tap";
 import {
   getGlobalTeacherPortfolioSlides,
   getHocPhiBlockData,
@@ -50,18 +53,44 @@ export async function KhoaHocSlugDetailSection({ slug }: Props) {
 
   /** Cùng chuỗi với `h1.kd-title` trong KhoaHocDetailView — lọc gallery bài học viên */
   const galleryCourseTitle = detail?.tenMonHoc ?? fallback ?? slug;
-  const [hocPhiBlock, studentGallery, baiTapList, ongoingClasses, reviewStats] =
-    await Promise.all([
-      monIdForFee != null ? getHocPhiBlockData(monIdForFee) : Promise.resolve(null),
-      getStudentGalleryForKhoaHocPage(detail, galleryCourseTitle),
-      monIdForFee != null
-        ? getBaiTapListForMon(monIdForFee)
-        : Promise.resolve([]),
-      monIdForFee != null
-        ? getOngoingClassesForMon(monIdForFee, detail?.hinhThucTag ?? "Tại lớp")
-        : Promise.resolve([]),
-      getKhoaHocReviewStats(monIdForFee ?? null),
-    ]);
+
+  /**
+   * Khóa "tổng hợp" Luyện thi (vd: "Luyện thi tại lớp") không có `bai_tap` trực tiếp.
+   * Thay vì hiển thị empty, fetch các môn con cùng `loai_khoa_hoc = 'Luyện thi'`
+   * (thường là Hình họa / Trang trí màu / Bố cục màu) và render tabs giáo trình.
+   */
+  const isLuyenThiAggregate = loaiKhoaHocForFee === "Luyện thi";
+  const hinhThucPreferred = detail?.hinhThucTag ?? null;
+
+  const [
+    hocPhiBlock,
+    studentGallery,
+    baiTapList,
+    baiTapGroups,
+    ongoingClasses,
+    reviewStats,
+  ] = await Promise.all([
+    monIdForFee != null ? getHocPhiBlockData(monIdForFee) : Promise.resolve(null),
+    getStudentGalleryForKhoaHocPage(detail, galleryCourseTitle),
+    monIdForFee != null
+      ? getBaiTapListForMon(monIdForFee)
+      : Promise.resolve([]),
+    isLuyenThiAggregate
+      ? getBaiTapGroupsForLoaiKhoaHoc("Luyện thi", {
+          excludeMonId: monIdForFee,
+          hinhThucPreferred,
+        })
+      : Promise.resolve([]),
+    monIdForFee != null
+      ? getOngoingClassesForMon(monIdForFee, detail?.hinhThucTag ?? "Tại lớp")
+      : Promise.resolve([]),
+    getKhoaHocReviewStats(monIdForFee ?? null),
+  ]);
+
+  /** Nếu môn hiện tại đã có bài tập trực tiếp → ưu tiên (giữ flow cũ); chỉ dùng groups
+   * khi bản thân mon `baiTapList` trống nhưng có môn con Luyện thi. */
+  const effectiveGroups =
+    baiTapList.length === 0 && baiTapGroups.length > 0 ? baiTapGroups : [];
 
   return (
     <div className="sa-root khoa-hoc-page" style={{ height: "fit-content" }}>
@@ -74,6 +103,7 @@ export async function KhoaHocSlugDetailSection({ slug }: Props) {
         hocPhiAllowCapToc={hocPhiAllowCapToc}
         teacherPortfolioSlides={teacherPortfolioSlides}
         baiTapList={baiTapList}
+        baiTapGroups={effectiveGroups}
         ongoingClasses={ongoingClasses}
         reviewStats={reviewStats}
       />

@@ -1,5 +1,7 @@
 /** Nội dung minh họa (chưa nối CMS) — giữ layout theo mock */
 
+import type { CourseGroupId, LearnOutcome } from "@/types/khoa-hoc";
+
 export type KdLesson = {
   num: string;
   name: string;
@@ -187,14 +189,118 @@ export const KD_ONGOING_CLASSES: KdOngoingClassCard[] = [
   },
 ];
 
-export const KD_DEFAULT_LEARN = [
-  "Nắm vững kỹ thuật vẽ theo đúng tiêu chuẩn đề thi",
-  "Phối màu và bố cục theo nguyên tắc thẩm mỹ",
-  "Luyện tập theo format và thời gian quy định",
-  "Nhận xét và chỉnh sửa bài cùng giáo viên tại lớp",
-  "Truy cập tài liệu và bài giảng của chương trình",
-  "Theo dõi tiến độ qua từng buổi học",
-];
+/**
+ * Fallback cho section «Bạn sẽ học được gì» khi môn học chưa có dữ liệu
+ * `ql_mon_hoc.ket_qua_dat_duoc`. Tách theo 4 nhóm `CourseGroupId`, mỗi nhóm
+ * 4–8 gạch đầu dòng để match tone từng nhóm học viên.
+ */
+export const KD_DEFAULT_LEARN_BY_GROUP: Record<CourseGroupId, LearnOutcome[]> = {
+  lthi: [
+    {
+      title: "Dựng hình chuẩn đề thi",
+      desc: "Đo tỷ lệ, xác định trục, bố cục trang A3 theo format khối V/H.",
+    },
+    {
+      title: "Kỹ thuật sáng – tối",
+      desc: "Phân 5 sắc độ, đan nét, chuyển khối mềm đúng bài thi.",
+    },
+    {
+      title: "Nguyên lý phối màu",
+      desc: "Nóng – lạnh, tương phản, sắc xám trung gian có hệ thống.",
+    },
+    {
+      title: "Bố cục điểm nhấn",
+      desc: "Phân mảng, cân bằng, hướng nhìn dẫn vào nhân vật chính.",
+    },
+    {
+      title: "Giải đề thực chiến",
+      desc: "Làm đủ dạng đề đã ra qua các năm của trường bạn đăng ký.",
+    },
+    {
+      title: "Quản lý thời gian thi",
+      desc: "Hoàn thiện bài trong 240 phút, chia pha dựng – lên màu – chỉnh.",
+    },
+    {
+      title: "Portfolio thi cử",
+      desc: "Mỗi buổi có bài nộp, tối thiểu 20 tác phẩm đạt chuẩn.",
+    },
+    {
+      title: "Feedback 1-1 sau buổi",
+      desc: "Chấm trực tiếp từng học viên, sửa đến khi đạt yêu cầu.",
+    },
+  ],
+  digital: [
+    {
+      title: "Thành thạo phần mềm",
+      desc: "Photoshop / Procreate / Clip Studio — workflow từ sketch đến final.",
+    },
+    {
+      title: "Kỹ thuật line digital",
+      desc: "Pen pressure, line weight, đi nét sạch chuẩn illustrator.",
+    },
+    {
+      title: "Rendering ánh sáng",
+      desc: "Volume light, ambient, key – fill – rim light theo concept.",
+    },
+    {
+      title: "Phối màu digital",
+      desc: "Palette hài hòa, mood board, color harmony cho từng thể loại.",
+    },
+    {
+      title: "Quy trình concept art",
+      desc: "Từ ideation, thumbnail, rendering đến final render — đầy đủ pipeline.",
+    },
+    {
+      title: "Portfolio ngành",
+      desc: "6–10 tác phẩm đủ chất lượng apply studio / freelance thực tế.",
+    },
+  ],
+  kids: [
+    {
+      title: "Phát triển quan sát",
+      desc: "Nhìn vật thật, mô tả bằng hình — rèn tư duy thị giác từ nhỏ.",
+    },
+    {
+      title: "Tự tin sáng tạo",
+      desc: "Không sợ sai, dám thử vật liệu mới, hình thành phong cách cá nhân.",
+    },
+    {
+      title: "Kỹ năng vận động tinh",
+      desc: "Điều khiển bút, kiểm soát lực tay qua bài tập có hệ thống.",
+    },
+    {
+      title: "Hoàn thành tác phẩm",
+      desc: "Tính kiên trì qua dự án nhỏ 3–5 buổi, tự hào về kết quả.",
+    },
+  ],
+  botro: [
+    {
+      title: "Nền tảng cơ bản",
+      desc: "Đường nét, hình khối, phối cảnh — đủ dùng cho mọi hướng nghề.",
+    },
+    {
+      title: "Khả năng quan sát",
+      desc: "Đo đạc tỷ lệ, chuyển vật thể 3D sang hình vẽ 2D chuẩn.",
+    },
+    {
+      title: "Kiến thức giải phẫu",
+      desc: "Anatomy người và vật — phục vụ concept art, illustration.",
+    },
+    {
+      title: "Đa dạng vật liệu",
+      desc: "Chì, than, bút mực, acrylic, màu nước — mỗi chất liệu có bài riêng.",
+    },
+    {
+      title: "Thói quen vẽ đều",
+      desc: "Gắn kết đam mê qua portfolio cá nhân, sketchbook hàng ngày.",
+    },
+  ],
+};
+
+/** @deprecated Dùng `KD_DEFAULT_LEARN_BY_GROUP` hoặc `ketQuaDatDuoc` từ DB. */
+export const KD_DEFAULT_LEARN = KD_DEFAULT_LEARN_BY_GROUP.lthi.map((it) =>
+  it.desc ? `${it.title} — ${it.desc}` : it.title
+);
 
 export const KD_DANH_CHO_AI: { bold: string; text: string }[] = [
   {

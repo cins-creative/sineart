@@ -3,98 +3,94 @@ import Script from "next/script";
 
 import NavBar from "../_components/NavBar";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
+import {
+  fetchAllLyThuyet,
+  groupByNhom,
+  toCard,
+} from "@/lib/data/ly-thuyet";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 
-import KienThucNenTangView from "./KienThucNenTangView";
+import KienThucNenTangView, {
+  type LandingGroup,
+} from "./KienThucNenTangView";
+import "./kien-thuc-library.css";
+
+/**
+ * Revalidate ISR — tài liệu thư viện cập nhật không thường xuyên, nên cache
+ * 10 phút là hợp lý (giống các trang content khác: blogs, de-thi).
+ */
+export const revalidate = 600;
 
 export const metadata: Metadata = {
-  title: "Cơ sở tạo hình — 7 yếu tố nền tảng | Thư viện Sine Art",
+  title: "Thư viện kiến thức mỹ thuật nền tảng | Sine Art",
   description:
-    "Bài giảng Cơ sở tạo hình tại thư viện Sine Art: 7 yếu tố thị giác và 7 nguyên lý tổ chức — nền tảng cho học sinh thi khối H, V.",
+    "Thư viện bài lý thuyết nền tảng — nguyên lý tạo hình, bố cục, giải phẫu, màu sắc, sắc độ và vật liệu — do đội ngũ Sine Art biên soạn.",
   keywords: [
+    "thư viện Sine Art",
+    "lý thuyết mỹ thuật",
     "cơ sở tạo hình",
-    "yếu tố thị giác",
-    "nguyên lý tổ chức",
+    "nguyên lý thị giác",
     "khối H",
     "khối V",
-    "Sine Art",
   ],
   alternates: {
     canonical: "https://sineart.vn/kien-thuc-nen-tang",
   },
   openGraph: {
-    title: "Cơ sở tạo hình — 7 yếu tố nền tảng | Sine Art",
+    title: "Thư viện kiến thức mỹ thuật nền tảng | Sine Art",
     description:
-      "Ngôn ngữ thị giác nền tảng cho học sinh thi khối H, V và người mới học vẽ.",
+      "Tập hợp các bài lý thuyết nền tảng cho học sinh thi khối H, V và người yêu mỹ thuật.",
     locale: "vi_VN",
-    type: "article",
+    type: "website",
   },
   robots: { index: true, follow: true },
 };
 
-const jsonLdArticle = {
-  "@context": "https://schema.org",
-  "@type": "Article",
-  headline: "Cơ sở tạo hình — 7 yếu tố nền tảng",
-  description:
-    "Cơ sở tạo hình nghiên cứu các yếu tố và nguyên lý thị giác — nền tảng cho mọi ngành sáng tạo và kỳ thi khối H, V.",
-  author: { "@type": "Person", name: "Thầy Tú" },
-  publisher: {
-    "@type": "Organization",
-    name: "Sine Art",
-    logo: {
-      "@type": "ImageObject",
-      url: "https://sineart.vn/logo.png",
-    },
-  },
-  datePublished: "2026-04-18",
-  dateModified: "2026-04-18",
-  inLanguage: "vi-VN",
-  articleSection: "Lý thuyết cơ sở",
-};
-
-const jsonLdFaq = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: [
-    {
-      "@type": "Question",
-      name: "Cơ sở tạo hình là gì?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Cơ sở tạo hình là môn học nền tảng trong mỹ thuật, nghiên cứu có hệ thống các yếu tố thị giác cơ bản và các nguyên lý tổ chức chúng thành một tổng thể có giá trị thẩm mỹ.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Người mới có thể tự học Cơ sở tạo hình không?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Có thể tự học lý thuyết, nhưng phần thực hành bố cục và màu sắc cần có giảng viên chấm sửa bài để mắt học viên được hiệu chỉnh đúng hướng.",
-      },
-    },
-  ],
-};
-
 export default async function KienThucNenTangPage() {
-  const { courses } = await getKhoaHocPageData();
+  const [items, { courses }] = await Promise.all([
+    fetchAllLyThuyet(),
+    getKhoaHocPageData(),
+  ]);
   const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
+
+  const grouped = groupByNhom(items);
+  const groups: LandingGroup[] = grouped.map((g) => ({
+    nhom: g.nhom,
+    items: g.items.map(toCard),
+  }));
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Thư viện kiến thức mỹ thuật nền tảng — Sine Art",
+    description:
+      "Tập hợp các bài lý thuyết nền tảng về nguyên lý tạo hình, bố cục, giải phẫu, màu sắc, sắc độ và vật liệu.",
+    url: "https://sineart.vn/kien-thuc-nen-tang",
+    inLanguage: "vi-VN",
+    isPartOf: {
+      "@type": "WebSite",
+      name: "Sine Art",
+      url: "https://sineart.vn",
+    },
+    hasPart: items.slice(0, 20).map((it) => ({
+      "@type": "Article",
+      headline: it.ten,
+      description: it.short_content ?? undefined,
+      url: `https://sineart.vn/kien-thuc-nen-tang/${it.slug}`,
+      articleSection: it.nhom ?? undefined,
+    })),
+  };
 
   return (
     <>
       <Script
-        id="ktn-jsonld-article"
+        id="ktn-landing-jsonld"
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdArticle) }}
-      />
-      <Script
-        id="ktn-jsonld-faq"
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdFaq) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div className="sa-root kien-thuc-nen-tang-root">
         <NavBar khoaHocGroups={khoaHocGroups} />
-        <KienThucNenTangView />
+        <KienThucNenTangView groups={groups} />
       </div>
     </>
   );

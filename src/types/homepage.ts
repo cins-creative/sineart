@@ -17,6 +17,8 @@ export interface MonHoc {
   video_gioi_thieu?: string | null;
   /** HTML — khối «Nội dung môn học» trên trang chi tiết khóa */
   gioi_thieu_mon_hoc?: string | null;
+  /** JSONB — danh sách năng lực đạt được sau khoá, hiển thị tại section #outcomes */
+  ket_qua_dat_duoc?: Array<{ title: string; desc?: string | null }> | null;
 }
 
 export interface BaiHocVien {

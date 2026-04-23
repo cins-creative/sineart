@@ -168,6 +168,42 @@ async function fetchGalleryItemsByMonHocId(
   return mapHvBaiHocVienRowsToGalleryItems(data as unknown as BaiHocVien[]);
 }
 
+/**
+ * Tranh học viên (gallery) theo `ql_mon_hoc.loai_khoa_hoc` — dùng cho các trang khóa
+ * mà cần gom tranh của **nhiều môn cùng loại** (vd: "Luyện thi tại lớp" gom tất cả môn
+ * Luyện thi). Join inner: `hv_bai_hoc_vien → hv_he_thong_bai_tap → ql_mon_hoc`.
+ */
+async function fetchGalleryItemsByLoaiKhoaHoc(
+  supabase: SupabaseClient,
+  loaiKhoaHoc: string,
+  limit: number,
+  options?: HvGalleryFetchOptions
+): Promise<GalleryDisplayItem[]> {
+  const selectInner = `
+    id, photo, score, bai_mau,
+    ten_hoc_vien:ql_thong_tin_hoc_vien(full_name),
+    lop_hoc:ql_lop_hoc(class_name),
+    thuoc_bai_tap:hv_he_thong_bai_tap!inner(
+      ten_bai_tap,
+      mon_hoc:ql_mon_hoc!inner(id, ten_mon_hoc, loai_khoa_hoc)
+    )
+  `;
+  let q = supabase
+    .from("hv_bai_hoc_vien")
+    .select(selectInner)
+    .eq("status", "Hoàn thiện")
+    .eq("thuoc_bai_tap.mon_hoc.loai_khoa_hoc", loaiKhoaHoc);
+  if (options?.onlyStudentWork) {
+    q = q.eq("bai_mau", false);
+  }
+  const { data, error } = await q
+    .order("score", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error || !data?.length) return [];
+  return mapHvBaiHocVienRowsToGalleryItems(data as unknown as BaiHocVien[]);
+}
+
 function normalizeTenMonHoc(s: string | null | undefined): string {
   return (s ?? "")
     .trim()
@@ -248,8 +284,17 @@ export async function getStudentGalleryForKhoaHocPage(
     return [];
   }
 
-  // Rule riêng: trang "Luyện thi tại lớp" hiển thị toàn bộ tranh học viên.
+  // Rule riêng: trang "Luyện thi tại lớp" hiển thị toàn bộ tranh học viên
+  // thuộc các `ql_mon_hoc` có `loai_khoa_hoc = 'Luyện thi'` (join inner).
   if (isLuyenThiTaiLopTitle(displayTitle)) {
+    const items = await fetchGalleryItemsByLoaiKhoaHoc(
+      supabase,
+      "Luyện thi",
+      cap,
+      { onlyStudentWork: true }
+    );
+    if (items.length > 0) return items.slice(0, cap);
+    // Fallback: nếu embed join lỗi → dùng minimal + không filter (giữ cũ để không rỗng).
     const allItems = await fetchHvBaiHocVienGalleryItems(supabase, cap, {
       onlyStudentWork: true,
     });
@@ -278,6 +323,25 @@ export async function getStudentGalleryForKhoaHocPage(
     return filtered.slice(0, cap);
   }
   return galleryFilteredByCourseTitle(supabase, displayTitle, detail, cap);
+}
+
+/**
+ * Tranh học viên thuộc loại khoá "Luyện thi" (gom mọi môn Luyện thi) — dùng
+ * cho sidebar trang /tong-hop-de-thi/[slug] để giới thiệu tác phẩm học viên.
+ * Sort theo `score` desc (null cuối) để ưu tiên bài chất lượng cao.
+ */
+export async function getTopLuyenThiStudentWorks(
+  limit = 20
+): Promise<GalleryDisplayItem[]> {
+  const supabase = await createClient();
+  if (!supabase) return [];
+  const items = await fetchGalleryItemsByLoaiKhoaHoc(
+    supabase,
+    "Luyện thi",
+    limit,
+    { onlyStudentWork: true }
+  );
+  return items;
 }
 
 const HTBT_BAI_TAP_GALLERY_CAP = 120;

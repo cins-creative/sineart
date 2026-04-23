@@ -14,7 +14,7 @@ export default function StatStrip({ students, years, groups }: Props) {
       <div className="stat-card" role="listitem">
         <div className="stat-n">{students}</div>
         <div className="stat-l">Học viên đã theo học</div>
-        <div className="stat-s">Từ 2015 đến nay</div>
+        <div className="stat-s">Từ 2018 đến nay</div>
       </div>
       <div className="stat-card" role="listitem">
         <div className="stat-n">{years}</div>

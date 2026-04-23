@@ -682,9 +682,7 @@
   color: rgba(255, 255, 255, 0.88);
   margin: 0 0 10px;
   animation: fadeUp 0.5s 0.05s ease both;
-  text-shadow:
-    0 1px 2px rgba(12, 8, 8, 0.55),
-    0 2px 14px rgba(12, 8, 8, 0.4);
+  text-shadow: none;
 }
 
 .hero-headline {
@@ -1462,10 +1460,31 @@ button.mi {
   background:rgba(45,32,32,.06);
   line-height:0;
 }
+/* Button variant khi ảnh có thể click xem full màn hình */
+button.tc-art-full.tc-art-btn {
+  display:block;
+  padding:0;
+  border:0;
+  margin:0;
+  font:inherit;
+  color:inherit;
+  cursor:zoom-in;
+  text-align:left;
+  appearance:none;
+  -webkit-appearance:none;
+}
+button.tc-art-full.tc-art-btn:focus-visible {
+  outline:2px solid #ee5b9f;
+  outline-offset:2px;
+}
 .tc-art-img {
   display:block;
   width:100%;
   height:auto;
+  transition: transform .35s ease;
+}
+button.tc-art-full.tc-art-btn:hover .tc-art-img {
+  transform: scale(1.02);
 }
 
 .teacher-dots { display:flex; gap:5px; justify-content:center; margin-top:12px; }

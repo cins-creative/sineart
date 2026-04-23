@@ -126,6 +126,75 @@ async function getBaiTapListForMonFallback(
   }));
 }
 
+/**
+ * Gom bài tập theo từng môn cho các môn cùng `loai_khoa_hoc` (vd: "Luyện thi").
+ * Dùng trang `/khoa-hoc/[slug]` khi khóa tổng hợp (vd: Luyện thi tại lớp) cần
+ * render tabs giáo trình cho mỗi môn con (Hình họa / Trang trí màu / Bố cục màu).
+ *
+ * - `opts.excludeMonId`: loại bỏ mon hiện tại (tránh duplicate khi page tổng hợp).
+ * - `opts.hinhThucPreferred`: ưu tiên các môn cùng `hinh_thuc` với khóa đang xem.
+ */
+export async function getBaiTapGroupsForLoaiKhoaHoc(
+  loaiKhoaHoc: string,
+  opts?: {
+    excludeMonId?: number | null;
+    hinhThucPreferred?: string | null;
+  }
+): Promise<Array<{ monHocId: number; monHocName: string; items: BaiTap[] }>> {
+  const supabase = await createClient();
+  if (!supabase || !loaiKhoaHoc?.trim()) return [];
+
+  const { data: mons, error } = await supabase
+    .from("ql_mon_hoc")
+    .select("id, ten_mon_hoc, hinh_thuc, thu_tu_hien_thi")
+    .eq("loai_khoa_hoc", loaiKhoaHoc)
+    .order("thu_tu_hien_thi", { ascending: true });
+  if (error || !mons?.length) return [];
+
+  const rows = mons as Array<{
+    id: number;
+    ten_mon_hoc: string | null;
+    hinh_thuc: string | null;
+    thu_tu_hien_thi?: number | null;
+  }>;
+
+  const excludeId =
+    opts?.excludeMonId != null && Number.isFinite(Number(opts.excludeMonId))
+      ? Number(opts.excludeMonId)
+      : null;
+
+  const preferred = (opts?.hinhThucPreferred ?? "").trim();
+  const normalizeHT = (s: string | null) =>
+    (s ?? "")
+      .trim()
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase();
+  const preferredNorm = normalizeHT(preferred);
+
+  let filtered = rows.filter((m) => m.id != null);
+  if (excludeId != null) {
+    filtered = filtered.filter((m) => Number(m.id) !== excludeId);
+  }
+  if (preferredNorm) {
+    const matched = filtered.filter(
+      (m) => normalizeHT(m.hinh_thuc) === preferredNorm
+    );
+    if (matched.length >= 1) filtered = matched;
+  }
+
+  const groups = await Promise.all(
+    filtered.map(async (m) => {
+      const id = Number(m.id);
+      const name = String(m.ten_mon_hoc ?? "").trim() || "Môn học";
+      const items = await getBaiTapListForMon(id);
+      return { monHocId: id, monHocName: name, items };
+    })
+  );
+
+  return groups.filter((g) => g.items.length > 0);
+}
+
 /** Bài tập theo `hv_he_thong_bai_tap.mon_hoc` — dùng trang chi tiết khóa học. */
 export async function getBaiTapListForMon(monId: number): Promise<BaiTap[]> {
   const supabase = await createClient();

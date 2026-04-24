@@ -97,14 +97,6 @@ export default function KienThucNenTangView({ groups }: { groups: LandingGroup[]
                       {it.ten}
                     </LibNavLink>
                   ))}
-                  {/* Anchor link tới section trong main khi user muốn scroll xem lưới */}
-                  <a
-                    className="lnav-item"
-                    href={`#nhom-${idx}`}
-                    style={{ fontStyle: "italic", opacity: 0.7 }}
-                  >
-                    ↓ Xem lưới nhóm
-                  </a>
                 </div>
               );
             })

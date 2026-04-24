@@ -40,7 +40,7 @@ export default async function KienThucNenTangPage() {
       ten: item.ten,
       nhom: item.nhom,
       shortContent: item.mo_ta,
-      thumbnail: null,
+      thumbnail: item.thumbnail ?? null,
       tags: item.tags,
       readingMin: item.doc_time,
     })),

@@ -891,7 +891,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .el-intro-t { font-family: var(--fs); font-size: 24px; font-weight: 700; font-style: italic; line-height: 1.25; color: var(--ink); letter-spacing: -0.015em; }
 .ktn-lib .el-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; margin: 0 0 40px; }
 
-/* ── El-item: 2 layer stacked — text wipes up on hover to reveal image ── */
+/* ── El-item: text is normal flow (sets card height), image wipes in from below on hover ── */
 .ktn-lib .el-item {
   position: relative;
   overflow: hidden;
@@ -903,10 +903,9 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .el-item:nth-child(2n) { border-right: 0; }
 .ktn-lib .el-item:nth-last-child(-n + 2) { border-bottom: 0; }
 
-/* Layer 1 — text (z-index cao hơn, slide lên khi hover) */
+/* Layer 1 — text (normal flow → determines card height, no clipping) */
 .ktn-lib .el-item-text {
-  position: absolute;
-  inset: 0;
+  position: relative;
   padding: 22px 26px;
   background: var(--bg, #faf9f7);
   z-index: 2;
@@ -917,13 +916,19 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   transform: translateY(-100%);
 }
 
-/* Layer 2 — image (luôn ở dưới, lộ ra khi text wipe đi) */
+/* Layer 2 — image (absolute, starts below, wipes up on hover) */
 .ktn-lib .el-item-img {
   position: absolute;
   inset: 0;
   z-index: 1;
   background: var(--bg-3, #ede6e0);
   overflow: hidden;
+  transform: translateY(100%);
+  transition: transform 0.44s cubic-bezier(0.76, 0, 0.24, 1);
+  will-change: transform;
+}
+.ktn-lib .el-item:hover .el-item-img {
+  transform: translateY(0);
 }
 .ktn-lib .el-item-img img {
   width: 100%;
@@ -981,7 +986,8 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(45, 32, 32, 0) 35%, rgba(45, 32, 32, 0.55) 78%, rgba(45, 32, 32, 0.8) 100%);
+  background:
+    linear-gradient(180deg, rgba(45, 32, 32, 0.1) 0%, rgba(45, 32, 32, 0) 30%, rgba(45, 32, 32, 0.55) 72%, rgba(45, 32, 32, 0.82) 100%);
 }
 .ktn-lib .subj-kw { position: absolute; top: 14px; left: 16px; font-family: var(--fd); font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(45, 32, 32, 0.7); background: rgba(255, 255, 255, 0.7); padding: 5px 9px; border-radius: 999px; backdrop-filter: blur(4px); z-index: 1; }
 .ktn-lib .body article .subj .subj-tag { font-family: var(--fd); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255, 255, 255, 0.92); margin: 0 0 6px; position: relative; z-index: 1; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35); }

@@ -2044,9 +2044,9 @@ a.rv-source:focus-visible { outline:2px solid #4285F4; outline-offset:2px; borde
     grid-template-columns: unset;
     grid-template-rows: unset;
     grid-template-areas: none;
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(20px) saturate(1.12);
-    -webkit-backdrop-filter: blur(20px) saturate(1.12);
+    background: #ffffff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     border-radius: 0;
     overflow: visible;
   }

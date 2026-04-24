@@ -99,7 +99,7 @@ export default function DongHocPhiEmailGateModal({
   );
 
   const handleContinueWithEmail = useCallback(async () => {
-    const t = email.trim();
+    const t = email.trim().toLowerCase();
     if (!isValidStudentEmail(t)) {
       setError(STUDENT_EMAIL_REQUIREMENT_VI);
       return;
@@ -154,7 +154,7 @@ export default function DongHocPhiEmailGateModal({
   }, [monHocId, courseTitle, onClose, router, verifiedEmail]);
 
   const handleNavProfile = useCallback(async () => {
-    const t = verifiedEmail.trim();
+    const t = verifiedEmail.trim().toLowerCase();
     if (!t) return;
     const sb = createBrowserSupabaseClient();
     if (!sb) {

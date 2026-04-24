@@ -103,8 +103,8 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 
   font-family: var(--fb);
   background: var(--bleed-bg);
-  color: var(--ink);
-  -webkit-font-smoothing: antialiased;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
   font-size: 15px;
   line-height: 1.6;
 }
@@ -121,7 +121,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   display: grid;
   grid-template-columns: 240px 1fr 260px;
   max-width: 1440px;
-  margin: 0 auto;
+    margin: 0 auto;
   background: #fff;
   min-height: 100vh;
   box-shadow: 0 0 80px rgba(45, 32, 32, 0.04);
@@ -150,7 +150,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   border-radius: 10px;
   font-family: var(--fb);
   font-size: 12.5px;
-  color: var(--ink);
+    color: var(--ink);
   background: #fff;
   transition: border-color 0.15s;
 }
@@ -180,9 +180,9 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   margin: 0 0 10px;
   padding-left: 0;
   font-family: var(--fd);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   gap: 8px;
 }
 .ktn-lib .lnav-cat::before {
@@ -210,10 +210,10 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 13px;
+    font-size: 13px;
   font-weight: 600;
   color: var(--ink-m);
-  padding: 8px 12px;
+    padding: 8px 12px;
   border-left: 2px solid transparent;
   margin-left: -2px;
   cursor: pointer;
@@ -252,7 +252,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .lnav-item.on {
   color: var(--mag);
   border-left-color: var(--mag);
-  font-weight: 700;
+    font-weight: 700;
   font-family: var(--fd);
   background: linear-gradient(90deg,
     rgba(238, 91, 159, 0.10) 0%,
@@ -303,7 +303,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 }
 
 .ktn-lib .lnav-empty {
-  font-size: 12px;
+    font-size: 12px;
   color: var(--ink-m);
   padding: 6px 12px;
   font-style: italic;
@@ -316,8 +316,8 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 
 /* Breadcrumb */
 .ktn-lib .bc {
-  display: flex;
-  align-items: center;
+    display: flex;
+    align-items: center;
   gap: 6px;
   font-size: 11.5px;
   font-weight: 600;
@@ -335,7 +335,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
    DETAIL — HERO
    ════════════════════════════════════════════════════════════════ */
 .ktn-lib .hero {
-  position: relative;
+    position: relative;
   width: 100%;
   min-height: 440px;
   background:
@@ -353,16 +353,16 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   display: flex;
   align-items: flex-end;
   padding: 48px 52px 44px;
-  overflow: hidden;
+    overflow: hidden;
   isolation: isolate;
   border-bottom: 4px solid var(--hero-accent, var(--mag));
   margin-top: 18px;
   color: #fff;
-}
+  }
 /* Grid overlay — thin, warm, subtle */
 .ktn-lib .hero::before {
   content: "";
-  position: absolute;
+    position: absolute;
   inset: 0;
   background-image:
     linear-gradient(rgba(248, 166, 104, 0.06) 1px, transparent 1px),
@@ -376,7 +376,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 /* Halftone dots in top-right — editorial magazine vibe */
 .ktn-lib .hero::after {
   content: "";
-  position: absolute;
+    position: absolute;
   top: -60px;
   right: -40px;
   width: 360px;
@@ -394,11 +394,11 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   mask-image: radial-gradient(circle at center, #000 0%, #000 40%, transparent 68%);
   -webkit-mask-image: radial-gradient(circle at center, #000 0%, #000 40%, transparent 68%);
   pointer-events: none;
-  z-index: 1;
-}
+    z-index: 1;
+  }
 /* Accent diagonal stripe (tuỳ accent) — “art direction mark” */
 .ktn-lib .hero-glow {
-  position: absolute;
+    position: absolute;
   bottom: -80px;
   left: -60px;
   width: 380px;
@@ -411,7 +411,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   border-radius: 50%;
   filter: blur(6px);
   pointer-events: none;
-  z-index: 1;
+    z-index: 1;
 }
 /* ═══════ HERO FOCUS TOGGLE (top-right button group) ═══════ */
 .ktn-lib .hero-focus-toggle {
@@ -419,9 +419,9 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   top: 20px;
   right: 24px;
   z-index: 3;
-  display: flex;
+    display: flex;
   gap: 8px;
-  align-items: center;
+    align-items: center;
 }
 .ktn-lib .hft-btn {
   display: inline-flex;
@@ -429,8 +429,8 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   gap: 7px;
   padding: 8px 14px;
   font-family: var(--fd);
-  font-size: 11px;
-  font-weight: 700;
+    font-size: 11px;
+    font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.92);
@@ -542,7 +542,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   color: color-mix(in oklab, var(--hero-accent, var(--peach)) 70%, #fff 30%);
   text-transform: uppercase;
   margin: 0 0 14px;
-  position: relative;
+    position: relative;
   padding-left: 22px;
 }
 /* Small tick marker cho eyebrow */
@@ -559,7 +559,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .hero-title {
   font-family: var(--fs);
   font-size: clamp(36px, 5.2vw, 68px);
-  font-weight: 900;
+    font-weight: 900;
   /* line-height tối thiểu 1.18 để không cắt dấu tiếng Việt khi title có 2 dòng
      (ơ, ê, ý, ị, ờ, ở, ẫ…). Diacritics VN cao hơn ascenders Latin → cần
      thêm headroom so với default 1.0-1.05. */
@@ -580,8 +580,8 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .hero-title em {
   font-style: italic;
   background: linear-gradient(135deg, #fde859, #f8a668);
-  -webkit-background-clip: text;
-  background-clip: text;
+    -webkit-background-clip: text;
+    background-clip: text;
   -webkit-text-fill-color: transparent;
   display: inline-block;
   /* padding-block để gradient text-clip không cắt dấu tiếng Việt in nghiêng.
@@ -604,7 +604,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   gap: 14px 20px;
   font-family: var(--fd);
   font-size: 10px;
-  font-weight: 700;
+    font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.6);
@@ -647,9 +647,9 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .intro {
   font-family: var(--fs);
   font-size: 21px;
-  font-weight: 700;
+    font-weight: 700;
   line-height: 1.4;
-  color: var(--ink);
+    color: var(--ink);
   margin-bottom: 40px;
   letter-spacing: -0.015em;
 }
@@ -670,7 +670,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   line-height: 1.8;
   color: var(--ink-2);
   margin-bottom: 14px;
-  font-weight: 500;
+    font-weight: 500;
 }
 .ktn-lib .body p strong { color: var(--ink); font-weight: 700; }
 .ktn-lib .body p em { color: var(--ink-m); font-style: italic; }
@@ -710,7 +710,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
+    text-transform: uppercase;
   color: var(--mag);
   margin-bottom: 4px;
 }
@@ -720,7 +720,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   font-weight: 900;
   letter-spacing: -0.025em;
   line-height: 1.1;
-  color: var(--ink);
+    color: var(--ink);
   scroll-margin-top: 80px;
 }
 
@@ -729,9 +729,9 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   font-size: 16px;
   font-weight: 900;
   letter-spacing: -0.015em;
-  color: var(--ink);
+    color: var(--ink);
   margin: 24px 0 8px;
-  position: relative;
+    position: relative;
   padding-left: 22px;
 }
 .ktn-lib .sh3::before {
@@ -747,7 +747,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 
 /* Full-bleed image */
 .ktn-lib .bleed {
-  position: relative;
+    position: relative;
   width: 100%;
   aspect-ratio: 16/9;
   margin: 40px 0;
@@ -797,11 +797,11 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   bottom: 16px;
   right: 20px;
   font-family: var(--fd);
-  font-size: 10px;
+    font-size: 10px;
   font-weight: 700;
   color: var(--ink-m);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   background: rgba(255, 255, 255, 0.85);
   padding: 6px 12px;
   border-radius: 999px;
@@ -823,9 +823,9 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   justify-content: center;
   padding: 24px;
   gap: 10px;
-  position: relative;
-  overflow: hidden;
-}
+    position: relative;
+    overflow: hidden;
+  }
 .ktn-lib .spread-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
 .ktn-lib .spread-img .img-kw { font-family: var(--fs); font-size: 22px; font-weight: 900; font-style: italic; color: var(--ink); text-align: center; letter-spacing: -0.015em; line-height: 1.2; }
 .ktn-lib .spread-img .img-sub { font-family: var(--fd); font-size: 10px; font-weight: 700; color: var(--ink-m); letter-spacing: 0.15em; text-transform: uppercase; }
@@ -841,7 +841,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   color: var(--mag);
   opacity: 0.15;
   line-height: 1;
-  position: absolute;
+    position: absolute;
   top: -20px;
   left: 50%;
   transform: translateX(-50%);
@@ -855,7 +855,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   line-height: 1.25;
   color: var(--ink);
   margin-bottom: 14px;
-  position: relative;
+    position: relative;
   z-index: 1;
   max-width: 640px;
   margin-left: auto;
@@ -878,10 +878,53 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .el-intro-n { font-family: var(--fs); font-size: 108px; font-weight: 900; font-style: italic; line-height: 1; letter-spacing: -0.02em; background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; padding: 4px 12px 4px 4px; display: inline-block; overflow: visible; }
 .ktn-lib .el-intro-t { font-family: var(--fs); font-size: 24px; font-weight: 700; font-style: italic; line-height: 1.25; color: var(--ink); letter-spacing: -0.015em; }
 .ktn-lib .el-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; margin: 0 0 40px; }
-.ktn-lib .el-item { padding: 22px 26px; border-bottom: 1px solid var(--ink-d); border-right: 1px solid var(--ink-d); transition: all 0.2s; position: relative; min-height: 130px; }
+
+/* ── El-item: 2 layer stacked — text wipes up on hover to reveal image ── */
+.ktn-lib .el-item {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--ink-d);
+  border-right: 1px solid var(--ink-d);
+  min-height: 160px;
+  cursor: default;
+}
 .ktn-lib .el-item:nth-child(2n) { border-right: 0; }
 .ktn-lib .el-item:nth-last-child(-n + 2) { border-bottom: 0; }
-.ktn-lib .el-item:hover { background: var(--ink-t); }
+
+/* Layer 1 — text (z-index cao hơn, slide lên khi hover) */
+.ktn-lib .el-item-text {
+  position: absolute;
+  inset: 0;
+  padding: 22px 26px;
+  background: var(--bg, #faf9f7);
+  z-index: 2;
+  transition: transform 0.44s cubic-bezier(0.76, 0, 0.24, 1);
+  will-change: transform;
+}
+.ktn-lib .el-item:hover .el-item-text {
+  transform: translateY(-100%);
+}
+
+/* Layer 2 — image (luôn ở dưới, lộ ra khi text wipe đi) */
+.ktn-lib .el-item-img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--bg-3, #ede6e0);
+  overflow: hidden;
+}
+.ktn-lib .el-item-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ktn-lib .el-item:hover .el-item-img img {
+  transform: scale(1.04);
+}
+
+/* Số thứ tự — absolute trong layer text */
 .ktn-lib .el-n { font-family: var(--fs); font-size: 48px; font-weight: 900; font-style: italic; color: var(--ink-d); line-height: 1; position: absolute; top: 18px; right: 24px; letter-spacing: -0.02em; padding-right: 4px; }
 .ktn-lib .el-name { font-family: var(--fd); font-size: 20px; font-weight: 900; color: var(--ink); margin-bottom: 6px; letter-spacing: -0.015em; position: relative; z-index: 1; }
 .ktn-lib .el-name em { font-family: var(--fb); font-size: 12px; font-weight: 500; color: var(--ink-m); font-style: italic; margin-left: 8px; letter-spacing: 0; }
@@ -984,16 +1027,16 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .faq { margin: 28px 0 0; border-top: 2px solid var(--ink); }
 .ktn-lib .faq details { border-bottom: 1px solid var(--ink-d); padding: 0; }
 .ktn-lib .faq details summary {
-  cursor: pointer;
+    cursor: pointer;
   font-family: var(--fs);
   font-weight: 900;
   font-style: italic;
   font-size: 20px;
-  color: var(--ink);
-  list-style: none;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+    color: var(--ink);
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   gap: 20px;
   padding: 20px 0;
   transition: color 0.15s;
@@ -1091,7 +1134,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   width: 320px;
   height: 320px;
   background: radial-gradient(circle, rgba(238, 91, 159, 0.12) 0%, transparent 65%);
-  border-radius: 50%;
+    border-radius: 50%;
 }
 .ktn-lib .lib-landing-hero::after {
   content: "";
@@ -1134,7 +1177,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 }
 .ktn-lib .lib-landing-sub {
   position: relative;
-  font-size: 15px;
+    font-size: 15px;
   font-weight: 500;
   color: var(--ink-2);
   max-width: 640px;
@@ -1148,7 +1191,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   margin-top: 20px;
   font-family: var(--fd);
   font-size: 10.5px;
-  font-weight: 700;
+    font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--ink-m);
@@ -1166,7 +1209,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .lib-group { margin-bottom: 48px; scroll-margin-top: 80px; }
 .ktn-lib .lib-group:last-child { margin-bottom: 0; }
 .ktn-lib .lib-group-head {
-  display: flex;
+    display: flex;
   align-items: flex-end;
   gap: 18px;
   margin-bottom: 22px;
@@ -1176,7 +1219,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .lib-group-n {
   font-family: var(--fs);
   font-size: 48px;
-  font-weight: 900;
+    font-weight: 900;
   font-style: italic;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -1189,7 +1232,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .lib-group-kicker {
   font-family: var(--fd);
   font-size: 10px;
-  font-weight: 700;
+    font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--accent, var(--mag));
@@ -1201,8 +1244,8 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   font-weight: 900;
   letter-spacing: -0.02em;
   line-height: 1.1;
-  color: var(--ink);
-}
+    color: var(--ink);
+  }
 .ktn-lib .lib-group-count {
   font-family: var(--fd);
   font-size: 12px;
@@ -1212,7 +1255,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 }
 
 .ktn-lib .lib-grid {
-  display: grid;
+    display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 18px;
 }
@@ -1224,8 +1267,8 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   border: 1.5px solid var(--ink-b);
   border-radius: 14px;
   overflow: hidden;
-  text-decoration: none;
-  color: inherit;
+    text-decoration: none;
+    color: inherit;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
   position: relative;
 }
@@ -1271,7 +1314,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(6px);
   font-family: var(--fd);
-  font-size: 10px;
+    font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1301,11 +1344,11 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   margin: 0;
 }
 .ktn-lib .lib-card-desc {
-  font-size: 13px;
+    font-size: 13px;
   line-height: 1.6;
   color: var(--ink-2);
   font-weight: 500;
-  margin: 0;
+    margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -1331,8 +1374,8 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   border-radius: 999px;
   background: var(--ink-t);
   color: var(--ink-2);
-  font-size: 10px;
-  font-weight: 700;
+    font-size: 10px;
+    font-weight: 700;
   letter-spacing: 0.04em;
 }
 .ktn-lib .lib-card-arrow { color: var(--mag); font-family: var(--fs); font-style: italic; font-size: 18px; }
@@ -1427,7 +1470,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 .ktn-lib .ktn-lib-content .el-hover-item {
   padding: 1.25rem 0;
   border-bottom: 1px solid var(--line);
-  cursor: pointer;
+    cursor: pointer;
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 1rem;
@@ -1471,7 +1514,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   padding: 0.05em 0.1em;
   overflow: visible;
   min-width: 2em;
-  color: var(--ink);
+    color: var(--ink);
 }
 
 .ktn-lib .ktn-lib-content .el-hover-item:hover .el-hover-n {
@@ -1529,7 +1572,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   display: flex;
   flex-direction: column;
   justify-content: center;
-  text-align: center;
+    text-align: center;
   overflow: hidden;
   transition: background 0.4s;
 }
@@ -1607,3 +1650,201 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   }
 }
 
+/* ═══════════════ GALLERY GRID (.gallery-3 / .gallery-4) ═══════════════
+   Các block ảnh minh hoạ trong bài lý thuyết. Scoped dưới .ktn-lib .body
+   để CSS chỉ áp dụng trong content area, không ảnh hưởng layout khác.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* Base: wrapper chung */
+.ktn-lib .body .gallery {
+  display: grid;
+  gap: 10px;
+  margin: 2rem 0;
+}
+
+/* 3 ảnh — dàn ngang đều nhau */
+.ktn-lib .body .gallery-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* 4 ảnh — 2×2 */
+.ktn-lib .body .gallery-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Mỗi ô ảnh */
+.ktn-lib .body .gallery-box {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--bg-2, #f3eeea);
+  aspect-ratio: 4 / 3;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ảnh bên trong box */
+.ktn-lib .body .gallery-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 6px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Caption */
+.ktn-lib .body .gallery-cap {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  font-family: var(--fd, system-ui, sans-serif);
+  color: #fff;
+  background: linear-gradient(to top, rgba(0,0,0,0.58) 0%, transparent 100%);
+  border-radius: 0 0 6px 6px;
+  line-height: 1.4;
+}
+
+/* Số thứ tự */
+.ktn-lib .body .gallery-num {
+  display: inline-block;
+  font-weight: 700;
+  margin-right: 4px;
+  opacity: 0.7;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Keyword placeholder (khi chưa có ảnh thật) */
+.ktn-lib .body .gallery-kw {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--ink-l, #9a8888);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Mobile: 2 cột cho gallery-3, vẫn 2 cột cho gallery-4 */
+@media (max-width: 600px) {
+  .ktn-lib .body .gallery-3,
+  .ktn-lib .body .gallery-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOSAIC — 1 ảnh lớn (trái, chiếm 2 hàng) + 2 ảnh nhỏ (phải,
+   xếp dọc). Scoped dưới .ktn-lib .body.
+   ═══════════════════════════════════════════════════════════════ */
+
+.ktn-lib .body .mosaic {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 6px;
+  margin: 2rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Ô lớn — chiếm cả 2 hàng bên trái */
+.ktn-lib .body .mosaic-big {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-2, #f3eeea);
+  min-height: 260px;
+}
+
+/* 2 ô nhỏ — bên phải, mỗi ô 1 hàng */
+.ktn-lib .body .mosaic-small {
+  grid-column: 2;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-3, #ede6e0);
+  min-height: 120px;
+}
+
+/* Ảnh thật bên trong */
+.ktn-lib .body .mosaic-big img,
+.ktn-lib .body .mosaic-small img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s ease;
+}
+.ktn-lib .body .mosaic-big:hover img,
+.ktn-lib .body .mosaic-small:hover img {
+  transform: scale(1.03);
+}
+
+/* Caption overlay (chỉ mosaic-big) */
+.ktn-lib .body .mosaic-cap {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+  font-family: var(--fd, system-ui, sans-serif);
+  color: #fff;
+  background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%);
+  line-height: 1.4;
+}
+
+/* Placeholder text (khi chưa có ảnh thật) */
+.ktn-lib .body .mosaic-kw-label,
+.ktn-lib .body .mosaic-kw {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  width: 90%;
+}
+.ktn-lib .body .mosaic-kw-label {
+  top: 50%;
+  transform: translate(-50%, -60%);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-l, #9a8888);
+}
+.ktn-lib .body .mosaic-kw {
+  top: 50%;
+  transform: translate(-50%, 10%);
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--ink-m, #5a4848);
+  line-height: 1.5;
+}
+
+/* Mobile: stack thành 1 cột */
+@media (max-width: 600px) {
+  .ktn-lib .body .mosaic {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  .ktn-lib .body .mosaic-big {
+    grid-column: 1;
+    grid-row: auto;
+    min-height: 200px;
+  }
+  .ktn-lib .body .mosaic-small {
+    grid-column: 1;
+    min-height: 140px;
+  }
+}

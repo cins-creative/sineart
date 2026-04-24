@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Menu, X } from "lucide-react";
+import { Home, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -250,6 +250,7 @@ export default function AdminShell({
   const searchKey = searchParams.toString();
   const [busy, setBusy] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const allowed = dashboardNav.allowedHrefs;
 
@@ -333,7 +334,13 @@ export default function AdminShell({
       className="min-h-screen text-[#1a1a1a] [font-family:ui-sans-serif,system-ui,sans-serif]"
       style={{ background: "#F5F4F2" }}
     >
-      <aside className="fixed left-0 top-0 z-[8] hidden h-full w-[260px] flex-col border-r border-black/[0.06] bg-white md:flex">
+      <aside
+        className="fixed left-0 top-0 z-[8] hidden h-full w-[260px] flex-col border-r border-black/[0.06] bg-white md:flex"
+        style={{
+          transform: sidebarCollapsed ? "translateX(-260px)" : "translateX(0)",
+          transition: "transform 0.22s cubic-bezier(0.4,0,0.2,1)",
+        }}
+      >
         <AdminDashboardNavPanel {...navPanelProps} />
       </aside>
 
@@ -369,9 +376,16 @@ export default function AdminShell({
         </>
       ) : null}
 
-      <div className="flex min-h-screen min-w-0 max-w-full flex-col md:pl-[260px]">
+      <div
+        className="flex min-h-screen min-w-0 max-w-full flex-col"
+        style={{
+          paddingLeft: `clamp(0px, ${sidebarCollapsed ? "0px" : "260px"}, 260px)`,
+          transition: "padding-left 0.22s cubic-bezier(0.4,0,0.2,1)",
+        }}
+      >
         <header className="sticky top-0 z-[9] flex h-14 w-full shrink-0 min-w-0 items-center justify-between gap-3 border-b border-black/[0.06] bg-white/90 pl-3 pr-4 backdrop-blur md:pl-4 md:pr-6">
           <div className="flex min-w-0 shrink-0 items-center gap-2">
+            {/* Mobile menu toggle */}
             <button
               type="button"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white text-black/70 transition hover:bg-black/[0.04] hover:text-black md:hidden"
@@ -381,6 +395,19 @@ export default function AdminShell({
               onClick={() => setMobileNavOpen(true)}
             >
               <Menu className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden />
+            </button>
+            {/* Desktop sidebar toggle */}
+            <button
+              type="button"
+              className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white text-black/70 transition hover:bg-black/[0.04] hover:text-black md:flex"
+              aria-label={sidebarCollapsed ? "Hiện sidebar" : "Ẩn sidebar"}
+              title={sidebarCollapsed ? "Hiện sidebar (ẩn để xem rộng hơn)" : "Ẩn sidebar"}
+              onClick={() => setSidebarCollapsed((v) => !v)}
+            >
+              {sidebarCollapsed
+                ? <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden />
+                : <PanelLeftClose className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden />
+              }
             </button>
             <Link
               href="/"

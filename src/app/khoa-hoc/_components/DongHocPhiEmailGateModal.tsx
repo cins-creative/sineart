@@ -116,7 +116,7 @@ export default function DongHocPhiEmailGateModal({
       const { data, error: qErr } = await supabase
         .from("ql_thong_tin_hoc_vien")
         .select("id")
-        .eq("email", em)
+        .ilike("email", em)
         .order("id", { ascending: false })
         .limit(1)
         .maybeSingle();

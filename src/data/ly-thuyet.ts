@@ -96,6 +96,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["sắc-độ", "value", "notan"],
     doc_time: 10,
     thumbnail: "/img/bo-cuc-sac-do/thumbnail.jpg",
+    hero_image: "/img/bo-cuc-sac-do/hero-cover.png",
   },
   {
     slug: "ti-le-co-the-nguoi",
@@ -225,6 +226,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     mo_ta: "Sắp xếp yếu tố thị giác để dẫn dắt cảm xúc — từ golden ratio đến rule of thirds.",
     tags: ["bố-cục", "golden-ratio", "composition"],
     doc_time: 14,
+    hero_image: "/img/bo-cuc-trong-tranh/hero-cover.png",
   },
   {
     slug: "bo-cuc-trong-thiet-ke",

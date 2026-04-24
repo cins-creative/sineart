@@ -5,27 +5,60 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClassroomSessionRecord, ClassroomStudentSessionData } from "./classroom-session";
 
 const LO_SELECT_TEACHER =
-  "id,class_name,class_full_name,avatar,url_class,mon_hoc,lich_hoc,meeting_room";
+  "id,class_name,class_full_name,avatar,url_class,teacher,mon_hoc,lich_hoc,meeting_room";
 
 /**
- * `ql_lop_hoc.teacher` có thể là bigint hoặc `bigint[]` — `.eq` chỉ khớp scalar.
+ * `ql_lop_hoc.teacher` có thể là bigint, bigint[], hoặc chuỗi JSON/CSV text —
+ * `.eq` và `.contains` chỉ phủ 2 dạng đầu. Khi cột là text chứa `"[23,45]"` hay
+ * `"23, 45"` thì fallback qua `.ilike` rồi lọc lại bằng `parseTeacherIds`.
  */
 async function fetchLopHocWhereTeacher(
   supabase: SupabaseClient,
   teacherId: number
 ): Promise<Record<string, unknown>[]> {
-  const [eqRes, csRes] = await Promise.all([
+  const [eqRes, csRes, likeRes] = await Promise.all([
     supabase.from("ql_lop_hoc").select(LO_SELECT_TEACHER).eq("teacher", teacherId),
     supabase.from("ql_lop_hoc").select(LO_SELECT_TEACHER).contains("teacher", [teacherId]),
+    supabase.from("ql_lop_hoc").select(LO_SELECT_TEACHER).ilike("teacher", `%${teacherId}%`),
   ]);
   const byId = new Map<number, Record<string, unknown>>();
-  for (const rows of [eqRes.data, csRes.error ? null : csRes.data] as const) {
-    if (!rows) continue;
+  const pushRows = (
+    rows: Record<string, unknown>[] | null | undefined,
+    { filterByParse }: { filterByParse: boolean }
+  ) => {
+    if (!rows) return;
     for (const r of rows) {
       const row = r as Record<string, unknown>;
       const id = Number(row.id);
-      if (Number.isFinite(id)) byId.set(id, row);
+      if (!Number.isFinite(id)) continue;
+      if (filterByParse && !parseTeacherIds(row.teacher).includes(teacherId)) continue;
+      byId.set(id, row);
     }
+  };
+  pushRows(eqRes.data ?? null, { filterByParse: false });
+  if (!csRes.error) pushRows(csRes.data ?? null, { filterByParse: false });
+  if (!likeRes.error) pushRows(likeRes.data ?? null, { filterByParse: true });
+
+  // Fallback cuối: cột `teacher` có thể là text JSON/CSV nhưng ilike vẫn miss
+  // (ví dụ text `"1,2,3"` mà teacherId=2 thì ilike '%2%' có match — nhưng nếu
+  // PostgREST từ chối ilike trên bigint thì queries ở trên all-miss). Scan
+  // toàn bộ `ql_lop_hoc` rồi lọc bằng parseTeacherIds. Fallback chỉ chạy khi
+  // 2 query đầu đều lỗi hoặc rỗng — tránh kéo hàng ngàn row không cần thiết.
+  if (byId.size === 0 && eqRes.error && csRes.error) {
+    const { data } = await supabase
+      .from("ql_lop_hoc")
+      .select(LO_SELECT_TEACHER);
+    pushRows(data ?? null, { filterByParse: true });
+  }
+  if (typeof console !== "undefined" && byId.size === 0) {
+    console.warn("[fetchLopHocWhereTeacher] teacherId=%d returned empty", teacherId, {
+      eqErr: eqRes.error?.message ?? null,
+      csErr: csRes.error?.message ?? null,
+      likeErr: likeRes.error?.message ?? null,
+      eqCount: eqRes.data?.length ?? 0,
+      csCount: csRes.data?.length ?? 0,
+      likeCount: likeRes.data?.length ?? 0,
+    });
   }
   return [...byId.values()];
 }
@@ -456,53 +489,66 @@ export async function lookupClassroomByEmail(
     }
   }
 
-  /* ── Giáo viên: hr_nhan_su + ql_lop_hoc (đếm ghi danh theo lớp, không lọc cột status — DB có thể không có) ── */
+  /* ── Giáo viên: hr_nhan_su + ql_lop_hoc (đếm ghi danh theo lớp, không lọc cột status — DB có thể không có) ──
+     Có thể có nhiều hr_nhan_su trùng email (nhân sự cũ/mới) — gom lớp từ mọi row. */
   const { data: teachers, error: teacherErr } = await supabase
     .from("hr_nhan_su")
     .select("id,full_name,email,avatar")
-    .ilike("email", clean)
-    .limit(1);
+    .ilike("email", clean);
 
   if (!teacherErr && teachers?.length) {
-    const t = teachers[0] as {
-      id: number;
-      full_name: string;
-      email: string | null;
-      avatar: string | null;
-    };
-    const classes = await fetchLopHocWhereTeacher(supabase, t.id);
+    let anyTeacherMatched = false;
+    let anyClassFound = false;
+    const seenLop = new Set<number>();
 
-    if (!classes.length) {
-      teacherWithoutClass = true;
+    for (const teacherRow of teachers) {
+      const t = teacherRow as {
+        id: number;
+        full_name: string;
+        email: string | null;
+        avatar: string | null;
+      };
+      if (!Number.isFinite(Number(t.id))) continue;
+      anyTeacherMatched = true;
+
+      const classes = await fetchLopHocWhereTeacher(supabase, Number(t.id));
+
+      for (const cls of classes) {
+        const lopId = Number(cls.id);
+        if (!Number.isFinite(lopId) || seenLop.has(lopId)) continue;
+        seenLop.add(lopId);
+        anyClassFound = true;
+
+        const { count } = await supabase
+          .from("ql_quan_ly_hoc_vien")
+          .select("id", { count: "exact", head: true })
+          .eq("lop_hoc", lopId);
+
+        results.push({
+          userType: "Teacher",
+          data: {
+            id: t.id,
+            full_name: t.full_name,
+            email: t.email,
+            avatar: t.avatar ?? "",
+            lop_hoc_id: lopId,
+            class_name: (cls.class_name as string | null | undefined) ?? "",
+            class_full_name: (cls.class_full_name as string | null | undefined) ?? null,
+            class_avatar: (cls.avatar as string | null | undefined) ?? "",
+            url_class: (cls.url_class as string | null | undefined) ?? null,
+            lich_hoc: cls.lich_hoc != null ? String(cls.lich_hoc).trim() : "",
+            meeting_room:
+              cls.meeting_room != null && String(cls.meeting_room).trim() !== ""
+                ? String(cls.meeting_room).trim()
+                : null,
+            so_hoc_vien: count ?? 0,
+          },
+        });
+      }
     }
 
-    for (const cls of classes) {
-      const lopId = Number(cls.id);
-      const { count } = await supabase
-        .from("ql_quan_ly_hoc_vien")
-        .select("id", { count: "exact", head: true })
-        .eq("lop_hoc", lopId);
-
-      results.push({
-        userType: "Teacher",
-        data: {
-          id: t.id,
-          full_name: t.full_name,
-          email: t.email,
-          avatar: t.avatar ?? "",
-          lop_hoc_id: lopId,
-          class_name: (cls.class_name as string | null | undefined) ?? "",
-          class_full_name: (cls.class_full_name as string | null | undefined) ?? null,
-          class_avatar: (cls.avatar as string | null | undefined) ?? "",
-          url_class: (cls.url_class as string | null | undefined) ?? null,
-          lich_hoc: cls.lich_hoc != null ? String(cls.lich_hoc).trim() : "",
-          meeting_room:
-            cls.meeting_room != null && String(cls.meeting_room).trim() !== ""
-              ? String(cls.meeting_room).trim()
-              : null,
-          so_hoc_vien: count ?? 0,
-        },
-      });
+    if (anyTeacherMatched && !anyClassFound) {
+      teacherWithoutClass = true;
     }
   }
 

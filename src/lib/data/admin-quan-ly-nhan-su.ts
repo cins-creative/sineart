@@ -398,6 +398,19 @@ export async function fetchAdminQuanLyNhanSuBundle(supabase: SupabaseClient): Pr
       })
     );
 
+    await Promise.all(
+      staffIds.map(async (sid) => {
+        const { data, error } = await supabase
+          .from("ql_lop_hoc")
+          .select(selectCols)
+          .ilike("teacher", `%${sid}%`);
+        if (error || !data) return;
+        for (const raw of data as unknown as Record<string, unknown>[]) {
+          pushClassForTeachers(raw);
+        }
+      })
+    );
+
     for (const tid of Object.keys(lopGiangByTeacherId)) {
       const k = Number(tid);
       lopGiangByTeacherId[k] = (lopGiangByTeacherId[k] ?? []).sort((a, b) =>

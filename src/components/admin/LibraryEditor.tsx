@@ -61,7 +61,7 @@ export default function LibraryEditor({ slug, initialContent, title, pasteMode =
   const [previewRefresh, setPreviewRefresh] = useState(0);
   const [autoPreview, setAutoPreview] = useState(true);
   const [visualEdit, setVisualEdit] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const bodyRef = useRef<HTMLDivElement>(null);
   /* Giữ ref content mới nhất để handleSave luôn dùng giá trị hiện tại */
   const contentRef = useRef(content);

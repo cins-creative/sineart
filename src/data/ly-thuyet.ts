@@ -51,6 +51,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     mo_ta: "Kỹ thuật dựng hình bằng đường bao ngoài — bước đầu tiên của mọi người học vẽ.",
     tags: ["contour", "dựng-hình", "nhập-môn"],
     doc_time: 8,
+    hero_image: "/img/phuong-phap-ve-gioi-han/hero-cover.png",
     thumbnail: "/img/phuong-phap-ve-gioi-han/thumbnail.jpg",
   },
   {
@@ -61,6 +62,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     mo_ta: "Kỹ thuật dựng hình bằng khối hình học cơ bản — xương sống của vẽ chính xác.",
     tags: ["cấu-trúc", "khối", "3D"],
     doc_time: 10,
+    hero_image: "/img/phuong-phap-ve-cau-truc/hero-cover.png",
     thumbnail: "/img/phuong-phap-ve-cau-truc/thumbnail.jpg",
   },
   {
@@ -71,6 +73,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     mo_ta: "Quy luật vật ở xa thì nhỏ — công cụ tạo chiều sâu không gian trong tranh 2D.",
     tags: ["phối-cảnh", "điểm-tụ", "không-gian"],
     doc_time: 12,
+    hero_image: "/img/ly-thuyet-phoi-canh/hero-cover.png",
     thumbnail: "/img/ly-thuyet-phoi-canh/thumbnail.png",
   },
   {
@@ -82,6 +85,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["focal-point", "bố-cục", "hierarchy"],
     doc_time: 8,
     thumbnail: "/img/diem-tap-trung/thumbnail.jpg",
+    hero_image: "/img/diem-tap-trung/hero-cover.png",
   },
   {
     slug: "bo-cuc-sac-do",

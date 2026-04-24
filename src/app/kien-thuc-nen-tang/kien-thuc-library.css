@@ -1076,6 +1076,49 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   margin: 2rem 0;
 }
 
+/* bleed-box bên trong bleed-dual: flex column để cap chảy bên dưới ảnh */
+.ktn-lib .bleed-dual .bleed-box {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  overflow: visible;
+}
+.ktn-lib .bleed-dual .bleed-img {
+  position: relative;
+  height: 260px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.ktn-lib .bleed-dual .bleed-box img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ktn-lib .bleed-dual .bleed-cap {
+  position: static;
+  padding: 8px 12px 10px;
+  font-family: var(--fd);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-m, #6b5c5c);
+  background: transparent;
+  border-top: 1px solid rgba(45, 32, 32, 0.08);
+}
+.ktn-lib .bleed-dual .bleed-badge {
+  display: inline-block;
+  margin-right: 6px;
+  opacity: 0.5;
+}
+.ktn-lib .bleed-dual .bleed-note {
+  display: inline;
+  margin: 0;
+}
+
 .ktn-lib .bleed-item {
   display: flex;
   flex-direction: column;
@@ -2198,12 +2241,18 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 
 /* Layout chung */
 .ktn-lib--v5 .page {
-  grid-template-columns: 260px 1fr 280px;
+  grid-template-columns: 220px 1fr 240px;
   gap: 2rem;
   padding: 2rem 2rem 4rem;
   background: transparent;
   box-shadow: none;
 }
+
+/* Hide scrollbars in v5 sidebars */
+.ktn-lib--v5 .lnav,
+.ktn-lib--v5 .rnav { scrollbar-width: none; }
+.ktn-lib--v5 .lnav::-webkit-scrollbar,
+.ktn-lib--v5 .rnav::-webkit-scrollbar { display: none; }
 
 /* ─── LEFT NAV ─────────────────────────────────────────────── */
 .ktn-lib--v5 .lnav {
@@ -2767,7 +2816,6 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
 /* ─── RESPONSIVE ────────────────────────────────────────────── */
 @media (max-width: 1180px) {
   .ktn-lib--v5 .page {
-    grid-template-columns: 220px 1fr 240px;
     gap: 1.5rem;
     padding: 1.25rem 1.25rem 3rem;
   }
@@ -2780,9 +2828,7 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   }
   .ktn-lib--v5 .lnav,
   .ktn-lib--v5 .rnav {
-    position: static;
-    max-height: none;
-    overflow: visible;
+    display: none;
   }
   .ktn-lib--v5 .lnav {
     border-bottom: 1px solid rgba(45, 32, 32, 0.08);

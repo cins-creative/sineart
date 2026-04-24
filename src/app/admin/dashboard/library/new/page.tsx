@@ -1,6 +1,6 @@
 import LibraryEditor from "@/components/admin/LibraryEditor";
 
-import "../../../../../kien-thuc-nen-tang/kien-thuc-library.css";
+import "../../../../kien-thuc-nen-tang/kien-thuc-library.css";
 
 export const metadata = { title: "Paste & Edit HTML — Sine Art Admin" };
 

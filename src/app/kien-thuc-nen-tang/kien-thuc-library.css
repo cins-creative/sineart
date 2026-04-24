@@ -2785,6 +2785,30 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   z-index: 1;
 }
 
+/* ─── v5 BLEED.BREAK — fills full article body width (mirrors video-embed) */
+.ktn-lib--v5 .body .bleed.break {
+  display: block !important;
+  width: calc(100% + 128px) !important;
+  max-width: none !important;
+  margin-left: -64px !important;
+  margin-right: -64px !important;
+  box-sizing: border-box !important;
+}
+@media (max-width: 1180px) {
+  .ktn-lib--v5 .body .bleed.break {
+    width: calc(100% + 88px) !important;
+    margin-left: -44px !important;
+    margin-right: -44px !important;
+  }
+}
+@media (max-width: 920px) {
+  .ktn-lib--v5 .body .bleed.break {
+    width: calc(100% + 48px) !important;
+    margin-left: -24px !important;
+    margin-right: -24px !important;
+  }
+}
+
 /* ─── VIDEO EMBED (iframe 16:9 full-width) ───────────────────
    Ghi đè toàn bộ:
    - `.ktn-lib .body > *` (max-width 620px, margin auto)

@@ -619,7 +619,7 @@ export default function KhoaHocDetailView({
                       <div className="kd-sch-day">{c.lich}</div>
                       <div className="kd-sch-meta">GV: {c.gvNames}</div>
                       <div className="kd-oc-seats">
-                        {hetCho ? "Hết chỗ" : `Còn chỗ`} · {c.filled}/{c.total}
+                        {hetCho ? "Hết chỗ" : "Còn chỗ"}
                       </div>
                       <div className="kd-oc-bar-track" role="progressbar" aria-valuenow={c.filled} aria-valuemin={0} aria-valuemax={c.total}>
                         <div className={meta.barClass} style={{ width: `${pct}%` }} />

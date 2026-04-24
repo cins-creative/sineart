@@ -2087,11 +2087,6 @@ export default function DongHocPhiClient({
 
         {step === 2 ? (
           <section className="dhp-card">
-            <p className="dhp-step2-enroll-hint">
-              Thanh «Lớp đã chọn» liệt kê đúng các lớp bạn tick ở các tab bên dưới. Lớp đã ghi danh trong{" "}
-              <code className="dhp-code">ql_quan_ly_hoc_vien</code>: bỏ chọn thẻ hoặc bấm × sẽ xóa ghi danh trên hệ
-              thống (có nhắc nhở nếu kỳ học phí còn ngày). Lớp chỉ mới chọn trên trang này thì chỉ bỏ khỏi đơn.
-            </p>
             {classRemoveError ? (
               <p className="dhp-step1-lookup-err" role="alert">
                 {classRemoveError}
@@ -2223,7 +2218,7 @@ export default function DongHocPhiClient({
                     <div className="dhp-oc-details-foot">
                       <span className={badge.className}>
                         <span className="dhp-oc-badge-dot" aria-hidden />
-                        {badge.label} · {cls.filled}/{cls.total} chỗ
+                        {badge.label}
                       </span>
                     </div>
                   </div>
@@ -2671,15 +2666,7 @@ export default function DongHocPhiClient({
                     STK: {qrRecipient.stk} · {qrRecipient.accountName}
                   </p>
                   {!paymentComplete ? (
-                    <p className="dhp-qr-hint">
-                      Cần <code className="dhp-code">SUPABASE_SERVICE_ROLE_KEY</code> trên
-                      server (đơn tự động — <code className="dhp-code">nguoi_tao</code> null).
-                      QR thử 2.000–2.300 ₫: bật sẵn khi <code className="dhp-code">next dev</code>;
-                      với <code className="dhp-code">next start</code> / Vercel production đặt{" "}
-                      <code className="dhp-code">NEXT_PUBLIC_DHP_TEST_MICRO_QR=1</code>. SePay khớp{" "}
-                      <strong>mã SA trong nội dung CK</strong>, không bắt buộc trùng số tiền với tổng đơn. Tắt micro
-                      QR: <code className="dhp-code">0</code> hoặc <code className="dhp-code">false</code>.
-                    </p>
+                    null
                   ) : null}
                   {paymentComplete ? (
                     <>

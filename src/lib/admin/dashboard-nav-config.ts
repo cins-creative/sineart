@@ -32,7 +32,6 @@ export const NAV_MARKETING: { label: string; href: string; disabled?: boolean }[
   { label: "Quản lý Ebook", href: "/admin/dashboard/quan-ly-ebook" },
   { label: "Tra cứu thông tin", href: "/admin/dashboard/quan-ly-tra-cuu" },
   { label: "Bình luận", href: "/admin/dashboard/binh-luan" },
-  { label: "Thư viện kiến thức", href: "/admin/dashboard/library" },
 ];
 
 export const HREFS_DIEU_HANH_ALL = NAV_MAIN.map((n) => n.href);

@@ -60,13 +60,14 @@ export default function HeroFocusToggle() {
       {!focused ? (
         <button
           type="button"
-          className="hft-btn"
+          className="hft-btn hft-btn-icon"
           onClick={enterFocus}
-          aria-label="Bật chế độ đọc tập trung, ẩn 2 sidebar"
+          aria-label="Bật chế độ đọc tập trung"
+          title="Bật chế độ đọc tập trung"
         >
           <svg
-            width="14"
-            height="14"
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -80,21 +81,22 @@ export default function HeroFocusToggle() {
             <path d="M4 15v4h4" />
             <path d="M20 15v4h-4" />
           </svg>
-          <span>Xem tập trung</span>
+          <span className="sr-only">Bật chế độ đọc tập trung</span>
         </button>
       ) : (
         <>
           <button
             type="button"
-            className="hft-btn is-primary"
+            className="hft-btn hft-btn-icon is-primary"
             onClick={toggleFullscreen}
             aria-label={
               isFs ? "Thoát chế độ toàn màn hình" : "Xem toàn màn hình"
             }
+            title={isFs ? "Thoát toàn màn hình" : "Xem toàn màn hình"}
           >
             <svg
-              width="14"
-              height="14"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -119,18 +121,20 @@ export default function HeroFocusToggle() {
                 </>
               )}
             </svg>
-            <span>{isFs ? "Thoát toàn màn hình" : "Xem toàn màn hình"}</span>
+            <span className="sr-only">
+              {isFs ? "Thoát toàn màn hình" : "Xem toàn màn hình"}
+            </span>
           </button>
           <button
             type="button"
-            className="hft-btn hft-btn-ghost"
+            className="hft-btn hft-btn-icon"
             onClick={exitFocus}
             aria-label="Thoát chế độ đọc tập trung"
-            title="Thoát tập trung"
+            title="Thoát chế độ đọc tập trung"
           >
             <svg
-              width="14"
-              height="14"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -142,7 +146,7 @@ export default function HeroFocusToggle() {
               <path d="M6 6l12 12" />
               <path d="M6 18L18 6" />
             </svg>
-            <span className="sr-only">Thoát tập trung</span>
+            <span className="sr-only">Thoát chế độ đọc tập trung</span>
           </button>
         </>
       )}

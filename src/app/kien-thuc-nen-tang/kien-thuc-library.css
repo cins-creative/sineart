@@ -774,6 +774,35 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   gap: 12px;
 }
 .ktn-lib .bleed img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ktn-lib .bleed.bleed--image {
+  aspect-ratio: auto;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  display: block;
+}
+.ktn-lib .bleed.bleed--image img {
+  width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+  border: 1px solid var(--ink-b);
+  border-radius: 16px;
+}
+.ktn-lib .bleed.bleed--image .bleed-kw,
+.ktn-lib .bleed.bleed--image .bleed-kw-label {
+  display: none;
+}
+.ktn-lib .bleed.bleed--image .bleed-note {
+  max-width: none;
+  padding: 10px 4px 0;
+  text-align: left;
+}
+.ktn-lib .bleed.bleed--image .bleed-cap {
+  position: static;
+  display: inline-flex;
+  margin-top: 8px;
+}
 .ktn-lib .bleed-kw-label {
   font-family: var(--fd);
   font-size: 10px;
@@ -840,6 +869,10 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   overflow: hidden;
 }
 .ktn-lib .spread-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
+.ktn-lib .spread-img.spread-img--image .img-kw,
+.ktn-lib .spread-img.spread-img--image .img-sub {
+  display: none;
+}
 .ktn-lib .spread-img .img-kw { font-family: var(--fs); font-size: 22px; font-weight: 900; font-style: italic; color: var(--ink); text-align: center; letter-spacing: -0.015em; line-height: 1.2; }
 .ktn-lib .spread-img .img-sub { font-family: var(--fd); font-size: 10px; font-weight: 700; color: var(--ink-m); letter-spacing: 0.15em; text-transform: uppercase; }
 
@@ -1145,6 +1178,80 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   transition: transform 0.4s ease;
 }
 .ktn-lib .bleed-item:hover .bleed-box img { transform: scale(1.03); }
+
+/* Legacy HTML blocks: `.bleed-dual > .bleed-box` stores the comparison
+   text inside the image box. Split it into a visual area + caption row. */
+.ktn-lib .bleed-dual > .bleed-box {
+  position: relative;
+  height: auto;
+  min-height: 0;
+  padding-top: 260px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-3, #ede6e0);
+  border: 1px solid rgba(45, 32, 32, 0.08);
+}
+.ktn-lib .bleed-dual > .bleed-box::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 260px;
+  background:
+    radial-gradient(circle at 22% 20%, rgba(248, 166, 104, 0.28), transparent 32%),
+    radial-gradient(circle at 78% 72%, rgba(238, 91, 159, 0.2), transparent 36%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(237, 230, 224, 0.95));
+}
+.ktn-lib .bleed-dual > .bleed-box.variant-b::before {
+  background:
+    radial-gradient(circle at 24% 76%, rgba(110, 254, 192, 0.22), transparent 34%),
+    radial-gradient(circle at 78% 24%, rgba(187, 137, 248, 0.2), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(237, 230, 224, 0.95));
+}
+.ktn-lib .bleed-dual > .bleed-box img {
+  height: 260px;
+  bottom: auto;
+  z-index: 1;
+}
+.ktn-lib .bleed-dual > .bleed-box .bleed-vs {
+  z-index: 2;
+}
+.ktn-lib .bleed-dual > .bleed-box .bleed-kw-label {
+  position: absolute;
+  left: 14px;
+  bottom: 54px;
+  z-index: 2;
+  color: var(--ink-m, #6b5c5c);
+}
+.ktn-lib .bleed-dual > .bleed-box .bleed-kw {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 16px;
+  z-index: 2;
+  margin: 0;
+  color: var(--ink, #2d2020);
+  font-family: var(--fs);
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+.ktn-lib .bleed-dual > .bleed-box .bleed-note {
+  display: block;
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(45, 32, 32, 0.08);
+  background: #fff;
+  color: var(--ink, #2d2020);
+  font-family: var(--fb);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: left;
+}
 
 /* Caption bên dưới ảnh (bleed-dual) */
 .ktn-lib .bleed-item .bleed-cap {
@@ -2552,37 +2659,32 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   opacity: 1;
 }
 
-/* ─── CTA DARK CARD (anchor piece) ──────────────────────────── */
+/* ─── CTA CARD — match landing cta-block ────────────────────── */
 .ktn-lib--v5 .rnav-card--dark {
-  background: var(--ink, #2d2020);
-  color: var(--paper, #faf7f2);
-  border: 0;
-  border-radius: 0.85rem;
+  background: #fff;
+  color: var(--ink, #2d2020);
+  border: 1.5px solid var(--ink-b, rgba(45, 32, 32, 0.1));
+  border-radius: 16px;
   width: 100%;
   box-sizing: border-box;
-  padding: 1.4rem 1.3rem 2rem;
+  padding: 18px;
   margin-top: 0.4rem;
   margin-bottom: 0;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 6px 24px -8px rgba(45, 32, 32, 0.25);
+  box-shadow: none;
 }
 .ktn-lib--v5 .rnav-card--dark:last-child {
-  padding-bottom: 20px;
+  padding-bottom: 18px;
 }
-/* Accent corner glow */
 .ktn-lib--v5 .rnav-card--dark::before {
   content: "";
   position: absolute;
-  top: -40%;
-  right: -30%;
-  width: 180px;
-  height: 180px;
-  background: radial-gradient(
-    circle,
-    color-mix(in oklab, var(--hero-accent, var(--mag, #ee5b9f)) 30%, transparent) 0%,
-    transparent 70%
-  );
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--grad, linear-gradient(135deg, #f8a668, #ee5b9f));
   pointer-events: none;
 }
 .ktn-lib--v5 .rnav-card--dark > * {
@@ -2590,72 +2692,85 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   z-index: 1;
 }
 .ktn-lib--v5 .rnav-card--dark h5 {
-  color: rgba(255, 255, 255, 0.55);
-  margin-bottom: 0.7rem;
+  font-family: var(--fd);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-m, #8a7a72);
+  margin: 0 0 8px;
 }
 .ktn-lib--v5 .rnav-card--dark h5::before {
-  background: var(--hero-accent, var(--peach, #f8a668));
+  display: none;
 }
 .ktn-lib--v5 .rnav-card--dark h5::after {
-  background: rgba(255, 255, 255, 0.15);
+  display: none;
 }
 .ktn-lib--v5 .rnav-cta-title {
   font-family: var(--fs);
-  font-style: normal;
+  font-style: italic;
   font-weight: 900;
-  font-size: 1.4rem;
-  line-height: 1.18;
-  margin: 0 0 0.55rem;
-  color: #fff;
-  letter-spacing: -0.01em;
+  font-size: 18px;
+  line-height: 1.2;
+  margin: 0 0 8px;
+  color: var(--ink, #2d2020);
+  letter-spacing: -0.02em;
 }
 .ktn-lib--v5 .rnav-cta-title em {
-  background: linear-gradient(135deg, var(--peach, #f8a668), var(--mag, #ee5b9f));
+  background: var(--grad, linear-gradient(135deg, #f8a668, #ee5b9f));
   -webkit-background-clip: text;
   background-clip: text;
-  color: transparent;
+  -webkit-text-fill-color: transparent;
   font-style: italic;
 }
 .ktn-lib--v5 .rnav-cta-desc {
   font-family: var(--fb);
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.55;
-  opacity: 0.68;
-  margin: 0 0 1.1rem;
-  color: #fff;
+  opacity: 1;
+  margin: 0 0 14px;
+  color: var(--ink-2, #6b5c5c);
+  font-weight: 500;
 }
 .ktn-lib--v5 .rnav-cta-btn {
-  display: flex;
+  display: block;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0.7rem 0.95rem;
-  border-radius: 0.5rem;
-  font-family: var(--fd);
-  font-size: 11.5px;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px;
+  border-radius: 999px;
+  font-family: var(--fb);
+  font-size: 12.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   text-decoration: none;
-  background: linear-gradient(135deg, var(--peach, #f8a668), var(--mag, #ee5b9f));
+  text-align: center;
+  background: var(--grad, linear-gradient(135deg, #f8a668, #ee5b9f));
   color: #fff;
-  margin-bottom: 0.45rem;
-  transition: transform 0.18s, box-shadow 0.18s, filter 0.18s;
+  border: 0;
+  margin-bottom: 8px;
+  box-shadow: var(--sh-cta, 0 10px 28px rgba(238, 91, 159, 0.25));
+  transition: transform 0.15s, filter 0.15s, border-color 0.15s, color 0.15s;
 }
 .ktn-lib--v5 .rnav-cta-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px -4px rgba(238, 91, 159, 0.5);
   filter: brightness(1.06);
 }
 .ktn-lib--v5 .rnav-cta-btn--out {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.9);
+  border: 1.5px solid var(--ink-b, rgba(45, 32, 32, 0.1));
+  color: var(--ink-2, #6b5c5c);
+  padding: 10px;
+  font-size: 11.5px;
   margin-bottom: 0;
+  box-shadow: none;
 }
 .ktn-lib--v5 .rnav-cta-btn--out:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+  border-color: var(--mag, #ee5b9f);
+  color: var(--mag, #ee5b9f);
   box-shadow: none;
   filter: none;
 }

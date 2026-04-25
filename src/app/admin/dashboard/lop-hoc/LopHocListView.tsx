@@ -3,12 +3,13 @@
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Copy, Flame, LayoutGrid, LayoutList, Pencil, Plus, School, Search, X, Zap } from "lucide-react";
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Copy, Flame, LayoutGrid, LayoutList, Loader2, Pencil, Plus, School, Search, Upload, X, Zap } from "lucide-react";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import type { LopHocFormState } from "@/app/admin/dashboard/lop-hoc/actions";
-import { createLopHoc, deleteLopHoc, duplicateLopHoc, toggleLopSpecial, updateLopHoc } from "@/app/admin/dashboard/lop-hoc/actions";
+import { createLopHoc, deleteLopHoc, duplicateLopHoc, toggleLopSpecial, updateLopHoc, updateTeacherPortfolio } from "@/app/admin/dashboard/lop-hoc/actions";
+import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import { cn } from "@/lib/utils";
 
 const DS = {
@@ -44,7 +45,7 @@ export type AdminLopRow = {
 };
 
 type MonOpt = { id: number; ten_mon_hoc: string | null };
-type NsOpt = { id: number; full_name: string; avatar: string | null };
+type NsOpt = { id: number; full_name: string; avatar: string | null; portfolio: string[] };
 type ChiOpt = { id: number; ten: string };
 
 type Props = {
@@ -119,6 +120,190 @@ function NsAvatar({ name, src, size = 28 }: { name: string; src?: string | null;
       }}
     >
       {initial}
+    </div>
+  );
+}
+
+function pickImageFile(items: DataTransferItemList): File | null {
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
+    if (item.kind === "file") {
+      const file = item.getAsFile();
+      if (file?.type.startsWith("image/")) return file;
+    }
+  }
+  return null;
+}
+
+function TeacherPortfolioEditor({ teacher }: { teacher: NsOpt }) {
+  const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [urls, setUrls] = useState<string[]>(() => [...teacher.portfolio]);
+  const [urlInput, setUrlInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+  const [saving, startSaving] = useTransition();
+
+  useEffect(() => {
+    setUrls([...teacher.portfolio]);
+    setUrlInput("");
+    setErr(null);
+    setOk(false);
+  }, [teacher.id, teacher.portfolio]);
+
+  async function uploadFile(file: File) {
+    setErr(null);
+    setOk(false);
+    setBusy(true);
+    try {
+      const url = await uploadAdminCfImage(file, file.name || "portfolio.jpg");
+      setUrls((prev) => [...prev, url]);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Không tải được ảnh portfolio.");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  function addUrl() {
+    const url = urlInput.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) {
+      setErr("URL portfolio phải bắt đầu bằng http:// hoặc https://.");
+      return;
+    }
+    setUrls((prev) => [...prev, url]);
+    setUrlInput("");
+    setErr(null);
+    setOk(false);
+  }
+
+  function savePortfolio() {
+    setErr(null);
+    setOk(false);
+    const next = [...new Set(urls.map((u) => u.trim()).filter(Boolean))];
+    startSaving(async () => {
+      const res = await updateTeacherPortfolio({ teacherId: teacher.id, portfolio: next });
+      if (res.ok) {
+        setUrls(next);
+        setOk(true);
+        router.refresh();
+      } else {
+        setErr(res.error);
+      }
+    });
+  }
+
+  const dirty =
+    JSON.stringify(urls.map((u) => u.trim()).filter(Boolean)) !==
+    JSON.stringify(teacher.portfolio.map((u) => u.trim()).filter(Boolean));
+
+  return (
+    <div className="rounded-[14px] border border-[#EAEAEA] bg-[#fafafa] p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <NsAvatar name={teacher.full_name} src={teacher.avatar} size={26} />
+          <div className="min-w-0">
+            <p className="m-0 truncate text-[12px] font-extrabold text-[#323232]">{teacher.full_name}</p>
+            <p className="m-0 text-[10px] font-semibold text-[#999]">{urls.length} ảnh portfolio</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={savePortfolio}
+          disabled={saving || busy || !dirty}
+          className="shrink-0 rounded-lg bg-gradient-to-r from-[#BC8AF9] to-[#ED5C9D] px-2.5 py-1.5 text-[11px] font-bold text-white disabled:opacity-45"
+        >
+          {saving ? "Đang lưu…" : "Lưu"}
+        </button>
+      </div>
+
+      {urls.length ? (
+        <div className="grid grid-cols-3 gap-1.5">
+          {urls.map((url, idx) => (
+            <div key={`${idx}-${url.slice(-18)}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-white bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="h-full w-full object-cover" />
+              <button
+                type="button"
+                onClick={() => {
+                  setUrls((prev) => prev.filter((_, i) => i !== idx));
+                  setOk(false);
+                }}
+                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 text-red-600 opacity-0 shadow-sm transition group-hover:opacity-100"
+                aria-label="Gỡ ảnh portfolio"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-[#EAEAEA] bg-white px-3 py-4 text-center text-[11px] font-semibold text-[#AAA]">
+          Chưa có ảnh portfolio
+        </div>
+      )}
+
+      <div
+        className="mt-2 rounded-lg border border-dashed border-[#EAEAEA] bg-white p-2"
+        onPaste={(e) => {
+          const file = pickImageFile(e.clipboardData.items);
+          if (!file) return;
+          e.preventDefault();
+          void uploadFile(file);
+        }}
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void uploadFile(file);
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-[#fafafa] px-2.5 py-1.5 text-[11px] font-bold text-[#555] disabled:opacity-50"
+          >
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            {busy ? "Đang tải…" : "Upload"}
+          </button>
+          <span className="text-[10px] font-medium text-[#999]">Có thể Ctrl+V ảnh vào khung này.</span>
+        </div>
+      </div>
+
+      <div className="mt-2 flex gap-1.5">
+        <input
+          className="min-w-0 flex-1 rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1.5 text-[11px] outline-none focus:border-[#BC8AF9]"
+          value={urlInput}
+          onChange={(e) => setUrlInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addUrl();
+            }
+          }}
+          placeholder="Hoặc dán URL ảnh..."
+        />
+        <button
+          type="button"
+          onClick={addUrl}
+          className="rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#666]"
+        >
+          Thêm
+        </button>
+      </div>
+
+      {err ? <p className="m-0 mt-2 text-[11px] font-semibold text-red-600">{err}</p> : null}
+      {ok ? <p className="m-0 mt-2 text-[11px] font-semibold text-emerald-600">Đã lưu portfolio.</p> : null}
     </div>
   );
 }
@@ -1069,6 +1254,21 @@ function LopDetailPanel({
             </dl>
           )}
         </div>
+
+        {gvList.length > 0 ? (
+          <div className="rounded-xl border border-black/[0.06] bg-white p-3.5">
+            <div className="mb-2">
+              <p className="m-0 text-[10px] font-extrabold uppercase tracking-widest" style={{ color: DS.teacher }}>
+                Portfolio giáo viên
+              </p>
+            </div>
+            <div className="space-y-2.5">
+              {gvList.map((gv) => (
+                <TeacherPortfolioEditor key={gv.id} teacher={gv} />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {editing ? (
           <div className="rounded-xl border border-black/[0.06] bg-white p-3.5">

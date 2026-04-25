@@ -236,6 +236,8 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     mo_ta: "Tổ chức yếu tố thị giác để truyền đạt thông tin hiệu quả — grid, hierarchy, Bauhaus.",
     tags: ["design", "layout", "grid", "hierarchy"],
     doc_time: 14,
+    hero_image: "/img/bo-cuc-trong-thiet-ke/hero-cover.png",
+    thumbnail: "/img/bo-cuc-trong-thiet-ke/hero-cover.png",
   },
 ];
 

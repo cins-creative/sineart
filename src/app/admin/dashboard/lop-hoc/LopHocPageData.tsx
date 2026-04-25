@@ -1,5 +1,6 @@
 import LopHocListView, { type AdminLopRow } from "@/app/admin/dashboard/lop-hoc/LopHocListView";
 import { fetchHvStatsByLopIds } from "@/lib/data/admin-lop-hoc-enrollment-stats";
+import { normalizePortfolioToUrls } from "@/lib/data/courses-page";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -21,7 +22,7 @@ export default async function LopHocPageData() {
   const [lopRes0, monRes, nsRes, cnRes, banRes] = await Promise.all([
     supabase.from("ql_lop_hoc").select(lopSelectFull).order("class_full_name", { ascending: true }),
     supabase.from("ql_mon_hoc").select("id, ten_mon_hoc").order("ten_mon_hoc", { ascending: true }),
-    supabase.from("hr_nhan_su").select("id, full_name, avatar, ban").order("full_name", { ascending: true }),
+    supabase.from("hr_nhan_su").select("id, full_name, avatar, ban, portfolio").order("full_name", { ascending: true }),
     supabase.from("ql_chi_nhanh").select("id, ten").order("id", { ascending: true }),
     supabase.from("hr_ban").select("id, ten_ban"),
   ]);
@@ -87,25 +88,32 @@ export default async function LopHocPageData() {
   const daotaoBanId =
     daotaoBan?.id != null && Number.isFinite(Number(daotaoBan.id)) ? Number(daotaoBan.id) : null;
 
-  const nsRows = (nsRes.data ?? []) as { id?: unknown; full_name?: unknown; avatar?: unknown; ban?: unknown }[];
+  const nsRows = (nsRes.data ?? []) as {
+    id?: unknown;
+    full_name?: unknown;
+    avatar?: unknown;
+    ban?: unknown;
+    portfolio?: unknown;
+  }[];
   const nhanSuListFull = nsRows
     .map((r) => ({
       id: Number(r.id),
       full_name: String(r.full_name ?? "").trim() || "—",
       avatar: r.avatar != null ? String(r.avatar).trim() || null : null,
       banId: r.ban != null && Number.isFinite(Number(r.ban)) ? Number(r.ban) : null,
+      portfolio: normalizePortfolioToUrls(r.portfolio),
     }))
     .filter((n) => Number.isFinite(n.id) && n.id > 0);
 
   // Full list để hiển thị (card, detail panel)
-  const nhanSuList = nhanSuListFull.map(({ id, full_name, avatar }) => ({ id, full_name, avatar }));
+  const nhanSuList = nhanSuListFull.map(({ id, full_name, avatar, portfolio }) => ({ id, full_name, avatar, portfolio }));
 
   // Picker list — chỉ giáo viên thuộc ban "Đào tạo"; fallback toàn bộ nếu chưa cấu hình ban
   const pickerNhanSuList =
     daotaoBanId != null
       ? nhanSuListFull
           .filter((n) => n.banId === daotaoBanId)
-          .map(({ id, full_name, avatar }) => ({ id, full_name, avatar }))
+          .map(({ id, full_name, avatar, portfolio }) => ({ id, full_name, avatar, portfolio }))
       : nhanSuList;
 
   const cnRows = !cnRes.error ? ((cnRes.data ?? []) as { id?: unknown; ten?: unknown }[]) : [];

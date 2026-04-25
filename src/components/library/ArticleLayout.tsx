@@ -288,13 +288,13 @@ export function ArticleLayout({ slug, children, toc = [] }: Props) {
 
             {/* Card: CTA (dark) */}
             <div className="rnav-card rnav-card--dark">
-              <h5>Muốn học thực hành?</h5>
+              <h5>Sine Art · 350+ học viên</h5>
               <p className="rnav-cta-title">
                 Học mỹ thuật <em>bài bản</em>
               </p>
               <p className="rnav-cta-desc">
-                Giáo trình khoa học cho học sinh thi khối H, V và hoạ sĩ công
-                nghệ — hoạt hình, phim, game.
+                Giáo trình khoa học, đồng hành cùng học viên từ nhập môn đến
+                luyện thi khối H, V.
               </p>
               <Link href="/khoa-hoc" className="rnav-cta-btn">
                 Xem khoá học →

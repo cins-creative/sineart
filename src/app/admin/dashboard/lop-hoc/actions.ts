@@ -149,6 +149,44 @@ export async function updateLopHoc(
   return { ok: true, message: "Đã lưu thông tin lớp học." };
 }
 
+export async function updateTeacherPortfolio(payload: {
+  teacherId: number;
+  portfolio: string[];
+}): Promise<LopHocFormState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) {
+    return { ok: false, error: "Phiên đăng nhập không hợp lệ. Đăng nhập lại." };
+  }
+
+  const teacherId = Number(payload.teacherId);
+  if (!Number.isFinite(teacherId) || teacherId <= 0) {
+    return { ok: false, error: "ID giáo viên không hợp lệ." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) {
+    return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
+  }
+
+  const portfolio = payload.portfolio
+    .map((url) => String(url).trim())
+    .filter(Boolean);
+
+  const { error } = await supabase
+    .from("hr_nhan_su")
+    .update({ portfolio })
+    .eq("id", teacherId);
+
+  if (error) {
+    return { ok: false, error: error.message || "Không cập nhật được portfolio giáo viên." };
+  }
+
+  revalidateLopHocPublic();
+  revalidatePath("/");
+  revalidatePath("/gallery", "page");
+  return { ok: true, message: "Đã cập nhật portfolio giáo viên." };
+}
+
 export async function duplicateLopHoc(id: number): Promise<LopHocFormState> {
   const session = await getAdminSessionOrNull();
   if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ. Đăng nhập lại." };

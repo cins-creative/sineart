@@ -107,6 +107,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["tỉ-lệ", "giải-phẫu", "8-đầu"],
     doc_time: 10,
     thumbnail: "/img/ti-le-co-the-nguoi/thumbnail.jpg",
+    hero_image: "/img/ti-le-co-the-nguoi/hero-cover.png",
   },
   {
     slug: "khong-gian-mau",
@@ -117,6 +118,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["color-space", "sRGB", "CMYK"],
     doc_time: 8,
     thumbnail: "/img/khong-gian-mau/thumbnail.jpg",
+    hero_image: "/img/khong-gian-mau/hero-cover.png",
   },
   {
     slug: "ly-thuyet-hoa-sac",

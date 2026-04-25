@@ -1214,6 +1214,14 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   bottom: auto;
   z-index: 1;
 }
+.ktn-lib .bleed-dual > .bleed-box--image img {
+  object-fit: contain;
+  background: #fff;
+}
+.ktn-lib .bleed-dual > .bleed-box--image .bleed-kw-label,
+.ktn-lib .bleed-dual > .bleed-box--image .bleed-kw {
+  display: none;
+}
 .ktn-lib .bleed-dual > .bleed-box .bleed-vs {
   z-index: 2;
 }
@@ -2201,6 +2209,10 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   border-radius: 8px;
   object-fit: contain;
 }
+.ktn-lib .body .gallery-box--image .gallery-num,
+.ktn-lib .body .gallery-box--image .gallery-kw {
+  display: none;
+}
 
 /* Caption overlay — gradient đen mờ chân ảnh */
 .ktn-lib .body .gallery-cap {
@@ -2303,6 +2315,14 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   object-fit: cover;
   display: block;
   transition: transform 0.4s ease;
+}
+.ktn-lib .body .mosaic--image img {
+  object-fit: contain;
+  background: #fff;
+}
+.ktn-lib .body .mosaic--image .mosaic-kw-label,
+.ktn-lib .body .mosaic--image .mosaic-kw {
+  display: none;
 }
 .ktn-lib .body .mosaic-big:hover img,
 .ktn-lib .body .mosaic-small:hover img {

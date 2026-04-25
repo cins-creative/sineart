@@ -96,6 +96,7 @@ export default function ClassroomSignInOverlay({ open, onClose }: Props) {
   const [records, setRecords] = useState<ClassroomSessionRecord[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [needsCreateAccount, setNeedsCreateAccount] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -105,6 +106,7 @@ export default function ClassroomSignInOverlay({ open, onClose }: Props) {
     setRecords([]);
     setEmail("");
     setMessage("");
+    setNeedsCreateAccount(false);
   };
 
   const closeOverlay = () => {
@@ -126,6 +128,7 @@ export default function ClassroomSignInOverlay({ open, onClose }: Props) {
       }
       if (!isCancelled()) {
         setLoading(true);
+        setNeedsCreateAccount(false);
         setMessage("Đang tải danh sách lớp…");
       }
       try {
@@ -143,8 +146,9 @@ export default function ClassroomSignInOverlay({ open, onClose }: Props) {
             );
           } else {
             setMessage(
-              "Không tìm thấy tài khoản với email này. Hãy dùng đúng email đã khai báo tại Sine Art (học viên hoặc giáo viên). Nếu cần hỗ trợ, liên hệ Fanpage Sine Art."
+              "Không tìm thấy tài khoản với email này. Vui lòng tạo tài khoản học viên trên Sine Art trước khi vào lớp."
             );
+            setNeedsCreateAccount(true);
           }
           if (!isCancelled()) setLoading(false);
           return;
@@ -219,6 +223,10 @@ export default function ClassroomSignInOverlay({ open, onClose }: Props) {
     void lookupWithEmail(email, () => false);
   };
 
+  const createAccountHref = email.trim()
+    ? `/donghocphi?email=${encodeURIComponent(email.trim())}`
+    : "/donghocphi";
+
   const handleAction = (item: ClassroomSessionRecord) => {
     if (item.userType === "Student") {
       const d = item.data.days_remaining;
@@ -284,7 +292,10 @@ export default function ClassroomSignInOverlay({ open, onClose }: Props) {
                     placeholder="Nhập email của bạn..."
                     value={email}
                     autoComplete="email"
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setNeedsCreateAccount(false);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") void checkUser();
                     }}
@@ -315,6 +326,18 @@ export default function ClassroomSignInOverlay({ open, onClose }: Props) {
                     >
                       {message}
                     </p>
+                  ) : null}
+                  {needsCreateAccount ? (
+                    <div className="cso-create-account">
+                      <p>Chưa có tài khoản? Tạo hồ sơ học viên để Sine Art ghi nhận lớp học của bạn.</p>
+                      <Link
+                        href={createAccountHref}
+                        className="cso-create-account-link"
+                        onClick={closeOverlay}
+                      >
+                        Tạo tài khoản Sine Art
+                      </Link>
+                    </div>
                   ) : null}
                 </motion.div>
               ) : null}

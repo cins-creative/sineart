@@ -156,8 +156,8 @@ table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   Home Ad Banner — floating ad ở góc trái trên homepage/subpages public.
-   Content HTML đến từ mkt_home_content.ads (admin dashboard).
+   Home Ad Banner — floating image ad ở góc trái trên homepage/subpages public.
+   Image URL đến từ mkt_home_content.ads (admin dashboard). Size thiết kế: 360×176px.
    ═══════════════════════════════════════════════════════════════════════ */
 
 .sa-adbanner {
@@ -181,21 +181,12 @@ table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
   border-radius: 16px;
   overflow: hidden;
   position: relative;
-  display: flex;
-  align-items: stretch;
 }
-.sa-adbanner-bar {
-  width: 4px;
-  flex-shrink: 0;
-  background: linear-gradient(180deg, #f8a668, #ee5b9f);
-}
-.sa-adbanner-body {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-.sa-adbanner-body * {
-  max-width: 100%;
+.sa-adbanner-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 360 / 176;
+  object-fit: cover;
 }
 .sa-adbanner-x {
   position: absolute;

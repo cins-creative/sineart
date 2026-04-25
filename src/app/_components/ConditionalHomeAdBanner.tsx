@@ -10,5 +10,5 @@ import ConditionalHomeAdBannerClient from "./ConditionalHomeAdBannerClient";
 export default async function ConditionalHomeAdBanner() {
   const cfg = await getHomeAdConfig();
   if (!shouldShowAd(cfg, "home")) return null;
-  return <ConditionalHomeAdBannerClient html={cfg.ads} />;
+  return <ConditionalHomeAdBannerClient imageUrl={cfg.ads} />;
 }

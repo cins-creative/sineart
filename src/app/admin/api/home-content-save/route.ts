@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
@@ -61,6 +62,10 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+
+  revalidatePath("/", "page");
+  revalidatePath("/", "layout");
+  revalidatePath("/admin/dashboard/quan-ly-trang-chu", "page");
 
   return NextResponse.json({
     ok: true,

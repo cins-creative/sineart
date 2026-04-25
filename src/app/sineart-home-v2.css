@@ -495,6 +495,10 @@
   background-position: center;
   border: 6px solid #fff;
 }
+.hero-card-img {
+  object-fit: cover;
+  z-index: 1;
+}
 .hero-card--main {
   inset: 6% 12% 10% 6%;
   z-index: 2;
@@ -537,13 +541,13 @@
   animation: heroFloaty 5s ease-in-out infinite;
 }
 .hero-sticker--1 {
-  top: 10%;
-  right: -4%;
+  top: 8%;
+  right: -1%;
   transform: rotate(4deg);
 }
 .hero-sticker--2 {
-  bottom: 18%;
-  right: -2%;
+  right: 0;
+  bottom: 16%;
   transform: rotate(-3deg);
   animation-delay: 1.2s;
 }
@@ -1248,6 +1252,10 @@
   .sa-root .hero {
     padding: 32px 0 56px;
   }
+  .hero-blob,
+  .hero-visual {
+    display: none;
+  }
   .sa-root .hero-headline {
     font-size: clamp(32px, 8vw, 44px) !important;
   }
@@ -1274,10 +1282,6 @@
   }
   .sa-root .page-inner > * {
     margin-top: 64px;
-  }
-  .hero-visual {
-    max-width: 420px;
-    margin: 0 auto;
   }
   .nav-dd-panel {
     min-width: 0 !important;

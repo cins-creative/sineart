@@ -1,8 +1,14 @@
 /**
  * "Ba trụ cột" — 3 card giải thích vì sao chọn Sine Art.
- * Static — không cần data từ server; tokens trong `sineart-home-v2.css`.
+ * Nội dung lấy từ dashboard admin; fallback giữ nguyên bản gốc.
  */
 import type { ReactElement } from "react";
+
+import {
+  DEFAULT_HOME_CONTENT,
+  type WhyContent,
+  type WhyPillarIconKey,
+} from "@/lib/admin/home-content-schema";
 
 const BookIcon = () => (
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -49,48 +55,45 @@ type Pillar = {
   Icon: () => ReactElement;
 };
 
-const PILLARS: Pillar[] = [
-  {
-    id: "c1",
-    num: "01",
-    title: "Giáo trình khoa học",
-    text: "Từ hình họa cơ bản đến digital painting chuyên sâu — 6 cấp độ được thiết kế bài bản theo chuẩn ĐH Mỹ thuật Công nghiệp & SKĐA.",
-    Icon: BookIcon,
-  },
-  {
-    id: "c2",
-    num: "02",
-    title: "Giáo viên đồng hành",
-    text: "Lớp nhỏ tối đa 12 học viên. Giáo viên đi từ đầu đến cuối — chấm bài chi tiết, sửa từng nét, hỗ trợ cả khi bạn về nhà.",
-    Icon: UsersIcon,
-  },
-  {
-    id: "c3",
-    num: "03",
-    title: "Hướng nghiệp thực chiến",
-    text: "Kết nối với studio Hoạt hình, Game và Phim hàng đầu Việt Nam. Bạn ra trường với portfolio thật, kỹ năng thật, việc làm thật.",
-    Icon: PulseIcon,
-  },
-];
+const ICONS: Record<WhyPillarIconKey, () => ReactElement> = {
+  book: BookIcon,
+  users: UsersIcon,
+  pulse: PulseIcon,
+};
 
-export default function WhySection() {
+type Props = {
+  content?: WhyContent;
+};
+
+function buildPillars(content: WhyContent): Pillar[] {
+  return content.pillars.map((p, index) => ({
+    id: `c${index + 1}` as Pillar["id"],
+    num: p.num,
+    title: p.title,
+    text: p.text,
+    Icon: ICONS[p.iconKey],
+  }));
+}
+
+export default function WhySection({ content = DEFAULT_HOME_CONTENT.why }: Props) {
+  const pillars = buildPillars(content);
+
   return (
     <section className="why-section">
       <div className="sec-head sec-head--align-start">
         <div className="sec-head-left">
-          <div className="sec-label">Vì sao chọn Sine Art</div>
+          <div className="sec-label">{content.sectionLabel}</div>
           <h2 className="sec-title">
-            Ba trụ cột làm nên một <em>Họa sỹ công nghệ</em>
+            {content.titleBefore}
+            <em>{content.titleEmphasis}</em>
+            {content.titleAfter}
           </h2>
-          <p className="sec-sub">
-            Chúng tôi không dạy mẹo — chúng tôi xây nền móng. Mỗi học viên đi qua cùng một
-            hành trình đã được kiểm chứng.
-          </p>
+          <p className="sec-sub">{content.subtitle}</p>
         </div>
       </div>
 
       <div className="why-grid">
-        {PILLARS.map(({ id, num, title, text, Icon }) => (
+        {pillars.map(({ id, num, title, text, Icon }) => (
           <article key={id} className={`why-card why-card--${id}`}>
             <div className="why-num" aria-hidden>
               {num}

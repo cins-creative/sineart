@@ -133,13 +133,14 @@ export type CtaBandContent = {
   sticks: [CtaBandStick, CtaBandStick, CtaBandStick, CtaBandStick];
 };
 
-// ── Ad banner (cột riêng trên bảng mkt_home_content, không phải JSONB) ─────
+// ── Ad banner ảnh (cột riêng trên bảng mkt_home_content, không phải JSONB) ──
 
 export type AdVisibleWhere = "home" | "class" | "both";
 
 export const AD_VISIBLE_WHERE_VALUES = ["home", "class", "both"] as const;
 
 export type HomeAdConfig = {
+  /** URL ảnh quảng cáo. Khung public/phòng học hiện tại: 360 × 176px. */
   ads: string;
   visibleWhere: AdVisibleWhere;
 };
@@ -168,6 +169,16 @@ export function normalizeAdConfig(raw: {
     ads: typeof raw.ads === "string" ? raw.ads : "",
     visibleWhere,
   };
+}
+
+export function isRenderableAdImageUrl(value: string): boolean {
+  const s = value.trim();
+  return (
+    /^https?:\/\//i.test(s) ||
+    s.startsWith("/") ||
+    /^data:image\//i.test(s) ||
+    /^blob:/i.test(s)
+  );
 }
 
 // ── Root shape ────────────────────────────────────────────────────────────────

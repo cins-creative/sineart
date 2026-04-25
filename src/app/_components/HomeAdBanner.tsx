@@ -2,17 +2,19 @@
 
 import { useEffect, useState } from "react";
 
+import { isRenderableAdImageUrl } from "@/lib/admin/home-content-schema";
+
 type Dismissal = "banner" | "pill" | "none";
 
 const STORAGE_KEY = "sa_home_ad_dismissal";
 
 /**
  * Banner quảng cáo nổi cho trang public (home + subpages).
- * - Nội dung HTML đến từ `mkt_home_content.ads` (inject via dangerouslySetInnerHTML).
+ * - URL ảnh đến từ `mkt_home_content.ads`.
  * - Có nút ✕ để thu gọn thành pill; pill click lại để mở banner.
  * - Trạng thái dismissal lưu `sessionStorage` — reload tab trả về `banner`.
  */
-export default function HomeAdBanner({ html }: { html: string }) {
+export default function HomeAdBanner({ imageUrl }: { imageUrl: string }) {
   const [dismissal, setDismissal] = useState<Dismissal>("banner");
 
   useEffect(() => {
@@ -34,7 +36,8 @@ export default function HomeAdBanner({ html }: { html: string }) {
     }
   }, [dismissal]);
 
-  if (!html.trim()) return null;
+  const src = imageUrl.trim();
+  if (!isRenderableAdImageUrl(src)) return null;
 
   return (
     <>
@@ -44,11 +47,7 @@ export default function HomeAdBanner({ html }: { html: string }) {
         aria-label="Quảng cáo"
       >
         <div className="sa-adbanner-inner">
-          <div className="sa-adbanner-bar" aria-hidden />
-          <div
-            className="sa-adbanner-body"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
+          <img className="sa-adbanner-img" src={src} alt="Quảng cáo Sine Art" />
           <button
             type="button"
             className="sa-adbanner-x"

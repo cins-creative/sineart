@@ -26,6 +26,7 @@ import {
   type HeroContent,
   type HomeAdConfig,
   type HomeContent,
+  isRenderableAdImageUrl,
   type VideoContent,
   type WhyContent,
   type WhyPillar,
@@ -685,7 +686,7 @@ function VideoTabCard({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Section 4: Ad banner (HTML content + visibility)
+// Section 4: Ad banner (image URL + visibility)
 // ═══════════════════════════════════════════════════════════════════════════
 
 const VISIBLE_WHERE_OPTIONS: {
@@ -717,6 +718,44 @@ function AdSection({
   data: HomeAdConfig;
   onChange: (v: HomeAdConfig) => void;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const adSrc = data.ads.trim();
+  const hasPreviewImage = isRenderableAdImageUrl(adSrc);
+
+  const handlePickFile = useCallback(() => {
+    fileRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setUploading(true);
+      setError(null);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/admin/api/upload-cf-image", {
+          method: "POST",
+          body: form,
+        });
+        const json = (await res.json()) as { ok?: boolean; url?: string; error?: string };
+        if (!res.ok || !json.ok || !json.url) {
+          throw new Error(json.error || "Upload thất bại.");
+        }
+        onChange({ ...data, ads: json.url });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Upload thất bại.");
+      } finally {
+        setUploading(false);
+        if (fileRef.current) fileRef.current.value = "";
+      }
+    },
+    [data, onChange],
+  );
+
   return (
     <section className="qlh-section qlh-section--ad">
       <header className="qlh-section-head">
@@ -726,8 +765,8 @@ function AdSection({
         <div>
           <h2 className="qlh-section-title">Quảng cáo (Ad banner)</h2>
           <p className="qlh-section-sub">
-            Nội dung HTML sẽ được render trực tiếp trong khung banner nổi ở góc
-            trái màn hình. Để trống để ẩn hoàn toàn.
+            Tạm thời banner chỉ hiển thị dạng ảnh. Kích thước khuyến nghị:{" "}
+            <b>360 × 176px</b> (tỷ lệ 45:22). Để trống để ẩn hoàn toàn.
           </p>
         </div>
       </header>
@@ -735,26 +774,44 @@ function AdSection({
       <div className="qlh-ad-wrap">
         <div className="qlh-ad-editor">
           <label className="qlh-field">
-            <span className="qlh-field-label">HTML nội dung quảng cáo</span>
-            <textarea
-              className="qlh-field-input qlh-field-ta qlh-ad-html"
-              rows={10}
+            <span className="qlh-field-label">URL ảnh quảng cáo</span>
+            <input
+              type="text"
+              className="qlh-field-input"
               value={data.ads}
               onChange={(e) => onChange({ ...data, ads: e.target.value })}
-              placeholder={SAMPLE_AD_HTML}
-              spellCheck={false}
+              placeholder="https://imagedelivery.net/... hoặc URL ảnh"
             />
           </label>
+          {error ? <div className="qlh-hero-err">{error}</div> : null}
           <p className="qlh-ad-hint">
-            Ví dụ markup gợi ý (bạn có thể copy &amp; chỉnh):
+            Ảnh nên xuất đúng canvas <b>360 × 176px</b> để không bị crop.
             <button
               type="button"
               className="qlh-ad-fill"
-              onClick={() => onChange({ ...data, ads: SAMPLE_AD_HTML })}
+              onClick={handlePickFile}
+              disabled={uploading}
             >
-              Dán mẫu
+              {uploading ? "Đang upload…" : "Upload ảnh"}
             </button>
+            {data.ads.trim() ? (
+              <button
+                type="button"
+                className="qlh-ad-fill qlh-ad-fill-danger"
+                onClick={() => onChange({ ...data, ads: "" })}
+                disabled={uploading}
+              >
+                Xoá ảnh
+              </button>
+            ) : null}
           </p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            style={{ display: "none" }}
+          />
 
           <fieldset className="qlh-fieldset qlh-vw-fieldset">
             <legend>Hiển thị ở đâu</legend>
@@ -793,39 +850,40 @@ function AdSection({
         </div>
 
         <div className="qlh-ad-preview-col">
-          <div className="qlh-ad-preview-label">Preview (theo đúng UI thật)</div>
+          <div className="qlh-ad-preview-label">Preview 360 × 176px</div>
           <div className="qlh-ad-preview-frame">
-            {data.ads.trim() ? (
-              <div
-                className="qlh-ad-preview-render"
-                dangerouslySetInnerHTML={{ __html: data.ads }}
-              />
+            {hasPreviewImage ? (
+              <div className="qlh-ad-preview-render">
+                <Image
+                  src={adSrc}
+                  alt="Preview quảng cáo"
+                  fill
+                  sizes="360px"
+                  style={{ objectFit: "cover" }}
+                  unoptimized
+                />
+              </div>
+            ) : adSrc ? (
+              <div className="qlh-ad-preview-empty">
+                <AlertTriangle size={28} />
+                <span>URL ảnh không hợp lệ</span>
+              </div>
             ) : (
               <div className="qlh-ad-preview-empty">
                 <Megaphone size={28} />
-                <span>Chưa có nội dung</span>
+                <span>Chưa có ảnh</span>
               </div>
             )}
           </div>
           <p className="qlh-ad-preview-note">
-            Render HTML trực tiếp — hãy kiểm tra kỹ mã bạn dán. Tránh inline
-            script hoặc iframe không rõ nguồn.
+            Banner thật dùng cùng tỷ lệ này trên trang chủ và phòng học. File
+            nên nhẹ để không làm chậm trang.
           </p>
         </div>
       </div>
     </section>
   );
 }
-
-const SAMPLE_AD_HTML = `<div style="display:flex;gap:12px;align-items:center;padding:14px;font-family:'Be Vietnam Pro',sans-serif;">
-  <div style="font-size:28px;">🎨</div>
-  <div style="flex:1;min-width:0;">
-    <div style="font-size:11px;font-weight:700;color:#ee5b9f;text-transform:uppercase;letter-spacing:.04em;">Ưu đãi học viên</div>
-    <div style="font-size:14px;font-weight:700;color:#1a1a1a;margin:2px 0;">Khóa Vẽ Kỹ Thuật Số — Khai giảng sắp tới</div>
-    <div style="font-size:12px;color:#6b5c5c;margin-bottom:8px;">Theo dõi sineart.vn để cập nhật lịch khai giảng.</div>
-    <a href="/khoa-hoc" style="display:inline-block;padding:6px 14px;border-radius:999px;background:linear-gradient(135deg,#f8a668,#ee5b9f);color:#fff;font-size:12px;font-weight:700;text-decoration:none;">Xem ngay →</a>
-  </div>
-</div>`;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Scoped CSS
@@ -915,9 +973,12 @@ const QLH_CSS = `
 .qlh-ad-wrap{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:flex-start}
 .qlh-ad-editor{display:flex;flex-direction:column;gap:12px}
 .qlh-ad-html{font-family:ui-monospace,SFMono-Regular,'Courier New',monospace;font-size:12px;min-height:200px;line-height:1.5}
-.qlh-ad-hint{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#6b5c5c;margin:0}
+.qlh-ad-hint{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#6b5c5c;margin:0;flex-wrap:wrap}
 .qlh-ad-fill{border:1px solid rgba(45,32,32,.12);background:#fff;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;color:#7439cc;cursor:pointer}
 .qlh-ad-fill:hover{background:rgba(187,137,248,.08);border-color:rgba(187,137,248,.3)}
+.qlh-ad-fill:disabled{opacity:.55;cursor:not-allowed}
+.qlh-ad-fill-danger{color:#b91c1c}
+.qlh-ad-fill-danger:hover{background:#fef2f2;border-color:#fecaca}
 
 .qlh-vw-fieldset{background:#fff}
 .qlh-vw-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -930,10 +991,10 @@ const QLH_CSS = `
 
 .qlh-ad-preview-col{display:flex;flex-direction:column;gap:8px}
 .qlh-ad-preview-label{font-size:11.5px;font-weight:700;color:#6b5c5c;text-transform:uppercase;letter-spacing:.03em}
-.qlh-ad-preview-frame{background:#fff;border:1px solid rgba(45,32,32,.1);border-radius:12px;overflow:hidden;min-height:140px;box-shadow:0 6px 18px rgba(45,32,32,.08)}
-.qlh-ad-preview-render{max-width:100%;overflow:auto}
+.qlh-ad-preview-frame{background:#fff;border:1px solid rgba(45,32,32,.1);border-radius:12px;overflow:hidden;box-shadow:0 6px 18px rgba(45,32,32,.08);width:100%;max-width:360px;aspect-ratio:360/176}
+.qlh-ad-preview-render{position:relative;width:100%;height:100%;overflow:hidden}
 .qlh-ad-preview-render *{max-width:100%}
-.qlh-ad-preview-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#9c8a8a;font-size:11.5px;font-weight:600;padding:28px 16px}
+.qlh-ad-preview-empty{display:flex;height:100%;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#9c8a8a;font-size:11.5px;font-weight:600;padding:28px 16px}
 .qlh-ad-preview-note{font-size:11px;color:#9c8a8a;margin:0;line-height:1.5;font-style:italic}
 
 @media (max-width:900px){

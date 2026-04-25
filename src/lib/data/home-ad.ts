@@ -2,6 +2,7 @@ import { cache } from "react";
 
 import {
   DEFAULT_HOME_AD,
+  isRenderableAdImageUrl,
   normalizeAdConfig,
   type AdVisibleWhere,
   type HomeAdConfig,
@@ -38,7 +39,7 @@ export function shouldShowAd(
   cfg: HomeAdConfig,
   place: Exclude<AdVisibleWhere, "both">,
 ): boolean {
-  if (!cfg.ads || !cfg.ads.trim()) return false;
+  if (!isRenderableAdImageUrl(cfg.ads)) return false;
   if (cfg.visibleWhere === "both") return true;
   return cfg.visibleWhere === place;
 }

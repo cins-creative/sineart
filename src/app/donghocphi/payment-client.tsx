@@ -702,6 +702,7 @@ export default function DongHocPhiClient({
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
     skipStep1Boot?.avatarUrl ?? existingHocVien?.avatar ?? initialAvatarUrl ?? null
   );
+  const emailLocked = !!existingHocVien?.email;
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
@@ -1899,14 +1900,14 @@ export default function DongHocPhiClient({
                   placeholder="vd. tenban@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  readOnly={!!initialEmail || !!existingHocVien?.email}
+                  readOnly={emailLocked}
                   className={
-                    initialEmail || existingHocVien?.email
+                    emailLocked
                       ? "opacity-60 cursor-default select-all"
                       : undefined
                   }
                   title={
-                    initialEmail || existingHocVien?.email
+                    emailLocked
                       ? "Email đăng nhập — không thể đổi tại đây"
                       : undefined
                   }

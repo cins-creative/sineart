@@ -4,6 +4,7 @@ import LuuBaiHocVienFab from "./_components/LuuBaiHocVienFab";
 import HeroSection from "./_components/HeroSection";
 import VideoSection from "./_components/VideoSection";
 import WhySection from "./_components/WhySection";
+import { getHomeContent } from "@/lib/data/home-content";
 import { HomeCareerSection } from "./_components/home/HomeCareerSection";
 import { HomeCareerSectionSkeleton } from "./_components/home/HomeCareerSection.skeleton";
 import { HomeGallerySection } from "./_components/home/HomeGallerySection";
@@ -21,22 +22,24 @@ import "./sineart-home.css";
 /** ISR — dữ liệu public; admin có `revalidatePath` khi đổi môn/lớp. */
 export const revalidate = 300;
 
-export default function Home() {
+export default async function Home() {
+  const homeContent = await getHomeContent();
+
   return (
     <div className="sa-root">
       <Suspense fallback={<HomeNavSectionSkeleton />}>
         <HomeNavSection />
       </Suspense>
 
-      <HeroSection />
+      <HeroSection content={homeContent.hero} />
 
       <Suspense fallback={<HomeStatStripSectionSkeleton />}>
         <HomeStatStripSection />
       </Suspense>
 
       <div className="page-inner">
-        <WhySection />
-        <VideoSection />
+        <WhySection content={homeContent.why} />
+        <VideoSection content={homeContent.video} />
         <Suspense fallback={<HomeReviewsSectionSkeleton />}>
           <HomeReviewsSection />
         </Suspense>

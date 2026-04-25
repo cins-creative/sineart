@@ -2,36 +2,35 @@
 
 import { useState } from "react";
 
-const tabs = [
-  {
-    id: "online" as const,
-    label: "📡 Lớp Online",
-    desc: "📡 Học qua website chính thức của Sine Art hoặc Google Meet",
-    youtubeId: "6LKT_E8XGu0",
-  },
-  {
-    id: "offline" as const,
-    label: "🏫 Lớp Offline",
-    desc: "🏫 Tại cơ sở · Không gian sáng tạo thực tế",
-    youtubeId: "rdtqpyKMn18",
-  },
-];
+import {
+  DEFAULT_HOME_CONTENT,
+  type VideoContent,
+} from "@/lib/admin/home-content-schema";
 
-export default function VideoSection() {
-  const [active, setActive] = useState<(typeof tabs)[number]["id"]>("online");
+type TabId = "online" | "offline";
+
+type Props = {
+  content?: VideoContent;
+};
+
+export default function VideoSection({ content = DEFAULT_HOME_CONTENT.video }: Props) {
+  const [active, setActive] = useState<TabId>("online");
+  const tabs = content.tabs.map((tab, index) => ({
+    ...tab,
+    id: (index === 0 ? "online" : "offline") as TabId,
+  }));
 
   return (
     <div className="video-section">
       <div className="sec-head sec-head--align-start">
         <div className="sec-head-left">
-          <div className="sec-label">Học thử · Xem trực tiếp</div>
+          <div className="sec-label">{content.sectionLabel}</div>
           <h2 className="sec-title">
-            Online hay Offline — <em>liệu có hiệu quả?</em>
+            {content.titleBefore}
+            <em>{content.titleEmphasis}</em>
+            {content.titleAfter}
           </h2>
-          <p className="sec-sub">
-            Sine Art có 2 hình thức học với giáo trình giống hệt nhau. Xem video giới thiệu từng
-            lớp để chọn cách học phù hợp với bạn.
-          </p>
+          <p className="sec-sub">{content.subtitle}</p>
         </div>
       </div>
       <div className="video-tabs">

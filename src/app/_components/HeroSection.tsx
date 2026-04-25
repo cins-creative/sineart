@@ -1,4 +1,12 @@
+import Image from "next/image";
 import Link from "next/link";
+import type { CSSProperties } from "react";
+
+import {
+  DEFAULT_HOME_CONTENT,
+  type HeroCardImage,
+  type HeroContent,
+} from "@/lib/admin/home-content-schema";
 
 /** Dot check dùng cho eyebrow — gradient ball trắng tick. */
 const CheckIcon = () => (
@@ -40,7 +48,45 @@ const BookIcon = () => (
   </svg>
 );
 
-export default function HeroSection() {
+type Props = {
+  content?: HeroContent;
+};
+
+function cardImageStyle(card: HeroCardImage): CSSProperties | undefined {
+  return card.imageUrl ? { backgroundImage: `url("${card.imageUrl}")` } : undefined;
+}
+
+function HeroImageCard({
+  className,
+  card,
+  eager,
+  sizes,
+}: {
+  className: string;
+  card: HeroCardImage;
+  eager?: boolean;
+  sizes: string;
+}) {
+  return (
+    <div className={className} style={cardImageStyle(card)}>
+      {card.imageUrl ? (
+        <Image
+          src={card.imageUrl}
+          alt={card.alt}
+          fill
+          sizes={sizes}
+          className="hero-card-img"
+          loading={eager ? "eager" : undefined}
+          unoptimized
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export default function HeroSection({ content = DEFAULT_HOME_CONTENT.hero }: Props) {
+  const [stickerOne, stickerTwo] = content.stickers;
+
   return (
     <section className="hero">
       <span className="hero-blob hero-blob--1" aria-hidden />
@@ -54,25 +100,24 @@ export default function HeroSection() {
             <span className="hero-eyebrow-dot">
               <CheckIcon />
             </span>
-            Giáo trình khoa học · Từ 2015
+            {content.eyebrow}
           </p>
           <h1 className="hero-headline">
-            Dành cho <em>Họa sỹ</em>
+            {content.headlineBefore}
+            <em>{content.headlineEmphasis}</em>
             <br />
-            <span className="hero-underline">công nghệ</span>.
+            <span className="hero-underline">{content.headlineAfter}</span>
+            {content.headlineSuffix}
           </h1>
-          <p className="hero-lead">
-            Sine Art xây dựng nền tảng Mỹ thuật <b>bài bản và khoa học</b>, giúp các bạn đủ
-            kiến thức để trở thành Họa sỹ công nghệ trong Hoạt hình, Phim và Game.
-          </p>
+          <p className="hero-lead">{content.lead}</p>
           <div className="hero-actions">
-            <Link href="/dang-ky" className="btn-p">
+            <Link href={content.ctaPrimary.href} className="btn-p">
               <PencilIcon />
-              Học thử miễn phí
+              {content.ctaPrimary.label}
             </Link>
-            <Link href="/khoa-hoc" className="btn-g">
+            <Link href={content.ctaGhost.href} className="btn-g">
               <BookIcon />
-              Xem khoá học
+              {content.ctaGhost.label}
             </Link>
           </div>
 
@@ -112,31 +157,45 @@ export default function HeroSection() {
             </div>
             <div className="hero-trust-text">
               <div>
-                <span className="stars">★★★★★</span> <b>4.9/5</b> · Google Reviews
+                <span className="stars">★★★★★</span> <b>{content.ratingScore}</b> ·{" "}
+                {content.ratingSource}
               </div>
               <div>
-                Được <b>350+ học viên</b> tin tưởng
+                Được <b>{content.studentsTrust}</b> tin tưởng
               </div>
             </div>
           </div>
         </div>
 
-        <div className="hero-visual" aria-hidden>
-          <div className="hero-card hero-card--top" />
-          <div className="hero-card hero-card--bottom" />
-          <div className="hero-card hero-card--main" />
+        <div className="hero-visual">
+          <HeroImageCard
+            className="hero-card hero-card--top"
+            card={content.cards.top}
+            sizes="(max-width: 860px) 32vw, 180px"
+          />
+          <HeroImageCard
+            className="hero-card hero-card--bottom"
+            card={content.cards.bottom}
+            sizes="(max-width: 860px) 34vw, 190px"
+          />
+          <HeroImageCard
+            className="hero-card hero-card--main"
+            card={content.cards.main}
+            eager
+            sizes="(max-width: 860px) 82vw, 460px"
+          />
           <div className="hero-sticker hero-sticker--1">
-            <span className="hero-sticker-emoji">🎨</span>
+            <span className="hero-sticker-emoji">{stickerOne.emoji}</span>
             <span className="hero-sticker-txt">
-              Hình họa
-              <span className="hero-sticker-sub">Lớp mới · T5</span>
+              {stickerOne.title}
+              <span className="hero-sticker-sub">{stickerOne.sub}</span>
             </span>
           </div>
           <div className="hero-sticker hero-sticker--2">
-            <span className="hero-sticker-emoji">✨</span>
+            <span className="hero-sticker-emoji">{stickerTwo.emoji}</span>
             <span className="hero-sticker-txt">
-              Digital Art
-              <span className="hero-sticker-sub">Procreate</span>
+              {stickerTwo.title}
+              <span className="hero-sticker-sub">{stickerTwo.sub}</span>
             </span>
           </div>
         </div>

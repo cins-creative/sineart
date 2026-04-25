@@ -22,6 +22,6 @@ export default async function PhongHocSlugPage({
 }) {
   const { slug } = await params;
   const adConfig = await getHomeAdConfig();
-  const adHtml = shouldShowAd(adConfig, "class") ? adConfig.ads : "";
-  return <ClassroomClient classSlug={slug} adHtml={adHtml} />;
+  const adImageUrl = shouldShowAd(adConfig, "class") ? adConfig.ads : "";
+  return <ClassroomClient classSlug={slug} adImageUrl={adImageUrl} />;
 }

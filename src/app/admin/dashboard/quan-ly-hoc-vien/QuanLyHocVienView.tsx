@@ -56,7 +56,7 @@ import {
 } from "@/app/admin/dashboard/quan-ly-hoc-vien/actions";
 import type { DhpDhCatalog } from "@/lib/donghocphi/dh-catalog";
 import StudentAvatarCircle from "@/components/StudentAvatarCircle";
-import { cn } from "@/lib/utils";
+import { calendarDaysRemainingInclusive, cn } from "@/lib/utils";
 
 const TT_ORDER: Record<string, number> = {
   "Đang học": 0,
@@ -102,19 +102,10 @@ function s2l(v: unknown): string {
 }
 
 function daysLeft(d: string | null): number {
-  if (!d) return 0;
-  try {
-    const t = new Date();
-    t.setHours(0, 0, 0, 0);
-    const e = new Date(d);
-    e.setHours(0, 0, 0, 0);
-    return Math.round((e.getTime() - t.getTime()) / 86400000);
-  } catch {
-    return 0;
-  }
+  return calendarDaysRemainingInclusive(d) ?? 0;
 }
 
-/** Tổng «ngày còn» (mỗi lớp một kỳ): cộng `daysLeft(ngay_cuoi_ky)` từ `hp_thu_hp_chi_tiet` (đã resolve server). */
+/** Tổng «ngày còn» (mỗi lớp một kỳ): cùng quy ước inclusive với phòng học/profile/đóng học phí. */
 function totalDaysLeftAllKhoa(khs: AdminQlhvEnrollment[]): number {
   if (!khs?.length) return 0;
   return khs.reduce((sum, kh) => sum + daysLeft(kh.ngay_cuoi_ky ?? null), 0);

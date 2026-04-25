@@ -44,6 +44,7 @@ import {
   type StudentManageRow,
 } from "@/lib/phong-hoc/student-manage-data";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { isRenderableAdImageUrl } from "@/lib/admin/home-content-schema";
 import {
   normalizePhongHocPathSlug,
   phongHocSlugFromClassName,
@@ -542,15 +543,97 @@ type PanelData = {
 type ClassroomClientProps = {
   /** `ql_lop_hoc.class_name` → slug đường dẫn (vd. `ttm_03`). Bỏ trống = `/phong-hoc`. */
   classSlug?: string;
-  /** HTML quảng cáo đến từ `mkt_home_content.ads`. Rỗng = ẩn hẳn banner. */
-  adHtml?: string;
+  /** URL ảnh quảng cáo đến từ `mkt_home_content.ads`. Rỗng = ẩn hẳn banner. */
+  adImageUrl?: string;
 };
+
+type MediaPermissionState = "idle" | "checking" | "granted" | "denied" | "unsupported";
+
+function MediaPermissionControl() {
+  const [state, setState] = useState<MediaPermissionState>("idle");
+  const [message, setMessage] = useState(
+    "Bấm để kiểm tra camera và micro trước khi vào lớp.",
+  );
+  const [open, setOpen] = useState(false);
+
+  const checkPermissions = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setState("unsupported");
+      setMessage("Trình duyệt này không hỗ trợ kiểm tra camera/micro.");
+      setOpen(true);
+      return;
+    }
+
+    setState("checking");
+    setMessage("Đang mở hộp thoại xin quyền camera và micro...");
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      stream.getTracks().forEach((track) => track.stop());
+      setState("granted");
+      setMessage("Camera và micro đã sẵn sàng.");
+      setOpen(false);
+    } catch {
+      setState("denied");
+      setMessage(
+        "Camera hoặc micro đang bị chặn. Hãy bấm biểu tượng ổ khóa/camera cạnh địa chỉ web, chọn Allow/Cho phép cho Camera và Microphone, rồi tải lại trang.",
+      );
+      setOpen(true);
+    }
+  }, []);
+
+  return (
+    <div className={cx("media-check", open && "is-open", `is-${state}`)}>
+      <button
+        type="button"
+        className="media-check-btn"
+        onClick={checkPermissions}
+        disabled={state === "checking"}
+        aria-expanded={open}
+      >
+        <span className="media-check-dot" aria-hidden />
+        {state === "checking"
+          ? "Đang kiểm tra..."
+          : state === "granted"
+            ? "Cam/mic OK"
+            : "Kiểm tra cam/mic"}
+      </button>
+      {open ? (
+        <div className="media-check-pop" role="status">
+          <div className="media-check-title">
+            {state === "denied" ? "Cần bật quyền trình duyệt" : "Camera & micro"}
+          </div>
+          <p>{message}</p>
+          {state === "denied" ? (
+            <ol>
+              <li>Bấm biểu tượng ổ khóa/camera trên thanh địa chỉ.</li>
+              <li>Đổi Camera và Microphone sang Allow/Cho phép.</li>
+              <li>Reload trang phòng học rồi bấm kiểm tra lại.</li>
+            </ol>
+          ) : null}
+          <button
+            type="button"
+            className="media-check-close"
+            onClick={() => setOpen(false)}
+          >
+            Đã hiểu
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export default function ClassroomClient({
   classSlug,
-  adHtml = "",
+  adImageUrl = "",
 }: ClassroomClientProps = {}) {
   const router = useRouter();
+  const adSrc = adImageUrl.trim();
+  const hasAdImage = isRenderableAdImageUrl(adSrc);
   const [mounted, setMounted] = useState(false);
   const [role, setRole] = useState<Role>("student");
   const [storedSession, setStoredSession] = useState<ClassroomSessionRecord | null>(null);
@@ -1600,6 +1683,7 @@ export default function ClassroomClient({
             </div>
           </div>
           <div className="topbar-tools">
+            <MediaPermissionControl />
             <button
               type="button"
               className="phc-theme-btn"
@@ -1667,6 +1751,7 @@ export default function ClassroomClient({
         </div>
 
         <div className="topbar-tools">
+          <MediaPermissionControl />
           <button
             type="button"
             className="phc-theme-btn"
@@ -2634,13 +2719,13 @@ export default function ClassroomClient({
         </LayoutGroup>
       </div>
 
-      {adHtml.trim() ? (
+      {hasAdImage ? (
         <div className={cx("adb", adDismissal !== "banner" && "hid")}>
           <div className="adinner">
-            <div className="adline-v" />
-            <div
-              className="adbody adbody--html"
-              dangerouslySetInnerHTML={{ __html: adHtml }}
+            <img
+              className="adimg"
+              src={adSrc}
+              alt="Quảng cáo Sine Art"
             />
             <button
               type="button"
@@ -2653,7 +2738,7 @@ export default function ClassroomClient({
           </div>
         </div>
       ) : null}
-      {adHtml.trim() ? (
+      {hasAdImage ? (
         <div className={cx("adpw", adDismissal === "pill" && "vis")}>
           <div className="ad-pill-wrap">
             <button

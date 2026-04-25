@@ -24,7 +24,7 @@ import {
   updateHpDonThu,
 } from "@/app/admin/dashboard/quan-ly-hoa-don/actions";
 import type { AdminChiTietDisplay, AdminHoaDonBundle, AdminHpDonRow } from "@/lib/data/admin-quan-ly-hoa-don";
-import { cn } from "@/lib/utils";
+import { calendarDaysRemainingInclusive, cn } from "@/lib/utils";
 
 const DATE_FILTERS: { label: string; days: number }[] = [
   { label: "Hôm nay", days: 0 },
@@ -112,16 +112,7 @@ function totalDon(don: AdminHpDonRow, chi: AdminChiTietDisplay[]): number {
 }
 
 function daysRemaining(ngayCuoi: string | null): number | null {
-  if (!ngayCuoi) return null;
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const end = new Date(ngayCuoi);
-    end.setHours(0, 0, 0, 0);
-    return Math.ceil((end.getTime() - today.getTime()) / 86400000);
-  } catch {
-    return null;
-  }
+  return calendarDaysRemainingInclusive(ngayCuoi);
 }
 
 function inpClass(): string {

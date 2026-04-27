@@ -1,7 +1,17 @@
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
+import {
+  depreciationExpenseForCalendarMonth,
+  fetchAdminTaiSanRows,
+  type TaiSanDbRow,
+} from "@/lib/data/admin-gia-tri-tai-san";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type BctcTuDongSource = "hoc_phi" | "thu_chi_khac" | "hoa_cu_ban" | "hoa_cu_nhap";
+export type BctcTuDongSource =
+  | "hoc_phi"
+  | "thu_chi_khac"
+  | "hoa_cu_ban"
+  | "hoa_cu_nhap"
+  | "khau_hao_tscd";
 
 /** Một dòng báo cáo — gộp theo danh mục + nguồn + loại thu/chi. */
 export type BctcTuDongMatrixRow = {
@@ -109,14 +119,39 @@ function upsertRow(
   source: BctcTuDongSource,
   mk: string | null,
   amount: number,
+  /** Nhiều dòng cùng danh mục + nguồn (vd. từng TSCĐ). */
+  rowDiscriminator?: string,
 ) {
-  const key = rowKey(dmId, loai, source);
+  const base = rowKey(dmId, loai, source);
+  const key = rowDiscriminator ? `${base}__${rowDiscriminator}` : base;
   let r = pool.get(key);
   if (!r) {
     r = { key, danhMucId: dmId, ma, ten, loai, source, byMonth: {} };
     pool.set(key, r);
   }
   mergeAmount(r.byMonth, mk, amount);
+}
+
+/** Gắn nhẹ với chỉ tiêu «Khấu hao TSCĐ» / cột DB `cp_khauhao_tscd` khi có danh mục chi phù hợp. */
+function resolveKhauHaoDanhMucChiId(dmById: Map<number, { ma: string; ten: string; loai: string }>): number | null {
+  for (const [id, j] of dmById) {
+    if (j.loai.trim().toLowerCase() !== "chi") continue;
+    const ma = j.ma.toLowerCase();
+    const ten = j.ten.toLowerCase();
+    if (ma.includes("khauhao") || ma.includes("khau_hao") || ma.includes("khấu")) return id;
+    if (ten.includes("khấu hao") && ten.includes("tscđ")) return id;
+    if (ten.includes("khấu hao") && ten.includes("tscd")) return id;
+  }
+  return null;
+}
+
+function assetRowLabel(dmKhauHaoId: number | null, dmById: Map<number, { ma: string; ten: string }>, row: TaiSanDbRow) {
+  const dm = dmKhauHaoId != null ? dmById.get(dmKhauHaoId) : undefined;
+  const maPrefix = dm?.ma?.trim() ? dm.ma : "KH-TSCĐ";
+  return {
+    ma: `${maPrefix} · TS${row.id}`,
+    ten: row.ten_tai_san.trim() || `Tài sản #${row.id}`,
+  };
 }
 
 /**
@@ -328,6 +363,22 @@ export async function fetchBctcTuDongBundle(
     const lb = labelForDm(dmId);
     upsertRow(pool, dmId, lb.ma, lb.ten, "chi", "hoa_cu_nhap", mk, tong);
     monthKeysSet.add(mk);
+  }
+
+  const dmKhauHaoId = resolveKhauHaoDanhMucChiId(dmById);
+  const khauHaoRes = await fetchAdminTaiSanRows(supabase);
+  if (!khauHaoRes.ok) {
+    return { ok: false, error: khauHaoRes.error };
+  }
+  for (const raw of khauHaoRes.rows) {
+    for (let mo = 1; mo <= 12; mo++) {
+      const mk = `${nam}-${String(mo).padStart(2, "0")}`;
+      const exp = depreciationExpenseForCalendarMonth(raw, mk);
+      if (!exp) continue;
+      const { ma, ten } = assetRowLabel(dmKhauHaoId, dmById, raw);
+      upsertRow(pool, dmKhauHaoId, ma, ten, "chi", "khau_hao_tscd", mk, exp, `ts_${raw.id}`);
+      monthKeysSet.add(mk);
+    }
   }
 
   const rows = [...pool.values()].sort((a, b) => {

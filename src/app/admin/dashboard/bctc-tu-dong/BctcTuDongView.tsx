@@ -163,13 +163,15 @@ function sourceLabel(source: BctcTuDongSource): string {
       return "Bán họa cụ";
     case "hoa_cu_nhap":
       return "Nhập họa cụ";
+    case "khau_hao_tscd":
+      return "Khấu hao TSCĐ (tc_tai_san_rong)";
     default:
       return source;
   }
 }
 
 const THU_SOURCES_ORDER: BctcTuDongSource[] = ["hoc_phi", "thu_chi_khac", "hoa_cu_ban"];
-const CHI_SOURCES_ORDER: BctcTuDongSource[] = ["thu_chi_khac", "hoa_cu_nhap"];
+const CHI_SOURCES_ORDER: BctcTuDongSource[] = ["thu_chi_khac", "hoa_cu_nhap", "khau_hao_tscd"];
 
 type Layer1Key = "thu" | "chi";
 
@@ -613,105 +615,48 @@ export default function BctcTuDongView({ bundle }: Props) {
   ]);
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6">
-      <div>
-        <p className="m-0 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#BC8AF9]">Kế toán</p>
-        <h1 className="m-0 mt-1 text-xl font-extrabold text-[#1a1a2e]">BCTC — nguồn tự động</h1>
-        <p className="m-0 mt-2 max-w-[720px] text-[13px] leading-relaxed text-black/55">
-          Bảng cân đối kế toán tổng hợp từ dữ liệu hệ thống (không nhập tay như «Báo cáo tài chính»). Chọn năm bằng{" "}
-          <code className="rounded bg-black/[0.06] px-1">?nam=</code> trên URL.
-        </p>
-      </div>
-
-      <section
-        aria-label="Nguồn dữ liệu"
-        className={cn(
-          "rounded-2xl border-2 border-transparent bg-gradient-to-r from-[#f8a668]/20 via-white to-[#ee5b9f]/15 p-[1px]",
-          "shadow-[0_8px_30px_rgba(0,0,0,0.06)]",
-        )}
-      >
-        <div className="rounded-2xl border border-black/[0.06] bg-white px-4 py-4 sm:px-5">
-          <p className="m-0 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#ee5b9f]">
-            Nguồn dữ liệu tự động (highlight)
-          </p>
-          <p className="m-0 mt-2 text-[13px] leading-relaxed text-black/65">
-            Học phí theo <strong className="font-semibold text-[#1a1a2e]">danh mục trên từng dòng chi tiết</strong>{" "}
-            (đơn đã thanh toán); <strong className="font-semibold text-[#1a1a2e]">thu chi khác</strong> theo phiếu{" "}
-            <code className="text-[12px]">tc_thu_chi_khac</code>;{" "}
-            <strong className="font-semibold text-[#1a1a2e]">họa cụ</strong> theo đơn bán / nhập đã gắn danh mục.
-          </p>
-          <ul className="m-0 mt-4 flex flex-wrap gap-2">
-            <li>
-              <Link
-                href="/admin/dashboard/quan-ly-hoc-vien"
-                className="inline-flex items-center rounded-xl border border-[#f8a668]/35 bg-gradient-to-r from-[#fff4eb] to-[#fdeef6] px-3 py-2 text-[12px] font-bold text-[#9a3412] transition hover:border-[#f8a668]/55"
-              >
-                Quản lý học viên
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/thu-chi-khac"
-                className="inline-flex items-center rounded-xl border border-[#BC8AF9]/35 bg-[#faf5ff] px-3 py-2 text-[12px] font-bold text-[#1a1a2e] transition hover:border-[#BC8AF9]/55"
-              >
-                Thu chi khác
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/quan-ly-hoa-cu"
-                className="inline-flex items-center rounded-xl border border-[#ee5b9f]/30 bg-gradient-to-r from-[#fff0f6] to-white px-3 py-2 text-[12px] font-bold text-[#9d174d] transition hover:border-[#ee5b9f]/45"
-              >
-                Quản lý họa cụ
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/quan-ly-hoa-don"
-                className="inline-flex items-center rounded-xl border border-black/[0.08] bg-[#fafafa] px-3 py-2 text-[12px] font-semibold text-black/70 transition hover:bg-black/[0.04]"
-              >
-                Quản lý hóa đơn (học phí)
-              </Link>
-            </li>
-          </ul>
+    <div className="mx-auto flex w-full max-w-[1600px] flex-col pb-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+        <div className="flex shrink-0 flex-col gap-3 border-b border-[#EAEAEA] bg-gradient-to-b from-[#fafafa] to-white px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:px-5 sm:py-4">
+          <div className="min-w-0">
+            <p className="m-0 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#BC8AF9]">Kế toán</p>
+            <h1 className="m-0 mt-1 text-xl font-extrabold tracking-tight text-[#1a1a2e]">BCTC — nguồn tự động</h1>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 sm:shrink-0 sm:pb-0.5">
+            <span className="text-[13px] text-black/60">
+              Năm báo cáo: <span className="font-bold text-[#1a1a2e]">{nam}</span>
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {[nam - 1, nam, nam + 1].map((y) => (
+                <Link
+                  key={y}
+                  href={`/admin/dashboard/bctc-tu-dong?nam=${y}`}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition",
+                    y === nam
+                      ? "border-[#f8a668]/45 bg-gradient-to-r from-[#f8a668]/18 to-[#ee5b9f]/12 text-[#1a1a2e] shadow-sm"
+                      : "border-[#E8EAEB] bg-white text-black/55 hover:border-[#BC8AF9]/25 hover:bg-[#fafafa]",
+                  )}
+                >
+                  {y}
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
-      </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] bg-white px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-        <div className="text-[13px] text-black/70">
-          Năm báo cáo: <span className="font-bold text-[#1a1a2e]">{nam}</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {[nam - 1, nam, nam + 1].map((y) => (
-            <Link
-              key={y}
-              href={`/admin/dashboard/bctc-tu-dong?nam=${y}`}
-              className={cn(
-                "rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition",
-                y === nam
-                  ? "border-[#f8a668]/50 bg-gradient-to-r from-[#f8a668]/15 to-[#ee5b9f]/10 text-[#1a1a2e]"
-                  : "border-[#EAEAEA] bg-white text-black/60 hover:bg-[#fafafa]",
-              )}
-            >
-              {y}
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex min-h-0 w-full max-w-full min-w-0 flex-col px-[10px] pb-6 pt-1">
-        <div className="mx-auto flex min-h-[min(72vh,820px)] w-full max-w-[1600px] flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div className="min-h-0 min-w-0 flex-1">
           {rows.length === 0 ? (
-            <div className="flex min-h-[min(48vh,420px)] flex-col items-center justify-center gap-3 px-6 py-12">
+            <div className="flex min-h-[min(44vh,380px)] flex-col items-center justify-center gap-3 px-6 py-14">
               <div className="text-5xl opacity-80" aria-hidden>
                 📋
               </div>
-              <p className="m-0 text-sm font-semibold text-[#888]">
+              <p className="m-0 text-center text-sm font-semibold text-[#888]">
                 Chưa có phát sinh trong năm {nam} (hoặc chưa gán danh mục / chưa thanh toán).
               </p>
             </div>
           ) : (
-            <div className="bcc-fin-scroll min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain">
+            <div className="bcc-fin-scroll max-h-[min(72vh,820px)] min-h-[min(52vh,560px)] overflow-x-auto overflow-y-auto overscroll-contain">
               <table className="bcc-fin-table w-max min-w-full border-separate border-spacing-0 text-[13px]">
                 <thead>
                   <tr>

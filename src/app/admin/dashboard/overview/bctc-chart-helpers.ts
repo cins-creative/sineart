@@ -161,11 +161,15 @@ export function fmtMoneyFull(v: number): string {
   return `${Math.round(v).toLocaleString("vi-VN")} ₫`;
 }
 
-/** Một hàng trục X = một tháng (T1…T12); mỗi chỉ tiêu tách theo `metricKey__YYYY`. */
+/**
+ * Một hàng trục X = một tháng (T1…T12); mỗi chỉ tiêu tách theo `metricKey__YYYY`.
+ * Index cho phép `string | number | undefined` để không xung đột `label`/`thang` (string) với đường series (number).
+ */
 export type BctcMonthAlignedDatum = {
   label: string;
   thang: string;
-} & Record<string, number | undefined>;
+  [key: string]: string | number | undefined;
+};
 
 const DATA_KEY_YEAR = /^(.+)__(\d{4})$/;
 

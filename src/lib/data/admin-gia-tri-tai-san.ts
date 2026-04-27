@@ -33,18 +33,71 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-/** Số tháng đã qua kể từ ngày mua (không âm). */
-export function monthsElapsedSincePurchase(ngayMua: string | null): number {
+/** Số tháng dương lịch đã qua từ tháng mua đến tháng chứa `ref` (cùng quy ước với UI Giá trị tài sản). */
+export function monthsElapsedSincePurchaseRef(ngayMua: string | null, ref: Date): number {
   if (!ngayMua?.trim()) return 0;
   try {
     const start = new Date(ngayMua.trim());
-    const now = new Date();
     const m =
-      (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+      (ref.getFullYear() - start.getFullYear()) * 12 + (ref.getMonth() - start.getMonth());
     return Math.max(0, m);
   } catch {
     return 0;
   }
+}
+
+/** Số tháng đã qua kể từ ngày mua đến hiện tại (không âm). */
+export function monthsElapsedSincePurchase(ngayMua: string | null): number {
+  return monthsElapsedSincePurchaseRef(ngayMua, new Date());
+}
+
+function endOfCalendarMonthFromKey(monthKey: string): Date | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(monthKey.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (!Number.isFinite(y) || mo < 1 || mo > 12) return null;
+  return new Date(y, mo, 0, 23, 59, 59, 999);
+}
+
+function endOfPrevCalendarMonthFromKey(monthKey: string): Date | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(monthKey.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (!Number.isFinite(y) || mo < 1 || mo > 12) return null;
+  return new Date(y, mo - 1, 0, 23, 59, 59, 999);
+}
+
+/** Lũy kế khấu hao đến hết tháng `monthKey` (YYYY-MM), cùng mô hình đường thẳng với `computeTaiSanDepreciation`. */
+export function cumulativeDepreciationThroughMonth(row: TaiSanDbRow, monthKey: string): number {
+  const end = endOfCalendarMonthFromKey(monthKey);
+  if (!end) return 0;
+  const giaTri = num(row.gia_tri_moi_mua);
+  const thoiGian = Math.floor(num(row.thoi_gian_khau_hao));
+  if (thoiGian <= 0 || giaTri <= 0) return 0;
+  const khauHaoThang = giaTri / thoiGian;
+  const elapsed = monthsElapsedSincePurchaseRef(row.ngay_mua, end);
+  return Math.min(giaTri, khauHaoThang * elapsed);
+}
+
+/**
+ * Chi phí khấu hao **phát sinh trong** tháng dương lịch `monthKey`.
+ * = lũy kế đến hết tháng − lũy kế đến hết tháng trước (retro khi đổi nguyên giá / kỳ KH trên DB).
+ *
+ * Không cần bảng snapshot: luôn đọc `tc_tai_san_rong` và tái tính — nhất quán với trang Giá trị tài sản.
+ */
+export function depreciationExpenseForCalendarMonth(row: TaiSanDbRow, monthKey: string): number {
+  const endThis = endOfCalendarMonthFromKey(monthKey);
+  const endPrev = endOfPrevCalendarMonthFromKey(monthKey);
+  if (!endThis || !endPrev) return 0;
+  const cumThis = cumulativeDepreciationThroughMonth(row, monthKey);
+  const yPrev = endPrev.getFullYear();
+  const mPrev = String(endPrev.getMonth() + 1).padStart(2, "0");
+  const prevKey = `${yPrev}-${mPrev}`;
+  const cumPrev = cumulativeDepreciationThroughMonth(row, prevKey);
+  const delta = cumThis - cumPrev;
+  return delta > 0 ? Math.round(delta) : 0;
 }
 
 export type TaiSanComputed = Omit<TaiSanDbRow, "gia_tri_moi_mua" | "thoi_gian_khau_hao"> & {

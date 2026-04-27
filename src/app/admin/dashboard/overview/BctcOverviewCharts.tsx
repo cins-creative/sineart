@@ -123,6 +123,15 @@ function metricDot(stroke: string) {
   };
 }
 
+/** Khớp Recharts `TooltipPayloadEntry`: `name` có thể là number. */
+type MonthTooltipPayloadEntry = {
+  name?: string | number;
+  value?: unknown;
+  color?: string;
+  dataKey?: unknown;
+  payload?: BctcMonthAlignedDatum;
+};
+
 /** Tooltip điểm tháng: với đường năm hiện tại, hiện % so với cùng tháng năm trước. */
 function MonthCompareTooltip({
   active,
@@ -133,7 +142,7 @@ function MonthCompareTooltip({
   currentYear,
 }: {
   active?: boolean;
-  payload?: Array<{ name?: string; value?: unknown; color?: string; dataKey?: unknown }>;
+  payload?: readonly MonthTooltipPayloadEntry[];
   label?: unknown;
   previousYearByThang: Map<string, ColData>;
   previousYear: string | null;
@@ -141,13 +150,13 @@ function MonthCompareTooltip({
 }) {
   if (!active || !payload?.length) return null;
 
-  const datum = payload[0]?.payload as BctcMonthAlignedDatum | undefined;
+  const datum = payload[0]?.payload;
   const thang = datum?.thang;
   const prevCol = thang ? previousYearByThang.get(thang) : null;
 
   return (
     <div className="max-w-[min(320px,92vw)] rounded-[10px] border border-[#EDE8E9] bg-white px-3 py-2 text-[12px] shadow-[0_8px_24px_rgba(0,0,0,0.10)]">
-      <div className="mb-1 font-bold text-[#1a1a2e]">{label}</div>
+      <div className="mb-1 font-bold text-[#1a1a2e]">{label != null ? String(label) : ""}</div>
       <ul className="m-0 space-y-1 p-0">
         {payload.map((item, i) => {
           const value = Number(item.value);
@@ -175,7 +184,9 @@ function MonthCompareTooltip({
               <div className="flex items-center justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2 text-black/70">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.color }} />
-                  <span className="truncate text-[11px]">{item.name}</span>
+                  <span className="truncate text-[11px]">
+                    {item.name != null && item.name !== "" ? String(item.name) : "—"}
+                  </span>
                 </span>
                 <span className="shrink-0 font-semibold tabular-nums text-[#1a1a2e]">
                   {fmtMoneyFull(Number.isFinite(value) ? value : 0)}

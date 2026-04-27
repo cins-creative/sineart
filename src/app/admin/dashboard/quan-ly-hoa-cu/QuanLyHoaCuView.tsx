@@ -64,9 +64,9 @@ function fmtDt(iso: string): string {
 
 type Tab = "kho" | "nhap" | "ban";
 
-type Props = { bundle: AdminHoaCuBundle; defaultStaffId: number };
+type Props = { bundle: AdminHoaCuBundle; defaultStaffId: number; loggedInStaffName: string };
 
-export default function QuanLyHoaCuView({ bundle, defaultStaffId }: Props) {
+export default function QuanLyHoaCuView({ bundle, defaultStaffId, loggedInStaffName }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("kho");
   const [q, setQ] = useState("");
@@ -218,8 +218,8 @@ export default function QuanLyHoaCuView({ bundle, defaultStaffId }: Props) {
           <ModalNhapHang
             key="nhap"
             sanPham={bundle.sanPham}
-            staff={bundle.staffOptions}
             defaultStaffId={defaultStaffId}
+            loggedInStaffName={loggedInStaffName}
             onClose={() => setModal(null)}
             onDone={(msg, ok) => {
               notify(msg, ok);
@@ -234,9 +234,9 @@ export default function QuanLyHoaCuView({ bundle, defaultStaffId }: Props) {
           <ModalBanHang
             key="ban"
             sanPham={bundle.sanPham}
-            staff={bundle.staffOptions}
             students={bundle.studentOptions}
             defaultStaffId={defaultStaffId}
+            loggedInStaffName={loggedInStaffName}
             onClose={() => setModal(null)}
             onDone={(msg, ok) => {
               notify(msg, ok);
@@ -470,12 +470,15 @@ function ModalShell({
   children,
   onClose,
   footer,
+  /** Mặc định ~800px cap — form bán/nhập nhiều cột cần chiều ngang hơn 520px. */
+  maxWidthClassName = "max-w-[min(96vw,800px)]",
 }: {
   title: string;
   subtitle: string;
   children: ReactNode;
   onClose: () => void;
   footer: ReactNode;
+  maxWidthClassName?: string;
 }) {
   const node = (
     <motion.div
@@ -490,7 +493,10 @@ function ModalShell({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 10 }}
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[92vh] w-full max-w-[520px] flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-2xl"
+        className={cn(
+          "flex max-h-[92vh] w-full flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-2xl",
+          maxWidthClassName,
+        )}
       >
         <div className="flex items-center justify-between border-b border-[#f0f0f0] px-5 py-4">
           <div>
@@ -1050,21 +1056,35 @@ function ModalThemHang({ onClose, onDone }: { onClose: () => void; onDone: (msg:
 
 type Line = { hangId: string; qty: string };
 
+function FieldLoggedInStaffRow({ label, name }: { label: string; name: string }) {
+  const display = name.trim() || "—";
+  return (
+    <div className="space-y-1">
+      <span className="block text-[10px] font-bold uppercase text-[#AAA]">{label}</span>
+      <div className="flex min-h-[42px] items-center gap-2 rounded-[10px] border border-[#EAEAEA] bg-[#f8fafc] px-3 py-2 text-[13px] font-semibold text-[#1a1a2e]">
+        <User size={16} className="shrink-0 text-[#BC8AF9]" aria-hidden />
+        <span className="min-w-0 flex-1 truncate" title={display}>
+          {display}
+        </span>
+      </div>
+      <p className="m-0 text-[11px] leading-snug text-[#888]">Theo tài khoản đăng nhập dashboard.</p>
+    </div>
+  );
+}
+
 function ModalNhapHang({
   sanPham,
-  staff,
   defaultStaffId,
+  loggedInStaffName,
   onClose,
   onDone,
 }: {
   sanPham: AdminHoaCuSanPham[];
-  staff: { id: number; full_name: string }[];
   defaultStaffId: number;
+  loggedInStaffName: string;
   onClose: () => void;
   onDone: (msg: string, ok: boolean) => void;
 }) {
-  const staffIds = new Set(staff.map((s) => s.id));
-  const [nv, setNv] = useState(staffIds.has(defaultStaffId) ? String(defaultStaffId) : staff[0] ? String(staff[0].id) : "");
   const [ncc, setNcc] = useState("");
   const [lines, setLines] = useState<Line[]>([{ hangId: "", qty: "1" }]);
   const [busy, setBusy] = useState(false);
@@ -1073,8 +1093,8 @@ function ModalNhapHang({
     const valid = lines
       .map((l) => ({ mat_hang: Number(l.hangId), so_luong_nhap: Number(l.qty) }))
       .filter((l) => l.mat_hang > 0 && l.so_luong_nhap > 0);
-    if (!nv) {
-      onDone("Chọn người nhập.", false);
+    if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) {
+      onDone("Không xác định được nhân sự đăng nhập.", false);
       return;
     }
     if (!valid.length) {
@@ -1083,7 +1103,7 @@ function ModalNhapHang({
     }
     setBusy(true);
     const r = await createHoaCuDonNhap({
-      nguoi_nhap: Number(nv),
+      nguoi_nhap: defaultStaffId,
       nha_cung_cap: ncc.trim() || null,
       lines: valid,
     });
@@ -1114,29 +1134,17 @@ function ModalNhapHang({
         </div>
       }
     >
-      <div className="space-y-3">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Người nhập *</span>
-            <select value={nv} onChange={(e) => setNv(e.target.value)} className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px]">
-              <option value="">— Chọn —</option>
-              {staff.map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.full_name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Nhà cung cấp</span>
-            <input
-              value={ncc}
-              onChange={(e) => setNcc(e.target.value)}
-              className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px]"
-              placeholder="Tuỳ chọn"
-            />
-          </label>
-        </div>
+      <div className="space-y-4">
+        <FieldLoggedInStaffRow label="Người nhập *" name={loggedInStaffName} />
+        <label className="block">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Nhà cung cấp</span>
+          <input
+            value={ncc}
+            onChange={(e) => setNcc(e.target.value)}
+            className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px]"
+            placeholder="Tuỳ chọn"
+          />
+        </label>
         <p className="m-0 text-[10px] font-bold uppercase text-[#AAA]">Hàng nhập *</p>
         {lines.map((l, i) => (
           <div key={i} className="flex flex-wrap gap-2">
@@ -1177,21 +1185,19 @@ function ModalNhapHang({
 
 function ModalBanHang({
   sanPham,
-  staff,
   students,
   defaultStaffId,
+  loggedInStaffName,
   onClose,
   onDone,
 }: {
   sanPham: AdminHoaCuSanPham[];
-  staff: { id: number; full_name: string }[];
   students: AdminHoaCuHvOpt[];
   defaultStaffId: number;
+  loggedInStaffName: string;
   onClose: () => void;
   onDone: (msg: string, ok: boolean) => void;
 }) {
-  const staffIds = new Set(staff.map((s) => s.id));
-  const [nv, setNv] = useState(staffIds.has(defaultStaffId) ? String(defaultStaffId) : staff[0] ? String(staff[0].id) : "");
   const [hv, setHv] = useState("");
   const [hinhThuc, setHinhThuc] = useState<string>(HINH_THUC[0]);
   const [lines, setLines] = useState<Line[]>([{ hangId: "", qty: "1" }]);
@@ -1207,8 +1213,12 @@ function ModalBanHang({
     const valid = lines
       .map((l) => ({ mat_hang: Number(l.hangId), so_luong_ban: Number(l.qty) }))
       .filter((l) => l.mat_hang > 0 && l.so_luong_ban > 0);
-    if (!nv || !hv) {
-      onDone("Chọn người bán và khách hàng.", false);
+    if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) {
+      onDone("Không xác định được nhân sự đăng nhập.", false);
+      return;
+    }
+    if (!hv) {
+      onDone("Chọn khách hàng (học viên).", false);
       return;
     }
     if (!valid.length) {
@@ -1225,7 +1235,7 @@ function ModalBanHang({
     }
     setBusy(true);
     const r = await createHoaCuDonBan({
-      nguoi_ban: Number(nv),
+      nguoi_ban: defaultStaffId,
       khach_hang: Number(hv),
       hinh_thuc_thu: hinhThuc,
       lines: valid,
@@ -1300,25 +1310,13 @@ function ModalBanHang({
         </div>
       }
     >
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start lg:gap-5">
-        <div className="min-w-0 space-y-3">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Người bán *</span>
-              <select value={nv} onChange={(e) => setNv(e.target.value)} className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px]">
-                <option value="">— Chọn —</option>
-                {staff.map((s) => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.full_name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Khách (học viên) *</span>
-              <HoaCuKhachPicker students={students} value={hv} onChange={setHv} />
-            </label>
-          </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+        <div className="min-w-0 space-y-4">
+          <FieldLoggedInStaffRow label="Người bán *" name={loggedInStaffName} />
+          <label className="block min-w-0">
+            <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Khách (học viên) *</span>
+            <HoaCuKhachPicker students={students} value={hv} onChange={setHv} />
+          </label>
           <label className="block">
             <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Hình thức thu</span>
             <select value={hinhThuc} onChange={(e) => setHinhThuc(e.target.value)} className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px]">

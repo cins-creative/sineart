@@ -59,6 +59,7 @@ type ChiNhapRow = {
   don_nhap: number;
   so_luong_nhap: number | null;
   mat_hang: number | null;
+  thanh_tien?: number | string | null;
   hc_danh_sach_san_pham?: { gia_nhap?: number | null; gia_ban?: number | null } | null;
 };
 
@@ -66,6 +67,7 @@ type ChiBanRow = {
   don_ban: number;
   so_luong_ban: number | null;
   mat_hang: number | null;
+  thanh_tien?: number | string | null;
   hc_danh_sach_san_pham?: { gia_nhap?: number | null; gia_ban?: number | null } | null;
 };
 
@@ -82,6 +84,38 @@ function unwrapSp(
 function unwrapOne<T extends Record<string, unknown>>(v: T | T[] | null | undefined): T | null {
   if (v == null) return null;
   return Array.isArray(v) ? (v[0] as T) ?? null : v;
+}
+
+function tongChiNhapLines(ct: ChiNhapRow[]): number {
+  return ct.reduce((s, c) => {
+    const raw = c.thanh_tien;
+    if (raw != null && raw !== "") {
+      const tt = Number(raw);
+      if (Number.isFinite(tt)) return s + tt;
+    }
+    const { gia_nhap } = unwrapSp(c.hc_danh_sach_san_pham);
+    return s + gia_nhap * (Number(c.so_luong_nhap) || 1);
+  }, 0);
+}
+
+function tongChiBanLines(ct: ChiBanRow[]): number {
+  return ct.reduce((s, c) => {
+    const raw = c.thanh_tien;
+    if (raw != null && raw !== "") {
+      const tt = Number(raw);
+      if (Number.isFinite(tt)) return s + tt;
+    }
+    const { gia_ban } = unwrapSp(c.hc_danh_sach_san_pham);
+    return s + gia_ban * (Number(c.so_luong_ban) || 1);
+  }, 0);
+}
+
+function tongTienHoaCuHeader(header: unknown, chiTong: number): number {
+  if (header != null && header !== "") {
+    const n = Number(header);
+    if (Number.isFinite(n)) return n;
+  }
+  return chiTong;
 }
 
 /** Nhân sự thuộc ban «Vận hành» hoặc «Marketing» (qua `hr_nhan_su_phong` → `hr_phong` → `hr_ban`). */
@@ -199,9 +233,10 @@ function normalizeSanPham(rows: Record<string, unknown>[]): AdminHoaCuSanPham[] 
     .filter((x): x is AdminHoaCuSanPham => x != null);
 }
 
-export async function fetchAdminHoaCuBundle(supabase: SupabaseClient): Promise<
-  { ok: true; data: AdminHoaCuBundle } | { ok: false; error: string }
-> {
+export async function fetchAdminHoaCuBundle(
+  supabase: SupabaseClient,
+  opts?: { ensureStaffId?: number },
+): Promise<{ ok: true; data: AdminHoaCuBundle } | { ok: false; error: string }> {
   const { data: sp, error: spErr } = await fetchSanPham(supabase);
   if (spErr) return { ok: false, error: spErr };
 
@@ -215,10 +250,24 @@ export async function fetchAdminHoaCuBundle(supabase: SupabaseClient): Promise<
   }
 
   const vanHanhMarketingIds = await fetchVanHanhMarketingNhanSuIds(supabase);
-  const staffOptions: AdminHoaCuStaffOpt[] = [...staffMap.entries()]
+  let staffOptions: AdminHoaCuStaffOpt[] = [...staffMap.entries()]
     .filter(([id]) => vanHanhMarketingIds.size === 0 || vanHanhMarketingIds.has(id))
     .map(([id, full_name]) => ({ id, full_name }))
     .sort((a, b) => a.full_name.localeCompare(b.full_name, "vi"));
+
+  const ensureId = opts?.ensureStaffId;
+  if (ensureId != null && Number.isFinite(ensureId) && ensureId > 0 && !staffOptions.some((s) => s.id === ensureId)) {
+    let full_name = staffMap.get(ensureId) ?? "";
+    if (!full_name.trim()) {
+      const { data: one } = await supabase.from("hr_nhan_su").select("full_name").eq("id", ensureId).maybeSingle();
+      full_name = one?.full_name != null ? String(one.full_name).trim() : "";
+    }
+    if (full_name) {
+      staffOptions = [...staffOptions, { id: ensureId, full_name }].sort((a, b) =>
+        a.full_name.localeCompare(b.full_name, "vi"),
+      );
+    }
+  }
 
   const { data: hvRows, error: hvErr } = await supabase
     .from("ql_thong_tin_hoc_vien")
@@ -249,7 +298,7 @@ export async function fetchAdminHoaCuBundle(supabase: SupabaseClient): Promise<
 
   const { data: nhapRecs, error: nhapErr } = await supabase
     .from("hc_nhap_hoa_cu")
-    .select("id, created_at, nha_cung_cap, nguoi_nhap")
+    .select("id, created_at, nha_cung_cap, nguoi_nhap, tong_tien")
     .order("created_at", { ascending: false })
     .limit(300);
   if (nhapErr) return { ok: false, error: nhapErr.message };
@@ -259,19 +308,22 @@ export async function fetchAdminHoaCuBundle(supabase: SupabaseClient): Promise<
   if (nhapIds.length) {
     const { data: ct, error: ctErr } = await supabase
       .from("hc_nhap_hoa_cu_chi_tiet")
-      .select("don_nhap, so_luong_nhap, mat_hang, hc_danh_sach_san_pham(gia_nhap, gia_ban)")
+      .select("don_nhap, so_luong_nhap, mat_hang, thanh_tien, hc_danh_sach_san_pham(gia_nhap, gia_ban)")
       .in("don_nhap", nhapIds);
     if (ctErr) return { ok: false, error: ctErr.message };
     nhapCtByDon = groupByDon(ct as ChiNhapRow[], "don_nhap");
   }
 
   const donNhap: AdminHoaCuNhapDon[] = (nhapRecs ?? []).map((raw) => {
-    const r = raw as { id: number; created_at: string; nha_cung_cap?: string | null; nguoi_nhap?: number | null };
+    const r = raw as {
+      id: number;
+      created_at: string;
+      nha_cung_cap?: string | null;
+      nguoi_nhap?: number | null;
+      tong_tien?: unknown;
+    };
     const ct = nhapCtByDon.get(r.id) ?? [];
-    const tong = ct.reduce((s, c) => {
-      const { gia_nhap } = unwrapSp(c.hc_danh_sach_san_pham);
-      return s + gia_nhap * (Number(c.so_luong_nhap) || 1);
-    }, 0);
+    const tong = tongTienHoaCuHeader(r.tong_tien, tongChiNhapLines(ct));
     const nv = r.nguoi_nhap != null ? staffMap.get(r.nguoi_nhap) ?? "—" : "—";
     return {
       id: r.id,
@@ -286,7 +338,7 @@ export async function fetchAdminHoaCuBundle(supabase: SupabaseClient): Promise<
 
   const { data: banRecs, error: banErr } = await supabase
     .from("hc_don_ban_hoa_cu")
-    .select("id, created_at, hinh_thuc_thu, nguoi_ban, khach_hang")
+    .select("id, created_at, hinh_thuc_thu, nguoi_ban, khach_hang, tong_tien")
     .order("created_at", { ascending: false })
     .limit(300);
   if (banErr) return { ok: false, error: banErr.message };
@@ -297,7 +349,7 @@ export async function fetchAdminHoaCuBundle(supabase: SupabaseClient): Promise<
   if (banIds.length) {
     const { data: ct, error: ctErr } = await supabase
       .from("hc_ban_hc_chi_tiet")
-      .select("don_ban, so_luong_ban, mat_hang, hc_danh_sach_san_pham(gia_nhap, gia_ban)")
+      .select("don_ban, so_luong_ban, mat_hang, thanh_tien, hc_danh_sach_san_pham(gia_nhap, gia_ban)")
       .in("don_ban", banIds);
     if (ctErr) return { ok: false, error: ctErr.message };
     banCtByDon = groupByDon(ct as ChiBanRow[], "don_ban");
@@ -310,12 +362,10 @@ export async function fetchAdminHoaCuBundle(supabase: SupabaseClient): Promise<
       hinh_thuc_thu?: string | null;
       nguoi_ban?: number | null;
       khach_hang?: number | null;
+      tong_tien?: unknown;
     };
     const ct = banCtByDon.get(r.id) ?? [];
-    const tong = ct.reduce((s, c) => {
-      const { gia_ban } = unwrapSp(c.hc_danh_sach_san_pham);
-      return s + gia_ban * (Number(c.so_luong_ban) || 1);
-    }, 0);
+    const tong = tongTienHoaCuHeader(r.tong_tien, tongChiBanLines(ct));
     return {
       id: r.id,
       created_at: r.created_at,

@@ -1,14 +1,7 @@
-import { cookies } from "next/headers";
-
-import { ADMIN_SESSION_COOKIE } from "@/lib/admin/constants";
-import { verifyAdminSessionToken } from "@/lib/admin/jwt-admin";
-import { adminStaffCanViewGiaTriTaiSanOverviewTab } from "@/lib/admin/staff-mutation-access";
 import { fetchAdminBaoCaoTaiChinhRows, rowsToInitialColumns } from "@/lib/data/admin-bao-cao-tai-chinh";
-import { fetchAdminTaiSanRows, type TaiSanDbRow } from "@/lib/data/admin-gia-tri-tai-san";
 import { countHocVienDangHoc } from "@/lib/data/admin-qlhv-tinh-trang";
 import { fetchMkDataAnalysisRows } from "@/lib/data/admin-report-mkt";
 import { fetchAdminQuanLyHocVienBundle } from "@/lib/data/admin-quan-ly-hoc-vien";
-import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 import DashboardOverviewClient from "./DashboardOverviewClient";
@@ -46,24 +39,6 @@ export default async function AdminDashboardOverviewPage() {
   const initialBctcColumns = bctcBundle.ok ? rowsToInitialColumns(bctcBundle.rows) : [];
   const bctcLoadError = bctcBundle.ok ? null : bctcBundle.error;
 
-  let initialTaiSanRows: TaiSanDbRow[] = [];
-  let taiSanLoadError: string | null = null;
-
-  const jar = await cookies();
-  const overviewTok = jar.get(ADMIN_SESSION_COOKIE)?.value;
-  const overviewSession = await verifyAdminSessionToken(overviewTok);
-  if (overviewSession && supabase) {
-    const profile = await fetchAdminStaffShellProfile(supabase, overviewSession.staffId);
-    if (adminStaffCanViewGiaTriTaiSanOverviewTab(profile.vai_tro)) {
-      const tsBundle = await fetchAdminTaiSanRows(supabase);
-      if (tsBundle.ok) {
-        initialTaiSanRows = tsBundle.rows;
-      } else {
-        taiSanLoadError = tsBundle.error;
-      }
-    }
-  }
-
   return (
     <div className="-m-4 flex h-full min-h-0 flex-col md:-m-6">
       <DashboardOverviewClient
@@ -71,8 +46,6 @@ export default async function AdminDashboardOverviewPage() {
         hocVienDangHoc={hocVienDangHoc}
         initialBctcColumns={initialBctcColumns}
         bctcLoadError={bctcLoadError}
-        initialTaiSanRows={initialTaiSanRows}
-        taiSanLoadError={taiSanLoadError}
       />
     </div>
   );

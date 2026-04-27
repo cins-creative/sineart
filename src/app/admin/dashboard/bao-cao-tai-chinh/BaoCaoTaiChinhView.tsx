@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, BarChart3, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 
+import { BctcHierarchyBody } from "@/app/admin/dashboard/bao-cao-tai-chinh/BctcHierarchyBody";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import {
   deleteBaoCaoTaiChinhRow,
@@ -12,18 +13,16 @@ import {
   updateBaoCaoTaiChinhPeriod,
 } from "@/app/admin/dashboard/bao-cao-tai-chinh/actions";
 import {
+  type BctcLayer1Key,
   type BaoCaoColumn,
-  type ColData,
-  type RowDef,
-  rowsForBctcVariant,
   THANG_FULL_ORDER,
   THANG_FULL_TO_SHORT,
   THANG_OPT,
   THANG_SHORT_TO_FULL,
   buildDisplayCols,
-  fmtNum,
+  getPriorComparisonMeta,
+  type PriorComparisonMeta,
   namOptions,
-  n,
 } from "@/lib/data/bao-cao-tai-chinh-config";
 import { cn } from "@/lib/utils";
 
@@ -31,26 +30,12 @@ const DEFAULT_LABEL_W = 240;
 const DEFAULT_COL_W = 150;
 const MIN_LABEL_W = 140;
 const MIN_COL_W = 90;
-const BORDER = "#EAEAEA";
 /** Viền phải cột chỉ tiêu — tách rõ khối số liệu khi cuộn ngang. */
 const LABEL_COL_BORDER_RIGHT = "2px solid #aeb2ba";
 
 /** Cột Σ quý — tách khỏi cột tháng (nền indigo nhạt + viền trái). */
 const QUARTER_HDR_BG = "#eef2ff";
 const QUARTER_BORDER_L = "#a5b4fc";
-/** Nền ô số quý — phối với `getRowBg`. */
-function quarterNumCellBg(
-  isQuarter: boolean,
-  isEditing: boolean,
-  rowBg: string | null,
-  rowType: RowDef["type"],
-): string {
-  if (!isQuarter) return isEditing ? "#f3f4f6" : (rowBg ?? "#fff");
-  if (isEditing) return "#e0e7ff";
-  if (rowType === "result") return "#dde4ff";
-  if (rowType === "formula") return "#e4e9ff";
-  return rowBg === "#FAFAFA" ? "#eff4ff" : "#f5f8ff";
-}
 
 function useColumnResize(colIds: string[]) {
   const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_W);
@@ -124,12 +109,11 @@ function newEmptyCol(id: string, nam: string, thang: string): BaoCaoColumn {
   return { id, nam, thang, data: {}, dirty: false };
 }
 
-/** Nền dòng — tông trung tính, tránh xanh/hồng/amber chồng chéo. */
-function getRowBg(row: RowDef, idx: number): string | null {
-  if (row.type === "section") return null;
-  if (row.type === "result") return "#ececed";
-  if (row.type === "formula") return "#f5f5f6";
-  return idx % 2 === 0 ? "#FFFFFF" : "#FAFAFA";
+function defaultBctcYearFilter(cols: BaoCaoColumn[]): string {
+  const ys = [...new Set(cols.map((c) => c.nam))]
+    .filter((n) => n !== "")
+    .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  return ys.length ? ys[ys.length - 1]! : "__all__";
 }
 
 type Props = {
@@ -147,7 +131,6 @@ export default function BaoCaoTaiChinhView({
 }: Props) {
   const variant = variantProp;
   const readonly = variant === "summary";
-  const displayRows = rowsForBctcVariant(variant);
   const router = useRouter();
   const { canDelete: roleMayDeleteCol } = useAdminDashboardAbilities();
   const [columns, setColumns] = useState<BaoCaoColumn[]>(() =>
@@ -177,7 +160,59 @@ export default function BaoCaoTaiChinhView({
   const [deleteColBusy, setDeleteColBusy] = useState(false);
   const [deleteColErr, setDeleteColErr] = useState("");
 
-  const displayCols = buildDisplayCols(columns);
+  const [openLayer1, setOpenLayer1] = useState<Set<BctcLayer1Key>>(() => new Set());
+  const [openLayer2Blocks, setOpenLayer2Blocks] = useState<Set<string>>(() => new Set());
+
+  const [filterNam, setFilterNam] = useState<string>(() => defaultBctcYearFilter(initialColumns));
+  const [showPriorYearComparison, setShowPriorYearComparison] = useState(true);
+
+  const toggleLayer1 = (key: BctcLayer1Key) => {
+    setOpenLayer1((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleLayer2Block = (compoundId: string) => {
+    setOpenLayer2Blocks((prev) => {
+      const next = new Set(prev);
+      if (next.has(compoundId)) next.delete(compoundId);
+      else next.add(compoundId);
+      return next;
+    });
+  };
+
+  const yearsInData = useMemo(() => {
+    const ys = [...new Set(columns.map((c) => c.nam))]
+      .filter((n) => n !== "")
+      .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    return ys;
+  }, [columns]);
+
+  useEffect(() => {
+    if (filterNam === "__all__" || yearsInData.length === 0) return;
+    if (!yearsInData.includes(filterNam)) {
+      setFilterNam(yearsInData[yearsInData.length - 1] ?? "__all__");
+    }
+  }, [yearsInData, filterNam]);
+
+  const displayColsFull = useMemo(() => buildDisplayCols(columns), [columns]);
+
+  const displayCols = useMemo(() => {
+    if (filterNam === "__all__") return displayColsFull;
+    return displayColsFull.filter((c) => c.nam === filterNam);
+  }, [displayColsFull, filterNam]);
+
+  const priorComparisonByColId = useMemo(() => {
+    const m = new Map<string, PriorComparisonMeta>();
+    for (const c of displayCols) {
+      m.set(c.id, getPriorComparisonMeta(c, columns));
+    }
+    return m;
+  }, [displayCols, columns]);
+
   const colIds = displayCols.map((c) => c.id);
   const { labelWidth, getColW, onLabelResizeStart, onColResizeStart } = useColumnResize(colIds);
 
@@ -466,16 +501,68 @@ export default function BaoCaoTaiChinhView({
             ) : null}
           </div>
         </div>
-        {!readonly ? (
-          <button
-            type="button"
-            onClick={() => setShowAddModal(true)}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-4 py-2 text-xs font-bold text-white shadow-sm hover:opacity-95"
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            Thêm tháng
-          </button>
-        ) : null}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {columns.length > 0 ? (
+            <>
+              <label className="flex shrink-0 items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Năm</span>
+                <select
+                  value={filterNam}
+                  onChange={(e) => setFilterNam(e.target.value)}
+                  className="h-[30px] cursor-pointer rounded-lg border border-[#EAEAEA] bg-white px-2 text-[11px] font-semibold text-[#323232] shadow-sm outline-none hover:border-[#BC8AF9]/40 focus:border-[#BC8AF9]"
+                  aria-label="Lọc theo năm hiển thị"
+                >
+                  <option value="__all__">Tất cả năm</option>
+                  {yearsInData.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex shrink-0 items-center gap-2 border-l border-[#EAEAEA] pl-2 md:pl-3">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showPriorYearComparison}
+                  aria-label="Bật hoặc tắt so sánh cùng kỳ năm trước"
+                  title={
+                    showPriorYearComparison
+                      ? "Đang bật so sánh năm trước — bấm để tắt"
+                      : "Đang tắt — bấm để hiện % và trạng thái đủ dữ liệu"
+                  }
+                  onClick={() => setShowPriorYearComparison((v) => !v)}
+                  className={cn(
+                    "relative h-[26px] w-11 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BC8AF9]/45",
+                    showPriorYearComparison
+                      ? "bg-gradient-to-r from-[#f8a668] to-[#ee5b9f]"
+                      : "bg-[#E3E5E5]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-1 left-1 block h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-200 ease-out",
+                      showPriorYearComparison ? "translate-x-[18px]" : "translate-x-0",
+                    )}
+                  />
+                </button>
+                <span className="max-w-[160px] text-[11px] font-semibold leading-snug text-[#555]">
+                  So sánh cùng kỳ năm trước
+                </span>
+              </div>
+            </>
+          ) : null}
+          {!readonly ? (
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-4 py-2 text-xs font-bold text-white shadow-sm hover:opacity-95"
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              Thêm tháng
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div
@@ -507,6 +594,11 @@ export default function BaoCaoTaiChinhView({
                     Thêm tháng đầu tiên
                   </button>
                 ) : null}
+              </div>
+            ) : displayCols.length === 0 ? (
+              <div className="flex min-h-[min(48vh,420px)] flex-col items-center justify-center gap-2 px-6 py-12">
+                <p className="m-0 text-sm font-semibold text-[#888]">Không có cột hiển thị cho năm đã chọn</p>
+                <p className="m-0 text-xs text-[#AAA]">Đổi bộ lọc năm hoặc chọn «Tất cả năm»</p>
               </div>
             ) : (
               <div
@@ -658,153 +750,23 @@ export default function BaoCaoTaiChinhView({
                     </tr>
                   </thead>
                   <tbody>
-                    {displayRows.map((row, ridx) => {
-                      if (row.type === "section") {
-                        return (
-                          <tr key={row.key}>
-                            <td
-                              className="bcc-fin-label-cell sticky left-0 z-[22] border-b border-t border-[#EAEAEA] px-4 py-1.5 text-left text-[9px] font-extrabold uppercase tracking-widest text-[#5c5c5c] shadow-[4px_0_14px_rgba(0,0,0,0.04)]"
-                              style={{
-                                width: labelWidth,
-                                minWidth: labelWidth,
-                                background: "#ebebec",
-                                borderRight: LABEL_COL_BORDER_RIGHT,
-                              }}
-                            >
-                              {row.label}
-                            </td>
-                            <td
-                              colSpan={readonly ? displayCols.length : displayCols.length + 1}
-                              className="border-b border-t border-[#EAEAEA] px-4 py-1.5 text-[9px] font-extrabold uppercase tracking-widest text-[#5c5c5c]"
-                              style={{
-                                background: "#ebebec",
-                              }}
-                              aria-hidden
-                            >
-                              {"\u00a0"}
-                            </td>
-                          </tr>
-                        );
-                      }
-                      const isFormula = row.type === "formula" || row.type === "result";
-                      const isResult = row.type === "result";
-                      const rowBg = getRowBg(row, ridx);
-                      return (
-                        <tr key={row.key} className={cn(!isFormula && !readonly && "cursor-pointer")}>
-                          <td
-                            className="bcc-fin-label-cell sticky left-0 z-[22] border-b text-nowrap font-bold text-[#323232] shadow-[4px_0_12px_rgba(0,0,0,0.04)]"
-                            style={{
-                              width: labelWidth,
-                              minWidth: labelWidth,
-                              background: rowBg ?? "#fff",
-                              borderRight: LABEL_COL_BORDER_RIGHT,
-                              borderBottomColor: BORDER,
-                              paddingTop: 7,
-                              paddingBottom: 7,
-                              paddingLeft: 12 + (row.indent ?? 0) * 16,
-                              paddingRight: 12,
-                              fontSize:
-                                row.type === "formula" ? 14 : row.type === "result" ? 13 : 12,
-                              fontWeight:
-                                row.type === "formula" || row.type === "result"
-                                  ? 800
-                                  : row.bold
-                                    ? 800
-                                    : 700,
-                              color: isResult ? "#1a1a1a" : "#323232",
-                            }}
-                          >
-                            {row.label}
-                          </td>
-                          {displayCols.map((col) => {
-                            const colData: ColData = col.isQuarter ? col.quarterData ?? {} : col.data;
-                            const val = row.formula ? row.formula(colData) : n(colData[row.key]);
-                            const isEditing =
-                              !col.isQuarter && editingCell?.colId === col.id && editingCell?.key === row.key;
-                            const isNeg = val < 0;
-                            const isQ = col.isQuarter === true;
-                            const cw = getColW(col.id);
-                            return (
-                              <td
-                                key={col.id}
-                                className={cn(
-                                  "bcc-num-cell border-b text-right text-xs align-middle transition-colors",
-                                  !isQ && "cursor-text",
-                                  isQ && "bcc-fin-num-quarter",
-                                )}
-                                onClick={() => {
-                                  if (!readonly && !isFormula && !isQ) {
-                                    setEditingCell({ colId: col.id, key: row.key });
-                                    setEditValue(col.data[row.key] ?? "");
-                                  }
-                                }}
-                                style={{
-                                  width: cw,
-                                  minWidth: cw,
-                                  background: quarterNumCellBg(isQ, isEditing, rowBg, row.type),
-                                  ...(isQ
-                                    ? {
-                                        borderLeftWidth: 3,
-                                        borderLeftStyle: "solid",
-                                        borderLeftColor: QUARTER_BORDER_L,
-                                      }
-                                    : {}),
-                                  borderRight: `1px solid ${BORDER}`,
-                                  borderBottom: `1px solid ${BORDER}`,
-                                  padding: "6px 10px",
-                                  fontSize: isQ ? 11 : 12,
-                                  fontWeight: isQ || row.bold ? 600 : isResult ? 600 : 400,
-                                  color: isNeg
-                                    ? "#dc2626"
-                                    : val === 0 && (isQ || isFormula)
-                                      ? "#b4b4b4"
-                                      : "#323232",
-                                  cursor: readonly || isFormula || isQ ? "default" : "text",
-                                }}
-                              >
-                                {!readonly && !isQ && isEditing ? (
-                                  <input
-                                    autoFocus
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value.replace(/[^0-9]/g, ""))}
-                                    onBlur={commitEdit}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter" || e.key === "Tab") {
-                                        e.preventDefault();
-                                        commitEdit();
-                                      }
-                                      if (e.key === "Escape") setEditingCell(null);
-                                    }}
-                                    className="w-full border-0 bg-transparent p-0 text-right text-xs text-[#1a1a1a] outline-none"
-                                  />
-                                ) : (
-                                  <span>
-                                    {val !== 0 ? (
-                                      fmtNum(val)
-                                    ) : isQ ? (
-                                      <span className="opacity-30">—</span>
-                                    ) : isFormula ? (
-                                      "—"
-                                    ) : readonly ? (
-                                      "—"
-                                    ) : (
-                                      <span className="text-[10px] text-gray-300">click để nhập</span>
-                                    )}
-                                  </span>
-                                )}
-                              </td>
-                            );
-                          })}
-                          {!readonly ? (
-                            <td
-                              className="bcc-num-cell border-b border-l border-[#EAEAEA] bg-[#fafafa]"
-                              style={{ width: 52, minWidth: 52, borderBottomColor: BORDER }}
-                              aria-hidden
-                            />
-                          ) : null}
-                        </tr>
-                      );
-                    })}
+                    <BctcHierarchyBody
+                      readonly={readonly}
+                      displayCols={displayCols}
+                      priorComparisonByColId={priorComparisonByColId}
+                      showPriorComparison={showPriorYearComparison}
+                      labelWidth={labelWidth}
+                      getColW={getColW}
+                      openLayer1={openLayer1}
+                      toggleLayer1={toggleLayer1}
+                      openLayer2Blocks={openLayer2Blocks}
+                      toggleLayer2Block={toggleLayer2Block}
+                      editingCell={editingCell}
+                      setEditingCell={setEditingCell}
+                      editValue={editValue}
+                      setEditValue={setEditValue}
+                      commitEdit={commitEdit}
+                    />
                   </tbody>
                 </table>
               </div>

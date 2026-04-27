@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/**
+ * Phiếu `tc_thu_chi_khac`: cột `danh_muc_thu_chi_id` → `tc_danh_muc_thu_chi`.
+ * Không dùng embed PostgREST `danh_muc:tc_danh_muc_thu_chi(...)` vì cần FK trong DB;
+ * tên danh mục được map sau khi fetch (xem `attachDanhMucLabels`).
+ * Cột `loai_thu_chi_id` (→ tc_loai_thu_chi) — dữ liệu cũ, fallback hiển thị.
+ */
+
 /** Dòng `tc_thu_chi_khac` + join hiển thị */
 export type AdminThuChiKhacRow = {
   id: number;
@@ -9,32 +16,70 @@ export type AdminThuChiKhacRow = {
   thu: number;
   chi: number;
   hinh_thuc: string | null;
+  danh_muc_thu_chi_id: number | null;
   loai_thu_chi_id: number | null;
   nguoi_tao_id: number | null;
   nguoi_tao?: { full_name: string } | { full_name: string }[] | null;
-  loai?: { giai_nghia: string; loai_thu_chi?: string } | { giai_nghia: string; loai_thu_chi?: string }[] | null;
+  danh_muc?:
+    | { ma?: string | null; ten?: string | null; nhom?: string | null; loai?: string | null }
+    | { ma?: string | null; ten?: string | null; nhom?: string | null; loai?: string | null }[]
+    | null;
+  loai?:
+    | { giai_nghia: string; loai_thu_chi?: string }
+    | { giai_nghia: string; loai_thu_chi?: string }[]
+    | null;
 };
 
-export type AdminLoaiThuChiOpt = {
+/** Một dòng `tc_danh_muc_thu_chi` — dropdown & lọc danh mục. */
+export type AdminDanhMucThuChiOpt = {
   id: number;
-  giai_nghia: string;
-  loai_thu_chi: string;
+  ma: string;
+  ten: string;
+  nhom: string;
+  loai: string;
 };
 
-export type AdminThuChiStaffOpt = {
-  id: number;
-  full_name: string;
-};
+export type AdminThuChiStaffOpt = { id: number; full_name: string };
 
 export type AdminThuChiKhacBundle = {
   records: AdminThuChiKhacRow[];
   staffOptions: AdminThuChiStaffOpt[];
-  loaiOptions: AdminLoaiThuChiOpt[];
+  danhMucOptions: AdminDanhMucThuChiOpt[];
 };
 
 function unwrapOne<T extends Record<string, unknown>>(v: T | T[] | null | undefined): T | null {
   if (v == null) return null;
   return Array.isArray(v) ? (v[0] as T) ?? null : v;
+}
+
+/** Map id → nhãn danh mục (mọi dòng `dmRows`, kể cả inactive — để hiển thị phiếu cũ). */
+function buildDanhMucLookup(
+  dmRows: Record<string, unknown>[] | null,
+): Map<number, { ma: string; ten: string; nhom: string; loai: string }> {
+  const m = new Map<number, { ma: string; ten: string; nhom: string; loai: string }>();
+  for (const r of dmRows ?? []) {
+    const id = Number((r as { id?: unknown }).id);
+    if (!Number.isFinite(id) || id <= 0) continue;
+    m.set(id, {
+      ma: String((r as { ma?: unknown }).ma ?? "").trim(),
+      ten: String((r as { ten?: unknown }).ten ?? "").trim(),
+      nhom: String((r as { nhom?: unknown }).nhom ?? "").trim(),
+      loai: String((r as { loai?: unknown }).loai ?? "").trim(),
+    });
+  }
+  return m;
+}
+
+function attachDanhMucLabels(
+  recRows: Record<string, unknown>[] | null,
+  dmById: Map<number, { ma: string; ten: string; nhom: string; loai: string }>,
+): AdminThuChiKhacRow[] {
+  return (recRows ?? []).map((raw) => {
+    const did = raw.danh_muc_thu_chi_id != null ? Number(raw.danh_muc_thu_chi_id) : null;
+    const dm =
+      did != null && Number.isFinite(did) ? dmById.get(did) ?? null : null;
+    return { ...raw, danh_muc: dm } as AdminThuChiKhacRow;
+  });
 }
 
 /** Nhân sự thuộc ban «Vận hành» (qua phòng); lỗi / rỗng → dùng toàn bộ nhân sự như Framer. */
@@ -51,7 +96,10 @@ async function fetchVanHanhNhanSuIds(supabase: SupabaseClient): Promise<Set<numb
     if (!ph) continue;
     const banRaw = (ph as { hr_ban?: unknown }).hr_ban;
     const ban = unwrapOne(banRaw as Record<string, unknown> | Record<string, unknown>[] | null);
-    const tenBan = ban && typeof (ban as { ten_ban?: unknown }).ten_ban === "string" ? (ban as { ten_ban: string }).ten_ban : "";
+    const tenBan =
+      ban && typeof (ban as { ten_ban?: unknown }).ten_ban === "string"
+        ? (ban as { ten_ban: string }).ten_ban
+        : "";
     if (tenBan !== "Vận hành") continue;
     const nid = Number(row.nhan_su_id);
     if (Number.isFinite(nid) && nid > 0) ids.add(nid);
@@ -73,25 +121,28 @@ export async function fetchAdminThuChiKhacBundle(supabase: SupabaseClient): Prom
     return { ok: false, error: staffErr.message };
   }
 
-  const { data: loaiRows, error: loaiErr } = await supabase
-    .from("tc_loai_thu_chi")
-    .select("id, giai_nghia, loai_thu_chi")
-    .order("giai_nghia");
+  const { data: dmRows, error: dmErr } = await supabase
+    .from("tc_danh_muc_thu_chi")
+    .select("id, ma, ten, nhom, loai, thu_tu, active")
+    .order("thu_tu", { ascending: true })
+    .order("ten", { ascending: true });
 
-  if (loaiErr) {
-    return { ok: false, error: loaiErr.message };
+  if (dmErr) {
+    return { ok: false, error: dmErr.message };
   }
 
   const { data: recRows, error: recErr } = await supabase
     .from("tc_thu_chi_khac")
     .select(
-      "id, created_at, tieu_de, chu_thich, thu, chi, hinh_thuc, loai_thu_chi_id, nguoi_tao_id, nguoi_tao:hr_nhan_su(full_name), loai:tc_loai_thu_chi(giai_nghia, loai_thu_chi)"
+      "id, created_at, tieu_de, chu_thich, thu, chi, hinh_thuc, danh_muc_thu_chi_id, loai_thu_chi_id, nguoi_tao_id, nguoi_tao:hr_nhan_su(full_name), loai:tc_loai_thu_chi(giai_nghia, loai_thu_chi)",
     )
     .order("created_at", { ascending: false });
 
   if (recErr) {
     return { ok: false, error: recErr.message };
   }
+
+  const dmById = buildDanhMucLookup(dmRows as Record<string, unknown>[] | null);
 
   const staffOptions = (staffRows ?? [])
     .map((r) => {
@@ -102,20 +153,23 @@ export async function fetchAdminThuChiKhacBundle(supabase: SupabaseClient): Prom
     })
     .filter((x): x is AdminThuChiStaffOpt => x != null);
 
-  const loaiOptions = (loaiRows ?? [])
+  const danhMucOptions: AdminDanhMucThuChiOpt[] = (dmRows ?? [])
+    .filter((r) => (r as { active?: boolean | null }).active !== false)
     .map((r) => {
       const id = Number((r as { id?: unknown }).id);
-      const giai_nghia = String((r as { giai_nghia?: unknown }).giai_nghia ?? "").trim();
-      const loai_thu_chi = String((r as { loai_thu_chi?: unknown }).loai_thu_chi ?? "Chi");
-      if (!Number.isFinite(id) || id <= 0 || !giai_nghia) return null;
-      return { id, giai_nghia, loai_thu_chi };
+      const ma = String((r as { ma?: unknown }).ma ?? "").trim();
+      const ten = String((r as { ten?: unknown }).ten ?? "").trim();
+      const nhom = String((r as { nhom?: unknown }).nhom ?? "").trim();
+      const loai = String((r as { loai?: unknown }).loai ?? "").trim();
+      if (!Number.isFinite(id) || id <= 0 || !ten) return null;
+      return { id, ma, ten, nhom: nhom || "—", loai: loai || "Chi" };
     })
-    .filter((x): x is AdminLoaiThuChiOpt => x != null);
+    .filter((x): x is AdminDanhMucThuChiOpt => x != null);
 
-  const records = (recRows ?? []) as AdminThuChiKhacRow[];
+  const records = attachDanhMucLabels(recRows as Record<string, unknown>[] | null, dmById);
 
   return {
     ok: true,
-    data: { records, staffOptions, loaiOptions },
+    data: { records, staffOptions, danhMucOptions },
   };
 }

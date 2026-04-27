@@ -19,6 +19,15 @@ export function adminStaffCanDeleteRecords(vaiTro: string | null | undefined): b
   return v === "admin" || v === "quan_ly";
 }
 
+/** Sửa phiếu Thu chi khác (`tc_thu_chi_khac`) — chỉ `quan_ly`, `admin`. */
+export function adminStaffCanEditThuChiKhacPhieu(vaiTro: string | null | undefined): boolean {
+  const v = normalizeStaffVaiTro(vaiTro);
+  return v === "admin" || v === "quan_ly";
+}
+
+export const THU_CHI_KHAC_EDIT_FORBIDDEN_MSG =
+  "Chỉ quản lý hoặc admin được sửa hoặc xóa phiếu thu chi khác.";
+
 /** Tab «BCTC chi tiết» trên dashboard tổng quan — chỉ admin & quản lý. */
 export function adminStaffCanViewBctcDetailCharts(vaiTro: string | null | undefined): boolean {
   const v = normalizeStaffVaiTro(vaiTro);

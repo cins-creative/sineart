@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AdminDashboardAbilitiesProvider } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
 import {
+  BCTC_TU_DONG_HREF,
   DASHBOARD_OVERVIEW_HREF,
   NAV_MAIN,
   NAV_HR,
@@ -258,10 +259,18 @@ export default function AdminShell({
     () => NAV_MAIN.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href)),
     [allowed],
   );
-  const navHrVisible = useMemo(
-    () => NAV_HR.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href)),
-    [allowed],
-  );
+  const navHrVisible = useMemo(() => {
+    let items = NAV_HR.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href));
+    const isAdmin = (staffRole ?? "").trim().toLowerCase() === "admin";
+    if (isAdmin) {
+      items = [
+        ...items.slice(0, 2),
+        { label: "BCTC — nguồn tự động", href: BCTC_TU_DONG_HREF },
+        ...items.slice(2),
+      ];
+    }
+    return items;
+  }, [allowed, staffRole]);
   const navMarketingVisible = useMemo(
     () => NAV_MARKETING.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href)),
     [allowed],
@@ -272,11 +281,12 @@ export default function AdminShell({
   const prefetchTargets = useMemo(() => {
     const out: string[] = [DASHBOARD_OVERVIEW_HREF];
     if (showOrderMedia) out.push(ORDER_MEDIA_HREF);
+    if ((staffRole ?? "").trim().toLowerCase() === "admin") out.push(BCTC_TU_DONG_HREF);
     for (const i of navMainVisible) out.push(i.href);
     for (const i of navHrVisible) out.push(i.href);
     for (const i of navMarketingVisible) out.push(i.href);
     return [...new Set(out)];
-  }, [showOrderMedia, navMainVisible, navHrVisible, navMarketingVisible]);
+  }, [showOrderMedia, navMainVisible, navHrVisible, navMarketingVisible, staffRole]);
 
   useEffect(() => {
     for (const href of prefetchTargets) {

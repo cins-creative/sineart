@@ -1,0 +1,10 @@
+{
+  "source": "c:\\Users\\DELL\\Downloads\\BCTC 2025.xlsx",
+  "sheet": "KQKD 2025",
+  "rules": {
+    "three_subjects_equal_P": "P = (Sum Online 3 môn + Sum Offline 3 môn) / 3 với Online3 = Excel4.1 - Kids - BG, Offline3 = Excel4.2",
+    "per_subject": "Online=round(0.7*P), Offline=round(0.3*P), then adjust để khớp tổng Excel",
+    "dt_marketplace": "dòng 4.4 Doanh thu bán họa cụ",
+    "dt_hh_off_conflict": "App map dtHoaCu -> dt_hh_off; script dùng dt_marketplace cho họa cụ để tránh ghi đè HH Offline"
+  }
+}

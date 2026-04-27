@@ -13,6 +13,179 @@ export interface RowDef {
   bold?: boolean;
 }
 
+/** Layer 1 — chỉ tiêu tóm tắt (expand → L2 có Σ nhóm → L3 chi tiết). */
+export const BCTC_LAYER1_KEYS = [
+  "_tongDT",
+  "_dtThuan",
+  "_tongCP",
+  "_lnTruocThue",
+  "_lnSauThue",
+] as const;
+
+export type BctcLayer1Key = (typeof BCTC_LAYER1_KEYS)[number];
+
+export const BCTC_LAYER1_DISPLAY_LABELS: Record<BctcLayer1Key, string> = {
+  _tongDT: "Tổng doanh thu",
+  _dtThuan: "Doanh thu thuần",
+  _tongCP: "Tổng chi phí",
+  _lnTruocThue: "Lợi nhuận trước thuế",
+  _lnSauThue: "Lợi nhuận sau thuế",
+};
+
+/** Khối điều hướng L2/L3 trong báo cáo phân cấp. */
+export type BctcNavBlock =
+  | {
+      kind: "rollup";
+      id: string;
+      title: string;
+      /** Dòng Σ nhóm (Layer 2) — `RowDef` formula/result/input */
+      subtotalKey: string;
+      /** Chi tiết Layer 3 — ẩn đến khi mở khối */
+      detailKeys: readonly string[];
+    }
+  | {
+      kind: "flat";
+      id: string;
+      /** Optional section title row above rows */
+      title?: string;
+      rowKeys: readonly string[];
+    };
+
+export const BCTC_NAV_TREE: Record<BctcLayer1Key, readonly BctcNavBlock[]> = {
+  _tongDT: [
+    {
+      kind: "flat",
+      id: "dt-online",
+      rowKeys: ["_dtOnline"],
+    },
+    {
+      kind: "flat",
+      id: "dt-offline",
+      rowKeys: ["_dtOffline"],
+    },
+    {
+      kind: "rollup",
+      id: "dt-hh",
+      title: "Doanh thu Hình họa",
+      subtotalKey: "_dtHinhHoa",
+      detailKeys: ["dtHHOnline", "dtHHOffline"],
+    },
+    {
+      kind: "rollup",
+      id: "dt-ttm",
+      title: "Doanh thu Trang trí màu",
+      subtotalKey: "_dtTTM",
+      detailKeys: ["dtTTMOnline", "dtTTMOffline"],
+    },
+    {
+      kind: "rollup",
+      id: "dt-bcm",
+      title: "Doanh thu BCM",
+      subtotalKey: "_dtBCM",
+      detailKeys: ["dtBCMOnline", "dtBCMOffline"],
+    },
+    {
+      kind: "rollup",
+      id: "dt-kids-bg",
+      title: "Kids & Background (trong Doanh thu Online)",
+      subtotalKey: "_l2SubKidsBackground",
+      detailKeys: ["dtKids", "dtBackground"],
+    },
+    {
+      kind: "rollup",
+      id: "dt-khac",
+      title: "Doanh thu khác (trong Tổng DT)",
+      subtotalKey: "_l2SubDTKhacTrongTongDT",
+      detailKeys: ["dtDichVu", "dtHoaCu"],
+    },
+    {
+      kind: "flat",
+      id: "dt-hdtc-ngoai-tong",
+      title: "Hoạt động tài chính (ngoài Tổng DT — vào LN)",
+      rowKeys: ["dtHoatDongTC"],
+    },
+    {
+      kind: "rollup",
+      id: "giam-tru",
+      title: "Giảm trừ doanh thu",
+      subtotalKey: "_l2SubGiamTru",
+      detailKeys: ["ckKhuyenMai", "hangTraLai"],
+    },
+  ],
+  _dtThuan: [
+    {
+      kind: "flat",
+      id: "thuan-doi-chieu",
+      title: "Đối chiếu DT thuần",
+      rowKeys: ["_bridgeDtThuanGross", "_l2SubGiamTru", "_dtThuanEcho"],
+    },
+  ],
+  _tongCP: [
+    {
+      kind: "rollup",
+      id: "cp-luong",
+      title: "Lương",
+      subtotalKey: "_tongLuong",
+      detailKeys: ["luongGVLuyenThi", "luongGVBackground", "luongVHDaoTao", "luongVHDichVu"],
+    },
+    {
+      kind: "flat",
+      id: "cp-bhxh",
+      title: "BHXH nhân viên",
+      rowKeys: ["bhxhNhanVien"],
+    },
+    {
+      kind: "rollup",
+      id: "cp-thue-phi",
+      title: "Thuế VAT học viên + Thuế CC",
+      subtotalKey: "_l2ThueVATCC",
+      detailKeys: ["thueVATHV", "thueCC"],
+    },
+    {
+      kind: "rollup",
+      id: "cp-van-hanh",
+      title: "Chi phí hoạt động",
+      subtotalKey: "_l2CpPhiVanHanh",
+      detailKeys: [
+        "cpTrichTruoc",
+        "cpTiecQua",
+        "cpDaoTao",
+        "cpWebsite",
+        "cpPhanMem",
+        "cpMarketing",
+        "cpKhauHao",
+        "cpDienNuoc",
+        "cpMatBang",
+        "cpNganHang",
+        "cpTienKhac",
+      ],
+    },
+    {
+      kind: "rollup",
+      id: "cp-tong-hop-nhanh",
+      title: "CP hỗ trợ KD + CP cố định (nhánh)",
+      subtotalKey: "_l2SubCpTongHopBranches",
+      detailKeys: ["_cpHoTroKD", "_cpCoDinh"],
+    },
+  ],
+  _lnTruocThue: [
+    {
+      kind: "flat",
+      id: "ln-truoc-doi-chieu",
+      title: "Đối chiếu LN trước thuế",
+      rowKeys: ["_l2LnDtBridge", "_l2LnCpBridge", "_lnTruocEcho"],
+    },
+  ],
+  _lnSauThue: [
+    {
+      kind: "flat",
+      id: "ln-sau-doi-chieu",
+      title: "Từ LN trước thuế (~94%)",
+      rowKeys: ["_lnTruocEchoSau", "_l2LnSauFromTruoc", "_lnSauEcho"],
+    },
+  ],
+};
+
 export type ColData = Record<string, string>;
 
 /** Thứ tự quan trọng: cột DB trùng nhau → key đứng trước nhận giá trị khi đọc. */
@@ -26,7 +199,6 @@ export const KEY_TO_COL_ENTRIES: readonly [string, string][] = [
   ["dtKids", "dt_kids"],
   ["dtBackground", "dt_background"],
   ["dtDichVu", "dt_dich_vu"],
-  ["dtMarketplace", "dt_marketplace"],
   ["dtHoaCu", "dt_hh_off"],
   ["dtHoatDongTC", "dt_hoat_dong_tc"],
   ["ckKhuyenMai", "chietkhau_khuyenmai"],
@@ -105,7 +277,7 @@ export const ROWS: RowDef[] = [
   { key: "__sec_tonghop", label: "TỔNG HỢP DOANH THU", type: "section", color: DS_ACC },
   {
     key: "_dtHinhHoa",
-    label: "DT Hình họa",
+    label: "Σ Doanh thu Hình họa",
     type: "formula",
     indent: 1,
     color: DS_ACC,
@@ -113,7 +285,7 @@ export const ROWS: RowDef[] = [
   },
   {
     key: "_dtTTM",
-    label: "DT TTM",
+    label: "Σ Doanh thu Trang trí màu",
     type: "formula",
     indent: 1,
     color: DS_ACC,
@@ -121,7 +293,7 @@ export const ROWS: RowDef[] = [
   },
   {
     key: "_dtBCM",
-    label: "DT BCM",
+    label: "Σ Doanh thu BCM",
     type: "formula",
     indent: 1,
     color: DS_ACC,
@@ -129,7 +301,7 @@ export const ROWS: RowDef[] = [
   },
   {
     key: "_dtOnline",
-    label: "Tổng DT Online",
+    label: "Doanh thu Online",
     type: "formula",
     indent: 1,
     color: DS_ACC,
@@ -138,7 +310,7 @@ export const ROWS: RowDef[] = [
   },
   {
     key: "_dtOffline",
-    label: "Tổng DT Offline",
+    label: "Doanh thu Offline",
     type: "formula",
     indent: 1,
     color: DS_ACC,
@@ -146,7 +318,6 @@ export const ROWS: RowDef[] = [
   },
   { key: "__sec_dtkhac", label: "DOANH THU KHÁC", type: "section", color: "#8b5cf6" },
   { key: "dtDichVu", label: "Dịch vụ", type: "input", indent: 1 },
-  { key: "dtMarketplace", label: "Marketplace", type: "input", indent: 1 },
   { key: "dtHoaCu", label: "Họa cụ", type: "input", indent: 1 },
   { key: "dtHoatDongTC", label: "Hoạt động tài chính", type: "input", indent: 1 },
   { key: "__sec_giamtru", label: "GIẢM TRỪ DOANH THU", type: "section", color: DS_AMBER },
@@ -168,7 +339,6 @@ export const ROWS: RowDef[] = [
       n(c.dtKids) +
       n(c.dtBackground) +
       n(c.dtDichVu) +
-      n(c.dtMarketplace) +
       n(c.dtHoaCu),
   },
   {
@@ -188,7 +358,6 @@ export const ROWS: RowDef[] = [
         n(c.dtKids) +
         n(c.dtBackground) +
         n(c.dtDichVu) +
-        n(c.dtMarketplace) +
         n(c.dtHoaCu);
       return t - n(c.ckKhuyenMai) - n(c.hangTraLai);
     },
@@ -298,7 +467,6 @@ export const ROWS: RowDef[] = [
         n(c.dtKids) +
         n(c.dtBackground) +
         n(c.dtDichVu) +
-        n(c.dtMarketplace) +
         n(c.dtHoaCu) +
         n(c.dtHoatDongTC) -
         n(c.ckKhuyenMai) -
@@ -340,7 +508,381 @@ export const ROWS: RowDef[] = [
         n(c.dtKids) +
         n(c.dtBackground) +
         n(c.dtDichVu) +
-        n(c.dtMarketplace) +
+        n(c.dtHoaCu) +
+        n(c.dtHoatDongTC) -
+        n(c.ckKhuyenMai) -
+        n(c.hangTraLai);
+      const cp =
+        n(c.luongGVLuyenThi) +
+        n(c.luongGVBackground) +
+        n(c.luongVHDaoTao) +
+        n(c.luongVHDichVu) +
+        n(c.bhxhNhanVien) +
+        n(c.cpTrichTruoc) +
+        n(c.cpTiecQua) +
+        n(c.cpDaoTao) +
+        n(c.cpWebsite) +
+        n(c.cpPhanMem) +
+        n(c.cpMarketing) +
+        n(c.cpKhauHao) +
+        n(c.cpDienNuoc) +
+        n(c.cpMatBang) +
+        n(c.cpNganHang) +
+        n(c.cpTienKhac);
+      return (dt - cp) * 0.94;
+    },
+  },
+
+  /** —— Phân cấp L2/L3 (chỉ hiển thị, không map DB) —— */
+  {
+    key: "_l2SubDTLop",
+    label: "Σ Doanh thu lớp học",
+    type: "formula",
+    indent: 1,
+    color: DS_ACC,
+    bold: true,
+    formula: (c) =>
+      n(c.dtTTMOnline) +
+      n(c.dtTTMOffline) +
+      n(c.dtHHOnline) +
+      n(c.dtHHOffline) +
+      n(c.dtBCMOnline) +
+      n(c.dtBCMOffline) +
+      n(c.dtKids) +
+      n(c.dtBackground),
+  },
+  {
+    key: "_l2SubDTTheoMon",
+    label: "Σ Doanh thu theo môn",
+    type: "formula",
+    indent: 1,
+    color: DS_ACC,
+    bold: true,
+    formula: (c) =>
+      n(c.dtTTMOnline) +
+      n(c.dtTTMOffline) +
+      n(c.dtHHOnline) +
+      n(c.dtHHOffline) +
+      n(c.dtBCMOnline) +
+      n(c.dtBCMOffline) +
+      n(c.dtKids) +
+      n(c.dtBackground),
+  },
+  {
+    key: "_l2SubKidsBackground",
+    label: "Σ Kids & Background",
+    type: "formula",
+    indent: 1,
+    color: DS_ACC,
+    bold: true,
+    formula: (c) => n(c.dtKids) + n(c.dtBackground),
+  },
+  {
+    key: "_l2SubOnlineOfflineOnly",
+    label: "Σ Tổng Online + Tổng Offline",
+    type: "formula",
+    indent: 1,
+    color: DS_ACC,
+    bold: true,
+    formula: (c) =>
+      n(c.dtTTMOnline) +
+      n(c.dtHHOnline) +
+      n(c.dtBCMOnline) +
+      n(c.dtKids) +
+      n(c.dtBackground) +
+      n(c.dtTTMOffline) +
+      n(c.dtHHOffline) +
+      n(c.dtBCMOffline),
+  },
+  {
+    key: "_l2SubDTKhacTrongTongDT",
+    label: "Σ Doanh thu khác (trong Tổng DT)",
+    type: "formula",
+    indent: 1,
+    color: DS_ACC,
+    bold: true,
+    formula: (c) => n(c.dtDichVu) + n(c.dtHoaCu),
+  },
+  {
+    key: "_l2SubGiamTru",
+    label: "Σ Giảm trừ (CK + hàng trả lại)",
+    type: "formula",
+    indent: 1,
+    color: DS_AMBER,
+    bold: true,
+    formula: (c) => n(c.ckKhuyenMai) + n(c.hangTraLai),
+  },
+  {
+    key: "_bridgeDtThuanGross",
+    label: "Doanh thu gộp (theo Tổng DT)",
+    type: "formula",
+    indent: 1,
+    color: DS_ACC,
+    formula: (c) =>
+      n(c.dtTTMOnline) +
+      n(c.dtTTMOffline) +
+      n(c.dtHHOnline) +
+      n(c.dtHHOffline) +
+      n(c.dtBCMOnline) +
+      n(c.dtBCMOffline) +
+      n(c.dtKids) +
+      n(c.dtBackground) +
+      n(c.dtDichVu) +
+      n(c.dtHoaCu),
+  },
+  {
+    key: "_dtThuanEcho",
+    label: "Doanh thu thuần (= kiểm tra)",
+    type: "result",
+    indent: 1,
+    color: DS_ACC,
+    bold: true,
+    formula: (c) => {
+      const t =
+        n(c.dtTTMOnline) +
+        n(c.dtTTMOffline) +
+        n(c.dtHHOnline) +
+        n(c.dtHHOffline) +
+        n(c.dtBCMOnline) +
+        n(c.dtBCMOffline) +
+        n(c.dtKids) +
+        n(c.dtBackground) +
+        n(c.dtDichVu) +
+        n(c.dtHoaCu);
+      return t - n(c.ckKhuyenMai) - n(c.hangTraLai);
+    },
+  },
+  {
+    key: "_l2CpPhiVanHanh",
+    label: "Σ Chi phí hoạt động (trừ lương & BHXH)",
+    type: "formula",
+    indent: 1,
+    color: DS_RED,
+    bold: true,
+    formula: (c) =>
+      n(c.cpTrichTruoc) +
+      n(c.cpTiecQua) +
+      n(c.cpDaoTao) +
+      n(c.cpWebsite) +
+      n(c.cpPhanMem) +
+      n(c.cpMarketing) +
+      n(c.cpKhauHao) +
+      n(c.cpDienNuoc) +
+      n(c.cpMatBang) +
+      n(c.cpNganHang) +
+      n(c.cpTienKhac),
+  },
+  {
+    key: "_l2ThueVATCC",
+    label: "Σ Thuế VAT học viên + Thuế CC",
+    type: "formula",
+    indent: 1,
+    color: DS_RED,
+    bold: true,
+    formula: (c) => n(c.thueVATHV) + n(c.thueCC),
+  },
+  {
+    key: "_l2SubCpTongHopBranches",
+    label: "Σ CP hỗ trợ KD + CP cố định (nhánh)",
+    type: "formula",
+    indent: 1,
+    color: DS_ACC,
+    bold: true,
+    formula: (c) =>
+      n(c.cpMarketing) +
+      n(c.cpTiecQua) +
+      n(c.cpWebsite) +
+      n(c.cpPhanMem) +
+      n(c.cpDienNuoc) +
+      n(c.cpMatBang) +
+      n(c.cpNganHang) +
+      n(c.cpTienKhac),
+  },
+  {
+    key: "_l2LnDtBridge",
+    label: "Doanh thu sau giảm trừ (+ HĐTC)",
+    type: "formula",
+    indent: 1,
+    color: "#EE5CA2",
+    formula: (c) =>
+      n(c.dtTTMOnline) +
+      n(c.dtTTMOffline) +
+      n(c.dtHHOnline) +
+      n(c.dtHHOffline) +
+      n(c.dtBCMOnline) +
+      n(c.dtBCMOffline) +
+      n(c.dtKids) +
+      n(c.dtBackground) +
+      n(c.dtDichVu) +
+      n(c.dtHoaCu) +
+      n(c.dtHoatDongTC) -
+      n(c.ckKhuyenMai) -
+      n(c.hangTraLai),
+  },
+  {
+    key: "_l2LnCpBridge",
+    label: "Σ Chi phí (theo LN trước thuế)",
+    type: "formula",
+    indent: 1,
+    color: DS_RED,
+    formula: (c) =>
+      n(c.luongGVLuyenThi) +
+      n(c.luongGVBackground) +
+      n(c.luongVHDaoTao) +
+      n(c.luongVHDichVu) +
+      n(c.bhxhNhanVien) +
+      n(c.cpTrichTruoc) +
+      n(c.cpTiecQua) +
+      n(c.cpDaoTao) +
+      n(c.cpWebsite) +
+      n(c.cpPhanMem) +
+      n(c.cpMarketing) +
+      n(c.cpKhauHao) +
+      n(c.cpDienNuoc) +
+      n(c.cpMatBang) +
+      n(c.cpNganHang) +
+      n(c.cpTienKhac),
+  },
+  {
+    key: "_lnTruocEcho",
+    label: "Lợi nhuận trước thuế (= kiểm tra)",
+    type: "result",
+    bold: true,
+    color: "#EE5CA2",
+    formula: (c) => {
+      const dt =
+        n(c.dtTTMOnline) +
+        n(c.dtTTMOffline) +
+        n(c.dtHHOnline) +
+        n(c.dtHHOffline) +
+        n(c.dtBCMOnline) +
+        n(c.dtBCMOffline) +
+        n(c.dtKids) +
+        n(c.dtBackground) +
+        n(c.dtDichVu) +
+        n(c.dtHoaCu) +
+        n(c.dtHoatDongTC) -
+        n(c.ckKhuyenMai) -
+        n(c.hangTraLai);
+      const cp =
+        n(c.luongGVLuyenThi) +
+        n(c.luongGVBackground) +
+        n(c.luongVHDaoTao) +
+        n(c.luongVHDichVu) +
+        n(c.bhxhNhanVien) +
+        n(c.cpTrichTruoc) +
+        n(c.cpTiecQua) +
+        n(c.cpDaoTao) +
+        n(c.cpWebsite) +
+        n(c.cpPhanMem) +
+        n(c.cpMarketing) +
+        n(c.cpKhauHao) +
+        n(c.cpDienNuoc) +
+        n(c.cpMatBang) +
+        n(c.cpNganHang) +
+        n(c.cpTienKhac);
+      return dt - cp;
+    },
+  },
+  {
+    key: "_lnTruocEchoSau",
+    label: "LN trước thuế (tham chiếu)",
+    type: "result",
+    bold: true,
+    color: "#EE5CA2",
+    formula: (c) => {
+      const dt =
+        n(c.dtTTMOnline) +
+        n(c.dtTTMOffline) +
+        n(c.dtHHOnline) +
+        n(c.dtHHOffline) +
+        n(c.dtBCMOnline) +
+        n(c.dtBCMOffline) +
+        n(c.dtKids) +
+        n(c.dtBackground) +
+        n(c.dtDichVu) +
+        n(c.dtHoaCu) +
+        n(c.dtHoatDongTC) -
+        n(c.ckKhuyenMai) -
+        n(c.hangTraLai);
+      const cp =
+        n(c.luongGVLuyenThi) +
+        n(c.luongGVBackground) +
+        n(c.luongVHDaoTao) +
+        n(c.luongVHDichVu) +
+        n(c.bhxhNhanVien) +
+        n(c.cpTrichTruoc) +
+        n(c.cpTiecQua) +
+        n(c.cpDaoTao) +
+        n(c.cpWebsite) +
+        n(c.cpPhanMem) +
+        n(c.cpMarketing) +
+        n(c.cpKhauHao) +
+        n(c.cpDienNuoc) +
+        n(c.cpMatBang) +
+        n(c.cpNganHang) +
+        n(c.cpTienKhac);
+      return dt - cp;
+    },
+  },
+  {
+    key: "_l2LnSauFromTruoc",
+    label: "LN trước × ~94% (= kiểm tra sau thuế)",
+    type: "formula",
+    indent: 1,
+    color: "#EE5CA2",
+    formula: (c) => {
+      const dt =
+        n(c.dtTTMOnline) +
+        n(c.dtTTMOffline) +
+        n(c.dtHHOnline) +
+        n(c.dtHHOffline) +
+        n(c.dtBCMOnline) +
+        n(c.dtBCMOffline) +
+        n(c.dtKids) +
+        n(c.dtBackground) +
+        n(c.dtDichVu) +
+        n(c.dtHoaCu) +
+        n(c.dtHoatDongTC) -
+        n(c.ckKhuyenMai) -
+        n(c.hangTraLai);
+      const cp =
+        n(c.luongGVLuyenThi) +
+        n(c.luongGVBackground) +
+        n(c.luongVHDaoTao) +
+        n(c.luongVHDichVu) +
+        n(c.bhxhNhanVien) +
+        n(c.cpTrichTruoc) +
+        n(c.cpTiecQua) +
+        n(c.cpDaoTao) +
+        n(c.cpWebsite) +
+        n(c.cpPhanMem) +
+        n(c.cpMarketing) +
+        n(c.cpKhauHao) +
+        n(c.cpDienNuoc) +
+        n(c.cpMatBang) +
+        n(c.cpNganHang) +
+        n(c.cpTienKhac);
+      return (dt - cp) * 0.94;
+    },
+  },
+  {
+    key: "_lnSauEcho",
+    label: "Lợi nhuận sau thuế (= kiểm tra)",
+    type: "result",
+    bold: true,
+    color: "#EE5CA2",
+    formula: (c) => {
+      const dt =
+        n(c.dtTTMOnline) +
+        n(c.dtTTMOffline) +
+        n(c.dtHHOnline) +
+        n(c.dtHHOffline) +
+        n(c.dtBCMOnline) +
+        n(c.dtBCMOffline) +
+        n(c.dtKids) +
+        n(c.dtBackground) +
+        n(c.dtDichVu) +
         n(c.dtHoaCu) +
         n(c.dtHoatDongTC) -
         n(c.ckKhuyenMai) -
@@ -366,6 +908,8 @@ export const ROWS: RowDef[] = [
     },
   },
 ];
+
+export const ROW_DEF_MAP: Record<string, RowDef> = Object.fromEntries(ROWS.map((r) => [r.key, r]));
 
 /** Chỉ tiêu tab «BCTC tổng quan» (dashboard) — tổng hợp & KQKD, không chi tiết từng dòng nhập. */
 export const BCTC_SUMMARY_ROW_KEYS = [
@@ -459,7 +1003,8 @@ export function buildSupabasePayload(
   return body;
 }
 
-function mergeColData(cols: ColData[]): ColData {
+/** Gộp nhiều `ColData` (các tháng trong quý) — dùng cho cột Σ quý và YoY quý. */
+export function mergeColDataInputs(cols: ColData[]): ColData {
   const result: ColData = {};
   for (const k of INPUT_KEYS) {
     const sum = Math.round(cols.reduce((acc, c) => acc + n(c[k]), 0));
@@ -468,7 +1013,7 @@ function mergeColData(cols: ColData[]): ColData {
   return result;
 }
 
-const QUARTER_MONTHS: Record<number, string[]> = {
+export const QUARTER_MONTHS: Record<number, string[]> = {
   1: ["Tháng 1", "Tháng 2", "Tháng 3"],
   2: ["Tháng 4", "Tháng 5", "Tháng 6"],
   3: ["Tháng 7", "Tháng 8", "Tháng 9"],
@@ -509,7 +1054,7 @@ export function buildDisplayCols(columns: BaoCaoColumn[]): BaoCaoColumn[] {
       const qMonths = QUARTER_MONTHS[q];
       const present = yearCols.filter((c) => qMonths.includes(c.thang));
       if (present.length === 0) continue;
-      const merged = mergeColData(present.map((c) => c.data));
+      const merged = mergeColDataInputs(present.map((c) => c.data));
       display.push({
         id: `q_${year}_Q${q}`,
         nam: year,
@@ -527,4 +1072,59 @@ export function buildDisplayCols(columns: BaoCaoColumn[]): BaoCaoColumn[] {
     }
   }
   return display;
+}
+
+/** Meta so sánh cùng kỳ năm trước — `comparable` = đủ dữ liệu để hiển thị %. */
+export type PriorComparisonMeta = {
+  priorColData: ColData | null;
+  comparable: boolean;
+};
+
+/**
+ * Cùng kỳ năm trước — chỉ dựa trên cột tháng gốc.
+ * Quý: chỉ `comparable` khi **đủ 3 tháng** của quý đó cho **cả** năm hiện tại và năm trước
+ * (vd. mới có tháng 4 của Q2 → không so được với Q2 năm trước).
+ */
+export function getPriorComparisonMeta(
+  col: BaoCaoColumn,
+  rawMonthCols: BaoCaoColumn[],
+): PriorComparisonMeta {
+  const y = parseInt(col.nam, 10);
+  if (!Number.isFinite(y) || y <= 1) {
+    return { priorColData: null, comparable: false };
+  }
+  const py = String(y - 1);
+
+  if (col.isQuarter === true) {
+    const m = /^q_(\d+)_Q(\d)$/.exec(col.id);
+    if (!m) return { priorColData: null, comparable: false };
+    const q = Number(m[2]);
+    if (q < 1 || q > 4) return { priorColData: null, comparable: false };
+    const qMonths = QUARTER_MONTHS[q];
+    const currentInQ = rawMonthCols.filter(
+      (c) => !c.isQuarter && c.nam === col.nam && qMonths.includes(c.thang),
+    );
+    const priorInQ = rawMonthCols.filter(
+      (c) => !c.isQuarter && c.nam === py && qMonths.includes(c.thang),
+    );
+    const comparable = currentInQ.length === 3 && priorInQ.length === 3;
+    const priorColData =
+      comparable && priorInQ.length === 3
+        ? mergeColDataInputs(priorInQ.map((c) => c.data))
+        : null;
+    return { priorColData, comparable };
+  }
+
+  const hit = rawMonthCols.find((c) => !c.isQuarter && c.nam === py && c.thang === col.thang);
+  return {
+    priorColData: hit ? hit.data : null,
+    comparable: !!hit,
+  };
+}
+
+export function getPriorPeriodColData(
+  col: BaoCaoColumn,
+  rawMonthCols: BaoCaoColumn[],
+): ColData | null {
+  return getPriorComparisonMeta(col, rawMonthCols).priorColData;
 }

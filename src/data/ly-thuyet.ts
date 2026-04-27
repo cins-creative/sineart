@@ -129,6 +129,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["hoà-sắc", "complementary", "analogous"],
     doc_time: 12,
     thumbnail: "/img/ly-thuyet-hoa-sac/thumbnail.jpg",
+    hero_image: "/img/ly-thuyet-hoa-sac/hero-cover.png",
   },
   {
     slug: "gam-mau",

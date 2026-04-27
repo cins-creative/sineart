@@ -2,6 +2,8 @@
 
 export const DASHBOARD_OVERVIEW_HREF = "/admin/dashboard/overview";
 export const ORDER_MEDIA_HREF = "/admin/dashboard/order-media";
+/** BCTC tự động (học phí + thu chi khác + họa cụ) — chỉ menu cho vai trò `admin`. */
+export const BCTC_TU_DONG_HREF = "/admin/dashboard/bctc-tu-dong";
 
 export const NAV_MAIN: { label: string; href: string; disabled?: boolean }[] = [
   { label: "Chi nhánh", href: "/admin/dashboard/chi-nhanh" },

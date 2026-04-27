@@ -27,5 +27,11 @@ export default async function ThuChiKhacPageData() {
     );
   }
 
-  return <ThuChiKhacView bundle={bundle.data} defaultNguoiTaoId={session.staffId} />;
+  return (
+    <ThuChiKhacView
+      bundle={bundle.data}
+      defaultNguoiTaoId={session.staffId}
+      loggedInStaffName={session.name}
+    />
+  );
 }

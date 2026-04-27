@@ -80,6 +80,7 @@ type ChiBanRow = {
   don_ban: number;
   so_luong_ban: number | null;
   mat_hang: number | null;
+  thanh_tien?: number | string | null;
   hc_danh_sach_san_pham?: { ten_hang?: string | null; gia_ban?: number | null } | { ten_hang?: string | null; gia_ban?: number | null }[] | null;
 };
 
@@ -123,7 +124,7 @@ export async function fetchAdminThongKeThuChiBundle(
       .limit(MAX_HP_DONS),
     supabase
       .from("hc_don_ban_hoa_cu")
-      .select("id, created_at, hinh_thuc_thu")
+      .select("id, created_at, hinh_thuc_thu, tong_tien")
       .order("created_at", { ascending: false })
       .limit(MAX_HC_DONS),
     supabase
@@ -311,21 +312,22 @@ export async function fetchAdminThongKeThuChiBundle(
     .map((r) => nId((r as { id?: unknown }).id))
     .filter((x): x is number => x != null);
 
-  const banMeta = new Map<number, { created_at: string; hinh_thuc_thu: string }>();
+  const banMeta = new Map<number, { created_at: string; hinh_thuc_thu: string; tong_tien_db: unknown }>();
   for (const raw of banRecs) {
-    const r = raw as { id?: unknown; created_at?: unknown; hinh_thuc_thu?: unknown };
+    const r = raw as { id?: unknown; created_at?: unknown; hinh_thuc_thu?: unknown; tong_tien?: unknown };
     const id = nId(r.id);
     if (!id) continue;
     banMeta.set(id, {
       created_at: String(r.created_at ?? ""),
       hinh_thuc_thu: String(r.hinh_thuc_thu ?? "").trim(),
+      tong_tien_db: r.tong_tien,
     });
   }
 
   if (banIds.length > 0) {
     const { data: ct, error: ctErr } = await supabase
       .from("hc_ban_hc_chi_tiet")
-      .select("don_ban, so_luong_ban, mat_hang, hc_danh_sach_san_pham(ten_hang,gia_ban)")
+      .select("don_ban, so_luong_ban, mat_hang, thanh_tien, hc_danh_sach_san_pham(ten_hang,gia_ban)")
       .in("don_ban", banIds);
     if (ctErr) {
       return { ok: false, error: ctErr.message || "Không đọc được chi tiết bán họa cụ." };
@@ -342,7 +344,11 @@ export async function fetchAdminThongKeThuChiBundle(
       const meta = banMeta.get(donId);
       const { tenHang, giaBan } = unwrapSp(line.hc_danh_sach_san_pham);
       const sl = Number(line.so_luong_ban) || 1;
-      const lineTotal = giaBan * sl;
+      const rawTt = line.thanh_tien;
+      const lineTotal =
+        rawTt != null && String(rawTt).trim() !== ""
+          ? parseMoney(rawTt)
+          : giaBan * sl;
       if (!hoaCuGroups.has(donId)) {
         hoaCuGroups.set(donId, {
           total: 0,
@@ -357,7 +363,14 @@ export async function fetchAdminThongKeThuChiBundle(
     }
 
     for (const [donId, g] of hoaCuGroups) {
-      if (g.total <= 0) continue;
+      const meta = banMeta.get(donId);
+      const headerRaw = meta?.tong_tien_db;
+      const headerTotal =
+        headerRaw != null && headerRaw !== ""
+          ? parseMoney(headerRaw)
+          : null;
+      const totalThu = headerTotal !== null ? headerTotal : g.total;
+      if (totalThu <= 0) continue;
       const tieude = g.items.filter(Boolean).join(", ") || "Bán họa cụ";
       rows.push({
         id: `hc_${donId}`,
@@ -366,7 +379,7 @@ export async function fetchAdminThongKeThuChiBundle(
         maDon: `HC-${donId}`,
         tieude,
         hinhThuc: g.hinhThuc,
-        thu: Math.round(g.total),
+        thu: Math.round(totalThu),
         chi: 0,
         trangThai: "Đã thanh toán",
         ghiChu: "",

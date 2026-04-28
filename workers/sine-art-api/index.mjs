@@ -741,7 +741,7 @@ async function getAgentContext(env) {
   }
 
   console.error("No context available");
-  return { system_prompt: null, faq: [], available_classes: [] };
+  return { system_prompt: null, faq: [], available_classes: [], dh_exam_profiles: [] };
 }
 
 async function callClaude({ text, session, sender_id, ctx_data, env }) {

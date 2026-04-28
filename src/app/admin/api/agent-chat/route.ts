@@ -6,6 +6,7 @@ import {
   stripMatchedImageUrlsFromText,
   stripMatchedLinkUrlsFromText,
 } from "@/app/admin/agent/knowledge-attachments";
+import type { DhExamProfileRow } from "@/lib/agent/dh-exam-profiles";
 import {
   buildReplyPartsForChat,
   stripMarkdownBold,
@@ -27,6 +28,7 @@ type AgentContextPayload = {
     answer?: string;
     attachments?: unknown;
   }[];
+  dh_exam_profiles?: DhExamProfileRow[];
   available_classes?: unknown[];
 };
 
@@ -150,11 +152,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       .join("\n")
       .trim() || "…";
 
-  const attachments = pickMatchedFaqAttachments(
-    message,
-    reply,
-    ctxData.faq ?? [],
-  );
+  const attachments = pickMatchedFaqAttachments(message, reply, ctxData.faq ?? []);
 
   let replyOut = reply;
   if (attachments?.images?.length) {

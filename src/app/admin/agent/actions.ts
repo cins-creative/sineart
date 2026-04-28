@@ -197,3 +197,27 @@ export async function fetchActiveKnowledgeExportAction(): Promise<
     return { ok: false, error: msg };
   }
 }
+
+export async function saveConsultantInstructionsAction(
+  text: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { supabase } = await requireAgentSupabase();
+    const { error } = await supabase.from("ag_agent_config").upsert(
+      {
+        id: 1,
+        consultant_instructions: text,
+      },
+      { onConflict: "id" },
+    );
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(AGENT_CONSULT_HREF);
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Lỗi không xác định";
+    if (msg === "UNAUTHORIZED") return { ok: false, error: "Chưa đăng nhập." };
+    if (msg === "FORBIDDEN") return { ok: false, error: "Không có quyền." };
+    if (msg === "NO_SUPABASE") return { ok: false, error: "Thiếu cấu hình Supabase." };
+    return { ok: false, error: msg };
+  }
+}

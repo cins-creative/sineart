@@ -36,6 +36,7 @@ const SUGGESTED_QUESTIONS = [
 type ContextInfo = {
   updated: string;
   faqCount: number;
+  examProfilesCount: number;
   classesCount: number;
 };
 
@@ -70,11 +71,15 @@ export default function AgentTrainingPanel() {
       const data = (await res.json()) as {
         updated?: string;
         faq?: unknown[];
+        dh_exam_profiles?: unknown[];
         available_classes?: unknown[];
       };
       setCtx({
         updated: data.updated ?? new Date().toISOString(),
         faqCount: Array.isArray(data.faq) ? data.faq.length : 0,
+        examProfilesCount: Array.isArray(data.dh_exam_profiles)
+          ? data.dh_exam_profiles.length
+          : 0,
         classesCount: Array.isArray(data.available_classes)
           ? data.available_classes.length
           : 0,
@@ -359,6 +364,10 @@ export default function AgentTrainingPanel() {
               <li>
                 <span className="font-semibold text-black/55">Q&A (KB):</span>{" "}
                 <span className="font-bold text-black">{ctx.faqCount}</span>
+              </li>
+              <li>
+                <span className="font-semibold text-black/55">Đề thi trường–ngành:</span>{" "}
+                <span className="font-bold text-black">{ctx.examProfilesCount}</span>
               </li>
               <li>
                 <span className="font-semibold text-black/55">Lớp còn chỗ:</span>{" "}

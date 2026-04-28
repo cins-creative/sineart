@@ -21,6 +21,7 @@ import {
 import {
   fetchActiveKnowledgeExportAction,
   insertKnowledgeAction,
+  saveConsultantInstructionsAction,
   softDeleteKnowledgeAction,
   updateKnowledgeAction,
 } from "@/app/admin/agent/actions";
@@ -68,6 +69,23 @@ function senderTail(id: string): string {
   const s = String(id ?? "").trim();
   if (s.length <= 6) return s || "—";
   return s.slice(-6);
+}
+
+function formatConsultantUpdatedVi(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    return `Cập nhật lần cuối: ${d.toLocaleString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+  } catch {
+    return "";
+  }
 }
 
 function relativeTimeVi(iso: string): string {
@@ -169,7 +187,15 @@ type ToastState = { ok: boolean; msg: string } | null;
 
 type PanelMode = "idle" | "create" | "edit";
 
-export default function AgentConsultView({ initialRows }: { initialRows: AgKnowledgeRow[] }) {
+export default function AgentConsultView({
+  initialRows,
+  initialConsultantInstructions,
+  consultantInstructionsUpdatedAt,
+}: {
+  initialRows: AgKnowledgeRow[];
+  initialConsultantInstructions: string;
+  consultantInstructionsUpdatedAt: string | null;
+}) {
   const router = useRouter();
   const [tab, setTab] = useState<TabKey>("studio");
 
@@ -303,6 +329,12 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
   const [draftImageUrls, setDraftImageUrls] = useState<string[]>([]);
   const [draftLinks, setDraftLinks] = useState<KbDraftLinkRow[]>([{ label: "", url: "" }]);
   const [kbSaving, setKbSaving] = useState(false);
+
+  const [consultantDraft, setConsultantDraft] = useState(initialConsultantInstructions);
+  const [consultantSaving, setConsultantSaving] = useState(false);
+  useEffect(() => {
+    setConsultantDraft(initialConsultantInstructions);
+  }, [initialConsultantInstructions]);
 
   function addDraftLinkRow() {
     setDraftLinks((rows) => [...rows, { label: "", url: "" }]);
@@ -438,6 +470,24 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
     }
     setToast({ ok: true, msg: "Đã gỡ Q&A." });
     router.refresh();
+  }
+
+  async function saveConsultantInstructions() {
+    setConsultantSaving(true);
+    try {
+      const res = await saveConsultantInstructionsAction(consultantDraft);
+      if (!res.ok) {
+        setToast({ ok: false, msg: res.error });
+        return;
+      }
+      setToast({
+        ok: true,
+        msg: "Đã lưu hướng dẫn. Chat thử cập nhật ngay; Messenger có thể trễ ~1 phút (cache Worker).",
+      });
+      router.refresh();
+    } finally {
+      setConsultantSaving(false);
+    }
   }
 
   async function exportJson() {
@@ -674,6 +724,47 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-6" data-agent-tab="studio">
+          <section
+            aria-labelledby="consultant-instructions-heading"
+            className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-sm"
+          >
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2
+                  id="consultant-instructions-heading"
+                  className="text-[15px] font-bold text-black/85"
+                >
+                  Hướng dẫn thêm cho Agent (tư vấn viên)
+                </h2>
+                <p className="mt-1 max-w-3xl text-[12px] leading-snug text-black/45">
+                  Nội dung được ghép sau prompt hệ thống (định nghĩa khóa, quy trình tư vấn…). Áp dụng cho chat thử và
+                  Messenger. Nếu bảng{" "}
+                  <code className="rounded bg-black/[0.06] px-1 font-mono text-[11px]">ag_agent_config</code> chưa có trên
+                  Supabase, chạy migration trong repo rồi lưu lại.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void saveConsultantInstructions()}
+                disabled={consultantSaving}
+                className="shrink-0 rounded-lg bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-4 py-2 text-[12px] font-bold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
+              >
+                {consultantSaving ? "Đang lưu…" : "Lưu"}
+              </button>
+            </div>
+            <textarea
+              value={consultantDraft}
+              onChange={(e) => setConsultantDraft(e.target.value)}
+              rows={12}
+              spellCheck={false}
+              placeholder="Ví dụ: nhắc lại định nghĩa khóa Trang trí màu vs Bố cục màu; checklist chào → trường/ngành → năm thi → Online/Offline…"
+              className="w-full resize-y rounded-xl border border-black/[0.1] bg-black/[0.02] px-3 py-2.5 font-mono text-[13px] leading-relaxed text-black/85 outline-none ring-[#BC8AF9]/35 placeholder:text-black/35 focus:border-[#BC8AF9]/45 focus:ring-2"
+            />
+            <p className="mt-2 text-[11px] text-black/40">
+              {formatConsultantUpdatedVi(consultantInstructionsUpdatedAt)}
+            </p>
+          </section>
+
           <section aria-labelledby="agent-chat-heading">
             <h2 id="agent-chat-heading" className="sr-only">
               Chat thử và Knowledge Base

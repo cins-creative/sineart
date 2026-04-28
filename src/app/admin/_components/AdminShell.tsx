@@ -18,6 +18,7 @@ import {
 } from "@/lib/admin/dashboard-nav-config";
 import type { DashboardNavAccess } from "@/lib/admin/dashboard-nav-visibility";
 import { canAccessDashboardHref } from "@/lib/admin/dashboard-nav-visibility";
+import { cn } from "@/lib/utils";
 
 type Props = {
   staffName: string;
@@ -286,7 +287,8 @@ export default function AdminShell({
     [allowed],
   );
 
-  const showOrderMedia = canAccessDashboardHref(allowed, ORDER_MEDIA_HREF);
+  /** Mọi nhân sự đăng nhập dashboard đều xem/tạo order media — không giới hạn theo phòng. */
+  const showOrderMedia = true;
 
   const prefetchTargets = useMemo(() => {
     const out: string[] = [DASHBOARD_OVERVIEW_HREF];
@@ -397,11 +399,10 @@ export default function AdminShell({
       ) : null}
 
       <div
-        className="flex min-h-screen min-w-0 max-w-full flex-col"
-        style={{
-          paddingLeft: `clamp(0px, ${sidebarCollapsed ? "0px" : "260px"}, 260px)`,
-          transition: "padding-left 0.22s cubic-bezier(0.4,0,0.2,1)",
-        }}
+        className={cn(
+          "flex min-h-screen min-w-0 max-w-full flex-col pl-0 transition-[padding-left] duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)]",
+          !sidebarCollapsed && "md:pl-[260px]",
+        )}
       >
         <header className="sticky top-0 z-[9] flex h-14 w-full shrink-0 min-w-0 items-center justify-between gap-3 border-b border-black/[0.06] bg-white/90 pl-3 pr-4 backdrop-blur md:pl-4 md:pr-6">
           <div className="flex min-w-0 shrink-0 items-center gap-2">

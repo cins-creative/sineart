@@ -110,7 +110,7 @@ export function resolveDashboardNavAccess(
   const onlyDaoTao = rules.length > 0 && rules.every((r) => r === "dao_tao_phong");
 
   if (onlyDaoTao) {
-    return { allowedHrefs: new Set([DASHBOARD_OVERVIEW_HREF]) };
+    return { allowedHrefs: new Set([DASHBOARD_OVERVIEW_HREF, ORDER_MEDIA_HREF]) };
   }
 
   const union = new Set<string>();
@@ -126,6 +126,7 @@ export function resolveDashboardNavAccess(
   }
 
   union.add(DASHBOARD_OVERVIEW_HREF);
+  union.add(ORDER_MEDIA_HREF);
   return { allowedHrefs: union };
 }
 

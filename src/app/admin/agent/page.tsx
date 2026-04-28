@@ -6,6 +6,7 @@ import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
 import { parseKbAttachments } from "@/app/admin/agent/knowledge-attachments";
 import type { AgKnowledgeRow } from "@/app/admin/agent/types";
+import { fetchConsultantInstructionsSafe } from "@/lib/agent/consultant-config";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -49,9 +50,17 @@ export default async function AdminAgentPage() {
     ),
   }));
 
+  const consultantRow = await fetchConsultantInstructionsSafe(supabase);
+  const initialConsultantInstructions = consultantRow.text;
+  const consultantInstructionsUpdatedAt = consultantRow.updatedAt;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <AgentConsultView initialRows={initialRows} />
+      <AgentConsultView
+        initialRows={initialRows}
+        initialConsultantInstructions={initialConsultantInstructions}
+        consultantInstructionsUpdatedAt={consultantInstructionsUpdatedAt}
+      />
     </div>
   );
 }

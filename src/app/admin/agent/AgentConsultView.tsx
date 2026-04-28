@@ -41,13 +41,6 @@ import type { AgKnowledgeRow } from "@/app/admin/agent/types";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/utils";
 
-/** Cùng Worker sine-art-api (gộp upload + Messenger). Ghi đè bằng NEXT_PUBLIC_AGENT_WORKER_URL nếu deploy khác domain. */
-const META_AGENT_BASE = (
-  typeof process.env.NEXT_PUBLIC_AGENT_WORKER_URL === "string" && process.env.NEXT_PUBLIC_AGENT_WORKER_URL.trim()
-    ? process.env.NEXT_PUBLIC_AGENT_WORKER_URL.trim().replace(/\/$/, "")
-    : "https://sine-art-api.nguyenthanhtu-nkl.workers.dev"
-);
-
 type TabKey = "studio" | "conversations";
 
 /** Tin nhận từ GET /agent/conversations (flat). */
@@ -204,20 +197,39 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
     else setConvLoading(true);
     setConvErr(null);
     try {
-      const res = await fetch(`${META_AGENT_BASE}/agent/conversations`, {
+      const res = await fetch("/admin/api/agent-conversations", {
         cache: "no-store",
+        credentials: "include",
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: unknown = await res.json();
+      if (!res.ok) {
+        const msg =
+          json != null &&
+          typeof json === "object" &&
+          "error" in json &&
+          typeof (json as { error: unknown }).error === "string"
+            ? (json as { error: string }).error
+            : `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      if (!Array.isArray(json)) {
+        throw new Error("Định dạng phản hồi không hợp lệ.");
+      }
       const raw = parseRawMessages(json);
       setConversations(summarizeConversations(raw));
       const inferred = inferGlobalAgentFromMessages(raw);
-      if (!globalAgentBootstrapped.current && inferred !== null) {
+      if (!globalAgentBootstrapped.current) {
         globalAgentBootstrapped.current = true;
-        setGlobalAgentEnabled(inferred);
+        setGlobalAgentEnabled(inferred ?? false);
       }
     } catch (e) {
-      setConvErr(e instanceof Error ? e.message : "Không tải được hội thoại.");
+      const fallback =
+        e instanceof Error && /failed to fetch/i.test(e.message)
+          ? "Không kết nối được máy chủ — thử làm mới hoặc kiểm tra mạng."
+          : e instanceof Error
+            ? e.message
+            : "Không tải được hội thoại.";
+      setConvErr(fallback);
       setConversations([]);
     } finally {
       setConvLoading(false);
@@ -239,22 +251,17 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
   /** Bật/tắt Agent cho toàn hệ thống — gọi Worker POST `{ sender_id, active }` lần lượt cho mọi sender trong danh sách. */
   async function onToggleGlobal(nextEnabled: boolean) {
     const senderIds = [...new Set(conversations.map((c) => c.sender_id).filter(Boolean))];
-    if (senderIds.length === 0) {
-      setToast({
-        ok: false,
-        msg: "Chưa có hội thoại nào — không có sender_id để gọi API.",
-      });
-      return;
-    }
+    if (senderIds.length === 0) return;
 
     const prevGlobal = globalAgentEnabled;
     setGlobalToggleBusy(true);
     setGlobalAgentEnabled(nextEnabled);
     try {
       for (const sender_id of senderIds) {
-        const res = await fetch(`${META_AGENT_BASE}/agent/toggle`, {
+        const res = await fetch("/admin/api/agent-toggle", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ sender_id, active: nextEnabled }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -453,6 +460,21 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
     if (e.key === "Escape") closePanel();
   }
 
+  const globalToggleDisabled =
+    globalToggleBusy ||
+    convLoading ||
+    convErr !== null ||
+    (!convLoading && conversations.length === 0);
+
+  const globalToggleTitle =
+    convErr !== null
+      ? "Không tải được trạng thái — sửa lỗi phía trên rồi làm mới."
+      : !convLoading && conversations.length === 0
+        ? "Chưa có tin Messenger — sau khi có hội thoại, công tắt sẽ áp dụng cho các sender đã chat."
+        : globalAgentEnabled
+          ? "Tắt Agent — chuyển sang tư vấn viên trả lời (giờ làm việc)"
+          : "Bật Agent — trả lời tự động cho mọi cuộc chat (vd. ngoài giờ)";
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4" onKeyDown={panelMode !== "idle" ? onKeyCancel : undefined}>
       <div className="flex flex-col gap-1 border-b border-black/[0.08] pb-3">
@@ -547,12 +569,6 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
 
       {tab === "conversations" ? (
         <div className="flex min-h-0 flex-1 flex-col gap-4" data-agent-tab="conversations">
-          {convErr ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              {convErr}
-            </div>
-          ) : null}
-
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white px-4 py-3 shadow-sm">
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-bold text-black/85">Agent trả lời tự động (toàn hệ thống)</p>
@@ -586,12 +602,8 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
                       ? "Đang bật Agent toàn hệ thống — bấm để tắt"
                       : "Đang tắt Agent — bấm để bật trả lời tự động"
                   }
-                  disabled={globalToggleBusy || convLoading}
-                  title={
-                    globalAgentEnabled
-                      ? "Tắt Agent — chuyển sang tư vấn viên trả lời (giờ làm việc)"
-                      : "Bật Agent — trả lời tự động cho mọi cuộc chat (vd. ngoài giờ)"
-                  }
+                  disabled={globalToggleDisabled}
+                  title={globalToggleTitle}
                   onClick={() =>
                     void onToggleGlobal(!(globalAgentEnabled ?? false))
                   }
@@ -611,6 +623,12 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
                 </button>
               </div>
             </div>
+
+          {convErr ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              {convErr}
+            </div>
+          ) : null}
 
           {convLoading ? (
             <div className="space-y-2 rounded-xl border border-black/[0.08] bg-white p-4 shadow-sm">

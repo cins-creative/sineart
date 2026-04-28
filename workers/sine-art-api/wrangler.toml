@@ -2,7 +2,10 @@ name = "sine-art-api"
 main = "index.mjs"
 compatibility_date = "2024-09-01"
 
-# Messenger Agent: session:* + agent_ctx — tạo KV mới trên Cloudflare hoặc dùng namespace cũ của Worker Meta; bắt buộc có binding tên "KV".
+# Messenger Agent — BẮT BUỘC: binding tên "KV" (session: + agent_ctx).
+# Nếu thiếu hoặc id sai → runtime không có env.KV → log "Messenger: missing KV binding".
+# Tạo namespace: wrangler kv namespace create SINE_ART_AGENT_KV --remote
+# Rồi chèn id UUID vào dòng id = bên dưới và deploy lại (hoặc gán KV tên "KV" trong Dashboard → Settings → Bindings).
 [[kv_namespaces]]
 binding = "KV"
 id = "REPLACE_WITH_KV_ID"

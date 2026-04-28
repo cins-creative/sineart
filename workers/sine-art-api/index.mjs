@@ -1220,8 +1220,20 @@ function sbHeaders(env) {
 }
 
 async function agentLog({ sender_id, role, message, env }) {
+  if (!env.SUPABASE_URL?.trim()) {
+    console.error(
+      "Log: thiếu secret SUPABASE_URL trên Worker — thêm trong Dashboard → Workers → sine-art-api → Settings → Variables, hoặc: wrangler secret put SUPABASE_URL",
+    );
+    return;
+  }
+  if (!env.SUPABASE_SERVICE_KEY?.trim()) {
+    console.error(
+      "Log: thiếu SUPABASE_SERVICE_KEY — cần service_role để ghi ag_conversation_log (wrangler secret put SUPABASE_SERVICE_KEY)",
+    );
+    return;
+  }
   try {
-    await fetch(`${env.SUPABASE_URL}/rest/v1/ag_conversation_log`, {
+    await fetch(`${env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/ag_conversation_log`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...sbHeaders(env), Prefer: "return=minimal" },
       body: JSON.stringify({ sender_id, channel: "messenger", role, message }),

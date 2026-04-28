@@ -48,7 +48,7 @@ const META_AGENT_BASE = (
     : "https://sine-art-api.nguyenthanhtu-nkl.workers.dev"
 );
 
-type TabKey = "conversations" | "knowledge" | "training";
+type TabKey = "studio" | "conversations";
 
 /** Tin nhận từ GET /agent/conversations (flat). */
 type RawAgentMessage = {
@@ -178,7 +178,7 @@ type PanelMode = "idle" | "create" | "edit";
 
 export default function AgentConsultView({ initialRows }: { initialRows: AgKnowledgeRow[] }) {
   const router = useRouter();
-  const [tab, setTab] = useState<TabKey>("conversations");
+  const [tab, setTab] = useState<TabKey>("studio");
 
   const [toast, setToast] = useState<ToastState>(null);
   useEffect(() => {
@@ -460,7 +460,10 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#1a1a1a] md:text-2xl">Agent tư vấn</h1>
             <p className="mt-0.5 text-[13px] text-black/50">
-              Theo dõi hội thoại Messenger và quản lý Knowledge Base cho chatbot.
+              {tab === "studio" ?
+                "Chat thử với Agent và chỉnh Q&A cùng một màn hình — không cần chuyển tab."
+              : "Theo dõi hội thoại Messenger từ Facebook."
+              }
             </p>
             {tab === "conversations" ? (
               <p className="mt-2 max-w-3xl rounded-xl border border-black/[0.06] bg-white/80 px-3 py-2 text-[12px] leading-snug text-black/55">
@@ -477,6 +480,18 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
           <div className="flex flex-wrap gap-1 rounded-xl border border-black/[0.08] bg-white p-1 shadow-sm">
             <button
               type="button"
+              onClick={() => setTab("studio")}
+              className={cn(
+                "rounded-lg px-4 py-2 text-[13px] font-semibold transition",
+                tab === "studio"
+                  ? "bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] text-white shadow-sm"
+                  : "text-black/65 hover:bg-black/[0.04]",
+              )}
+            >
+              Chat & Knowledge
+            </button>
+            <button
+              type="button"
               onClick={() => setTab("conversations")}
               className={cn(
                 "rounded-lg px-4 py-2 text-[13px] font-semibold transition",
@@ -486,30 +501,6 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
               )}
             >
               Conversations
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("knowledge")}
-              className={cn(
-                "rounded-lg px-4 py-2 text-[13px] font-semibold transition",
-                tab === "knowledge"
-                  ? "bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] text-white shadow-sm"
-                  : "text-black/65 hover:bg-black/[0.04]",
-              )}
-            >
-              Knowledge Base
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("training")}
-              className={cn(
-                "rounded-lg px-4 py-2 text-[13px] font-semibold transition",
-                tab === "training"
-                  ? "bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] text-white shadow-sm"
-                  : "text-black/65 hover:bg-black/[0.04]",
-              )}
-            >
-              Đào tạo Agent
             </button>
           </div>
 
@@ -531,7 +522,7 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
                   Làm mới ngay
                 </button>
               </>
-            ) : tab === "knowledge" ? (
+            ) : (
               <>
                 <button
                   type="button"
@@ -549,13 +540,13 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
                   Thêm Q&A
                 </button>
               </>
-            ) : null}
+            )}
           </div>
         </div>
       </div>
 
       {tab === "conversations" ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4" data-agent-tab="conversations">
           {convErr ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               {convErr}
@@ -663,8 +654,26 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
             </div>
           )}
         </div>
-      ) : tab === "knowledge" ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col gap-6" data-agent-tab="studio">
+          <section aria-labelledby="agent-chat-heading">
+            <h2 id="agent-chat-heading" className="sr-only">
+              Chat thử và Knowledge Base
+            </h2>
+            <AgentTrainingPanel />
+          </section>
+
+          <section aria-labelledby="kb-heading" className="flex min-h-0 flex-1 flex-col">
+            <div className="mb-2 flex flex-wrap items-end justify-between gap-2 border-b border-black/[0.06] pb-2">
+              <h2 id="kb-heading" className="text-[15px] font-bold text-black/85">
+                Knowledge Base
+              </h2>
+              <p className="max-w-xl text-[12px] text-black/45">
+                Sau khi chat thử, chỉnh Q&A ngay bên dưới — Agent đọc context từ đây khi trả lời học viên.
+              </p>
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
           <aside className="w-full shrink-0 lg:w-[220px]">
             <div className="rounded-xl border border-black/[0.08] bg-white p-2 shadow-sm">
               <p className="mb-2 px-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-black/45">
@@ -837,12 +846,12 @@ export default function AgentConsultView({ initialRows }: { initialRows: AgKnowl
               )}
             </div>
           </div>
+            </div>
+          </section>
         </div>
-      ) : (
-        <AgentTrainingPanel />
       )}
 
-      {tab === "knowledge" && panelMode !== "idle" ? (
+      {tab === "studio" && panelMode !== "idle" ? (
         <div className="sticky bottom-0 z-30 mt-auto border-t border-black/[0.1] bg-[#FFFCFA] px-4 py-4 shadow-[0_-8px_28px_rgba(0,0,0,0.08)] md:rounded-t-2xl">
           <div className="mx-auto flex max-w-4xl flex-col gap-3">
             <div className="flex items-center justify-between gap-2">

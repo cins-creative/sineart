@@ -201,6 +201,40 @@ function isLikelyImageUrlIntroLine(line: string): boolean {
   );
 }
 
+/** Bỏ URL đã có trong attachments.links khỏi tin chữ (hiển thị dưới dạng link riêng). */
+export function stripMatchedLinkUrlsFromText(
+  text: string,
+  links: KbLinkAttachment[],
+): string {
+  if (!links?.length) return text;
+  let out = text;
+  for (const l of links) {
+    const u = l.url.trim();
+    if (!u) continue;
+    out = out.replace(new RegExp(escapeRegExp(u), "gi"), "");
+  }
+  out = out.replace(/[ \t]+/g, " ");
+
+  const lines = out
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => {
+      if (!l) return false;
+      if (/^[:-–—•\s]+$/.test(l)) return false;
+      const t = l.replace(/\s+/g, " ");
+      if (/:\s*$/.test(t) && isLikelyBareLinkIntroLine(t)) return false;
+      return true;
+    });
+
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function isLikelyBareLinkIntroLine(line: string): boolean {
+  return /xem\s+(thêm\s+)?(chi\s+tiết|thông\s+tin)|lịch\s+học|tại\s+đây|tham\s+khảo|đường\s+dẫn|link\s+(web|này)/i.test(
+    line,
+  );
+}
+
 export function buildKbAttachmentsForSave(input: {
   imageUrls: string[];
   links: KbDraftLinkRow[];

@@ -674,20 +674,32 @@ async function processMessengerMessage({ sender_id, text }, env) {
   const reply = await callClaude({ text, session, sender_id, ctx_data, env });
 
   const extras = pickMatchedFaqAttachments(text, reply.text, ctx_data.faq ?? []);
-  let replyForUser =
-    extras?.images?.length ? stripMatchedImageUrlsFromText(reply.text, extras.images) : reply.text;
+  let replyForUser = reply.text;
+  if (extras?.images?.length) replyForUser = stripMatchedImageUrlsFromText(replyForUser, extras.images);
+  if (extras?.links?.length) replyForUser = stripMatchedLinkUrlsFromText(replyForUser, extras.links);
+  replyForUser = stripMarkdownBold(replyForUser);
   if (!String(replyForUser || "").trim()) replyForUser = "…";
+  const replyChunks = buildReplyPartsForChat(replyForUser, extras || undefined);
+  const combinedForHistory = replyChunks.join("\n\n");
 
-  session.history = [...(session.history ?? []), { role: "user", content: text }, { role: "assistant", content: replyForUser }].slice(
-    -20,
-  );
+  session.history = [
+    ...(session.history ?? []),
+    { role: "user", content: text },
+    { role: "assistant", content: combinedForHistory },
+  ].slice(-20);
 
   try {
     await env.KV.put(key, JSON.stringify(session), { expirationTtl: 86400 });
   } catch {}
 
-  await agentLog({ sender_id, role: "agent", message: replyForUser, env });
-  console.log("Messenger:", JSON.stringify(await sendMessengerReply(sender_id, replyForUser, env)));
+  await agentLog({ sender_id, role: "agent", message: combinedForHistory, env });
+  for (let ci = 0; ci < replyChunks.length; ci++) {
+    console.log(
+      "Messenger:",
+      JSON.stringify(await sendMessengerReply(sender_id, replyChunks[ci], env)),
+    );
+    if (ci < replyChunks.length - 1) await new Promise((r) => setTimeout(r, 420));
+  }
 
   if (extras && (extras.images.length || extras.links.length)) {
     console.log("Messenger extras:", JSON.stringify(await sendMessengerExtras(sender_id, extras, env)));
@@ -1001,6 +1013,156 @@ function stripMatchedImageUrlsFromText(text, imageUrls) {
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+function isLikelyBareLinkIntroLine(line) {
+  const t = line.replace(/\s+/g, " ").trim();
+  return /xem\s+(thêm\s+)?(chi\s+tiết|thông\s+tin)|lịch\s+học|tại\s+đây|tham\s+khảo|đường\s+dẫn|link\s+(web|này)/i.test(
+    t,
+  );
+}
+
+function stripMatchedLinkUrlsFromText(text, links) {
+  if (!links?.length) return text;
+  let out = text;
+  for (const l of links) {
+    const u = typeof l.url === "string" ? l.url.trim() : "";
+    if (!u) continue;
+    out = out.replace(new RegExp(u.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "");
+  }
+  out = out.replace(/[ \t]+/g, " ");
+  const lines = out
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => {
+      if (!l) return false;
+      if (/^[:-–—•\s]+$/.test(l)) return false;
+      const t = l.replace(/\s+/g, " ");
+      if (/:\s*$/.test(t) && isLikelyBareLinkIntroLine(t)) return false;
+      return true;
+    });
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function stripMarkdownBold(text) {
+  let out = text;
+  let prev = "";
+  while (prev !== out) {
+    prev = out;
+    out = out.replace(/\*\*([^*]+)\*\*/g, "$1");
+  }
+  return out.replace(/\*\*/g, "");
+}
+
+const CHUNK_MAX = 300;
+
+function splitAgentReplyIntoChatParts(text, maxChunk = CHUNK_MAX) {
+  const cleaned = (text || "").trim();
+  if (!cleaned) return ["…"];
+
+  const paragraphs = cleaned.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const segments = [];
+
+  for (const block of paragraphs) {
+    if (block.length <= maxChunk) {
+      segments.push(block);
+      continue;
+    }
+    const sentences = block.split(/(?<=[.!?…])\s+/u).filter(Boolean);
+    let buf = "";
+    for (const s of sentences) {
+      const next = buf ? `${buf} ${s}` : s;
+      if (next.length <= maxChunk || !buf) buf = next;
+      else {
+        segments.push(buf.trim());
+        buf = s;
+      }
+    }
+    if (buf.trim()) segments.push(buf.trim());
+  }
+
+  const merged = [];
+  for (const p of segments) {
+    const t = p.trim();
+    if (
+      merged.length > 0 &&
+      t.length < 40 &&
+      merged[merged.length - 1].length + t.length + 2 <= maxChunk
+    ) {
+      merged[merged.length - 1] = `${merged[merged.length - 1]} ${t}`;
+    } else {
+      merged.push(t);
+    }
+  }
+
+  return merged.length > 0 ? merged : [cleaned];
+}
+
+const ATTACHMENT_INVITE_BUBBLE =
+  "Mình gửi bạn thêm thông tin để bạn tham khảo nha, cần gì thì hỏi mình thêm!";
+
+const REFERENCE_TAIL_PARA =
+  /xem\s+(thêm\s+)?(chi\s+tiết|thông\s+tin)|tại\s+đây\b|tham\s+khảo\s+tại|lịch\s+học\s+tại|https?:\/\/|đường\s+dẫn/i;
+
+function paragraphLooksLikeReferenceTail(p) {
+  const t = p.trim();
+  if (REFERENCE_TAIL_PARA.test(t)) return true;
+  if (t.length < 240 && /\bbạn\s+có\s+thể\s+xem\b/i.test(t)) return true;
+  return false;
+}
+
+function extractCoreBeforeReferenceSentence(paragraph) {
+  const re =
+    /\s+(?=Bạn\s+có\s+thể\s+xem\b)|\s+(?=xem\s+thêm\s+chi\s+tiết)|\s+(?=chi\s+tiết\s+về\s+lịch)|\s+(?=thông\s+tin\s+chi\s+tiết)/i;
+  const m = paragraph.match(re);
+  if (!m || m.index === undefined || m.index === 0) return paragraph.trim();
+  return paragraph.slice(0, m.index).trim();
+}
+
+function buildReplyPartsForChat(text, attachments) {
+  const cleaned = (text || "").trim();
+  if (!cleaned) return ["…"];
+
+  const hasAtt =
+    attachments &&
+    ((attachments.images || []).length > 0 || (attachments.links || []).length > 0);
+
+  if (!hasAtt) {
+    return splitAgentReplyIntoChatParts(cleaned);
+  }
+
+  const paras = cleaned.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+
+  let coreText = "";
+
+  if (paras.length >= 2) {
+    const coreParas = [];
+    for (const p of paras) {
+      if (paragraphLooksLikeReferenceTail(p)) break;
+      coreParas.push(p);
+    }
+    coreText = coreParas.join("\n\n").trim();
+  }
+
+  if (!coreText && paras.length === 1) {
+    coreText = extractCoreBeforeReferenceSentence(paras[0]);
+  }
+
+  if (!coreText) {
+    const nonTail = paras.filter((p) => !paragraphLooksLikeReferenceTail(p));
+    coreText = nonTail.join("\n\n").trim() || paras[0] || cleaned;
+  }
+
+  if (paragraphLooksLikeReferenceTail(coreText) && paras.length > 1) {
+    coreText =
+      paras.filter((p) => !paragraphLooksLikeReferenceTail(p)).join("\n\n").trim() ||
+      extractCoreBeforeReferenceSentence(paras[0]);
+  }
+
+  const trimmedCore = coreText.trim() || cleaned;
+  const coreChunks = splitAgentReplyIntoChatParts(trimmedCore);
+
+  return [...coreChunks, ATTACHMENT_INVITE_BUBBLE];
+}
+
 async function sendMessengerExtras(recipient_id, extras, env) {
   const images = (extras.images || []).slice(0, 6);
   const links = extras.links || [];
@@ -1025,9 +1187,10 @@ async function sendMessengerExtras(recipient_id, extras, env) {
     await new Promise((r) => setTimeout(r, 120));
   }
   if (links.length) {
-    const text = `Tham khảo thêm:\n${links
+    const text = links
       .map((l) => (l.label ? `${l.label}: ${l.url}` : l.url))
-      .join("\n")}`.slice(0, 2000);
+      .join("\n")
+      .slice(0, 2000);
     results.push(await sendMessengerReply(recipient_id, text, env));
   }
   return results;
@@ -1036,15 +1199,17 @@ async function sendMessengerExtras(recipient_id, extras, env) {
 function buildSystemPrompt(ctx_data) {
   const base =
     ctx_data.system_prompt ??
-    `Bạn là Sơn — tư vấn viên của Sine Art, trường mỹ thuật tại TP.HCM.
-Chỉ viết tiếng Việt. Nhắn tin ngắn gọn, thân thiện, dùng "mình/bạn". Không nhận là AI.
-Gọi query_courses khi cần thông tin khóa học. Escalate khi hỏi giảm giá hoặc khiếu nại.`;
+    `Bạn là Sơn — tư vấn viên Sine Art (TP.HCM). Chỉ tiếng Việt.
+Giọng nhắn tin thật (Zalo/Messenger): ngắn, "mình/bạn", có thể nói "chờ chút", "check", "nha", "Cho mình hỏi". Tránh giọng bot: không "Để mình check lịch lớp còn chỗ cho bạn nhé" kiểu khô; không "Theo thông tin", "Tóm lại", "Rất vui được hỗ trợ". Có thể tách vài ý: một tin xin chờ / nhận ý, tin sau hỏi cụ thể (thứ mấy, giờ nào).
+Không nhận là AI. Gọi query_courses khi cần lớp còn chỗ. Escalate khi hỏi giảm giá đặc biệt hoặc khiếu nại.`;
 
+  const noMd =
+    "\n- Không dùng markdown: không viết ** hoặc __ để in đậm; giá ghi bình thường (vd: 550k).";
   const faq = ctx_data.faq ?? [];
-  if (faq.length === 0) return base;
+  if (faq.length === 0) return `${base}${noMd}`;
 
   const faqText = faq.map(formatFaqEntry).join("\n\n");
-  return `${base}\n\nKNOWLEDGE BASE — ưu tiên dùng trước khi gọi tool:\n${faqText}`;
+  return `${base}${noMd}\n\nKNOWLEDGE BASE — ưu tiên dùng trước khi gọi tool:\n${faqText}`;
 }
 
 function sbHeaders(env) {

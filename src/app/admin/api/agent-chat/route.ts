@@ -4,7 +4,12 @@ import {
   formatFaqRowForPrompt,
   pickMatchedFaqAttachments,
   stripMatchedImageUrlsFromText,
+  stripMatchedLinkUrlsFromText,
 } from "@/app/admin/agent/knowledge-attachments";
+import {
+  buildReplyPartsForChat,
+  stripMarkdownBold,
+} from "@/lib/agent/reply-format";
 import { adminStaffCanAccessAgentPage } from "@/lib/admin/staff-mutation-access";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
@@ -28,13 +33,15 @@ type AgentContextPayload = {
 function buildSystemPrompt(ctx: AgentContextPayload): string {
   const base =
     ctx.system_prompt?.trim() ||
-    `Bạn là tư vấn viên của Sine Art. Chỉ tiếng Việt, ngắn gọn, thân thiện, dùng "mình/bạn".`;
+    `Bạn là tư vấn viên Sine Art. Giọng nhắn tin Zalo: ngắn, "mình/bạn", có thể "chờ chút/check/nha". Tránh giọng AI ("Để mình check lịch..." khô; "Theo thông tin"; "Rất vui hỗ trợ"). Có thể tách vài ý: tin 1 xin chờ hoặc trả lời gọn, tin 2 hỏi tiếp cụ thể. Chỉ tiếng Việt.`;
+  const noMd =
+    "\n- Không dùng markdown: không viết ** in đậm, không dùng __ hoặc dấu * quanh chữ.";
   const faq = ctx.faq ?? [];
   if (faq.length === 0) {
-    return `${base}\n\n[Chế độ thử nội bộ admin: chỉ dùng thông tin bạn biết, không gọi tool.]`;
+    return `${base}${noMd}\n\n[Chế độ thử nội bộ admin: chỉ dùng thông tin bạn biết, không gọi tool.]`;
   }
   const faqText = faq.map(formatFaqRowForPrompt).join("\n\n");
-  return `${base}\n\nKNOWLEDGE BASE — ưu tiên dùng khi trả lời:\n${faqText}\n\n[Chế độ thử nội bộ admin: không gọi tool, không tạo link thanh toán.]`;
+  return `${base}${noMd}\n\nKNOWLEDGE BASE — ưu tiên dùng khi trả lời:\n${faqText}\n\n[Chế độ thử nội bộ admin: không gọi tool, không tạo link thanh toán.]`;
 }
 
 type HistoryTurn = { role: string; content: string };
@@ -149,14 +156,20 @@ export async function POST(req: Request): Promise<NextResponse> {
     ctxData.faq ?? [],
   );
 
-  const replyOut =
-    attachments?.images?.length ?
-      stripMatchedImageUrlsFromText(reply, attachments.images)
-    : reply;
-  const replyFinal = replyOut.trim() || "…";
+  let replyOut = reply;
+  if (attachments?.images?.length) {
+    replyOut = stripMatchedImageUrlsFromText(replyOut, attachments.images);
+  }
+  if (attachments?.links?.length) {
+    replyOut = stripMatchedLinkUrlsFromText(replyOut, attachments.links);
+  }
+  const withoutMd = stripMarkdownBold(replyOut);
+  const replyFinal = withoutMd.trim() || "…";
+  const replyParts = buildReplyPartsForChat(replyFinal, attachments);
 
   return NextResponse.json({
-    reply: replyFinal,
+    reply: replyParts.join("\n\n"),
+    replyParts,
     ...(attachments ? { attachments } : {}),
   });
 }

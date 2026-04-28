@@ -15,8 +15,16 @@ import { cn } from "@/lib/utils";
 type ChatTurn = {
   role: "user" | "assistant";
   content: string;
+  /** Nhiều bong bóng (cùng một lượt phản hồi); gửi lên API gộp bằng `content`. */
+  contentParts?: string[];
   attachments?: PickedFaqAttachments;
 };
+
+function assistantTextForApi(turn: ChatTurn): string {
+  if (turn.role !== "assistant") return turn.content;
+  if (turn.contentParts?.length) return turn.contentParts.join("\n\n");
+  return turn.content;
+}
 
 const SUGGESTED_QUESTIONS = [
   "Học phí Bố cục màu?",
@@ -100,9 +108,9 @@ export default function AgentTrainingPanel() {
     setSending(true);
     setTyping(true);
 
-    const historyPayload = messages.map(({ role, content }) => ({
-      role,
-      content,
+    const historyPayload = messages.map((turn) => ({
+      role: turn.role,
+      content: assistantTextForApi(turn),
     }));
 
     try {
@@ -117,13 +125,18 @@ export default function AgentTrainingPanel() {
       });
       const data = (await res.json()) as {
         reply?: string;
+        replyParts?: string[];
         error?: string;
         attachments?: PickedFaqAttachments;
       };
       if (!res.ok) {
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
-      const reply = data.reply?.trim() || "…";
+      const parts =
+        Array.isArray(data.replyParts) && data.replyParts.length > 0 ?
+          data.replyParts
+        : [data.reply?.trim() || "…"];
+      const combined = parts.join("\n\n");
       const att = data.attachments;
       const hasAtt =
         att &&
@@ -132,7 +145,8 @@ export default function AgentTrainingPanel() {
         ...m,
         {
           role: "assistant",
-          content: reply,
+          content: combined,
+          ...(parts.length > 1 ? { contentParts: parts } : {}),
           ...(hasAtt ? { attachments: att } : {}),
         },
       ]);
@@ -188,68 +202,93 @@ export default function AgentTrainingPanel() {
             </p>
           ) : null}
 
-          {messages.map((m, i) =>
-            m.role === "user" ? (
-              <div key={i} className="flex justify-end">
-                <div
-                  className="max-w-[88%] rounded-2xl rounded-br-md bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-4 py-2.5 text-[13px] leading-relaxed text-white shadow-sm"
-                >
-                  {m.content}
-                </div>
-              </div>
-            ) : (
-              <div key={i} className="flex justify-start gap-2">
-                <div
-                  className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-black/[0.08] bg-gradient-to-br from-[#f8a668] to-[#ee5b9f] text-[11px] font-bold text-white shadow-sm"
-                  aria-hidden
-                >
-                  S
-                </div>
-                <div className="min-w-0 max-w-[88%]">
-                  <div className="mb-1 text-[11px] font-semibold text-black/50">Sơn</div>
-                  <div className="rounded-2xl rounded-tl-md border border-black/[0.08] bg-[#f6f6f7] px-4 py-2.5 text-[13px] leading-relaxed text-black/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-                    <p className="whitespace-pre-wrap">{m.content}</p>
-                    {m.attachments?.images?.length ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {m.attachments.images.map((src, idx) => (
-                          <a
-                            key={`${src}-${idx}`}
-                            href={src}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block max-w-full"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element -- remote KB URLs */}
-                            <img
-                              src={src}
-                              alt=""
-                              className="max-h-44 max-w-full rounded-lg border border-black/[0.08] object-contain"
-                            />
-                          </a>
-                        ))}
-                      </div>
-                    ) : null}
-                    {m.attachments?.links?.length ? (
-                      <ul className="mt-3 space-y-1.5 border-t border-black/[0.06] pt-3">
-                        {m.attachments.links.map((link, idx) => (
-                          <li key={`${link.url}-${idx}`}>
-                            <a
-                              href={link.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="break-all text-[12px] font-semibold text-[#BB89F8] underline decoration-[#BB89F8]/45 underline-offset-2 hover:text-[#a06fe8]"
-                            >
-                              {link.label?.trim() || link.url}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
+          {messages.map((m, i) => {
+            if (m.role === "user") {
+              return (
+                <div key={i} className="flex justify-end">
+                  <div
+                    className="max-w-[88%] rounded-2xl rounded-br-md bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-4 py-2.5 text-[13px] leading-relaxed text-white shadow-sm"
+                  >
+                    {m.content}
                   </div>
                 </div>
+              );
+            }
+
+            const parts =
+              m.contentParts && m.contentParts.length > 0 ?
+                m.contentParts
+              : [m.content];
+
+            return (
+              <div key={i} className="flex flex-col gap-1.5">
+                {parts.map((part, pi) => {
+                  const showAvatar = pi === 0;
+                  const isLastPart = pi === parts.length - 1;
+                  return (
+                    <div key={`${i}-${pi}`} className="flex justify-start gap-2">
+                      {showAvatar ? (
+                        <div
+                          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-black/[0.08] bg-gradient-to-br from-[#f8a668] to-[#ee5b9f] text-[11px] font-bold text-white shadow-sm"
+                          aria-hidden
+                        >
+                          S
+                        </div>
+                      ) : (
+                        <div className="h-9 w-9 shrink-0" aria-hidden />
+                      )}
+                      <div className="min-w-0 max-w-[88%]">
+                        {showAvatar ? (
+                          <div className="mb-1 text-[11px] font-semibold text-black/50">
+                            Sơn
+                          </div>
+                        ) : null}
+                        <div className="rounded-2xl rounded-tl-md border border-black/[0.08] bg-[#f6f6f7] px-4 py-2.5 text-[13px] leading-relaxed text-black/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                          <p className="whitespace-pre-wrap">{part}</p>
+                          {isLastPart && m.attachments?.images?.length ? (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {m.attachments.images.map((src, idx) => (
+                                <a
+                                  key={`${src}-${idx}`}
+                                  href={src}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-block max-w-full"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element -- remote KB URLs */}
+                                  <img
+                                    src={src}
+                                    alt=""
+                                    className="max-h-44 max-w-full rounded-lg border border-black/[0.08] object-contain"
+                                  />
+                                </a>
+                              ))}
+                            </div>
+                          ) : null}
+                          {isLastPart && m.attachments?.links?.length ? (
+                            <ul className="mt-3 space-y-1.5 border-t border-black/[0.06] pt-3">
+                              {m.attachments.links.map((link, idx) => (
+                                <li key={`${link.url}-${idx}`}>
+                                  <a
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="break-all text-[12px] font-semibold text-[#BB89F8] underline decoration-[#BB89F8]/45 underline-offset-2 hover:text-[#a06fe8]"
+                                  >
+                                    {link.label?.trim() || link.url}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ),
-          )}
+            );
+          })}
 
           {typing ? (
             <div className="flex justify-start gap-2">

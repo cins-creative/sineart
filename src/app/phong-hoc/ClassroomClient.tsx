@@ -35,6 +35,7 @@ import {
 import {
   fetchLopHocMeetRow,
   patchLopHocGoogleMeetUrl,
+  studentVisibleGoogleMeetUrl,
 } from "@/lib/phong-hoc/lop-hoc-meet-fields";
 import {
   buildExerciseModel,
@@ -639,8 +640,10 @@ export default function ClassroomClient({
   const [storedSession, setStoredSession] = useState<ClassroomSessionRecord | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [tab, setTab] = useState<TabId>("lop");
-  /** Google Meet (`ql_lop_hoc.url_google_meet`) — logic Framer MeetControl. */
+  /** Google Meet (`ql_lop_hoc.url_google_meet`) — iPad/GV: meet.new + paste; học viên mở cùng link trong ngày (VN). */
   const [googleMeetUrl, setGoogleMeetUrl] = useState<string | null>(null);
+  /** Mốc lưu link (DB `url_google_meet_set_at`) — reset hiển thị HV sau 24:00 theo ngày VN. */
+  const [googleMeetSetAt, setGoogleMeetSetAt] = useState<string | null>(null);
   const [lopDevice, setLopDevice] = useState<string | null>(null);
   const [gmeetRowReady, setGmeetRowReady] = useState(false);
   const [gmeetFormOpen, setGmeetFormOpen] = useState(false);
@@ -1069,6 +1072,7 @@ export default function ClassroomClient({
     if (!Number.isFinite(lopHocIdForDb)) {
       setMeetingRoomRefreshed(undefined);
       setGoogleMeetUrl(null);
+      setGoogleMeetSetAt(null);
       setLopDevice(null);
       setGmeetRowReady(false);
       return;
@@ -1087,11 +1091,13 @@ export default function ClassroomClient({
       if (!row) {
         setMeetingRoomRefreshed(undefined);
         setGoogleMeetUrl(null);
+        setGoogleMeetSetAt(null);
         setLopDevice(null);
         return;
       }
       setMeetingRoomRefreshed(row.meeting_room);
       setGoogleMeetUrl(row.url_google_meet);
+      setGoogleMeetSetAt(row.url_google_meet_set_at);
       setLopDevice(row.device);
       if (storedSession && !cancelled) {
         const v = row.meeting_room;
@@ -1122,7 +1128,10 @@ export default function ClassroomClient({
     if (!supabase) return;
     const tick = () => {
       void fetchLopHocMeetRow(supabase, lopHocIdForDb).then((row) => {
-        if (row) setGoogleMeetUrl(row.url_google_meet);
+        if (!row) return;
+        setGoogleMeetUrl(row.url_google_meet);
+        setGoogleMeetSetAt(row.url_google_meet_set_at);
+        setMeetingRoomRefreshed(row.meeting_room);
       });
     };
     const id = window.setInterval(tick, 5000);
@@ -1139,6 +1148,7 @@ export default function ClassroomClient({
     setGmeetSaving(false);
     if (!ok) return;
     setGoogleMeetUrl(url);
+    setGoogleMeetSetAt(new Date().toISOString());
     setGmeetFormOpen(false);
     setGmeetInput("");
     setGmeetJustSaved(true);
@@ -1169,6 +1179,18 @@ export default function ClassroomClient({
     () => normalizeMeetingRoomUrl(meetingRoomEffective),
     [meetingRoomEffective]
   );
+
+  /**
+   * Sidebar học viên: chỉ Google Meet (`url_google_meet`), không dùng `meeting_room`
+   * (Daily.co nhúng khung chính — GV iPad không share màn được nên Meet tách riêng).
+   * Link chỉ hiện trong **cùng ngày lịch VN** sau khi GV lưu (`url_google_meet_set_at`).
+   */
+  const studentSidebarMeetUrl = useMemo((): string | null => {
+    if (storedSession?.userType !== "Student") return null;
+    const raw = studentVisibleGoogleMeetUrl(googleMeetUrl, googleMeetSetAt);
+    if (!raw?.trim()) return null;
+    return normalizeMeetingRoomUrl(raw.trim()) ?? raw.trim();
+  }, [googleMeetUrl, googleMeetSetAt, storedSession?.userType]);
 
   const participantDisplayName = useMemo(() => {
     const n = d.full_name?.trim();
@@ -2698,12 +2720,12 @@ export default function ClassroomClient({
                     </button>
                   )}
                 </>
-              ) : googleMeetUrl?.trim() ? (
+              ) : studentSidebarMeetUrl ? (
                 <button
                   type="button"
                   className="dhp-btn phc-btn-block"
                   onClick={() =>
-                    window.open(googleMeetUrl.trim(), "_blank", "noopener,noreferrer")
+                    window.open(studentSidebarMeetUrl, "_blank", "noopener,noreferrer")
                   }
                 >
                   Tham gia lớp học

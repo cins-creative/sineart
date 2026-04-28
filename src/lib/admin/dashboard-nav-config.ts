@@ -1,14 +1,34 @@
 /** Các route sidebar dashboard admin — dùng chung cho UI + phân quyền theo phòng. */
 
+import type { LucideIcon } from "lucide-react";
+import { MessageCircle } from "lucide-react";
+
 export const DASHBOARD_OVERVIEW_HREF = "/admin/dashboard/overview";
 export const ORDER_MEDIA_HREF = "/admin/dashboard/order-media";
 /** BCTC tự động (học phí + thu chi khác + họa cụ) — chỉ menu cho vai trò `admin`. */
 export const BCTC_TU_DONG_HREF = "/admin/dashboard/bctc-tu-dong";
 
-export const NAV_MAIN: { label: string; href: string; disabled?: boolean }[] = [
+export const AGENT_CONSULT_HREF = "/admin/agent";
+
+export type NavMainItem = {
+  label: string;
+  href: string;
+  disabled?: boolean;
+  icon?: LucideIcon;
+  /** Chỉ hiện menu khi `hr_nhan_su.vai_tro` khớp (chuẩn hóa lowercase). */
+  visibleForRoles?: readonly string[];
+};
+
+export const NAV_MAIN: NavMainItem[] = [
   { label: "Chi nhánh", href: "/admin/dashboard/chi-nhanh" },
   { label: "Khóa học", href: "/admin/dashboard/khoa-hoc" },
   { label: "Lớp học", href: "/admin/dashboard/lop-hoc" },
+  {
+    label: "Agent Tư vấn",
+    href: AGENT_CONSULT_HREF,
+    icon: MessageCircle,
+    visibleForRoles: ["admin", "quan_ly"],
+  },
   { label: "Gói học phí", href: "/admin/dashboard/goi-hoc-phi" },
   { label: "Quản lý hóa đơn", href: "/admin/dashboard/quan-ly-hoa-don" },
   { label: "Quản lý học viên", href: "/admin/dashboard/quan-ly-hoc-vien" },

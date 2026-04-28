@@ -56,7 +56,39 @@ export async function handleAdminCfImageUpload(req: Request): Promise<NextRespon
     body: out,
   });
 
-  const json: unknown = await res.json().catch(() => ({}));
+  const rawText = await res.text();
+  let json: unknown = {};
+  try {
+    json = rawText.trim() ? JSON.parse(rawText) : {};
+  } catch {
+    const preview = rawText.replace(/\s+/g, " ").trim().slice(0, 160);
+    const wrongAgentWorker = /sine art agent/i.test(rawText);
+    const host = (() => {
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return "";
+      }
+    })();
+
+    /** URL đúng sine-art-api nhưng Cloudflare đang mount nhầm script Agent → vẫn trả plain text */
+    const agentBundleOnUploadHost =
+      wrongAgentWorker && /sine-art-api/i.test(host);
+
+    let msg: string;
+    if (agentBundleOnUploadHost) {
+      msg =
+        `Worker ${host} đang chạy code Messenger Agent (text "Sine Art Agent…"), không phải sine-art-api upload. Không phải lỗi biến môi trường: cần trên Cloudflare Workers deploy lại đúng file repo workers/sine-art-api/index.mjs vào worker gắn subdomain này (route POST /upload-cf-images). Giữ Worker Agent (api-meta) là project riêng. Đang gọi: ${url}`;
+    } else if (wrongAgentWorker) {
+      msg =
+        `Upload nhận text Worker Agent — SINE_ART_WORKER_URL đang trỏ Worker Messenger (api-meta). Đặt origin của Worker sine-art-api (upload-cf-images). Đang gọi: ${url}`;
+    } else {
+      msg = `Phản hồi worker không phải JSON (${res.status}). Body: ${preview || "(rỗng)"}`;
+    }
+
+    return NextResponse.json({ ok: false, error: msg }, { status: 502 });
+  }
+
   if (!res.ok) {
     const msg =
       typeof json === "object" && json !== null && "error" in json
@@ -65,14 +97,54 @@ export async function handleAdminCfImageUpload(req: Request): Promise<NextRespon
     return NextResponse.json({ error: msg, ok: false }, { status: 502 });
   }
 
-  if (
-    typeof json === "object" &&
-    json !== null &&
-    (json as { success?: boolean }).success === true &&
-    typeof (json as { url?: unknown }).url === "string"
-  ) {
-    return NextResponse.json({ ok: true, url: (json as { url: string }).url });
+  const extracted = extractWorkerImageUploadUrl(json);
+  if (extracted) {
+    return NextResponse.json({ ok: true, url: extracted });
   }
 
-  return NextResponse.json({ error: "Phản hồi worker không hợp lệ.", ok: false }, { status: 502 });
+  const hint =
+    typeof json === "object" && json !== null && "error" in json
+      ? String((json as { error?: unknown }).error)
+      : rawText.slice(0, 280);
+  return NextResponse.json(
+    {
+      ok: false,
+      error:
+        hint && hint !== "[object Object]"
+          ? hint
+          : "Phản hồi worker không có URL ảnh hợp lệ. Kiểm tra Worker /upload-cf-images và biến CF trên Cloudflare.",
+    },
+    { status: 502 },
+  );
+}
+
+/** Chuẩn hoá URL từ `{ success, url }` hoặc payload Cloudflare Images v4 lẫn vào. */
+function extractWorkerImageUploadUrl(json: unknown): string | null {
+  if (typeof json !== "object" || json === null) return null;
+  const o = json as Record<string, unknown>;
+
+  const topUrl = o.url;
+  if (typeof topUrl === "string") {
+    const u = topUrl.trim();
+    if (/^https?:\/\//i.test(u)) return u;
+  }
+
+  const inner =
+    typeof o.result === "object" && o.result !== null ? (o.result as Record<string, unknown>) : o;
+
+  const variants = inner.variants;
+  if (Array.isArray(variants)) {
+    const urls = variants
+      .filter((v): v is string => typeof v === "string" && /^https?:\/\//i.test(v.trim()))
+      .map((v) => v.trim());
+    if (urls.length) {
+      const pub = urls.find((x) => x.endsWith("/public"));
+      return pub ?? urls[0];
+    }
+  }
+
+  const ok = o.success === true || o.ok === true;
+  if (ok && typeof topUrl === "string" && topUrl.trim()) return topUrl.trim();
+
+  return null;
 }

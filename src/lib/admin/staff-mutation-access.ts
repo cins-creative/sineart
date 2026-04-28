@@ -38,3 +38,9 @@ export function adminStaffCanViewBctcDetailCharts(vaiTro: string | null | undefi
 export function adminStaffCanViewGiaTriTaiSanOverviewTab(vaiTro: string | null | undefined): boolean {
   return normalizeStaffVaiTro(vaiTro) === "admin";
 }
+
+/** Trang Agent tư vấn (`/admin/agent`) — chỉ admin & quản lý. */
+export function adminStaffCanAccessAgentPage(vaiTro: string | null | undefined): boolean {
+  const v = normalizeStaffVaiTro(vaiTro);
+  return v === "admin" || v === "quan_ly";
+}

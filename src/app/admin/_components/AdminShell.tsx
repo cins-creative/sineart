@@ -14,6 +14,7 @@ import {
   NAV_HR,
   NAV_MARKETING,
   ORDER_MEDIA_HREF,
+  type NavMainItem,
 } from "@/lib/admin/dashboard-nav-config";
 import type { DashboardNavAccess } from "@/lib/admin/dashboard-nav-visibility";
 import { canAccessDashboardHref } from "@/lib/admin/dashboard-nav-visibility";
@@ -113,7 +114,7 @@ function AdminDashboardNavPanel({
   pathname: string | null;
   searchParams: URLSearchParams;
   showOrderMedia: boolean;
-  navMainVisible: NavItem[];
+  navMainVisible: NavMainItem[];
   navHrVisible: NavItem[];
   navMarketingVisible: NavItem[];
   onNavigate?: () => void;
@@ -166,23 +167,28 @@ function AdminDashboardNavPanel({
         {navMainVisible.length > 0 ? (
           <AdminNavSection sectionId="admin-nav-dieu-hanh" title="Điều hành">
             <ul className="space-y-0.5">
-              {navMainVisible.map((item) => (
-                <li key={item.label}>
-                  {item.disabled ? (
-                    <span className="block cursor-not-allowed rounded-lg px-2 py-2 text-black/35">
-                      {item.label}
-                    </span>
-                  ) : (
-                    <Link
-                      href={item.href}
-                      className={navItemClass(item.href, pathname, searchParams)}
-                      onClick={onNavigate}
-                    >
-                      {item.label}
-                    </Link>
-                  )}
-                </li>
-              ))}
+              {navMainVisible.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <li key={item.href}>
+                    {item.disabled ? (
+                      <span className="flex cursor-not-allowed items-center gap-2 rounded-lg px-2 py-2 text-black/35">
+                        {Icon ? <Icon size={16} className="shrink-0 opacity-55" aria-hidden /> : null}
+                        <span>{item.label}</span>
+                      </span>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        className={`flex items-center gap-2 ${navItemClass(item.href, pathname, searchParams)}`}
+                        onClick={onNavigate}
+                      >
+                        {Icon ? <Icon size={16} className="shrink-0 opacity-70" aria-hidden /> : null}
+                        <span className="min-w-0 truncate">{item.label}</span>
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </AdminNavSection>
         ) : null}
@@ -255,10 +261,14 @@ export default function AdminShell({
 
   const allowed = dashboardNav.allowedHrefs;
 
-  const navMainVisible = useMemo(
-    () => NAV_MAIN.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href)),
-    [allowed],
-  );
+  const navMainVisible = useMemo(() => {
+    const r = (staffRole ?? "").trim().toLowerCase();
+    return NAV_MAIN.filter((i) => {
+      if (i.disabled) return false;
+      if (i.visibleForRoles?.length && !i.visibleForRoles.includes(r)) return false;
+      return canAccessDashboardHref(allowed, i.href);
+    });
+  }, [allowed, staffRole]);
   const navHrVisible = useMemo(() => {
     let items = NAV_HR.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href));
     const isAdmin = (staffRole ?? "").trim().toLowerCase() === "admin";
@@ -443,7 +453,9 @@ export default function AdminShell({
           </div>
         </header>
         <main className="relative flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col p-4 md:p-6">
-          <AdminDashboardAbilitiesProvider staffRole={staffRole}>{children}</AdminDashboardAbilitiesProvider>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <AdminDashboardAbilitiesProvider staffRole={staffRole}>{children}</AdminDashboardAbilitiesProvider>
+          </div>
         </main>
       </div>
       <div

@@ -615,7 +615,7 @@ export default function BctcTuDongView({ bundle }: Props) {
   ]);
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col pb-6">
+    <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col pb-6">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
         <div className="flex shrink-0 flex-col gap-3 border-b border-[#EAEAEA] bg-gradient-to-b from-[#fafafa] to-white px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:px-5 sm:py-4">
           <div className="min-w-0">
@@ -645,9 +645,10 @@ export default function BctcTuDongView({ bundle }: Props) {
           </div>
         </div>
 
-        <div className="min-h-0 min-w-0 flex-1">
+        {/* Bắt buộc `flex flex-col` — nếu không, con `flex-1` (vùng cuộn) không ăn theo flex. */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {rows.length === 0 ? (
-            <div className="flex min-h-[min(44vh,380px)] flex-col items-center justify-center gap-3 px-6 py-14">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 py-14">
               <div className="text-5xl opacity-80" aria-hidden>
                 📋
               </div>
@@ -656,7 +657,7 @@ export default function BctcTuDongView({ bundle }: Props) {
               </p>
             </div>
           ) : (
-            <div className="bcc-fin-scroll max-h-[min(72vh,820px)] min-h-[min(52vh,560px)] overflow-x-auto overflow-y-auto overscroll-contain">
+            <div className="bcc-fin-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain">
               <table className="bcc-fin-table w-max min-w-full border-separate border-spacing-0 text-[13px]">
                 <thead>
                   <tr>

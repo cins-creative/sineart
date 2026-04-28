@@ -38,5 +38,9 @@ export default async function BctcTuDongPageData({ namParam }: { namParam?: stri
     );
   }
 
-  return <BctcTuDongView bundle={bundle.data} />;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <BctcTuDongView bundle={bundle.data} />
+    </div>
+  );
 }

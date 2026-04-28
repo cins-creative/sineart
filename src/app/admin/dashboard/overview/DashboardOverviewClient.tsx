@@ -1,13 +1,9 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useState } from "react";
 
-import type { MkDataAnalysisRow } from "@/lib/data/admin-report-mkt";
-import type { BaoCaoColumn } from "@/lib/data/bao-cao-tai-chinh-config";
 import { cn } from "@/lib/utils";
-
-import BctcOverviewCharts from "./BctcOverviewCharts";
-import MarketingDataAnalysisCharts from "./MarketingDataAnalysisCharts";
 
 type OverviewTabId = "marketing" | "bctc-summary";
 
@@ -17,23 +13,15 @@ const TABS: { id: OverviewTabId; label: string }[] = [
 ];
 
 type Props = {
-  initialRows: MkDataAnalysisRow[];
-  /** Cùng logic «Đang học — tổng» như trang Quản lý học viên; `null` nếu không tải được HV. */
-  hocVienDangHoc: number | null;
-  initialBctcColumns: BaoCaoColumn[];
-  bctcLoadError: string | null;
+  marketingContent: ReactNode;
+  bctcContent: ReactNode;
 };
 
-export default function DashboardOverviewClient({
-  initialRows,
-  hocVienDangHoc,
-  initialBctcColumns,
-  bctcLoadError,
-}: Props) {
+export default function DashboardOverviewClient({ marketingContent, bctcContent }: Props) {
   const [tab, setTab] = useState<OverviewTabId>("marketing");
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 px-[10px] pb-6 pt-2 md:px-6 md:pt-3 md:pb-8">
+    <div className="flex h-full min-h-0 flex-col gap-4 px-[10px] pb-6 pt-2 md:px-6 md:pb-8 md:pt-3">
       <nav
         className="flex flex-row flex-wrap gap-2 border-b border-black/[0.08] pb-3"
         aria-label="Tab bảng điều khiển"
@@ -58,25 +46,9 @@ export default function DashboardOverviewClient({
       </nav>
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 md:pr-1" role="tabpanel">
-        {tab === "marketing" ? (
-          <MarketingDataAnalysisCharts rows={initialRows} hocVienDangHoc={hocVienDangHoc} />
-        ) : null}
-        {tab === "bctc-summary" ? (
-          bctcLoadError ? (
-            <BctcErrorBanner message={bctcLoadError} />
-          ) : (
-            <BctcOverviewCharts key="bctc-summary" columns={initialBctcColumns} />
-          )
-        ) : null}
+        {tab === "marketing" ? marketingContent : null}
+        {tab === "bctc-summary" ? bctcContent : null}
       </div>
-    </div>
-  );
-}
-
-function BctcErrorBanner({ message }: { message: string }) {
-  return (
-    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-snug text-amber-950">
-      Không tải được báo cáo tài chính: <span className="font-semibold">{message}</span>
     </div>
   );
 }

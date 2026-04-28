@@ -66,7 +66,10 @@ function subtotalChi(chi: AdminChiTietDisplay[]): number {
 }
 
 function totalDon(don: AdminHpDonRow, chi: AdminChiTietDisplay[]): number {
-  return Math.max(0, Math.round(subtotalChi(chi) - parseMoney(don.giam_gia)));
+  return Math.max(
+    0,
+    Math.round(subtotalChi(chi) - parseMoney(don.giam_gia) - parseMoney(don.giam_gia_vnd)),
+  );
 }
 
 function isoOrEmpty(v: string | null | undefined): string {
@@ -106,7 +109,7 @@ function transferIsChi(raw: string | null | undefined): boolean {
 
 /**
  * Gộp học phí (đã thanh toán), bán họa cụ, giao dịch SePay (`hp_giao_dich_thanh_toan`) cho trang thống kê.
- * Tiền học phí = tổng dòng `hp_thu_hp_chi_tiet` (theo gói) trừ `giam_gia` đơn — cùng logic «Quản lý hóa đơn».
+ * Tiền học phí = tổng dòng `hp_thu_hp_chi_tiet` (theo gói) trừ `giam_gia` và `giam_gia_vnd` đơn — cùng logic «Quản lý hóa đơn».
  */
 export async function fetchAdminThongKeThuChiBundle(
   supabase: SupabaseClient
@@ -117,7 +120,7 @@ export async function fetchAdminThongKeThuChiBundle(
     supabase
       .from("hp_don_thu_hoc_phi")
       .select(
-        "id, created_at, ma_don, ma_don_so, student, nguoi_tao, hinh_thuc_thu, status, ngay_thanh_toan, giam_gia"
+        "id, created_at, ma_don, ma_don_so, student, nguoi_tao, hinh_thuc_thu, status, ngay_thanh_toan, giam_gia, giam_gia_vnd"
       )
       .in("status", ["paid", "Đã thanh toán"])
       .order("created_at", { ascending: false })

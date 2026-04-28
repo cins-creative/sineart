@@ -6,7 +6,12 @@ import {
   fetchAdminQuanLyHocVienBundle,
   type AdminQlhvBaiTapBrief,
 } from "@/lib/data/admin-quan-ly-hoc-vien";
+import { staffBelongsToTuVanPhong } from "@/lib/admin/dashboard-nav-visibility";
 import { fetchDhNguyenVongCatalog, type DhpDhCatalog } from "@/lib/donghocphi/dh-catalog";
+import {
+  fetchAdminStaffShellPhongTenPhongs,
+  fetchAdminStaffShellProfile,
+} from "@/lib/data/admin-shell-user";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export default async function QuanLyHocVienPageData() {
@@ -27,6 +32,15 @@ export default async function QuanLyHocVienPageData() {
     fetchDhNguyenVongCatalog(supabase),
   ]);
   const dhCatalog: DhpDhCatalog | null = !dhRes.error && dhRes.catalog ? dhRes.catalog : null;
+
+  const [profile, phongTenPhongs] = await Promise.all([
+    fetchAdminStaffShellProfile(supabase, session.staffId),
+    fetchAdminStaffShellPhongTenPhongs(supabase, session.staffId),
+  ]);
+  const dhpShowExtraVndDiscount =
+    (profile.vai_tro ?? "").trim().toLowerCase() === "admin" ||
+    staffBelongsToTuVanPhong(phongTenPhongs);
+
   if (bundle.error) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
@@ -58,6 +72,7 @@ export default async function QuanLyHocVienPageData() {
       truongNganhByHvId={bundle.truongNganhByHvId}
       dhCatalog={dhCatalog}
       adminStaffId={session.staffId}
+      dhpShowExtraVndDiscount={dhpShowExtraVndDiscount}
     />
   );
 }

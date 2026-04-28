@@ -203,7 +203,7 @@ export async function sendPaymentReceiptEmail(
 
   const { data: don, error: donErr } = await supabase
     .from("hp_don_thu_hoc_phi")
-    .select("student, ma_don_so, ma_don, ngay_thanh_toan, giam_gia")
+    .select("student, ma_don_so, ma_don, ngay_thanh_toan, giam_gia, giam_gia_vnd")
     .eq("id", donId)
     .maybeSingle();
 
@@ -217,6 +217,7 @@ export async function sendPaymentReceiptEmail(
     ma_don?: string | null;
     ngay_thanh_toan?: string | null;
     giam_gia?: unknown;
+    giam_gia_vnd?: unknown;
   };
 
   const studentId = Number(dr.student);
@@ -246,6 +247,7 @@ export async function sendPaymentReceiptEmail(
   const ngayThanhToan =
     dr.ngay_thanh_toan != null ? String(dr.ngay_thanh_toan) : null;
   const giamGia = parseMoney(dr.giam_gia);
+  const giamGiaVnd = parseMoney(dr.giam_gia_vnd);
 
   const { data: chiRows, error: chiErr } = await supabase
     .from("hp_thu_hp_chi_tiet")
@@ -398,7 +400,7 @@ export async function sendPaymentReceiptEmail(
     return { sent: false, reason: "no_line_items" };
   }
 
-  const totalDong = Math.max(0, Math.round(subtotal - giamGia));
+  const totalDong = Math.max(0, Math.round(subtotal - giamGia - giamGiaVnd));
 
   const siteBaseUrl =
     process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ||

@@ -14,6 +14,8 @@ export type AdminHpDonRow = {
   status: string | null;
   ngay_thanh_toan: string | null;
   giam_gia: number | string | null;
+  /** Trừ thêm VND (sau KM %/combo) — tư vấn viên. */
+  giam_gia_vnd: number | string | null;
 };
 
 export type AdminChiTietDisplay = {
@@ -93,7 +95,7 @@ export async function fetchAdminHoaDonBundle(
   let q = supabase
     .from("hp_don_thu_hoc_phi")
     .select(
-      "id, created_at, ma_don, ma_don_so, student, nguoi_tao, hinh_thuc_thu, status, ngay_thanh_toan, giam_gia"
+      "id, created_at, ma_don, ma_don_so, student, nguoi_tao, hinh_thuc_thu, status, ngay_thanh_toan, giam_gia, giam_gia_vnd"
     )
     .order("created_at", { ascending: false })
     .limit(MAX_DONS);

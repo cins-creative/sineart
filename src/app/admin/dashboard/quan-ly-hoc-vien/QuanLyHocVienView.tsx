@@ -91,6 +91,8 @@ type Props = {
   dhCatalog: DhpDhCatalog | null;
   /** Nhân viên đang đăng nhập admin — mặc định «người tạo đơn» thu học phí. */
   adminStaffId: number;
+  /** Phòng Tư vấn hoặc admin — hiện ô «Giảm giá thêm» (VNĐ) trong modal thu học phí. */
+  dhpShowExtraVndDiscount: boolean;
 };
 
 type SortDir = "asc" | "desc" | null;
@@ -1678,6 +1680,7 @@ export default function QuanLyHocVienView({
   truongNganhByHvId,
   dhCatalog,
   adminStaffId,
+  dhpShowExtraVndDiscount,
 }: Props) {
   const router = useRouter();
   const { canDelete: staffMayDeleteHocVien } = useAdminDashboardAbilities();
@@ -2536,6 +2539,7 @@ export default function QuanLyHocVienView({
           student={selected}
           enrollments={byHv.get(selected.id) ?? []}
           defaultNguoiTaoId={adminStaffId}
+          showExtraVndDiscount={dhpShowExtraVndDiscount}
         />
       ) : null}
     </div>

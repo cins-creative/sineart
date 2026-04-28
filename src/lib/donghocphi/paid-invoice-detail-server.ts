@@ -35,6 +35,8 @@ export type PaidInvoiceDetailPayload = {
     ma_don: string | null;
     ngay_thanh_toan: string | null;
     giam_gia_dong: number;
+    /** Trừ thêm VND (sau KM gói / % trên đơn). */
+    giam_gia_vnd_dong: number;
     hinh_thuc_thu: string | null;
     status: string;
   };
@@ -60,7 +62,7 @@ export async function fetchPaidInvoiceDetailForStudent(
 
   const { data: don, error: donErr } = await supabase
     .from("hp_don_thu_hoc_phi")
-    .select("id, student, status, ma_don, ma_don_so, ngay_thanh_toan, giam_gia, hinh_thuc_thu")
+    .select("id, student, status, ma_don, ma_don_so, ngay_thanh_toan, giam_gia, giam_gia_vnd, hinh_thuc_thu")
     .eq("id", donId)
     .maybeSingle();
 
@@ -76,6 +78,7 @@ export async function fetchPaidInvoiceDetailForStudent(
     ma_don_so?: string | null;
     ngay_thanh_toan?: string | null;
     giam_gia?: unknown;
+    giam_gia_vnd?: unknown;
     hinh_thuc_thu?: string | null;
   };
 
@@ -241,7 +244,8 @@ export async function fetchPaidInvoiceDetailForStudent(
   }
 
   const giamGia = parseMoney(dr.giam_gia);
-  const totalDong = Math.max(0, Math.round(subtotal - giamGia));
+  const giamGiaVnd = parseMoney(dr.giam_gia_vnd);
+  const totalDong = Math.max(0, Math.round(subtotal - giamGia - giamGiaVnd));
 
   return {
     ok: true,
@@ -252,6 +256,7 @@ export async function fetchPaidInvoiceDetailForStudent(
         ma_don: dr.ma_don != null && String(dr.ma_don).trim() !== "" ? String(dr.ma_don).trim() : null,
         ngay_thanh_toan: dr.ngay_thanh_toan != null ? String(dr.ngay_thanh_toan) : null,
         giam_gia_dong: giamGia,
+        giam_gia_vnd_dong: giamGiaVnd,
         hinh_thuc_thu: dr.hinh_thuc_thu != null ? String(dr.hinh_thuc_thu).trim() || null : null,
         status: st,
       },

@@ -111,9 +111,18 @@ type Props = {
   student: AdminQlhvStudent;
   enrollments: AdminQlhvEnrollment[];
   defaultNguoiTaoId: number;
+  /** Phòng Tư vấn / admin — ô «Giảm giá thêm» (VNĐ), không hiện với nhân sự khác. */
+  showExtraVndDiscount?: boolean;
 };
 
-export default function AdminDongHocPhiModal({ open, onClose, student, enrollments, defaultNguoiTaoId }: Props) {
+export default function AdminDongHocPhiModal({
+  open,
+  onClose,
+  student,
+  enrollments,
+  defaultNguoiTaoId,
+  showExtraVndDiscount = false,
+}: Props) {
   const [isPending, startTransition] = useTransition();
   const [staff, setStaff] = useState<{ id: number; full_name: string }[]>([]);
   const [gois, setGois] = useState<AdminDhpGoiOption[]>([]);
@@ -125,6 +134,8 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
   const [nguoiTaoId, setNguoiTaoId] = useState(String(defaultNguoiTaoId));
   const [hinhThuc, setHinhThuc] = useState<string>("Chuyển khoản");
   const [khuyenMai, setKhuyenMai] = useState(0);
+  /** Chỉ dùng khi `showExtraVndDiscount` — gửi server đã cắt theo tối đa sau KM & combo. */
+  const [giamGiaVnd, setGiamGiaVnd] = useState(0);
   const defaultQl =
     enrollments.length === 1 && enrollments[0] != null ? String(enrollments[0].id) : "";
   const [lines, setLines] = useState<LineState[]>(() => [mkLine(defaultQl)]);
@@ -146,6 +157,7 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
     setNguoiTaoId(String(defaultNguoiTaoId));
     setHinhThuc("Chuyển khoản");
     setKhuyenMai(0);
+    setGiamGiaVnd(0);
     setLines([mkLine(defaultQl)]);
     setCreatedDonId(null);
     setMaDon("");
@@ -256,16 +268,32 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
     );
   }, [comboDiscountDong, lines, combos, canonicalMap]);
 
+  const afterKmCombo = useMemo(
+    () => Math.max(0, Math.round(subtotalPreview - khuyenMaiDong - comboDiscountDong)),
+    [subtotalPreview, khuyenMaiDong, comboDiscountDong],
+  );
+
+  const giamGiaVndApplied = useMemo(() => {
+    if (!showExtraVndDiscount) return 0;
+    const raw = Math.max(0, Math.round(Number(giamGiaVnd) || 0));
+    return Math.min(raw, afterKmCombo);
+  }, [showExtraVndDiscount, giamGiaVnd, afterKmCombo]);
+
   const tongPreview = useMemo(() => {
-    return Math.max(0, subtotalPreview - khuyenMaiDong - comboDiscountDong);
-  }, [subtotalPreview, khuyenMaiDong, comboDiscountDong]);
+    return Math.max(0, afterKmCombo - giamGiaVndApplied);
+  }, [afterKmCombo, giamGiaVndApplied]);
+
+  /** Khi bật «QR thử micro» (mặc định `next dev`), số trên QR là 2k–2,3k ₫ — khác tổng đơn; xem `vietqr.ts`. */
+  const qrPaymentResolved = useMemo(() => {
+    if (!maDonSo.trim() || invoiceTotal <= 0) return null;
+    return resolveQrPaymentAmounts(maDonSo, invoiceTotal);
+  }, [maDonSo, invoiceTotal]);
 
   const qrUrl = useMemo(() => {
     if (sessionStep !== "s2" || !isChuyenKhoanUi(hinhThuc)) return "";
-    if (!maDonSo || invoiceTotal <= 0 || createdDonId == null) return "";
-    const { qrAmountDong } = resolveQrPaymentAmounts(maDonSo, invoiceTotal);
-    return buildVietQrImageUrl(maDonSo, qrAmountDong, createdDonId);
-  }, [sessionStep, hinhThuc, maDonSo, invoiceTotal, createdDonId]);
+    if (!qrPaymentResolved || createdDonId == null) return "";
+    return buildVietQrImageUrl(maDonSo, qrPaymentResolved.qrAmountDong, createdDonId);
+  }, [sessionStep, hinhThuc, maDonSo, invoiceTotal, createdDonId, qrPaymentResolved]);
 
   useEffect(() => {
     if (!open || sessionStep !== "s2" || createdDonId == null) return;
@@ -332,6 +360,7 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
       nguoiTaoId: ntao,
       hinhThucThu: hinhThuc,
       khuyenMaiPercent: khuyenMai,
+      giamGiaVnd: showExtraVndDiscount ? giamGiaVndApplied : 0,
       lines: payloadLines,
     });
     setSaving(false);
@@ -640,20 +669,53 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
                   {subtotalPreview > 0 ? (
                     <>
                       <p className="m-0 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#3b82f6]">Tổng đơn</p>
-                      <div>
-                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Khuyến mãi (%)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          className={inp}
-                          value={khuyenMai || ""}
-                          onChange={(e) => setKhuyenMai(Number(e.target.value) || 0)}
-                          placeholder="0"
-                        />
+                      <div
+                        className={cn(
+                          "grid gap-3",
+                          showExtraVndDiscount ? "grid-cols-2" : "grid-cols-1",
+                        )}
+                      >
+                        <div className="min-w-0">
+                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-[#AAA]">
+                            Khuyến mãi (%)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            className={inp}
+                            value={khuyenMai || ""}
+                            onChange={(e) => setKhuyenMai(Number(e.target.value) || 0)}
+                            placeholder="0"
+                          />
+                        </div>
+                        {showExtraVndDiscount ? (
+                          <div className="min-w-0">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-[#AAA]">
+                              Giảm giá thêm (VNĐ)
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              className={inp}
+                              value={giamGiaVnd || ""}
+                              onChange={(e) => setGiamGiaVnd(Number(e.target.value) || 0)}
+                              placeholder="0"
+                            />
+                          </div>
+                        ) : null}
                       </div>
+                      {showExtraVndDiscount ? (
+                        <p className="m-0 text-[10px] leading-snug text-black/40">
+                          Trừ sau khuyến mãi % và combo. Tối đa còn lại:{" "}
+                          <strong className="text-black/55">{fmtVnd(afterKmCombo)}</strong>
+                          {giamGiaVndApplied > 0 && Math.round(Number(giamGiaVnd) || 0) > afterKmCombo ? (
+                            <span className="text-amber-700"> · đang áp {fmtVnd(giamGiaVndApplied)}</span>
+                          ) : null}
+                        </p>
+                      ) : null}
                       <div className="space-y-1.5 rounded-xl border border-[#3b82f622] bg-gradient-to-r from-blue-500/6 to-indigo-500/5 px-3.5 py-2.5">
-                        {chieuKhauDong > 0 || khuyenMaiDong > 0 || comboDiscountDong > 0 ? (
+                        {chieuKhauDong > 0 || khuyenMaiDong > 0 || comboDiscountDong > 0 || giamGiaVndApplied > 0 ? (
                           <>
                             <div className="flex items-center justify-between text-[11px]">
                               <span className="text-black/45">Giá gốc</span>
@@ -677,9 +739,17 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
                                 <span className="tabular-nums font-semibold text-emerald-600">−{fmtVnd(comboDiscountDong)}</span>
                               </div>
                             ) : null}
+                            {giamGiaVndApplied > 0 ? (
+                              <div className="flex items-center justify-between text-[11px] border-t border-[#3b82f615] pt-1.5">
+                                <span className="text-black/45">Giảm giá thêm (VNĐ)</span>
+                                <span className="tabular-nums text-black/50">−{fmtVnd(giamGiaVndApplied)}</span>
+                              </div>
+                            ) : null}
                           </>
                         ) : null}
-                        <div className={`flex items-center justify-between ${chieuKhauDong > 0 || khuyenMaiDong > 0 || comboDiscountDong > 0 ? "border-t border-[#3b82f620] pt-1.5" : ""}`}>
+                        <div
+                          className={`flex items-center justify-between ${chieuKhauDong > 0 || khuyenMaiDong > 0 || comboDiscountDong > 0 || giamGiaVndApplied > 0 ? "border-t border-[#3b82f620] pt-1.5" : ""}`}
+                        >
                           <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#3b82f6]">Tổng học phí cần đóng</span>
                           <span className="text-lg font-black text-[#1a1a2e]">{fmtVnd(tongPreview)}</span>
                         </div>
@@ -777,6 +847,12 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
                           <span className="font-bold text-emerald-600">{khuyenMai}%</span>
                         </div>
                       ) : null}
+                      {giamGiaVndApplied > 0 ? (
+                        <div className="flex justify-between border-b border-[#f0f0f0] py-1 text-[12px]">
+                          <span className="text-[10px] font-bold uppercase text-[#BBB]">Giảm giá thêm</span>
+                          <span className="font-bold text-emerald-600">−{fmtVnd(giamGiaVndApplied)}</span>
+                        </div>
+                      ) : null}
                       <div className="flex justify-between py-1 text-[12px]">
                         <span className="text-[10px] font-bold uppercase text-[#BBB]">Tổng học phí</span>
                         <span className="text-base font-black text-[#3b82f6]">{fmtVnd(invoiceTotal)}</span>
@@ -784,14 +860,28 @@ export default function AdminDongHocPhiModal({ open, onClose, student, enrollmen
                     </div>
                   </div>
 
-                  {isChuyenKhoanUi(hinhThuc) && qrUrl ? (
+                  {isChuyenKhoanUi(hinhThuc) && qrUrl && qrPaymentResolved ? (
                     <div className="flex flex-col items-center gap-2 rounded-xl bg-[#F8F9FA] px-4 py-4">
                       <p className="m-0 text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#888]">QR chuyển khoản · TPBank</p>
                       {/* eslint-disable-next-line @next/next/no-img-element -- VietQR URL */}
                       <img src={qrUrl} alt="Mã QR thanh toán" className="h-40 w-40 rounded-[10px] bg-white object-contain" />
                       <p className="m-0 text-center text-base font-black text-[#1a1a2e]">
-                        {fmtVnd(resolveQrPaymentAmounts(maDonSo, invoiceTotal).qrAmountDong)}
+                        {fmtVnd(qrPaymentResolved.qrAmountDong)}
                       </p>
+                      {qrPaymentResolved.isTestMicro ? (
+                        <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left text-[11px] leading-snug text-amber-950">
+                          <strong className="font-bold">Đang bật QR thử (micro):</strong> số trên mã QR cố định trong khoảng{" "}
+                          <span className="whitespace-nowrap font-semibold">2.000–2.300 ₫</span> theo mã SA để test chuyển khoản
+                          khi chạy local —{" "}
+                          <span className="whitespace-nowrap font-semibold">không phải</span> tổng học phí trên đơn (
+                          <span className="font-semibold tabular-nums">{fmtVnd(invoiceTotal)}</span>
+                          ). Production mặc định tắt. Để QR khớp tổng đơn trên dev: đặt{" "}
+                          <code className="rounded bg-amber-100/90 px-1 py-0.5 text-[10px]">
+                            NEXT_PUBLIC_DHP_TEST_MICRO_QR=0
+                          </code>{" "}
+                          rồi chạy lại server.
+                        </div>
+                      ) : null}
                       <p className="m-0 text-center text-[11px] text-[#888]">
                         Nội dung CK: <strong className="text-[#1a1a2e]">{maDonSo || maDon}</strong>
                       </p>

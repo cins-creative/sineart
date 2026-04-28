@@ -201,7 +201,7 @@ export async function fetchBctcTuDongBundle(
 
   const { data: donRows, error: donErr } = await supabase
     .from("hp_don_thu_hoc_phi")
-    .select("id, created_at, ngay_thanh_toan, giam_gia, status")
+    .select("id, created_at, ngay_thanh_toan, giam_gia, giam_gia_vnd, status")
     .eq("status", STATUS_PAID);
 
   if (donErr) {
@@ -275,7 +275,7 @@ export async function fetchBctcTuDongBundle(
         lineAmts.push({ dmId, amt });
       }
 
-      const discount = parseMoney(don?.giam_gia);
+      const discount = parseMoney(don?.giam_gia) + parseMoney(don?.giam_gia_vnd);
       const payableTotal = Math.max(0, Math.round(subtotal - discount));
       const factor = subtotal > 0 ? payableTotal / subtotal : 0;
 

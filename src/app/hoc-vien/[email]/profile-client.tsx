@@ -152,6 +152,7 @@ type PaidInvoiceDetailPayload = {
     ma_don: string | null;
     ngay_thanh_toan: string | null;
     giam_gia_dong: number;
+    giam_gia_vnd_dong: number;
     hinh_thuc_thu: string | null;
     status: string;
   };
@@ -1334,7 +1335,8 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
                   </table>
                 </div>
                 <div className="hvp-inv-detail-totals">
-                  {invoiceDetailModal.detail.don.giam_gia_dong > 0 ? (
+                  {invoiceDetailModal.detail.don.giam_gia_dong > 0 ||
+                  invoiceDetailModal.detail.don.giam_gia_vnd_dong > 0 ? (
                     <>
                       <div className="hvp-inv-detail-total-row">
                         <span>Tạm tính</span>
@@ -1344,10 +1346,22 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
                           )}
                         </span>
                       </div>
-                      <div className="hvp-inv-detail-total-row hvp-inv-detail-total-row--discount">
-                        <span>Giảm giá / ưu đãi</span>
-                        <span className="hvp-inv-detail-num">−{formatVnd(invoiceDetailModal.detail.don.giam_gia_dong)}</span>
-                      </div>
+                      {invoiceDetailModal.detail.don.giam_gia_dong > 0 ? (
+                        <div className="hvp-inv-detail-total-row hvp-inv-detail-total-row--discount">
+                          <span>Giảm giá / ưu đãi</span>
+                          <span className="hvp-inv-detail-num">
+                            −{formatVnd(invoiceDetailModal.detail.don.giam_gia_dong)}
+                          </span>
+                        </div>
+                      ) : null}
+                      {invoiceDetailModal.detail.don.giam_gia_vnd_dong > 0 ? (
+                        <div className="hvp-inv-detail-total-row hvp-inv-detail-total-row--discount">
+                          <span>Giảm giá thêm</span>
+                          <span className="hvp-inv-detail-num">
+                            −{formatVnd(invoiceDetailModal.detail.don.giam_gia_vnd_dong)}
+                          </span>
+                        </div>
+                      ) : null}
                     </>
                   ) : null}
                   <div className="hvp-inv-detail-total-row hvp-inv-detail-total-row--grand">

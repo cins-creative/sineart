@@ -108,7 +108,10 @@ function subtotalChi(chi: AdminChiTietDisplay[]): number {
 }
 
 function totalDon(don: AdminHpDonRow, chi: AdminChiTietDisplay[]): number {
-  return Math.max(0, Math.round(subtotalChi(chi) - parseMoney(don.giam_gia)));
+  return Math.max(
+    0,
+    Math.round(subtotalChi(chi) - parseMoney(don.giam_gia) - parseMoney(don.giam_gia_vnd)),
+  );
 }
 
 function daysRemaining(ngayCuoi: string | null): number | null {
@@ -632,7 +635,7 @@ export default function QuanLyHoaDonView({ bundle, days }: Props) {
             <AnimatePresence mode="wait" initial={false}>
               {selected ? (
                 <motion.aside
-                  key={`${selected.id}-${selected.ngay_thanh_toan ?? ""}-${selected.status ?? ""}-${String(selected.giam_gia ?? "")}-${selected.hinh_thuc_thu ?? ""}`}
+                  key={`${selected.id}-${selected.ngay_thanh_toan ?? ""}-${selected.status ?? ""}-${String(selected.giam_gia ?? "")}-${String(selected.giam_gia_vnd ?? "")}-${selected.hinh_thuc_thu ?? ""}`}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 6 }}
@@ -708,7 +711,8 @@ function DonDetailPanel({
 
   const sub = subtotalChi(chi);
   const giamVal = editGiam.trim() === "" ? 0 : Math.round(Number(editGiam) || 0);
-  const previewTotal = Math.max(0, Math.round(sub - giamVal));
+  const giamVndExtra = parseMoney(don.giam_gia_vnd);
+  const previewTotal = Math.max(0, Math.round(sub - giamVal - giamVndExtra));
 
   const saveDon = async () => {
     setSaving(true);
@@ -883,7 +887,7 @@ function DonDetailPanel({
               <span className="text-[12px] font-semibold text-[#1a1a2e]">{fmtDate(don.ngay_thanh_toan)}</span>
             )}
           </div>
-          <div className="flex items-center justify-between py-1.5">
+          <div className="flex items-center justify-between border-b border-[#EAEAEA] py-1.5">
             <span className="text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Giảm giá (₫)</span>
             {editing ? (
               <input
@@ -898,6 +902,12 @@ function DonDetailPanel({
               <span className="text-[12px] font-bold text-[#1a1a2e]">{fmtVnd(parseMoney(don.giam_gia))}</span>
             )}
           </div>
+          {giamVndExtra > 0 ? (
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Giảm giá thêm (₫)</span>
+              <span className="text-[12px] font-bold text-emerald-700">{fmtVnd(giamVndExtra)}</span>
+            </div>
+          ) : null}
           <div className="mt-2 flex items-center justify-between rounded-lg border border-dashed border-black/10 bg-white/80 px-2 py-1.5">
             <span className="text-[11px] font-bold text-black/55">Tổng (ước tính)</span>
             <span className="text-sm font-black text-[#1a1a2e]">{editing ? fmtVnd(previewTotal) : fmtVnd(totalDon(don, chi))}</span>

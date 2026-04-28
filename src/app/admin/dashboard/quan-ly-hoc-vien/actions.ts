@@ -4,11 +4,16 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
+import { staffBelongsToTuVanPhong } from "@/lib/admin/dashboard-nav-visibility";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { isValidStudentEmail, STUDENT_EMAIL_REQUIREMENT_VI } from "@/lib/donghocphi/profile-step1";
 import { firstApplicableComboDiscountDong } from "@/lib/donghocphi/combo-discount";
 import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
+import {
+  fetchAdminStaffShellPhongTenPhongs,
+  fetchAdminStaffShellProfile,
+} from "@/lib/data/admin-shell-user";
 import { insertQlQuanLyHocVienEnrollment } from "@/lib/supabase/insert-ql-quan-ly-hoc-vien";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -605,6 +610,14 @@ async function dhpFetchVanHanhMarketingNhanSuIds(supabase: SupabaseClient): Prom
   return ids;
 }
 
+/** Admin hoặc phòng «Tư vấn» — được ghi `giam_gia_vnd` trên đơn. */
+async function dhpSessionMaySetGiamGiaVnd(supabase: SupabaseClient, staffId: number): Promise<boolean> {
+  const profile = await fetchAdminStaffShellProfile(supabase, staffId);
+  if ((profile.vai_tro ?? "").trim().toLowerCase() === "admin") return true;
+  const phongs = await fetchAdminStaffShellPhongTenPhongs(supabase, staffId);
+  return staffBelongsToTuVanPhong(phongs);
+}
+
 /** Người tạo đơn thu học phí — chỉ ban Vận hành & Marketing khi lọc được từ `hr_nhan_su_phong`. */
 export async function listHrNhanSuOptions(): Promise<
   { ok: true; rows: { id: number; full_name: string }[] } | { ok: false; error: string }
@@ -816,6 +829,8 @@ export async function adminCreateHpDonThu(payload: {
   nguoiTaoId: number;
   hinhThucThu: string;
   khuyenMaiPercent: number;
+  /** Chỉ admin / phòng Tư vấn — trừ VND sau KM % và combo (server chặn nếu không đủ quyền). */
+  giamGiaVnd?: number;
   lines: AdminCreateHpDonLine[];
 }): Promise<
   | { ok: true; donId: number; maDon: string; maDonSo: string; invoiceTotalDong: number }
@@ -835,6 +850,11 @@ export async function adminCreateHpDonThu(payload: {
 
   const pct = Math.min(100, Math.max(0, Math.round(Number(payload.khuyenMaiPercent) || 0)));
   const hinhDb = dhpNormalizeHinhThucThu(payload.hinhThucThu);
+
+  const maySetExtraVnd = await dhpSessionMaySetGiamGiaVnd(supabase, session.staffId);
+  const rawExtraVnd = maySetExtraVnd
+    ? Math.max(0, Math.round(Number(payload.giamGiaVnd ?? 0) || 0))
+    : 0;
 
   const { data: hvRow, error: hvErr } = await supabase
     .from("ql_thong_tin_hoc_vien")
@@ -960,7 +980,9 @@ export async function adminCreateHpDonThu(payload: {
   }
 
   const totalDiscount = discountDong + comboDiscountDong;
-  const invoiceTotalDong = Math.max(0, Math.round(subtotal - totalDiscount));
+  const afterKmCombo = Math.max(0, Math.round(subtotal - totalDiscount));
+  const giamGiaVndApplied = Math.min(rawExtraVnd, afterKmCombo);
+  const invoiceTotalDong = Math.max(0, afterKmCombo - giamGiaVndApplied);
   if (invoiceTotalDong <= 0) return { ok: false, error: "Tổng sau khuyến mãi phải > 0." };
 
   const { data: donRow, error: donErr } = await supabase
@@ -971,6 +993,7 @@ export async function adminCreateHpDonThu(payload: {
       hinh_thuc_thu: hinhDb,
       status: "Chờ thanh toán",
       giam_gia: totalDiscount > 0 ? totalDiscount : null,
+      giam_gia_vnd: giamGiaVndApplied > 0 ? giamGiaVndApplied : null,
     })
     .select("id")
     .single();

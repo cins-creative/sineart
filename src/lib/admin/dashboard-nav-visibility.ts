@@ -37,6 +37,14 @@ type PhongRule =
   | "dao_tao_phong"
   | "unknown";
 
+/** Nhân sự thuộc phòng «Tư vấn» (theo `hr_phong.ten_phong`). */
+export function staffBelongsToTuVanPhong(phongTenPhongs: readonly string[]): boolean {
+  for (const t of phongTenPhongs) {
+    if (classifyPhongTen(String(t)) === "tu_van") return true;
+  }
+  return false;
+}
+
 function classifyPhongTen(tenPhongRaw: string): PhongRule {
   const p = tonelessVi(tenPhongRaw);
   if (!p) return "unknown";

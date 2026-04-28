@@ -9,6 +9,8 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const ADMIN_PATH = "/admin/dashboard/quan-ly-nhan-su";
 
+const VAI_TRO_ALLOWED = new Set(["admin", "quan_ly", "nhan_vien", "tu_van"]);
+
 export type UpdateNhanSuAvatarResult = { ok: true } | { ok: false; error: string };
 
 /**
@@ -88,10 +90,17 @@ export async function updateNhanSuThongTin(payload: NhanSuThongTinPayload): Prom
     return /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(t) ? t : null;
   };
 
+  const trimmedVt = payload.vai_tro != null ? String(payload.vai_tro).trim() : "";
+  let vai_tro: string | null = null;
+  if (trimmedVt) {
+    const k = trimmedVt.toLowerCase();
+    vai_tro = VAI_TRO_ALLOWED.has(k) ? k : "nhan_vien";
+  }
+
   const body = {
     full_name,
     chi_nhanh_id: payload.chi_nhanh_id,
-    vai_tro: payload.vai_tro != null && payload.vai_tro.trim() !== "" ? payload.vai_tro.trim() : null,
+    vai_tro,
     status: payload.status != null && payload.status.trim() !== "" ? payload.status.trim() : null,
     ngay_sinh: toDateOrNull(payload.ngay_sinh),
     sa_startdate: toDateOrNull(payload.sa_startdate),
@@ -125,8 +134,6 @@ export type CreateNhanSuPayload = {
 };
 
 export type CreateNhanSuResult = { ok: true; row: AdminNhanSuRow } | { ok: false; error: string };
-
-const VAI_TRO_ALLOWED = new Set(["admin", "quan_ly", "nhan_vien"]);
 
 /**
  * Tạo bản ghi `hr_nhan_su` mới + gán phòng (`hr_nhan_su_phong`), giống flow Framer `createNhanSu` + `setPhongForNhanSu`.

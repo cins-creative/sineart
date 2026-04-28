@@ -283,7 +283,7 @@ export default function AdminDongHocPhiModal({
     return Math.max(0, afterKmCombo - giamGiaVndApplied);
   }, [afterKmCombo, giamGiaVndApplied]);
 
-  /** Khi bật «QR thử micro» (mặc định `next dev`), số trên QR là 2k–2,3k ₫ — khác tổng đơn; xem `vietqr.ts`. */
+  /** Khi bật «QR thử micro» (`NEXT_PUBLIC_DHP_TEST_MICRO_QR=1`), số trên QR là 2k–2,3k ₫ — khác tổng đơn; xem `vietqr.ts`. */
   const qrPaymentResolved = useMemo(() => {
     if (!maDonSo.trim() || invoiceTotal <= 0) return null;
     return resolveQrPaymentAmounts(maDonSo, invoiceTotal);
@@ -871,15 +871,11 @@ export default function AdminDongHocPhiModal({
                       {qrPaymentResolved.isTestMicro ? (
                         <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left text-[11px] leading-snug text-amber-950">
                           <strong className="font-bold">Đang bật QR thử (micro):</strong> số trên mã QR cố định trong khoảng{" "}
-                          <span className="whitespace-nowrap font-semibold">2.000–2.300 ₫</span> theo mã SA để test chuyển khoản
-                          khi chạy local —{" "}
+                          <span className="whitespace-nowrap font-semibold">2.000–2.300 ₫</span> theo mã SA —{" "}
                           <span className="whitespace-nowrap font-semibold">không phải</span> tổng học phí trên đơn (
                           <span className="font-semibold tabular-nums">{fmtVnd(invoiceTotal)}</span>
-                          ). Production mặc định tắt. Để QR khớp tổng đơn trên dev: đặt{" "}
-                          <code className="rounded bg-amber-100/90 px-1 py-0.5 text-[10px]">
-                            NEXT_PUBLIC_DHP_TEST_MICRO_QR=0
-                          </code>{" "}
-                          rồi chạy lại server.
+                          ). Tắt hẳn: bỏ env <code className="rounded bg-amber-100/90 px-1 py-0.5 text-[10px]">NEXT_PUBLIC_DHP_TEST_MICRO_QR</code> hoặc đặt{" "}
+                          <code className="rounded bg-amber-100/90 px-1 py-0.5 text-[10px]">=0</code>, khởi động lại build.
                         </div>
                       ) : null}
                       <p className="m-0 text-center text-[11px] text-[#888]">

@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { GV_SYNC_COOKIE, signGvSessionToken } from "@/lib/phong-hoc/gv-session-cookie";
+import { HV_SYNC_COOKIE } from "@/lib/phong-hoc/hv-session-cookie";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -89,14 +90,23 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   const res = NextResponse.json({ ok: true });
+  const cookieBase = {
+    path: "/" as const,
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+  };
   res.cookies.set({
     name: GV_SYNC_COOKIE,
     value: token,
-    httpOnly: true,
-    path: "/",
+    ...cookieBase,
     maxAge: 60 * 60 * 24 * 14,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+  });
+  res.cookies.set({
+    name: HV_SYNC_COOKIE,
+    value: "",
+    ...cookieBase,
+    maxAge: 0,
   });
   return res;
 }

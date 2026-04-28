@@ -428,8 +428,8 @@ export default {
       let cfRes;
       try {
         cfRes = await fetch(
-          `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/images/v1`,
-          { method: "POST", headers: { Authorization: `Bearer ${env.CF_IMAGES_TOKEN}` }, body: cfForm }
+        `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/images/v1`,
+        { method: "POST", headers: { Authorization: `Bearer ${env.CF_IMAGES_TOKEN}` }, body: cfForm }
         );
       } catch (e) {
         return json(
@@ -546,7 +546,7 @@ export default {
           {
             ok: false,
             error: "Supabase trả body không phải JSON",
-            status: supaRes.status,
+        status: supaRes.status,
             preview: raw.slice(0, 200),
           },
           502
@@ -648,6 +648,47 @@ export default {
 // Messenger Agent — Claude + agent-context (KV binding "KV")
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Luôn có map URL ảnh môn thi (KV cache cũ có thể thiếu key sau khi thêm tính năng).
+ * API `/api/agent-context` có thể ghi đè từng URL (NEXT_PUBLIC_SITE_URL).
+ */
+function buildPriorAssistantMessenger(userText, session) {
+  if (
+    !/(?:ảnh|hình\s*ảnh|hình\s*minh|minh\s*họa|gửi.*ảnh|xin\s*ảnh|có\s*hình|co\s*hinh)/i.test(
+      String(userText || ""),
+    )
+  ) {
+    return "";
+  }
+  const h = session?.history || [];
+  const c = [];
+  for (const t of h) {
+    if (t.role === "assistant" && t.content) c.push(String(t.content));
+  }
+  if (!c.length) return "";
+  return c.slice(-4).join("\n\n");
+}
+
+function mergeDhMonThiSampleImageUrlsIntoContext(raw) {
+  const data = raw && typeof raw === "object" ? { ...raw } : {};
+  const origin = PAYMENT_BASE.replace(/\/$/, "");
+  const defaults = {
+    "Hình họa khối cơ bản": `${origin}/img/dh-mon-thi/hinh-hoa-khoi-co-ban.png`,
+    "Hình họa tĩnh vật": `${origin}/img/dh-mon-thi/hinh-hoa-tinh-vat.png`,
+    "Hình họa tượng tròn": `${origin}/img/dh-mon-thi/hinh-hoa-tuong-tron.png`,
+    "Hình họa chân dung": `${origin}/img/dh-mon-thi/hinh-hoa-chan-dung.png`,
+    "Hình họa toàn thân": `${origin}/img/dh-mon-thi/hinh-hoa-toan-than.png`,
+    "Trang trí màu": `${origin}/img/dh-mon-thi/trang-tri-mau.png`,
+    "Bố cục màu": `${origin}/img/dh-mon-thi/bo-cuc-mau.png`,
+  };
+  const ex =
+    data.dh_mon_thi_sample_image_urls && typeof data.dh_mon_thi_sample_image_urls === "object" ?
+      data.dh_mon_thi_sample_image_urls
+    : {};
+  data.dh_mon_thi_sample_image_urls = { ...defaults, ...ex };
+  return data;
+}
+
 async function processMessengerMessage({ sender_id, text }, env) {
   if (!env.KV) {
     console.error("Messenger: missing KV binding");
@@ -673,7 +714,15 @@ async function processMessengerMessage({ sender_id, text }, env) {
 
   const reply = await callClaude({ text, session, sender_id, ctx_data, env });
 
-  const extras = pickMatchedFaqAttachments(text, reply.text, ctx_data.faq ?? []);
+  const priorAssist = buildPriorAssistantMessenger(text, session);
+  const monImages = pickDhMonThiSampleImages(
+    text,
+    reply.text,
+    ctx_data.dh_mon_thi_sample_image_urls,
+    priorAssist,
+  );
+  const faqExtras = pickMatchedFaqAttachments(text, reply.text, ctx_data.faq ?? []);
+  const extras = mergeMessengerAttachmentExtras(faqExtras, monImages);
   let replyForUser = reply.text;
   if (extras?.images?.length) replyForUser = stripMatchedImageUrlsFromText(replyForUser, extras.images);
   if (extras?.links?.length) replyForUser = stripMatchedLinkUrlsFromText(replyForUser, extras.links);
@@ -716,7 +765,7 @@ async function processMessengerMessage({ sender_id, text }, env) {
 async function getAgentContext(env) {
   try {
     const c = await env.KV.get("agent_ctx");
-    if (c) return JSON.parse(c);
+    if (c) return mergeDhMonThiSampleImageUrlsIntoContext(JSON.parse(c));
   } catch {}
 
   for (const rawUrl of SITE_CONTEXT_URLS) {
@@ -729,7 +778,7 @@ async function getAgentContext(env) {
         headers: { Accept: "application/json" },
       });
       if (!res.ok) continue;
-      const data = await res.json();
+      const data = mergeDhMonThiSampleImageUrlsIntoContext(await res.json());
       console.log(`CTX: ${rawUrl} → ${data.faq?.length ?? 0} FAQ, ${data.available_classes?.length ?? 0} classes`);
       try {
         await env.KV.put("agent_ctx", JSON.stringify(data), { expirationTtl: 60 });
@@ -741,7 +790,13 @@ async function getAgentContext(env) {
   }
 
   console.error("No context available");
-  return { system_prompt: null, faq: [], available_classes: [], dh_exam_profiles: [] };
+  return mergeDhMonThiSampleImageUrlsIntoContext({
+    system_prompt: null,
+    faq: [],
+    available_classes: [],
+    dh_exam_profiles: [],
+    dh_mon_thi_sample_image_urls: {},
+  });
 }
 
 async function callClaude({ text, session, sender_id, ctx_data, env }) {
@@ -956,6 +1011,89 @@ function parseAttachmentsForPick(att) {
   return { images, links };
 }
 
+const DH_MON_THI_SAMPLE_ORDER = [
+  "Hình họa khối cơ bản",
+  "Hình họa tĩnh vật",
+  "Hình họa tượng tròn",
+  "Hình họa chân dung",
+  "Hình họa toàn thân",
+  "Trang trí màu",
+  "Bố cục màu",
+];
+
+function foldViWorker(s) {
+  return String(s || "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const EXAM_SUBJECT_INTENT_RE =
+  /(?:thi|đề)\s*môn|môn\s*(?:thi|nào|gì)|học\s*môn\s*gì|môn\s*nào|môn\s*gì|thi\s*những|đề\s*thi|thi\s*mấy\s*môn/i;
+
+const SHORT_NEEDLES_DH = [
+  ["hinh hoa khoi co ban", "Hình họa khối cơ bản"],
+  ["hinh hoa tinh vat", "Hình họa tĩnh vật"],
+  ["hinh hoa tuong tron", "Hình họa tượng tròn"],
+  ["hinh hoa chan dung", "Hình họa chân dung"],
+  ["hinh chan dung", "Hình họa chân dung"],
+  ["hinh hoa toan than", "Hình họa toàn thân"],
+  ["trang tri mau", "Trang trí màu"],
+  ["bo cuc mau", "Bố cục màu"],
+  ["khoi co ban", "Hình họa khối cơ bản"],
+  ["tinh vat", "Hình họa tĩnh vật"],
+  ["tuong tron", "Hình họa tượng tròn"],
+  ["chan dung", "Hình họa chân dung"],
+  ["toan than", "Hình họa toàn thân"],
+];
+
+function pickDhMonThiSampleImages(userText, replyText, urlMap, priorAssistant) {
+  if (!urlMap || typeof urlMap !== "object") return [];
+  const uFold = foldViWorker(userText);
+  const assistantBlock =
+    priorAssistant && String(priorAssistant).trim() ?
+      `${String(priorAssistant).trim()}\n\n${replyText || ""}`
+    : (replyText || "");
+  const aFold = foldViWorker(assistantBlock);
+  const combined = `${uFold} ${aFold}`;
+  const intent =
+    EXAM_SUBJECT_INTENT_RE.test(userText || "") ||
+    EXAM_SUBJECT_INTENT_RE.test(replyText || "") ||
+    (priorAssistant && EXAM_SUBJECT_INTENT_RE.test(String(priorAssistant)));
+  const found = new Set();
+
+  for (const mon of DH_MON_THI_SAMPLE_ORDER) {
+    if (combined.includes(foldViWorker(mon))) found.add(mon);
+  }
+  const hayUserShort = intent ? uFold : "";
+  for (const [needle, mon] of SHORT_NEEDLES_DH) {
+    if (found.has(mon)) continue;
+    if (aFold.includes(needle) || (hayUserShort && hayUserShort.includes(needle))) found.add(mon);
+  }
+
+  const out = [];
+  for (const mon of DH_MON_THI_SAMPLE_ORDER) {
+    if (!found.has(mon)) continue;
+    const url = urlMap[mon];
+    if (url && typeof url === "string" && url.trim()) out.push(url.trim());
+  }
+  return out;
+}
+
+function mergeMessengerAttachmentExtras(faqExtras, monImageUrls) {
+  const images = new Set();
+  const links = [];
+  if (faqExtras) {
+    for (const im of faqExtras.images || []) images.add(im);
+    for (const l of faqExtras.links || []) links.push(l);
+  }
+  for (const im of monImageUrls || []) images.add(im);
+  if (!images.size && !links.length) return null;
+  return { images: [...images], links };
+}
+
 function pickMatchedFaqAttachments(userText, replyText, faq) {
   const um = (userText || "").toLowerCase().trim();
   const ar = (replyText || "").toLowerCase();
@@ -1102,8 +1240,105 @@ function splitAgentReplyIntoChatParts(text, maxChunk = CHUNK_MAX) {
   return merged.length > 0 ? merged : [cleaned];
 }
 
-const ATTACHMENT_INVITE_BUBBLE =
-  "Mình gửi bạn thêm thông tin để bạn tham khảo nha, cần gì thì hỏi mình thêm!";
+function rollReplyBubbleCount() {
+  const r = Math.random();
+  if (r < 0.6) return 1;
+  if (r < 0.9) return 2;
+  return 3;
+}
+
+function mergeSegmentGroupsToCount(segments, n) {
+  let a = segments.map((s) => String(s).trim()).filter(Boolean);
+  if (a.length === 0) return ["…"];
+  while (a.length > n) {
+    let bestI = 0;
+    let bestSum = Infinity;
+    for (let i = 0; i < a.length - 1; i++) {
+      const sum = a[i].length + a[i + 1].length;
+      if (sum < bestSum) {
+        bestSum = sum;
+        bestI = i;
+      }
+    }
+    a.splice(bestI, 2, `${a[bestI]}\n\n${a[bestI + 1]}`.trim());
+  }
+  return a;
+}
+
+function splitLongestAtSentence(text) {
+  const t = String(text).trim();
+  if (t.length < 80) return null;
+  const mid = Math.floor(t.length / 2);
+  for (let i = mid; i < t.length - 15; i++) {
+    const ch = t[i];
+    if (/[.!?…]/.test(ch) && /\s/.test(t[i + 1] || "")) {
+      let j = i + 1;
+      while (j < t.length && /\s/.test(t[j])) j++;
+      if (j > 20 && t.length - j > 20) return [t.slice(0, j).trim(), t.slice(j).trim()];
+    }
+  }
+  for (let i = mid; i > 15; i--) {
+    const ch = t[i];
+    if (/[.!?…]/.test(ch) && /\s/.test(t[i + 1] || "")) {
+      let j = i + 1;
+      while (j < t.length && /\s/.test(t[j])) j++;
+      if (j > 20 && t.length - j > 20) return [t.slice(0, j).trim(), t.slice(j).trim()];
+    }
+  }
+  const sp = t.indexOf(" ", mid);
+  if (sp > 20 && t.length - sp - 1 > 20) return [t.slice(0, sp).trim(), t.slice(sp + 1).trim()];
+  return null;
+}
+
+function partitionRoughlyN(t, n) {
+  const s = String(t).trim();
+  if (!s) return ["…"];
+  if (n <= 1) return [s];
+  const len = s.length;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor((len * i) / n);
+    const b = i === n - 1 ? len : Math.floor((len * (i + 1)) / n);
+    const slice = s.slice(a, b).trim();
+    if (slice) out.push(slice);
+  }
+  return out.length ? out : [s];
+}
+
+function expandToCount(parts, n) {
+  let a = [...parts];
+  while (a.length < n && a.length > 0) {
+    let longest = 0;
+    let len = -1;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].length > len) {
+        len = a[i].length;
+        longest = i;
+      }
+    }
+    const sp = splitLongestAtSentence(a[longest]);
+    if (!sp) break;
+    a.splice(longest, 1, sp[0], sp[1]);
+  }
+  return a;
+}
+
+function splitAgentReplyIntoRandomChatParts(text, maxChunk = CHUNK_MAX) {
+  const cleaned = String(text || "").trim();
+  if (!cleaned) return ["…"];
+
+  let targetN = rollReplyBubbleCount();
+  if (cleaned.length < 96) targetN = 1;
+
+  const segments = splitAgentReplyIntoChatParts(cleaned, maxChunk);
+  if (targetN === 1) return [segments.join("\n\n").trim() || "…"];
+
+  if (segments.length >= targetN) return mergeSegmentGroupsToCount(segments, targetN);
+
+  let merged = expandToCount(segments, targetN);
+  if (merged.length < targetN) merged = partitionRoughlyN(cleaned, targetN);
+  return merged.length ? merged : [cleaned];
+}
 
 const REFERENCE_TAIL_PARA =
   /xem\s+(thêm\s+)?(chi\s+tiết|thông\s+tin)|tại\s+đây\b|tham\s+khảo\s+tại|lịch\s+học\s+tại|https?:\/\/|đường\s+dẫn/i;
@@ -1132,7 +1367,7 @@ function buildReplyPartsForChat(text, attachments) {
     ((attachments.images || []).length > 0 || (attachments.links || []).length > 0);
 
   if (!hasAtt) {
-    return splitAgentReplyIntoChatParts(cleaned);
+    return splitAgentReplyIntoRandomChatParts(cleaned);
   }
 
   const paras = cleaned.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
@@ -1164,13 +1399,11 @@ function buildReplyPartsForChat(text, attachments) {
   }
 
   const trimmedCore = coreText.trim() || cleaned;
-  const coreChunks = splitAgentReplyIntoChatParts(trimmedCore);
-
-  return [...coreChunks, ATTACHMENT_INVITE_BUBBLE];
+  return splitAgentReplyIntoRandomChatParts(trimmedCore);
 }
 
 async function sendMessengerExtras(recipient_id, extras, env) {
-  const images = (extras.images || []).slice(0, 6);
+  const images = (extras.images || []).slice(0, 10);
   const links = extras.links || [];
   const results = [];
   for (const url of images) {
@@ -1189,7 +1422,16 @@ async function sendMessengerExtras(recipient_id, extras, env) {
         },
       }),
     });
-    results.push(await res.json());
+    const body = await res.json();
+    results.push(body);
+    if (!res.ok || body.error) {
+      console.error(
+        "Messenger image attachment failed:",
+        res.status,
+        url,
+        JSON.stringify(body.error ?? body),
+      );
+    }
     await new Promise((r) => setTimeout(r, 120));
   }
   if (links.length) {

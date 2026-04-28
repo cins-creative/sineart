@@ -8,6 +8,11 @@ import {
 } from "@/app/admin/agent/knowledge-attachments";
 import type { DhExamProfileRow } from "@/lib/agent/dh-exam-profiles";
 import {
+  buildPriorAssistantContextForMonMatch,
+  mergePickedFaqExtras,
+  pickDhMonThiSampleImageAttachments,
+} from "@/lib/agent/dh-mon-thi-sample-images";
+import {
   buildReplyPartsForChat,
   stripMarkdownBold,
 } from "@/lib/agent/reply-format";
@@ -29,6 +34,8 @@ type AgentContextPayload = {
     attachments?: unknown;
   }[];
   dh_exam_profiles?: DhExamProfileRow[];
+  /** Map tên môn (đúng chuỗi DB) → URL ảnh mẫu. */
+  dh_mon_thi_sample_image_urls?: Record<string, string>;
   available_classes?: unknown[];
 };
 
@@ -152,7 +159,16 @@ export async function POST(req: Request): Promise<NextResponse> {
       .join("\n")
       .trim() || "…";
 
-  const attachments = pickMatchedFaqAttachments(message, reply, ctxData.faq ?? []);
+  const priorAssist = buildPriorAssistantContextForMonMatch(message, turns);
+  const attachments = mergePickedFaqExtras(
+    pickMatchedFaqAttachments(message, reply, ctxData.faq ?? []),
+    pickDhMonThiSampleImageAttachments(
+      message,
+      reply,
+      ctxData.dh_mon_thi_sample_image_urls,
+      priorAssist,
+    ),
+  );
 
   let replyOut = reply;
   if (attachments?.images?.length) {

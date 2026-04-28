@@ -16,6 +16,7 @@ import {
   CLASSROOM_SESSION_CHANGED_EVENT,
   CLASSROOM_SESSION_STORAGE_KEY,
   parseClassroomSession,
+  syncPhongHocCookiesWithStorage,
 } from "@/lib/phong-hoc/classroom-session";
 import ClassroomSignInOverlay from "./ClassroomSignInOverlay";
 
@@ -342,15 +343,19 @@ export default function NavBar({
   const reducedMotion = useReducedMotion();
 
   useEffect(() => {
-    const sync = () => setStudentSession(readNavStudentSession());
-    sync();
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === CLASSROOM_SESSION_STORAGE_KEY || e.key === null) sync();
+    const readUi = () => setStudentSession(readNavStudentSession());
+    readUi();
+    const onSessionChanged = () => {
+      void syncPhongHocCookiesWithStorage();
+      readUi();
     };
-    window.addEventListener(CLASSROOM_SESSION_CHANGED_EVENT, sync);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === CLASSROOM_SESSION_STORAGE_KEY || e.key === null) onSessionChanged();
+    };
+    window.addEventListener(CLASSROOM_SESSION_CHANGED_EVENT, onSessionChanged);
     window.addEventListener("storage", onStorage);
     return () => {
-      window.removeEventListener(CLASSROOM_SESSION_CHANGED_EVENT, sync);
+      window.removeEventListener(CLASSROOM_SESSION_CHANGED_EVENT, onSessionChanged);
       window.removeEventListener("storage", onStorage);
     };
   }, []);

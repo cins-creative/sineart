@@ -4,6 +4,7 @@
  */
 
 import {
+  AGENT_CONSULT_HREF,
   DASHBOARD_OVERVIEW_HREF,
   HREFS_DIEU_HANH_ALL,
   HREFS_MARKETING_ALL,
@@ -118,6 +119,11 @@ export function resolveDashboardNavAccess(
   const onlyDaoTao = rules.length > 0 && rules.every((r) => r === "dao_tao_phong");
 
   if (onlyDaoTao) {
+    if ((staffRole ?? "").trim().toLowerCase() === "tu_van") {
+      return {
+        allowedHrefs: new Set([DASHBOARD_OVERVIEW_HREF, ORDER_MEDIA_HREF, AGENT_CONSULT_HREF]),
+      };
+    }
     return { allowedHrefs: new Set([DASHBOARD_OVERVIEW_HREF, ORDER_MEDIA_HREF]) };
   }
 
@@ -135,6 +141,9 @@ export function resolveDashboardNavAccess(
 
   union.add(DASHBOARD_OVERVIEW_HREF);
   union.add(ORDER_MEDIA_HREF);
+  if ((staffRole ?? "").trim().toLowerCase() === "tu_van") {
+    union.add(AGENT_CONSULT_HREF);
+  }
   return { allowedHrefs: union };
 }
 

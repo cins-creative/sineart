@@ -31,6 +31,7 @@ import {
   type WhyContent,
   type WhyPillar,
 } from "@/lib/admin/home-content-schema";
+import { parseYoutubeVideoId } from "@/lib/youtube";
 
 type Props = {
   initialContent: HomeContent;
@@ -606,8 +607,8 @@ function VideoSection({
         <div>
           <h2 className="qlh-section-title">URL video</h2>
           <p className="qlh-section-sub">
-            2 tab video giới thiệu — Online và Offline. Dán YouTube ID (phần
-            sau <code>v=</code>).
+            2 tab video giới thiệu — Online và Offline. Dán link YouTube hoặc
+            ID (phần sau <code>v=</code>).
           </p>
         </div>
       </header>
@@ -672,13 +673,23 @@ function VideoTabCard({
         />
       </label>
       <label className="qlh-field">
-        <span className="qlh-field-label">YouTube ID</span>
+        <span className="qlh-field-label">YouTube (ID hoặc link)</span>
         <input
           type="text"
           className="qlh-field-input"
           value={data.youtubeId}
-          onChange={(e) => onChange({ ...data, youtubeId: e.target.value })}
-          placeholder="6LKT_E8XGu0"
+          onChange={(e) => {
+            const v = e.target.value;
+            const next =
+              /https?:\/\/|youtu\.be\//i.test(v) || /watch\?v=/i.test(v)
+                ? parseYoutubeVideoId(v)
+                : v;
+            onChange({ ...data, youtubeId: next });
+          }}
+          onBlur={(e) =>
+            onChange({ ...data, youtubeId: parseYoutubeVideoId(e.target.value) })
+          }
+          placeholder="https://www.youtube.com/watch?v=6LKT_E8XGu0 hoặc 6LKT_E8XGu0"
         />
       </label>
     </div>

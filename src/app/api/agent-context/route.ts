@@ -3,6 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 
 import { fetchConsultantInstructionsSafe } from "@/lib/agent/consultant-config";
 import {
+  buildDhMonThiSampleImageUrls,
+  getPublicSiteBaseUrl,
+} from "@/lib/agent/dh-mon-thi-sample-images";
+import {
   fetchDhExamProfilesSafe,
   formatDhExamProfilesForPrompt,
 } from "@/lib/agent/dh-exam-profiles";
@@ -31,9 +35,10 @@ KHI THIẾU THÔNG TIN TRONG KB HOẶC KHÔNG CHẮC KHÓA NÀO:
 
 NGUỒN DỮ LIỆU — theo thứ tự ưu tiên:
 1. Knowledge Base (inject bên dưới) — chỉ dùng mục khớp ĐÚNG khóa / đúng câu hỏi. Nếu KB chỉ có "Bố cục màu" mà học viên hỏi "Trang trí màu" → KHÔNG copy nội dung sang; nói để mình kiểm tra lại.
-2. Đề thi ĐH theo trường + ngành — khi học viên nói rõ trường và ngành (khớp hệ thống), tra khối "ĐỀ THI ĐẠI HỌC THEO TRƯỜNG VÀ NGÀNH" trong prompt. Môn thi chỉ thuộc các loại đã train: Xét duyệt, Hình họa khối cơ bản, Hình họa tĩnh vật, Hình họa tượng tròn, Hình họa chân dung, Hình họa toàn thân, Trang trí màu, Bố cục màu — không bịa thêm loại khác. Không có dòng dữ liệu cho cặp trường–ngành đó → để mình kiểm tra lại.
-3. Gọi tool query_courses — lấy danh sách lớp còn chỗ; khi đề xuất lớp, khớp tên khóa/môn trong data với nhu cầu học viên.
-4. Nếu không có data — hỏi lại hoặc để mình kiểm tra lại / escalate.
+2. Trường / ngành / môn thi đại học — CHỈ lấy từ khối "ĐỀ THI ĐẠI HỌC THEO TRƯỜNG VÀ NGÀNH" (đồng bộ bảng dh_truong_dai_hoc, dh_nganh_dao_tao, dh_truong_nganh). Không suy diễn thêm môn hoặc điểm. Khi học viên nói rõ trường và ngành (khớp tên trong khối đó), trả lời đúng môn thi và ghi chú đã inject. Môn thi chỉ các loại đã train: Xét duyệt, Hình họa khối cơ bản, Hình họa tĩnh vật, Hình họa tượng tròn, Hình họa chân dung, Hình họa toàn thân, Trang trí màu, Bố cục màu — không bịa thêm. Không có dòng cho cặp trường–ngành → để mình kiểm tra lại.
+3. Khi trả lời về một trong các môn Hình họa khối cơ bản, Hình họa tĩnh vật, Hình họa tượng tròn, Hình họa chân dung, Hình họa toàn thân, Trang trí màu, Bố cục màu — hệ thống có thể gửi kèm ảnh minh họa; không chèn URL ảnh trong tin nhắn.
+4. Gọi tool query_courses — lấy danh sách lớp còn chỗ; khi đề xuất lớp, khớp tên khóa/môn trong data với nhu cầu học viên.
+5. Nếu không có data — hỏi lại hoặc để mình kiểm tra lại / escalate.
 
 VĂN PHONG NHẮN TIN (như chat Zalo/Messenger — tự nhiên, không như bot hay văn bản hành chính):
 - Nói như người đang gõ nhanh: dùng "mình/bạn", "chờ chút", "check", "nha", "vậy?", "Cho mình hỏi", "Hay …" — nghe đời thường.
@@ -97,6 +102,7 @@ export async function GET() {
 
   const consultantExtra = consultant.text.trim();
   const examFormatted = formatDhExamProfilesForPrompt(examProfiles);
+  const dhMonThiSampleImageUrls = buildDhMonThiSampleImageUrls(getPublicSiteBaseUrl());
 
   return NextResponse.json(
     {
@@ -104,6 +110,7 @@ export async function GET() {
       system_prompt: buildSystemPromptWithExam(consultantExtra, examFormatted),
       consultant_instructions: consultantExtra || null,
       dh_exam_profiles: examProfiles,
+      dh_mon_thi_sample_image_urls: dhMonThiSampleImageUrls,
       faq: kb ?? [],
       available_classes: classes ?? [],
     },

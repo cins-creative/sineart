@@ -11,6 +11,14 @@ export function stripMarkdownBold(text: string): string {
 
 const DEFAULT_MAX_CHUNK = 300;
 
+/** 60% → 1 tin, 30% → 2 tin, 10% → 3 tin (mỗi lần gọi độc lập). */
+export function rollReplyBubbleCount(): 1 | 2 | 3 {
+  const r = Math.random();
+  if (r < 0.6) return 1;
+  if (r < 0.9) return 2;
+  return 3;
+}
+
 /**
  * Tách một phản hồi dài thành vài “tin” ngắn (đoạn + giới hạn độ dài) giống chat tay.
  */
@@ -60,9 +68,121 @@ export function splitAgentReplyIntoChatParts(
   return merged.length > 0 ? merged : [cleaned];
 }
 
-/** Bubble thứ hai khi có ảnh/link đính kèm từ KB — ảnh và link hiển thị ngay dưới bubble này trong UI. */
-export const ATTACHMENT_INVITE_BUBBLE =
-  "Mình gửi bạn thêm thông tin để bạn tham khảo nha, cần gì thì hỏi mình thêm!";
+/**
+ * Gộp các đoạn liền kề cho đến khi còn đúng `n` phần (ưu tiên gộp cặp liền kề có tổng độ dài nhỏ nhất).
+ */
+function mergeSegmentGroupsToCount(segments: string[], n: number): string[] {
+  if (n <= 0) return [segments.join("\n\n").trim() || "…"];
+  let a = segments.map((s) => s.trim()).filter(Boolean);
+  if (a.length === 0) return ["…"];
+  while (a.length > n) {
+    let bestI = 0;
+    let bestSum = Infinity;
+    for (let i = 0; i < a.length - 1; i++) {
+      const sum = a[i].length + a[i + 1].length;
+      if (sum < bestSum) {
+        bestSum = sum;
+        bestI = i;
+      }
+    }
+    a.splice(bestI, 2, `${a[bestI]}\n\n${a[bestI + 1]}`.trim());
+  }
+  return a;
+}
+
+function splitLongestAtSentence(text: string): [string, string] | null {
+  const t = text.trim();
+  if (t.length < 80) return null;
+  const mid = Math.floor(t.length / 2);
+  for (let i = mid; i < t.length - 15; i++) {
+    const ch = t[i]!;
+    if (/[.!?…]/.test(ch) && /\s/.test(t[i + 1] ?? "")) {
+      let j = i + 1;
+      while (j < t.length && /\s/.test(t[j]!)) j++;
+      if (j > 20 && t.length - j > 20) {
+        return [t.slice(0, j).trim(), t.slice(j).trim()];
+      }
+    }
+  }
+  for (let i = mid; i > 15; i--) {
+    const ch = t[i]!;
+    if (/[.!?…]/.test(ch) && /\s/.test(t[i + 1] ?? "")) {
+      let j = i + 1;
+      while (j < t.length && /\s/.test(t[j]!)) j++;
+      if (j > 20 && t.length - j > 20) {
+        return [t.slice(0, j).trim(), t.slice(j).trim()];
+      }
+    }
+  }
+  const sp = t.indexOf(" ", mid);
+  if (sp > 20 && t.length - sp - 1 > 20) {
+    return [t.slice(0, sp).trim(), t.slice(sp + 1).trim()];
+  }
+  return null;
+}
+
+/** Chia đều theo độ dài khi không đủ ranh giới câu. */
+function partitionRoughlyN(t: string, n: number): string[] {
+  const s = t.trim();
+  if (!s) return ["…"];
+  if (n <= 1) return [s];
+  const len = s.length;
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor((len * i) / n);
+    const b = i === n - 1 ? len : Math.floor((len * (i + 1)) / n);
+    const slice = s.slice(a, b).trim();
+    if (slice) out.push(slice);
+  }
+  return out.length ? out : [s];
+}
+
+function expandToCount(parts: string[], n: number): string[] {
+  let a = [...parts];
+  while (a.length < n && a.length > 0) {
+    let longest = 0;
+    let len = -1;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].length > len) {
+        len = a[i].length;
+        longest = i;
+      }
+    }
+    const sp = splitLongestAtSentence(a[longest]);
+    if (!sp) break;
+    a.splice(longest, 1, sp[0], sp[1]);
+  }
+  return a;
+}
+
+/**
+ * Giống tin nhắn tay: mỗi lần trả lời ngẫu nhiên 1–3 tin (60% / 30% / 10%).
+ */
+export function splitAgentReplyIntoRandomChatParts(
+  text: string,
+  maxChunk = DEFAULT_MAX_CHUNK,
+): string[] {
+  const cleaned = text.trim();
+  if (!cleaned) return ["…"];
+
+  let targetN = rollReplyBubbleCount();
+  if (cleaned.length < 96) targetN = 1;
+
+  const segments = splitAgentReplyIntoChatParts(cleaned, maxChunk);
+  if (targetN === 1) {
+    return [segments.join("\n\n").trim() || "…"];
+  }
+
+  if (segments.length >= targetN) {
+    return mergeSegmentGroupsToCount(segments, targetN);
+  }
+
+  let merged = expandToCount(segments, targetN);
+  if (merged.length < targetN) {
+    merged = partitionRoughlyN(cleaned, targetN);
+  }
+  return merged.length ? merged : [cleaned];
+}
 
 const REFERENCE_TAIL_PARA =
   /xem\s+(thêm\s+)?(chi\s+tiết|thông\s+tin)|tại\s+đây\b|tham\s+khảo\s+tại|lịch\s+học\s+tại|https?:\/\/|đường\s+dẫn/i;
@@ -89,8 +209,7 @@ type ChatAttachmentHint = {
 };
 
 /**
- * Có đính kèm KB: bubble 1 = chỉ phần trả lời chính; bubble 2 = câu mời cố định (ảnh + link render ở UI/Messenger sau).
- * Không đính kèm: giữ cách tách đoạn/câu như `splitAgentReplyIntoChatParts`.
+ * Tách nội dung chat thành 1–3 tin ngẫu nhiên. Ảnh/link đính kèm render riêng trong UI — không thêm bubble cố định để tránh luôn thành 2 tin.
  */
 export function buildReplyPartsForChat(
   text: string,
@@ -105,7 +224,7 @@ export function buildReplyPartsForChat(
       (attachments.links?.length ?? 0) > 0);
 
   if (!hasAtt) {
-    return splitAgentReplyIntoChatParts(cleaned);
+    return splitAgentReplyIntoRandomChatParts(cleaned);
   }
 
   const paras = cleaned.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
@@ -138,7 +257,5 @@ export function buildReplyPartsForChat(
   }
 
   const trimmedCore = coreText.trim() || cleaned;
-  const coreChunks = splitAgentReplyIntoChatParts(trimmedCore);
-
-  return [...coreChunks, ATTACHMENT_INVITE_BUBBLE];
+  return splitAgentReplyIntoRandomChatParts(trimmedCore);
 }

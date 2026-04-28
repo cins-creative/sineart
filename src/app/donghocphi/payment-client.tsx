@@ -30,6 +30,12 @@ import {
 } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 import { isHocPhiCapTocSpecial } from "@/lib/hocPhiDedupe";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import {
+  type DhpStoredClassPickV1,
+  readDhpStoredPickRaw,
+  writeDhpClassPickToStorage,
+  clearDhpClassPickStorage,
+} from "@/lib/donghocphi/class-pick-storage";
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
@@ -38,69 +44,6 @@ const HP_CHO_THANH_TOAN = "Chờ thanh toán";
 const HP_DA_THANH_TOAN = "Đã thanh toán";
 
 const POLL_INTERVAL_MS = 3000;
-
-/** Lưu lớp đã chọn theo email — reload không bị ghi đè bởi danh sách ghi danh đầy đủ từ server. */
-const DHP_CLASS_PICK_STORAGE_KEY = "sineart.dhp.classPick.v1";
-
-type DhpStoredClassPickV1 = {
-  v: 1;
-  emailNorm: string;
-  classIds: number[];
-  feeByClassId: Record<string, number>;
-  skipRenewalByClassId?: Record<string, boolean>;
-};
-
-function readDhpStoredPickRaw(): DhpStoredClassPickV1 | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(DHP_CLASS_PICK_STORAGE_KEY);
-    if (!raw) return null;
-    const j = JSON.parse(raw) as DhpStoredClassPickV1;
-    if (j.v !== 1 || typeof j.emailNorm !== "string" || !Array.isArray(j.classIds)) return null;
-    return j;
-  } catch {
-    return null;
-  }
-}
-
-function writeDhpClassPickToStorage(
-  emailNorm: string,
-  selectedClassIds: number[],
-  feeByClassId: Record<number, number>,
-  skipRenewalByClassId: Record<number, boolean>
-): void {
-  if (typeof window === "undefined") return;
-  try {
-    const feeStr: Record<string, number> = {};
-    for (const id of selectedClassIds) {
-      const v = feeByClassId[id];
-      if (v != null) feeStr[String(id)] = v;
-    }
-    const skipStr: Record<string, boolean> = {};
-    for (const id of selectedClassIds) {
-      if (skipRenewalByClassId[id]) skipStr[String(id)] = true;
-    }
-    const payload: DhpStoredClassPickV1 = {
-      v: 1,
-      emailNorm,
-      classIds: selectedClassIds,
-      feeByClassId: feeStr,
-      skipRenewalByClassId: Object.keys(skipStr).length ? skipStr : undefined,
-    };
-    localStorage.setItem(DHP_CLASS_PICK_STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    /* quota / private mode */
-  }
-}
-
-function clearDhpClassPickStorage(): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.removeItem(DHP_CLASS_PICK_STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
-}
 
 /** Tránh `[]` literal trong default param — gây deps useMemo đổi mỗi render */
 const NO_ENROLLED_CLASS_IDS: number[] = [];
@@ -186,7 +129,9 @@ function materializeStoredClassPick(
   skipRenewalByClassId: Record<number, boolean>;
 } {
   const validLop = new Set(lopHoc.map((c) => c.id));
-  const classIds = stored.classIds.filter((id) => Number.isFinite(id) && validLop.has(id));
+  const classIds = stored.classIds.filter(
+    (id: number) => Number.isFinite(id) && validLop.has(id),
+  );
 
   const feeByClassId: Record<number, number> = {};
   for (const id of classIds) {

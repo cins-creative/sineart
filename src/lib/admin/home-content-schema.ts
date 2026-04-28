@@ -10,6 +10,8 @@
  * khi chưa kết nối CMS.
  */
 
+import { parseYoutubeVideoId } from "@/lib/youtube";
+
 // ── Blocks ────────────────────────────────────────────────────────────────────
 
 export type CtaLink = {
@@ -498,7 +500,7 @@ function mergeVideoTab(
   return {
     label: str(o.label, d.label),
     desc: str(o.desc, d.desc),
-    youtubeId: str(o.youtubeId, d.youtubeId),
+    youtubeId: parseYoutubeVideoId(str(o.youtubeId, d.youtubeId)),
   };
 }
 

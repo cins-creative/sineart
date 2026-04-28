@@ -86,12 +86,14 @@ const VAI_TRO_LABEL: Record<string, string> = {
   admin: "Admin",
   quan_ly: "Quản lý",
   nhan_vien: "Nhân viên",
+  tu_van: "Tư vấn (Agent)",
 };
 
 const VAI_TRO_PILL: Record<string, { bg: string; text: string; border: string }> = {
   admin: { bg: "bg-[#EEF3FF]", text: "text-[#3B5BDB]", border: "border-[#BAC8FF]" },
   quan_ly: { bg: "bg-[#FFF7E6]", text: "text-[#B76E00]", border: "border-[#FFD88A]" },
   nhan_vien: { bg: "bg-[#F5F7F7]", text: "text-[#888888]", border: "border-[#EAEAEA]" },
+  tu_van: { bg: "bg-[#F3E8FF]", text: "text-[#7B2CBF]", border: "border-[#D3B3F0]" },
 };
 
 const STATUS_PILL: Record<string, { bg: string; text: string; border: string }> = {
@@ -213,6 +215,7 @@ function vaiTroNormKey(raw: string | null): keyof typeof VAI_TRO_LABEL | "other"
   const s = (raw ?? "").trim().toLowerCase();
   if (s === "admin") return "admin";
   if (s === "quan_ly" || s === "quản lý" || s === "quan ly") return "quan_ly";
+  if (s === "tu_van" || s === "tư vấn" || s === "tu van") return "tu_van";
   if (s === "nhan_vien" || s === "nhân viên" || s === "nhan vien") return "nhan_vien";
   if (!s) return "nhan_vien";
   return "other";
@@ -631,6 +634,7 @@ function vaiTroForForm(raw: string | null): string {
   const k = vaiTroNormKey(raw);
   if (k === "admin") return "admin";
   if (k === "quan_ly") return "quan_ly";
+  if (k === "tu_van") return "tu_van";
   return "nhan_vien";
 }
 
@@ -938,6 +942,7 @@ const StaffDetailInfoTab = forwardRef<
             onChange={(e) => setDraft((d) => ({ ...d, vai_tro: e.target.value }))}
           >
             <option value="nhan_vien">Nhân viên</option>
+            <option value="tu_van">Tư vấn (Agent)</option>
             <option value="quan_ly">Quản lý</option>
             <option value="admin">Admin</option>
           </select>
@@ -1367,6 +1372,7 @@ function StaffCreateModal({
           <FieldRow label="Vai trò">
             <select className={cn(inpEdit, "bg-white")} value={vaiTro} onChange={(e) => setVaiTro(e.target.value)}>
               <option value="nhan_vien">Nhân viên</option>
+              <option value="tu_van">Tư vấn (Agent)</option>
               <option value="quan_ly">Quản lý</option>
               <option value="admin">Admin</option>
             </select>

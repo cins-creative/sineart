@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
+  ChevronRight,
   Link2,
   Plus,
   Trash2,
@@ -332,6 +333,7 @@ export default function AgentConsultView({
 
   const [consultantDraft, setConsultantDraft] = useState(initialConsultantInstructions);
   const [consultantSaving, setConsultantSaving] = useState(false);
+  const [consultantPanelOpen, setConsultantPanelOpen] = useState(false);
   useEffect(() => {
     setConsultantDraft(initialConsultantInstructions);
   }, [initialConsultantInstructions]);
@@ -728,21 +730,28 @@ export default function AgentConsultView({
             aria-labelledby="consultant-instructions-heading"
             className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-sm"
           >
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-              <div>
+            <div className="mb-0 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setConsultantPanelOpen((o) => !o)}
+                aria-expanded={consultantPanelOpen}
+                aria-controls="consultant-instructions-editor"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none ring-[#BC8AF9]/35 hover:bg-black/[0.03] focus-visible:ring-2"
+              >
+                <ChevronRight
+                  className={cn(
+                    "h-4 w-4 shrink-0 text-black/45 transition-transform duration-200",
+                    consultantPanelOpen && "rotate-90",
+                  )}
+                  aria-hidden
+                />
                 <h2
                   id="consultant-instructions-heading"
                   className="text-[15px] font-bold text-black/85"
                 >
-                  Hướng dẫn thêm cho Agent (tư vấn viên)
+                  Đưa yêu cầu phổ quát cho Agent
                 </h2>
-                <p className="mt-1 max-w-3xl text-[12px] leading-snug text-black/45">
-                  Nội dung được ghép sau prompt hệ thống (định nghĩa khóa, quy trình tư vấn…). Áp dụng cho chat thử và
-                  Messenger. Nếu bảng{" "}
-                  <code className="rounded bg-black/[0.06] px-1 font-mono text-[11px]">ag_agent_config</code> chưa có trên
-                  Supabase, chạy migration trong repo rồi lưu lại.
-                </p>
-              </div>
+              </button>
               <button
                 type="button"
                 onClick={() => void saveConsultantInstructions()}
@@ -752,17 +761,21 @@ export default function AgentConsultView({
                 {consultantSaving ? "Đang lưu…" : "Lưu"}
               </button>
             </div>
-            <textarea
-              value={consultantDraft}
-              onChange={(e) => setConsultantDraft(e.target.value)}
-              rows={12}
-              spellCheck={false}
-              placeholder="Ví dụ: nhắc lại định nghĩa khóa Trang trí màu vs Bố cục màu; checklist chào → trường/ngành → năm thi → Online/Offline…"
-              className="w-full resize-y rounded-xl border border-black/[0.1] bg-black/[0.02] px-3 py-2.5 font-mono text-[13px] leading-relaxed text-black/85 outline-none ring-[#BC8AF9]/35 placeholder:text-black/35 focus:border-[#BC8AF9]/45 focus:ring-2"
-            />
-            <p className="mt-2 text-[11px] text-black/40">
-              {formatConsultantUpdatedVi(consultantInstructionsUpdatedAt)}
-            </p>
+            {consultantPanelOpen ? (
+              <div className="mt-3" id="consultant-instructions-editor">
+                <textarea
+                  value={consultantDraft}
+                  onChange={(e) => setConsultantDraft(e.target.value)}
+                  rows={12}
+                  spellCheck={false}
+                  placeholder="Ví dụ: nhắc lại định nghĩa khóa Trang trí màu vs Bố cục màu; checklist chào → trường/ngành → năm thi → Online/Offline…"
+                  className="w-full resize-y rounded-xl border border-black/[0.1] bg-black/[0.02] px-3 py-2.5 font-mono text-[13px] leading-relaxed text-black/85 outline-none ring-[#BC8AF9]/35 placeholder:text-black/35 focus:border-[#BC8AF9]/45 focus:ring-2"
+                />
+                <p className="mt-2 text-[11px] text-black/40">
+                  {formatConsultantUpdatedVi(consultantInstructionsUpdatedAt)}
+                </p>
+              </div>
+            ) : null}
           </section>
 
           <section aria-labelledby="agent-chat-heading">

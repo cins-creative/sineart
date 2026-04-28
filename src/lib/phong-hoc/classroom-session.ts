@@ -1,3 +1,8 @@
+import {
+  clearDhpClassPickStorage,
+  invalidateClassPickUnlessMatches,
+} from "@/lib/donghocphi/class-pick-storage";
+
 /** Khớp key trong prototype Framer — dùng chung NavBar + Phòng học */
 
 export const CLASSROOM_SESSION_STORAGE_KEY = "sine_art_session";
@@ -104,6 +109,13 @@ export function saveClassroomSession(record: ClassroomSessionRecord): void {
   try {
     localStorage.setItem(CLASSROOM_SESSION_STORAGE_KEY, JSON.stringify(record));
     emitClassroomSessionChanged();
+    if (record.userType === "Student") {
+      const em = String(record.data.email ?? "").trim().toLowerCase();
+      invalidateClassPickUnlessMatches(em.includes("@") ? em : null);
+    } else {
+      invalidateClassPickUnlessMatches(null);
+    }
+    void syncPhongHocCookiesWithStorage();
   } catch {
     /* quota / private mode */
   }
@@ -114,6 +126,57 @@ export function clearClassroomSession(): void {
   try {
     localStorage.removeItem(CLASSROOM_SESSION_STORAGE_KEY);
     emitClassroomSessionChanged();
+    clearDhpClassPickStorage();
+    void fetch("/api/phong-hoc/clear-sync-cookies", {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => {
+      /* offline */
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Đồng bộ cookie httpOnly `sine_hv_sync` / `sine_gv_sync` với `sine_art_session` — SSR (vd. `/he-thong-bai-tap`)
+ * không đọc được `localStorage`. Gọi sau khi ghi session, hoặc khi mount trang cần cookie.
+ */
+export async function syncPhongHocCookiesWithStorage(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem(CLASSROOM_SESSION_STORAGE_KEY);
+    const s = parseClassroomSession(raw);
+    if (s?.userType === "Student") {
+      const qlhv_id = s.data.qlhv_id;
+      const lop_hoc_id = s.data.lop_hoc_id;
+      if (Number.isFinite(qlhv_id) && Number.isFinite(lop_hoc_id)) {
+        await fetch("/api/phong-hoc/sync-hv-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ qlhv_id, lop_hoc_id }),
+          credentials: "include",
+        });
+        return;
+      }
+    }
+    if (s?.userType === "Teacher") {
+      const hr_id = s.data.id;
+      const lop_hoc_id = s.data.lop_hoc_id;
+      if (Number.isFinite(hr_id) && Number.isFinite(lop_hoc_id)) {
+        await fetch("/api/phong-hoc/sync-gv-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hr_id, lop_hoc_id }),
+          credentials: "include",
+        });
+        return;
+      }
+    }
+    await fetch("/api/phong-hoc/clear-sync-cookies", {
+      method: "POST",
+      credentials: "include",
+    });
   } catch {
     /* ignore */
   }

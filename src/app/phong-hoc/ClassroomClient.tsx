@@ -1141,23 +1141,64 @@ export default function ClassroomClient({
   const saveGoogleMeetUrl = useCallback(async () => {
     const url = gmeetInput.trim();
     if (!url || !Number.isFinite(lopHocIdForDb)) return;
-    const sb = createBrowserSupabaseClient();
-    if (!sb) return;
     setGmeetSaving(true);
-    const ok = await patchLopHocGoogleMeetUrl(sb, lopHocIdForDb, url);
-    setGmeetSaving(false);
-    if (!ok) return;
-    setGoogleMeetUrl(url);
-    setGoogleMeetSetAt(new Date().toISOString());
-    setGmeetFormOpen(false);
-    setGmeetInput("");
-    setGmeetJustSaved(true);
-    if (gmeetSavedTimerRef.current) clearTimeout(gmeetSavedTimerRef.current);
-    gmeetSavedTimerRef.current = setTimeout(() => {
-      setGmeetJustSaved(false);
-      gmeetSavedTimerRef.current = null;
-    }, 3000);
-  }, [gmeetInput, lopHocIdForDb]);
+    try {
+      let ok = false;
+      let setAtIso: string | null = new Date().toISOString();
+
+      if (storedSession?.userType === "Teacher" && Number.isFinite(teacherHrIdForDb)) {
+        const res = await fetch("/api/phong-hoc/save-google-meet-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            lopHocId: lopHocIdForDb,
+            teacherHrId: teacherHrIdForDb,
+            url,
+          }),
+        });
+        const j = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+          url_google_meet_set_at?: string | null;
+        };
+        ok = res.ok && j.ok === true;
+        if (j.url_google_meet_set_at) setAtIso = j.url_google_meet_set_at;
+        if (!ok) {
+          window.alert(j.error ?? "Không lưu được link Meet. Kiểm tra quyền chủ nhiệm lớp.");
+        }
+      } else {
+        const sb = createBrowserSupabaseClient();
+        if (!sb) {
+          window.alert("Chưa cấu hình kết nối Supabase.");
+          setGmeetSaving(false);
+          return;
+        }
+        ok = await patchLopHocGoogleMeetUrl(sb, lopHocIdForDb, url);
+        if (!ok) {
+          window.alert(
+            "Không ghi được vào CSDL (thường do quyền). Đăng nhập lại Phòng học bằng tài khoản giáo viên hoặc liên hệ quản trị."
+          );
+        }
+      }
+
+      setGmeetSaving(false);
+      if (!ok) return;
+      setGoogleMeetUrl(url);
+      setGoogleMeetSetAt(setAtIso);
+      setGmeetFormOpen(false);
+      setGmeetInput("");
+      setGmeetJustSaved(true);
+      if (gmeetSavedTimerRef.current) clearTimeout(gmeetSavedTimerRef.current);
+      gmeetSavedTimerRef.current = setTimeout(() => {
+        setGmeetJustSaved(false);
+        gmeetSavedTimerRef.current = null;
+      }, 3000);
+    } catch {
+      setGmeetSaving(false);
+      window.alert("Lỗi mạng khi lưu link Meet.");
+    }
+  }, [gmeetInput, lopHocIdForDb, storedSession?.userType, teacherHrIdForDb]);
 
   useEffect(() => {
     return () => {

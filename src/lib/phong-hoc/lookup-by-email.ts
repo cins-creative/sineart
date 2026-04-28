@@ -252,6 +252,68 @@ function mergeEnrollmentsFromRows(
 }
 
 /**
+ * Cùng học viên + cùng `lop_hoc_id` có thể có nhiều dòng `ql_quan_ly_hoc_vien` (gia hạn / nhập trùng).
+ * UI chỉ nên một thẻ lớp — giữ bản ghi ưu tiên `qlhv_id` lớn hơn, sau đó `days_remaining` cao hơn.
+ */
+function dedupeStudentSessionDataByLop(
+  list: ClassroomStudentSessionData[]
+): ClassroomStudentSessionData[] {
+  const byLop = new Map<number, ClassroomStudentSessionData>();
+  const noLop: ClassroomStudentSessionData[] = [];
+
+  for (const s of list) {
+    const lid = Number(s.lop_hoc_id);
+    if (!Number.isFinite(lid)) {
+      noLop.push(s);
+      continue;
+    }
+    const prev = byLop.get(lid);
+    if (!prev) {
+      byLop.set(lid, s);
+      continue;
+    }
+    const pick =
+      s.qlhv_id > prev.qlhv_id
+        ? s
+        : s.qlhv_id < prev.qlhv_id
+          ? prev
+          : (s.days_remaining ?? -1e9) > (prev.days_remaining ?? -1e9)
+            ? s
+            : prev;
+    byLop.set(lid, pick);
+  }
+
+  const merged = [...byLop.values(), ...noLop];
+  merged.sort((a, b) => {
+    const an = a.class_name?.trim() ?? "";
+    const bn = b.class_name?.trim() ?? "";
+    if (an !== bn) return an.localeCompare(bn, "vi");
+    return a.qlhv_id - b.qlhv_id;
+  });
+  return merged;
+}
+
+function dedupeLookupStudentRecordsByLop(
+  records: ClassroomSessionRecord[]
+): ClassroomSessionRecord[] {
+  const teachers = records.filter(
+    (r): r is Extract<ClassroomSessionRecord, { userType: "Teacher" }> => r.userType === "Teacher",
+  );
+  const students = records.filter(
+    (r): r is Extract<ClassroomSessionRecord, { userType: "Student" }> => r.userType === "Student",
+  );
+
+  const dataList = students.map((r) => r.data);
+  const dedupedData = dedupeStudentSessionDataByLop(dataList);
+  const mergedStudents: ClassroomSessionRecord[] = dedupedData.map((data) => ({
+    userType: "Student" as const,
+    data,
+  }));
+
+  return [...mergedStudents, ...teachers];
+}
+
+/**
  * Một dòng ghi danh → dữ liệu lớp trên session học viên (cùng logic `lookupClassroomByEmail`).
  */
 async function classroomStudentDataForEnrollment(
@@ -390,14 +452,7 @@ export async function fetchAllClassSessionsForStudentHv(
     if (data) list.push(data);
   }
 
-  list.sort((a, b) => {
-    const an = a.class_name?.trim() ?? "";
-    const bn = b.class_name?.trim() ?? "";
-    if (an !== bn) return an.localeCompare(bn, "vi");
-    return a.qlhv_id - b.qlhv_id;
-  });
-
-  return list;
+  return dedupeStudentSessionDataByLop(list);
 }
 
 export type LookupClassroomOutcome = {
@@ -552,5 +607,9 @@ export async function lookupClassroomByEmail(
     }
   }
 
-  return { records: results, studentProfileWithoutEnrollment, teacherWithoutClass };
+  return {
+    records: dedupeLookupStudentRecordsByLop(results),
+    studentProfileWithoutEnrollment,
+    teacherWithoutClass,
+  };
 }

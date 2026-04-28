@@ -75,7 +75,8 @@ export async function GET() {
     },
     {
       headers: {
-        "Cache-Control": "public, s-maxage=120, stale-while-revalidate=60",
+        // KB đổi thường xuyên — không để CDN/WAF cache body cũ (Worker Messenger fetch sẽ nhận FAQ lệch).
+        "Cache-Control": "private, no-store, max-age=0, must-revalidate",
       },
     },
   );

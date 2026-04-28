@@ -719,14 +719,20 @@ async function getAgentContext(env) {
     if (c) return JSON.parse(c);
   } catch {}
 
-  for (const ctxUrl of SITE_CONTEXT_URLS) {
+  for (const rawUrl of SITE_CONTEXT_URLS) {
     try {
-      const res = await fetch(ctxUrl, { signal: AbortSignal.timeout(5000) });
+      const ctxUrl = new URL(rawUrl);
+      ctxUrl.searchParams.set("_cb", String(Date.now()));
+      const res = await fetch(ctxUrl.toString(), {
+        signal: AbortSignal.timeout(8000),
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
       if (!res.ok) continue;
       const data = await res.json();
-      console.log(`CTX: ${ctxUrl} → ${data.faq?.length ?? 0} FAQ, ${data.available_classes?.length ?? 0} classes`);
+      console.log(`CTX: ${rawUrl} → ${data.faq?.length ?? 0} FAQ, ${data.available_classes?.length ?? 0} classes`);
       try {
-        await env.KV.put("agent_ctx", JSON.stringify(data), { expirationTtl: 120 });
+        await env.KV.put("agent_ctx", JSON.stringify(data), { expirationTtl: 60 });
       } catch {}
       return data;
     } catch (e) {

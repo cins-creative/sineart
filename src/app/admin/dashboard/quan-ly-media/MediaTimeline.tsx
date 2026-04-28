@@ -65,8 +65,8 @@ const MAX_PX_PER_DAY = 48;
 const DEFAULT_PX_PER_DAY = 8;
 const MIN_TRACK_W = 640;
 
-/** Số dự án tối đa vẽ trên timeline (giảm tải DOM). */
-const MAX_TIMELINE_PROJECTS = 20;
+/** Hiển thị ban đầu + mỗi lần bấm «Xem thêm» (giảm tải DOM). */
+const TIMELINE_PAGE_SIZE = 10;
 
 type PersistShape = {
   labelWidth?: number;
@@ -1435,6 +1435,8 @@ export default function MediaTimeline({
   const [hydrated, setHydrated] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [detailProject, setDetailProject] = useState<Project | null>(null);
+  /** Số dòng timeline đang vẽ (tăng dần bằng «Xem thêm»). */
+  const [timelineDisplayCount, setTimelineDisplayCount] = useState(TIMELINE_PAGE_SIZE);
 
   const trackScrollRef = useRef<HTMLDivElement>(null);
   const labelScrollRef = useRef<HTMLDivElement>(null);
@@ -1462,20 +1464,28 @@ export default function MediaTimeline({
     return o;
   }, [poolAfterAssignee]);
 
-  const visibleProjects = useMemo(() => {
+  const filteredSortedProjects = useMemo(() => {
     let list = poolAfterAssignee;
     if (filterStatuses.length > 0) {
       const want = new Set(filterStatuses.filter((s) => STATUS_ORDER.includes(s)));
       if (want.size > 0) list = list.filter((p) => want.has(p.status ?? ""));
     }
-    const sorted = [...list].sort((a, b) => {
+    return [...list].sort((a, b) => {
+      if (b.id !== a.id) return b.id - a.id;
       const da = parseDate(a.start_date)?.getTime() ?? 0;
       const db = parseDate(b.start_date)?.getTime() ?? 0;
-      if (da !== db) return da - db;
-      return a.id - b.id;
+      return db - da;
     });
-    return sorted.slice(0, MAX_TIMELINE_PROJECTS);
   }, [poolAfterAssignee, filterStatuses]);
+
+  const visibleProjects = useMemo(
+    () => filteredSortedProjects.slice(0, timelineDisplayCount),
+    [filteredSortedProjects, timelineDisplayCount],
+  );
+
+  useEffect(() => {
+    setTimelineDisplayCount(TIMELINE_PAGE_SIZE);
+  }, [filterLamId, filterStatuses]);
 
   const customTimelineRange = useMemo(() => {
     const a = parseDate(rangeStartStr.trim() || null);
@@ -2121,6 +2131,39 @@ export default function MediaTimeline({
           </div>
         </div>
       </div>
+
+      {filteredSortedProjects.length > timelineDisplayCount ? (
+        <div
+          style={{
+            flexShrink: 0,
+            padding: "12px 20px",
+            borderTop: `1px solid ${BORDER}`,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 12,
+            background: HEADER_BG,
+          }}
+        >
+          <span style={{ fontSize: 11, color: TEXT_MUTED }}>
+            Đang hiển thị {visibleProjects.length} / {filteredSortedProjects.length} dự án
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              setTimelineDisplayCount((c) => Math.min(c + TIMELINE_PAGE_SIZE, filteredSortedProjects.length))
+            }
+            style={{
+              ...BTN,
+              fontWeight: 700,
+              borderColor: "#F8A568",
+              color: "#c2410c",
+            }}
+          >
+            Xem thêm ({Math.min(TIMELINE_PAGE_SIZE, filteredSortedProjects.length - timelineDisplayCount)} dự án)
+          </button>
+        </div>
+      ) : null}
 
       {detailProject ? (
         <ProjectDetailModal

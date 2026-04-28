@@ -32,7 +32,7 @@ export async function fetchMktQuanLyMediaRows(
   const { data, error } = await supabase
     .from(MKT_MEDIA_TABLE)
     .select(SELECT)
-    .order("start_date", { ascending: true });
+    .order("id", { ascending: false });
 
   if (error) return { ok: false, error: error.message };
   return { ok: true, rows: (data as MktMediaProjectRow[]) ?? [] };

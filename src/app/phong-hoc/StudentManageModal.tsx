@@ -53,6 +53,55 @@ function getColor(n: string) {
 
 const s2l = (v: string) => v.toLowerCase();
 
+/** Cột ngày YYYY-MM-DD trong khoảng [from, to] (lịch VN). */
+function enumerateCalendarDatesInclusive(fromYmd: string, toYmd: string): string[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromYmd) || !/^\d{4}-\d{2}-\d{2}$/.test(toYmd)) return [];
+  if (fromYmd > toYmd) return [];
+  const out: string[] = [];
+  const d = new Date(`${fromYmd}T12:00:00`);
+  const endMs = new Date(`${toYmd}T12:00:00`).getTime();
+  for (; d.getTime() <= endMs; d.setDate(d.getDate() + 1)) {
+    out.push(vnCalendarDateString(d));
+  }
+  return out;
+}
+
+/** Chỉ số ngày trong tháng (1–31), cho hàng header thứ 2. */
+function calendarDayNumber(ymd: string): number {
+  const d = Number(ymd.slice(8, 10));
+  return Number.isFinite(d) ? d : 0;
+}
+
+/** Gộp liên tiếp theo tháng — hàng «tháng» của heatmap. */
+function monthHeaderSegmentsFromDates(dates: string[]): { label: string; colspan: number }[] {
+  if (dates.length === 0) return [];
+  const segments: { label: string; colspan: number }[] = [];
+  let i = 0;
+  while (i < dates.length) {
+    const ymd = dates[i].slice(0, 10);
+    const ym = ymd.slice(0, 7);
+    let j = i + 1;
+    while (j < dates.length && dates[j].slice(0, 7) === ym) j++;
+    const monthNum = Number(ymd.slice(5, 7));
+    const yearNum = Number(ymd.slice(0, 4));
+    const label = `${monthNum}/${yearNum}`;
+    segments.push({ label, colspan: j - i });
+    i = j;
+  }
+  return segments;
+}
+
+type DdCellLevel = 0 | 1 | 2;
+
+const DD_HEATMAP: Record<
+  DdCellLevel,
+  { bg: string; border: string; title: string }
+> = {
+  0: { bg: "#ebedf0", border: "#d1d5db", title: "Không có dữ liệu" },
+  1: { bg: "rgba(248, 165, 104, 0.55)", border: "rgba(234, 88, 12, 0.35)", title: "Vào phòng" },
+  2: { bg: "rgba(20, 184, 166, 0.68)", border: "rgba(15, 118, 110, 0.35)", title: "Gửi ảnh" },
+};
+
 const TINH_TRANG_ORDER: Record<string, number> = {
   "Đang học": 0,
   "Bảo lưu": 1,
@@ -361,6 +410,8 @@ export default function StudentManageModal({
     return vnCalendarDateString(t);
   });
   const [ddTo, setDdTo] = useState(() => vnCalendarDateString());
+  /** Lọc học viên trong tab Điểm danh (heatmap). */
+  const [ddStudentQuery, setDdStudentQuery] = useState("");
 
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1024
@@ -449,6 +500,7 @@ export default function StudentManageModal({
         return vnCalendarDateString(t);
       });
       setDdTo(vnCalendarDateString());
+      setDdStudentQuery("");
     }
   }, [open]);
 
@@ -518,6 +570,63 @@ export default function StudentManageModal({
     }
     setFiltered(list);
   }, [students, query, sortDir]);
+
+  const ddDateColumns = useMemo(
+    () => enumerateCalendarDatesInclusive(ddFrom, ddTo),
+    [ddFrom, ddTo]
+  );
+
+  const ddMonthHeaderSegments = useMemo(
+    () => monthHeaderSegmentsFromDates(ddDateColumns),
+    [ddDateColumns]
+  );
+
+  const ddAttendanceByDayHv = useMemo(() => {
+    const m = new Map<string, DdCellLevel>();
+    for (const row of ddRows) {
+      const ymd = row.ngay.slice(0, 10);
+      const k = `${ymd}|${row.hoc_vien_id}`;
+      let lvl: DdCellLevel = 0;
+      if (row.da_gui_anh) lvl = 2;
+      else if (row.da_vao_phong) lvl = 1;
+      const prev = m.get(k) ?? 0;
+      const next = Math.max(prev, lvl) as DdCellLevel;
+      m.set(k, next);
+    }
+    return m;
+  }, [ddRows]);
+
+  const ddHeatmapStudents = useMemo((): StudentManageRow[] => {
+    const q = s2l(ddStudentQuery).trim();
+    if (students.length > 0) {
+      let list = students;
+      if (q) list = list.filter((s) => s2l(s.name).includes(q));
+      return [...list].sort((a, b) =>
+        a.name.localeCompare(b.name, "vi", { sensitivity: "base" })
+      );
+    }
+    const byHv = new Map<number, string>();
+    for (const r of ddRows) {
+      if (!byHv.has(r.hoc_vien_id)) {
+        byHv.set(r.hoc_vien_id, r.full_name?.trim() || `HV #${r.hoc_vien_id}`);
+      }
+    }
+    const fake: StudentManageRow[] = [...byHv.entries()].map(([id, name]) => ({
+      enrollmentId: -id,
+      studentId: id,
+      name,
+      email: "",
+      namThi: "",
+      className: "",
+      status: "Đang học",
+      tienDoId: null,
+      currentEx: null,
+      latest: {},
+      truongNganhPairs: null,
+    }));
+    const list = q ? fake.filter((s) => s2l(s.name).includes(q)) : fake;
+    return list.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+  }, [students, ddRows, ddStudentQuery]);
 
   const openPicker = (s: StudentManageRow) => setPicker(s);
 
@@ -1723,6 +1832,39 @@ export default function StudentManageModal({
                       }}
                     />
                   </label>
+                  <label
+                    style={{
+                      fontSize: 12,
+                      color: DS.colorSub,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      flex: "1 1 180px",
+                      minWidth: 160,
+                      maxWidth: 280,
+                    }}
+                  >
+                    Lọc tên
+                    <input
+                      type="search"
+                      value={ddStudentQuery}
+                      onChange={(e) => setDdStudentQuery(e.target.value)}
+                      placeholder="Tên học viên…"
+                      autoComplete="off"
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        height: 36,
+                        border: `1px solid ${DS.colorBorder}`,
+                        borderRadius: 8,
+                        padding: "0 10px",
+                        fontFamily: DS.font,
+                        fontSize: 13,
+                        color: DS.colorText,
+                        background: DS.colorBg,
+                      }}
+                    />
+                  </label>
                   <button
                     type="button"
                     onClick={() => void fetchDiemDanh()}
@@ -1743,6 +1885,59 @@ export default function StudentManageModal({
                   >
                     Tải lại
                   </button>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: 14,
+                    padding: "6px 14px 10px",
+                    background: DS.colorSurface,
+                    borderBottom: `1px solid ${DS.colorBorder}`,
+                    flexShrink: 0,
+                  }}
+                >
+                  <span style={{ fontSize: 11, fontWeight: 700, color: DS.colorSub }}>Chú giải ô</span>
+                  {([0, 1, 2] as const).map((lvl) => (
+                    <span
+                      key={lvl}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        fontSize: 11,
+                        color: DS.colorText,
+                        fontFamily: DS.font,
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 11,
+                          height: 11,
+                          borderRadius: 3,
+                          flexShrink: 0,
+                          background: DD_HEATMAP[lvl].bg,
+                          border: `1px solid ${DD_HEATMAP[lvl].border}`,
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      {DD_HEATMAP[lvl].title}
+                    </span>
+                  ))}
+                  {ddDateColumns.length > 12 ? (
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontSize: 10,
+                        color: DS.colorMuted,
+                        fontFamily: DS.font,
+                      }}
+                    >
+                      {ddDateColumns.length} ngày — kéo ngang để xem toàn bộ
+                    </span>
+                  ) : null}
                 </div>
 
                 {ddLoading ? (
@@ -1767,7 +1962,7 @@ export default function StudentManageModal({
                   </div>
                 ) : null}
 
-                <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
+                <div style={{ overflow: "auto", flex: 1, minHeight: 0, padding: "8px 0 16px" }}>
                   {!ddLoading && !ddError && ddRows.length === 0 ? (
                     <div
                       style={{
@@ -1781,49 +1976,168 @@ export default function StudentManageModal({
                     </div>
                   ) : null}
 
-                  {!ddLoading && ddRows.length > 0 ? (
-                    <table
+                  {!ddLoading && !ddError && ddRows.length > 0 && ddDateColumns.length === 0 ? (
+                    <div
                       style={{
-                        width: "100%",
-                        borderCollapse: "collapse",
-                        fontSize: 12,
-                        fontFamily: DS.font,
+                        padding: "24px 16px",
+                        textAlign: "center",
+                        fontSize: 13,
+                        color: "#ee5b9f",
+                        fontWeight: 600,
                       }}
                     >
-                      <thead>
-                        <tr style={{ background: DS.colorSurface, borderBottom: `1px solid ${DS.colorBorder}` }}>
-                          <th style={{ ...TH, textAlign: "left", padding: "10px 14px" }}>Ngày</th>
-                          <th style={{ ...TH, textAlign: "left", padding: "10px 14px" }}>Họ tên</th>
-                          <th style={{ ...TH, textAlign: "center", padding: "10px 14px", width: 110 }}>
-                            Vào phòng
-                          </th>
-                          <th style={{ ...TH, textAlign: "center", padding: "10px 14px", width: 110 }}>
-                            Gửi ảnh
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ddRows.map((row) => (
-                          <tr
-                            key={`${row.ngay}-${row.hoc_vien_id}-${row.id}`}
-                            style={{ borderBottom: `1px solid ${DS.colorBorder}` }}
-                          >
-                            <td style={{ padding: "10px 14px", color: DS.colorText, fontVariantNumeric: "tabular-nums" }}>
-                              {row.ngay}
-                            </td>
-                            <td style={{ padding: "10px 14px", color: DS.colorText, fontWeight: 600 }}>
-                              {row.full_name?.trim() || `HV #${row.hoc_vien_id}`}
-                            </td>
-                            <td style={{ padding: "10px 14px", textAlign: "center", color: row.da_vao_phong ? "#15803d" : DS.colorMuted }}>
-                              {row.da_vao_phong ? "✓" : "—"}
-                            </td>
-                            <td style={{ padding: "10px 14px", textAlign: "center", color: row.da_gui_anh ? "#15803d" : DS.colorMuted }}>
-                              {row.da_gui_anh ? "✓" : "—"}
-                            </td>
+                      Chọn «Từ» nhỏ hơn hoặc bằng «Đến» (khoảng ngày không hợp lệ).
+                    </div>
+                  ) : null}
+
+                  {!ddLoading && !ddError && ddRows.length > 0 && ddDateColumns.length > 0 && ddHeatmapStudents.length === 0 ? (
+                    <div
+                      style={{
+                        padding: "40px 16px",
+                        textAlign: "center",
+                        fontSize: 13,
+                        color: DS.colorSub,
+                      }}
+                    >
+                      Không có học viên khớp bộ lọc tên.
+                    </div>
+                  ) : null}
+
+                  {!ddLoading && ddRows.length > 0 && ddDateColumns.length > 0 && ddHeatmapStudents.length > 0 ? (
+                    <div style={{ padding: "0 12px 8px", overflowX: "auto" }}>
+                      <table
+                        style={{
+                          borderCollapse: "separate",
+                          borderSpacing: "4px 6px",
+                          minWidth: "max-content",
+                          fontFamily: DS.font,
+                        }}
+                      >
+                        <thead>
+                          <tr>
+                            <th
+                              scope="col"
+                              rowSpan={2}
+                              style={{
+                                position: "sticky",
+                                left: 0,
+                                zIndex: 5,
+                                background: DS.colorBg,
+                                boxShadow: "4px 0 8px -4px rgba(0,0,0,0.08)",
+                                textAlign: "left",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: DS.colorSub,
+                                padding: "8px 10px 8px 8px",
+                                minWidth: 148,
+                                maxWidth: 220,
+                                verticalAlign: "middle",
+                              }}
+                            >
+                              Học viên / Ngày
+                            </th>
+                            {ddMonthHeaderSegments.map((seg, idx) => (
+                              <th
+                                key={`m-${seg.label}-${idx}`}
+                                scope="colgroup"
+                                colSpan={seg.colspan}
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: DS.colorSub,
+                                  textAlign: "center",
+                                  padding: "6px 4px 4px",
+                                  verticalAlign: "bottom",
+                                  borderBottom: `1px solid ${DS.colorBorder}`,
+                                  fontVariantNumeric: "tabular-nums",
+                                }}
+                              >
+                                Thg {seg.label}
+                              </th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                          <tr>
+                            {ddDateColumns.map((ymd) => (
+                              <th
+                                key={`d-${ymd}`}
+                                scope="col"
+                                title={ymd}
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: DS.colorText,
+                                  textAlign: "center",
+                                  padding: "4px 1px 6px",
+                                  minWidth: 20,
+                                  verticalAlign: "top",
+                                  fontVariantNumeric: "tabular-nums",
+                                  lineHeight: 1.2,
+                                }}
+                              >
+                                {calendarDayNumber(ymd)}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ddHeatmapStudents.map((s) => (
+                            <tr key={s.studentId}>
+                              <th
+                                scope="row"
+                                style={{
+                                  position: "sticky",
+                                  left: 0,
+                                  zIndex: 3,
+                                  background: DS.colorBg,
+                                  boxShadow: "4px 0 8px -4px rgba(0,0,0,0.08)",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  color: DS.colorText,
+                                  textAlign: "left",
+                                  padding: "6px 10px 6px 8px",
+                                  maxWidth: 220,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {s.name}
+                              </th>
+                              {ddDateColumns.map((ymd) => {
+                                const lvl =
+                                  ddAttendanceByDayHv.get(`${ymd}|${s.studentId}`) ?? 0;
+                                const cfg = DD_HEATMAP[lvl];
+                                return (
+                                  <td
+                                    key={ymd}
+                                    style={{
+                                      textAlign: "center",
+                                      padding: 2,
+                                      verticalAlign: "middle",
+                                    }}
+                                  >
+                                    <div
+                                      role="img"
+                                      aria-label={`${s.name}, ${ymd}: ${cfg.title}`}
+                                      title={`${s.name} — ${ymd}: ${cfg.title}`}
+                                      style={{
+                                        width: 12,
+                                        height: 12,
+                                        borderRadius: 3,
+                                        margin: "0 auto",
+                                        background: cfg.bg,
+                                        border: `1px solid ${cfg.border}`,
+                                        boxSizing: "border-box",
+                                      }}
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   ) : null}
                 </div>
               </div>

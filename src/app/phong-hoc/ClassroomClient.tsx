@@ -5,10 +5,11 @@ import {
   CLASSROOM_SESSION_STORAGE_KEY,
   parseClassroomSession,
   saveClassroomSession,
+  syncPhongHocCookiesWithStorage,
   type ClassroomSessionRecord,
 } from "@/lib/phong-hoc/classroom-session";
 import { vnCalendarDateString } from "@/lib/phong-hoc/diem-danh";
-import { parseHvIdFromDailyDisplayName } from "@/lib/phong-hoc/diem-danh-parse";
+import { parseHvIdFromDailyParticipant } from "@/lib/phong-hoc/diem-danh-parse";
 import {
   fetchClassmatesForLop,
   formatClassmateProgressLine,
@@ -714,6 +715,7 @@ export default function ClassroomClient({
 
   const dailyMeetContainerRef = useRef<HTMLDivElement>(null);
   const dailyCallFrameRef = useRef<DailyCall | null>(null);
+  const dailyPresencePollRef = useRef<number | null>(null);
   const gmeetSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Timer id (DOM `window.setTimeout`). */
   const teacherSaveToastTimerRef = useRef<number | null>(null);
@@ -767,6 +769,12 @@ export default function ClassroomClient({
       window.removeEventListener("storage", onStorage);
     };
   }, [hydrateSessionFromStorage]);
+
+  /** Không có NavBar trên route Phòng học — đặt cookie `sine_hv_sync` / `sine_gv_sync` để API điểm danh nhận HV/GV. */
+  useEffect(() => {
+    if (!mounted || !storedSession) return;
+    void syncPhongHocCookiesWithStorage();
+  }, [mounted, storedSession]);
 
   useEffect(() => {
     if (storedSession?.userType !== "Teacher") {
@@ -1305,6 +1313,24 @@ export default function ClassroomClient({
     hvPkResolvedForDaily,
   ]);
 
+  /** Tiêu đề topbar — tên lớp (`class_name`), fallback tên đầy đủ / slug URL. */
+  const topbarTitle = useMemo(() => {
+    const short = (d.class_name ?? "").trim();
+    if (short) return short;
+    if (storedSession?.userType === "Teacher" || storedSession?.userType === "Student") {
+      const full = String(storedSession.data.class_full_name ?? "").trim();
+      if (full) return full;
+    }
+    if (classSlug != null && String(classSlug).trim() !== "") {
+      try {
+        return decodeURIComponent(classSlug).replace(/_/g, " ");
+      } catch {
+        return classSlug;
+      }
+    }
+    return "Phòng học";
+  }, [d.class_name, storedSession, classSlug]);
+
   const liveChatEnabled =
     mounted && storedSession !== null && Number.isFinite(lopHocIdForDb);
 
@@ -1599,6 +1625,10 @@ export default function ClassroomClient({
 
   useLayoutEffect(() => {
     if (!meetingRoomUrl || !isDailyRoomUrl(meetingRoomUrl)) {
+      if (dailyPresencePollRef.current) {
+        clearInterval(dailyPresencePollRef.current);
+        dailyPresencePollRef.current = null;
+      }
       const prev = dailyCallFrameRef.current;
       if (prev) {
         void prev.destroy().finally(() => {
@@ -1649,11 +1679,11 @@ export default function ClassroomClient({
           try {
             const p = frame.participants() as Record<
               string,
-              { user_name?: string; local?: boolean }
+              { user_name?: string; userName?: string; local?: boolean }
             >;
             const ids = new Set<number>();
             for (const part of Object.values(p)) {
-              const hid = parseHvIdFromDailyDisplayName(part?.user_name);
+              const hid = parseHvIdFromDailyParticipant(part);
               if (hid != null) ids.add(hid);
             }
             setDailyOnlineHvIds(ids);
@@ -1665,23 +1695,43 @@ export default function ClassroomClient({
         if (trackPresence) {
           frame.on("participant-joined", syncParticipants);
           frame.on("participant-left", syncParticipants);
+          if (dailyPresencePollRef.current) {
+            clearInterval(dailyPresencePollRef.current);
+            dailyPresencePollRef.current = null;
+          }
+          dailyPresencePollRef.current = window.setInterval(() => {
+            if (!cancelled) syncParticipants();
+          }, 2000);
         }
 
         frame.on("joined-meeting", () => {
           syncParticipants();
           if (!forStudentRecord || cancelled || !Number.isFinite(lopIdRecord)) return;
-          const day = vnCalendarDateString();
-          const key = `${day}-${lopIdRecord}`;
-          if (diemDanhRecordedKeyRef.current === key) return;
-          diemDanhRecordedKeyRef.current = key;
-          void fetch("/api/phong-hoc/diem-danh/record", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ lopHocId: lopIdRecord }),
-          }).catch(() => {
-            /* ignore */
-          });
+          void (async () => {
+            await syncPhongHocCookiesWithStorage();
+            if (cancelled) return;
+            const day = vnCalendarDateString();
+            const key = `${day}-${lopIdRecord}`;
+            if (diemDanhRecordedKeyRef.current === key) return;
+            try {
+              const res = await fetch("/api/phong-hoc/diem-danh/record", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ lopHocId: lopIdRecord }),
+              });
+              if (res.ok) {
+                diemDanhRecordedKeyRef.current = key;
+              } else if (process.env.NODE_ENV === "development") {
+                const t = await res.text().catch(() => "");
+                console.warn("[diem-danh/record]", res.status, t);
+              }
+            } catch (e) {
+              if (process.env.NODE_ENV === "development") {
+                console.warn("[diem-danh/record] fetch failed", e);
+              }
+            }
+          })();
         });
 
         try {
@@ -1694,6 +1744,10 @@ export default function ClassroomClient({
 
     return () => {
       cancelled = true;
+      if (dailyPresencePollRef.current) {
+        clearInterval(dailyPresencePollRef.current);
+        dailyPresencePollRef.current = null;
+      }
       diemDanhRecordedKeyRef.current = null;
       setDailyOnlineHvIds(new Set());
       const frame = dailyCallFrameRef.current;
@@ -1908,7 +1962,7 @@ export default function ClassroomClient({
             </Link>
             <div className="topbar-title-wrap">
               <div className="phc-eyebrow">Sine Art</div>
-              <div className={cx("topbar-title", fontTitle.className)}>Phòng học online</div>
+              <div className={cx("topbar-title", fontTitle.className)}>{topbarTitle}</div>
             </div>
           </div>
           <div className="topbar-tools">
@@ -1975,7 +2029,7 @@ export default function ClassroomClient({
           </Link>
           <div className="topbar-title-wrap">
             <div className="phc-eyebrow">Sine Art</div>
-            <div className={cx("topbar-title", fontTitle.className)}>Phòng học online</div>
+            <div className={cx("topbar-title", fontTitle.className)}>{topbarTitle}</div>
           </div>
         </div>
 

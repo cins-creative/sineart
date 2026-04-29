@@ -1,5 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/** GV: coi HV không còn trong phòng nếu không có heartbeat trong khoảng này (ms). */
+export const HV_DIEM_DANH_PRESENCE_STALE_MS = 90_000;
+
+/** HV gửi POST record để làm mới `last_seen_at` (tab đang hiển thị). */
+export const HV_DIEM_DANH_HEARTBEAT_INTERVAL_MS = 25_000;
+
+export function parseIsoToUtcMs(iso: string | null | undefined): number | null {
+  if (iso == null || typeof iso !== "string" || !iso.trim()) return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Còn «trong phòng» trên UI GV khi `last_seen_at` (UTC ms) còn mới. */
+export function hvPresenceIsLive(lastSeenUtcMs: number | null | undefined, nowMs: number): boolean {
+  if (lastSeenUtcMs == null || !Number.isFinite(lastSeenUtcMs)) return false;
+  return nowMs - lastSeenUtcMs < HV_DIEM_DANH_PRESENCE_STALE_MS;
+}
+
 /** Ngày lịch VN `YYYY-MM-DD` (UTC+7). */
 export function vnCalendarDateString(d: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -25,6 +43,8 @@ export type PhDiemDanhNgayRow = {
   da_gui_anh: boolean;
   first_join_at: string | null;
   first_image_at: string | null;
+  /** Heartbeat — lần cuối HV còn mở Phòng học (ISO). */
+  last_seen_at: string | null;
   full_name: string | null;
 };
 
@@ -62,6 +82,7 @@ export async function upsertDiemDanhJoin(
     da_gui_anh: Boolean(ex?.da_gui_anh),
     first_join_at: ex?.first_join_at ?? iso,
     first_image_at: ex?.first_image_at ?? null,
+    last_seen_at: iso,
   };
 
   const { error: upErr } = await sb.from("hv_diem_danh").upsert(payload, {
@@ -108,6 +129,7 @@ export async function upsertDiemDanhImage(
     da_gui_anh: true,
     first_join_at: ex?.first_join_at ?? null,
     first_image_at: ex?.first_image_at ?? iso,
+    last_seen_at: iso,
   };
 
   const { error: upErr } = await sb.from("hv_diem_danh").upsert(merged, {
@@ -125,7 +147,9 @@ export async function fetchDiemDanhForLopRange(
 ): Promise<PhDiemDanhNgayRow[]> {
   const { data, error } = await sb
     .from("hv_diem_danh")
-    .select("id, ngay, hoc_vien_id, da_vao_phong, da_gui_anh, first_join_at, first_image_at")
+    .select(
+      "id, ngay, hoc_vien_id, da_vao_phong, da_gui_anh, first_join_at, first_image_at, last_seen_at"
+    )
     .eq("lop_hoc_id", lopHocId)
     .gte("ngay", ngayFrom)
     .lte("ngay", ngayTo)
@@ -164,6 +188,7 @@ export async function fetchDiemDanhForLopRange(
       da_gui_anh: Boolean(r.da_gui_anh),
       first_join_at: r.first_join_at != null ? String(r.first_join_at) : null,
       first_image_at: r.first_image_at != null ? String(r.first_image_at) : null,
+      last_seen_at: r.last_seen_at != null ? String(r.last_seen_at) : null,
       full_name: nameById.get(hid) ?? null,
     };
   });

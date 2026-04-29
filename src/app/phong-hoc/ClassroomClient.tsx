@@ -8,7 +8,12 @@ import {
   syncPhongHocCookiesWithStorage,
   type ClassroomSessionRecord,
 } from "@/lib/phong-hoc/classroom-session";
-import { vnCalendarDateString } from "@/lib/phong-hoc/diem-danh";
+import {
+  HV_DIEM_DANH_HEARTBEAT_INTERVAL_MS,
+  hvPresenceIsLive,
+  parseIsoToUtcMs,
+  vnCalendarDateString,
+} from "@/lib/phong-hoc/diem-danh";
 import {
   fetchClassmatesForLop,
   formatClassmateProgressLine,
@@ -694,9 +699,10 @@ export default function ClassroomClient({
   );
   /** `undefined` = chưa tải; có session GV thì sau fetch là danh sách `ql_quan_ly_hoc_vien` + hồ sơ. */
   const [classmatesReal, setClassmatesReal] = useState<ClassmateListRow[] | undefined>(undefined);
-  /** Theo DB trong ngày (VN): HV đã gọi record «đã vào phòng» khi mở Phòng học — không phụ thuộc Join Daily. */
-  const [dbVaoPhongTodayIds, setDbVaoPhongTodayIds] = useState<Set<number>>(() => new Set());
-  const diemDanhRecordedKeyRef = useRef<string | null>(null);
+  /** GV poll: `hoc_vien_id` → `last_seen_at` (UTC ms). Chỉ coi «online» khi còn mới (heartbeat HV). */
+  const [dbLastSeenMsByHvId, setDbLastSeenMsByHvId] = useState<Map<number, number>>(() => new Map());
+  /** Làm UI GV cập nhật trạng thái xám khi hết cửa sổ hiệu lực presence (không cần chờ poll). */
+  const [presenceUiTick, setPresenceUiTick] = useState(0);
   /** Session cũ có thể thiếu `data.id` — tra `hoc_vien_id` qua `qlhv_id` để Daily `#HV…` khớp sidebar GV. */
   const [hvPkResolvedForDaily, setHvPkResolvedForDaily] = useState<number | null>(null);
   const [studentManageOpen, setStudentManageOpen] = useState(false);
@@ -913,17 +919,14 @@ export default function ClassroomClient({
   }, [storedSession, d.lop_hoc_id]);
 
   /**
-   * Điểm danh «đã vào phòng» — gọi khi HV mở Phòng học (chọn lớp xong), không bắt buộc chờ Daily `joined-meeting`.
-   * Vẫn gộp với lần gọi sau Daily; `diemDanhRecordedKeyRef` tránh trùng trong cùng ngày/lớp.
+   * Điểm danh «đã vào phòng» + làm mới `last_seen_at` (heartbeat).
+   * Gọi khi HV mở Phòng học, định kỳ khi tab đang hiển thị, và sau Daily `joined-meeting`.
    */
   const recordDiemDanhWhenStudentInRoom = useCallback(async () => {
     if (storedSession?.userType !== "Student") return;
     if (!hasRoomAccess) return;
     if (!Number.isFinite(lopHocIdForDb)) return;
     await syncPhongHocCookiesWithStorage();
-    const day = vnCalendarDateString();
-    const key = `${day}-${lopHocIdForDb}`;
-    if (diemDanhRecordedKeyRef.current === key) return;
     try {
       const res = await fetch("/api/phong-hoc/diem-danh/record", {
         method: "POST",
@@ -931,9 +934,7 @@ export default function ClassroomClient({
         credentials: "include",
         body: JSON.stringify({ lopHocId: lopHocIdForDb }),
       });
-      if (res.ok) {
-        diemDanhRecordedKeyRef.current = key;
-      } else {
+      if (!res.ok) {
         const t = await res.text().catch(() => "");
         console.warn("[phong-hoc] diem-danh/record failed", res.status, t);
       }
@@ -946,6 +947,18 @@ export default function ClassroomClient({
     if (!mounted) return;
     void recordDiemDanhWhenStudentInRoom();
   }, [mounted, recordDiemDanhWhenStudentInRoom]);
+
+  /** HV: heartbeat — đóng tab hết timer → ~90s sau GV thấy xám (trình duyệt có thể giảm tần suất tab nền). */
+  useEffect(() => {
+    if (!mounted || storedSession?.userType !== "Student" || !hasRoomAccess || !Number.isFinite(lopHocIdForDb)) {
+      return;
+    }
+    const pulse = () => {
+      void recordDiemDanhWhenStudentInRoom();
+    };
+    const id = window.setInterval(pulse, HV_DIEM_DANH_HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [mounted, storedSession?.userType, hasRoomAccess, lopHocIdForDb, recordDiemDanhWhenStudentInRoom]);
 
   /** `hr_nhan_su.id` của GV — chỉ có khi session là Teacher. Dùng để gọi API ghi
    * tiến độ học viên (bypass RLS + verify chủ nhiệm phía server). */
@@ -1372,16 +1385,37 @@ export default function ClassroomClient({
     storedSession?.userType === "Teacher" &&
     classmatesReal !== undefined;
 
+  /** GV: học viên đang online (theo heartbeat) lên trên, sau đó sắp tên. */
+  const teacherClassmatesOnlineFirst = useMemo((): ClassmateListRow[] => {
+    if (!teacherPresenceSidebar) return teacherClassmates;
+    const now = Date.now();
+    const out = [...teacherClassmates];
+    out.sort((a, b) => {
+      const aLive = hvPresenceIsLive(dbLastSeenMsByHvId.get(a.hvId), now);
+      const bLive = hvPresenceIsLive(dbLastSeenMsByHvId.get(b.hvId), now);
+      if (aLive !== bLive) return aLive ? -1 : 1;
+      return a.n.localeCompare(b.n, "vi", { sensitivity: "base" });
+    });
+    return out;
+  }, [
+    teacherClassmates,
+    teacherPresenceSidebar,
+    dbLastSeenMsByHvId,
+    presenceUiTick,
+  ]);
+
   const photoVisitWhileOnline = useMemo(() => {
     const set = new Set<number>();
     if (!teacherPresenceSidebar || !liveChatEnabled) return set;
+    const now = Date.now();
     const enToHv = new Map(classmatesReal!.map((x) => [x.enrollmentId, x.hvId]));
     for (const m of hvChatRows) {
       if (m.usertype !== "Student" || !m.photo?.trim()) continue;
       const en = parseQlhvKey(m.name);
       if (en == null) continue;
       const hvId = enToHv.get(en);
-      if (hvId != null && dbVaoPhongTodayIds.has(hvId)) set.add(hvId);
+      const last = hvId != null ? dbLastSeenMsByHvId.get(hvId) : undefined;
+      if (hvId != null && hvPresenceIsLive(last, now)) set.add(hvId);
     }
     return set;
   }, [
@@ -1389,7 +1423,8 @@ export default function ClassroomClient({
     liveChatEnabled,
     classmatesReal,
     hvChatRows,
-    dbVaoPhongTodayIds,
+    dbLastSeenMsByHvId,
+    presenceUiTick,
   ]);
 
   const sidebarAttendanceStyle = useCallback(
@@ -1401,7 +1436,7 @@ export default function ClassroomClient({
           dot === "dg" ? "phc-o-ok" : dot === "dy" ? "phc-o-warn" : "phc-o-muted";
         return { dot, nameCls };
       }
-      const here = dbVaoPhongTodayIds.has(s.hvId);
+      const here = hvPresenceIsLive(dbLastSeenMsByHvId.get(s.hvId), Date.now());
       if (!here) {
         return { dot: "dr", nameCls: "phc-o-muted" };
       }
@@ -1410,13 +1445,27 @@ export default function ClassroomClient({
       }
       return { dot: "dy", nameCls: "phc-o-warn" };
     },
-    [teacherPresenceSidebar, dbVaoPhongTodayIds, photoVisitWhileOnline]
+    [
+      teacherPresenceSidebar,
+      dbLastSeenMsByHvId,
+      photoVisitWhileOnline,
+      presenceUiTick,
+    ]
   );
 
-  /** GV: sidebar «Online» — chỉ dựa vào DB trong ngày (HV mở Phòng học → record). Poll để cập nhật danh sách. */
+  useEffect(() => {
+    if (!teacherPresenceSidebar) return;
+    const id = window.setInterval(
+      () => setPresenceUiTick((n) => n + 1),
+      10_000
+    );
+    return () => clearInterval(id);
+  }, [teacherPresenceSidebar]);
+
+  /** GV: poll `last_seen_at` — online = heartbeat còn mới (HV còn mở Phòng học / tab hiển thị). */
   useEffect(() => {
     if (!mounted || !teacherPresenceSidebar || !Number.isFinite(lopHocIdForDb)) {
-      setDbVaoPhongTodayIds(new Set());
+      setDbLastSeenMsByHvId(new Map());
       return;
     }
     let cancelled = false;
@@ -1430,20 +1479,28 @@ export default function ClassroomClient({
         const res = await fetch(u.toString(), { credentials: "include" });
         if (cancelled || !res.ok) return;
         const j = (await res.json()) as {
-          rows?: { hoc_vien_id?: number; da_vao_phong?: boolean }[];
+          rows?: {
+            hoc_vien_id?: number;
+            da_vao_phong?: boolean;
+            last_seen_at?: string | null;
+            first_join_at?: string | null;
+          }[];
         };
-        const next = new Set<number>();
+        const next = new Map<number, number>();
         for (const r of j.rows ?? []) {
           if (
-            r.da_vao_phong &&
-            typeof r.hoc_vien_id === "number" &&
-            Number.isFinite(r.hoc_vien_id) &&
-            r.hoc_vien_id > 0
+            !r.da_vao_phong ||
+            typeof r.hoc_vien_id !== "number" ||
+            !Number.isFinite(r.hoc_vien_id) ||
+            r.hoc_vien_id <= 0
           ) {
-            next.add(r.hoc_vien_id);
+            continue;
           }
+          const ms =
+            parseIsoToUtcMs(r.last_seen_at) ?? parseIsoToUtcMs(r.first_join_at);
+          if (ms != null) next.set(r.hoc_vien_id, ms);
         }
-        if (!cancelled) setDbVaoPhongTodayIds(next);
+        if (!cancelled) setDbLastSeenMsByHvId(next);
       } catch {
         /* ignore */
       }
@@ -1760,7 +1817,6 @@ export default function ClassroomClient({
 
     return () => {
       cancelled = true;
-      diemDanhRecordedKeyRef.current = null;
       const frame = dailyCallFrameRef.current;
       if (frame) {
         void frame.destroy().finally(() => {
@@ -2273,7 +2329,7 @@ export default function ClassroomClient({
                           minWidth: 0,
                         }}
                       >
-                        {teacherClassmates.map((s) => {
+                        {teacherClassmatesOnlineFirst.map((s) => {
                           const { dot, nameCls } = sidebarAttendanceStyle(s);
                           return (
                             <div key={s.hvId} className="online-row">

@@ -1,5 +1,7 @@
 "use client";
 
+import { vnCalendarDateString } from "@/lib/phong-hoc/diem-danh";
+import type { PhDiemDanhNgayRow } from "@/lib/phong-hoc/diem-danh";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { fetchTruongNganhLabelsForHv } from "@/lib/phong-hoc/lookup-by-email";
 import {
@@ -11,7 +13,14 @@ import {
   type StudentManageRow,
 } from "@/lib/phong-hoc/student-manage-data";
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import StudentManageLessonPicker from "./StudentManageLessonPicker";
 
 const DS = {
@@ -341,6 +350,18 @@ export default function StudentManageModal({
   /** Compact: mặc định thu gọn; chỉ enrollmentId trong Set là đang mở rộng (trường/ngành + ProgressCard đầy đủ). */
   const [compactExpandedIds, setCompactExpandedIds] = useState<Set<number>>(() => new Set());
 
+  type ManageMainTab = "danh-sach" | "diem-danh";
+  const [mainTab, setMainTab] = useState<ManageMainTab>("danh-sach");
+  const [ddRows, setDdRows] = useState<PhDiemDanhNgayRow[]>([]);
+  const [ddLoading, setDdLoading] = useState(false);
+  const [ddError, setDdError] = useState<string | null>(null);
+  const [ddFrom, setDdFrom] = useState(() => {
+    const t = new Date();
+    t.setDate(t.getDate() - 7);
+    return vnCalendarDateString(t);
+  });
+  const [ddTo, setDdTo] = useState(() => vnCalendarDateString());
+
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1024
   );
@@ -418,8 +439,52 @@ export default function StudentManageModal({
       setFiltered([]);
       setLoading(false);
       setCompactExpandedIds(new Set());
+      setMainTab("danh-sach");
+      setDdRows([]);
+      setDdError(null);
+      setDdLoading(false);
+      setDdFrom(() => {
+        const t = new Date();
+        t.setDate(t.getDate() - 7);
+        return vnCalendarDateString(t);
+      });
+      setDdTo(vnCalendarDateString());
     }
   }, [open]);
+
+  const fetchDiemDanh = useCallback(async () => {
+    if (!Number.isFinite(lopHocId) || lopHocId <= 0) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ddFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(ddTo)) {
+      setDdError("Chọn khoảng ngày hợp lệ.");
+      return;
+    }
+    setDdLoading(true);
+    setDdError(null);
+    try {
+      const u = new URL("/api/phong-hoc/diem-danh", window.location.origin);
+      u.searchParams.set("lopHocId", String(lopHocId));
+      u.searchParams.set("ngayFrom", ddFrom);
+      u.searchParams.set("ngayTo", ddTo);
+      const r = await fetch(u.toString(), { credentials: "include" });
+      const j = (await r.json()) as { rows?: PhDiemDanhNgayRow[]; error?: string };
+      if (!r.ok) {
+        setDdRows([]);
+        setDdError(j.error ?? "Không tải được điểm danh.");
+        return;
+      }
+      setDdRows(j.rows ?? []);
+    } catch (e: unknown) {
+      setDdRows([]);
+      setDdError(e instanceof Error ? e.message : "Lỗi mạng.");
+    } finally {
+      setDdLoading(false);
+    }
+  }, [lopHocId, ddFrom, ddTo]);
+
+  useEffect(() => {
+    if (!open || mainTab !== "diem-danh") return;
+    void fetchDiemDanh();
+  }, [open, mainTab, fetchDiemDanh]);
 
   useEffect(() => {
     let list = students;
@@ -674,6 +739,59 @@ export default function StudentManageModal({
               </button>
             </div>
 
+            <div
+              role="tablist"
+              aria-label="Chế độ quản lý"
+              style={{
+                padding: "8px 22px 0",
+                display: "flex",
+                gap: 8,
+                flexShrink: 0,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mainTab === "danh-sach"}
+                onClick={() => setMainTab("danh-sach")}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 10,
+                  border: `1.5px solid ${mainTab === "danh-sach" ? DS.colorTeacher : DS.colorBorder}`,
+                  background: mainTab === "danh-sach" ? `${DS.colorTeacher}14` : DS.colorBg,
+                  color: mainTab === "danh-sach" ? DS.colorTeacher : DS.colorSub,
+                  fontFamily: DS.font,
+                  fontSize: 13,
+                  fontWeight: mainTab === "danh-sach" ? 700 : 600,
+                  cursor: "pointer",
+                }}
+              >
+                Danh sách học viên
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mainTab === "diem-danh"}
+                onClick={() => setMainTab("diem-danh")}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 10,
+                  border: `1.5px solid ${mainTab === "diem-danh" ? DS.colorTeacher : DS.colorBorder}`,
+                  background: mainTab === "diem-danh" ? `${DS.colorTeacher}14` : DS.colorBg,
+                  color: mainTab === "diem-danh" ? DS.colorTeacher : DS.colorSub,
+                  fontFamily: DS.font,
+                  fontSize: 13,
+                  fontWeight: mainTab === "diem-danh" ? 700 : 600,
+                  cursor: "pointer",
+                }}
+              >
+                Điểm danh phòng học
+              </button>
+            </div>
+
+            {mainTab === "danh-sach" ? (
+              <>
             <div
               style={{
                 padding: "14px 22px 0",
@@ -1542,6 +1660,174 @@ export default function StudentManageModal({
                   })}
               </div>
             </div>
+              </>
+            ) : (
+              <div
+                style={{
+                  flex: 1,
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  margin: "12px 22px 20px",
+                  border: `1px solid ${DS.colorBorder}`,
+                  borderRadius: 12,
+                  minHeight: 0,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 14px",
+                    background: DS.colorSurface,
+                    borderBottom: `1px solid ${DS.colorBorder}`,
+                    flexShrink: 0,
+                  }}
+                >
+                  <span style={{ fontSize: 12, fontWeight: 600, color: DS.colorText }}>Khoảng ngày (VN)</span>
+                  <label style={{ fontSize: 12, color: DS.colorSub, display: "flex", alignItems: "center", gap: 6 }}>
+                    Từ
+                    <input
+                      type="date"
+                      value={ddFrom}
+                      onChange={(e) => setDdFrom(e.target.value)}
+                      style={{
+                        height: 36,
+                        border: `1px solid ${DS.colorBorder}`,
+                        borderRadius: 8,
+                        padding: "0 8px",
+                        fontFamily: DS.font,
+                        fontSize: 13,
+                        color: DS.colorText,
+                        background: DS.colorBg,
+                      }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, color: DS.colorSub, display: "flex", alignItems: "center", gap: 6 }}>
+                    Đến
+                    <input
+                      type="date"
+                      value={ddTo}
+                      onChange={(e) => setDdTo(e.target.value)}
+                      style={{
+                        height: 36,
+                        border: `1px solid ${DS.colorBorder}`,
+                        borderRadius: 8,
+                        padding: "0 8px",
+                        fontFamily: DS.font,
+                        fontSize: 13,
+                        color: DS.colorText,
+                        background: DS.colorBg,
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void fetchDiemDanh()}
+                    disabled={ddLoading}
+                    style={{
+                      marginLeft: "auto",
+                      padding: "8px 14px",
+                      borderRadius: 10,
+                      border: "none",
+                      background: DS.gradTeacher,
+                      color: "#fff",
+                      fontFamily: DS.font,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: ddLoading ? "wait" : "pointer",
+                      opacity: ddLoading ? 0.75 : 1,
+                    }}
+                  >
+                    Tải lại
+                  </button>
+                </div>
+
+                {ddLoading ? (
+                  <div style={{ padding: "16px 14px", fontSize: 13, color: "#94a3b8", textAlign: "center" }}>
+                    Đang tải điểm danh…
+                  </div>
+                ) : null}
+
+                {ddError && !ddLoading ? (
+                  <div
+                    style={{
+                      margin: "10px 14px 0",
+                      padding: 12,
+                      borderRadius: 10,
+                      background: "#fff5f5",
+                      fontSize: 13,
+                      color: "#ee5b9f",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {ddError}
+                  </div>
+                ) : null}
+
+                <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
+                  {!ddLoading && !ddError && ddRows.length === 0 ? (
+                    <div
+                      style={{
+                        padding: "48px 16px",
+                        textAlign: "center",
+                        fontSize: 13,
+                        color: DS.colorSub,
+                      }}
+                    >
+                      Chưa có dòng điểm danh trong khoảng đã chọn (hoặc bảng chưa được tạo trên Supabase).
+                    </div>
+                  ) : null}
+
+                  {!ddLoading && ddRows.length > 0 ? (
+                    <table
+                      style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        fontSize: 12,
+                        fontFamily: DS.font,
+                      }}
+                    >
+                      <thead>
+                        <tr style={{ background: DS.colorSurface, borderBottom: `1px solid ${DS.colorBorder}` }}>
+                          <th style={{ ...TH, textAlign: "left", padding: "10px 14px" }}>Ngày</th>
+                          <th style={{ ...TH, textAlign: "left", padding: "10px 14px" }}>Họ tên</th>
+                          <th style={{ ...TH, textAlign: "center", padding: "10px 14px", width: 110 }}>
+                            Vào phòng
+                          </th>
+                          <th style={{ ...TH, textAlign: "center", padding: "10px 14px", width: 110 }}>
+                            Gửi ảnh
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ddRows.map((row) => (
+                          <tr
+                            key={`${row.ngay}-${row.hoc_vien_id}-${row.id}`}
+                            style={{ borderBottom: `1px solid ${DS.colorBorder}` }}
+                          >
+                            <td style={{ padding: "10px 14px", color: DS.colorText, fontVariantNumeric: "tabular-nums" }}>
+                              {row.ngay}
+                            </td>
+                            <td style={{ padding: "10px 14px", color: DS.colorText, fontWeight: 600 }}>
+                              {row.full_name?.trim() || `HV #${row.hoc_vien_id}`}
+                            </td>
+                            <td style={{ padding: "10px 14px", textAlign: "center", color: row.da_vao_phong ? "#15803d" : DS.colorMuted }}>
+                              {row.da_vao_phong ? "✓" : "—"}
+                            </td>
+                            <td style={{ padding: "10px 14px", textAlign: "center", color: row.da_gui_anh ? "#15803d" : DS.colorMuted }}>
+                              {row.da_gui_anh ? "✓" : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : null}
+                </div>
+              </div>
+            )}
           </div>
 
           <div

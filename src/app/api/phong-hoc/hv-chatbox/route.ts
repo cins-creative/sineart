@@ -1,8 +1,8 @@
+import { upsertDiemDanhImage } from "@/lib/phong-hoc/diem-danh";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { NextResponse } from "next/server";
 
 import { hvChatboxInsert, hvChatboxSelectByLop } from "./lop-column";
-
 export const runtime = "nodejs";
 
 type HvChatboxUserType = "Student" | "Teacher";
@@ -99,6 +99,19 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   try {
     const { message } = await hvChatboxInsert(sb, lopHocId, base);
+
+    if (ut === "Student" && photo && name != null && Number.isFinite(name)) {
+      const { data: en } = await sb
+        .from("ql_quan_ly_hoc_vien")
+        .select("hoc_vien_id")
+        .eq("id", name)
+        .maybeSingle();
+      const hvPk = Number((en as { hoc_vien_id?: unknown } | null)?.hoc_vien_id);
+      if (Number.isFinite(hvPk) && hvPk > 0) {
+        await upsertDiemDanhImage(sb, lopHocId, hvPk);
+      }
+    }
+
     return NextResponse.json({ message });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Gửi tin thất bại.";

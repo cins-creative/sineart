@@ -81,11 +81,23 @@ Xem thêm ngữ cảnh site: `SITE_STRUCTURE.md`, `HOMEPAGE_BRIEF.md`.
 
 ---
 
+## Admin — đã triển khai stale-while-revalidate (`localStorage`)
+
+> Chỉ danh sách nội bộ; dữ liệu nhạy cảm trên máy trình duyệt admin. Key prefix `sineart.admin.cache.v1.*`.  
+> Khi `router.refresh()` sau thao tác, server gửi `reloadSignal` mới → client refetch + cập nhật cache.
+
+| Route | File chính | Key `localStorage` | Ghi chú |
+|-------|------------|--------------------|--------|
+| `/admin/dashboard/quan-ly-hoc-vien` | `QuanLyHocVienBootstrap.tsx`, `quan-ly-hoc-vien-local-cache.ts` | `sineart.admin.cache.v1.quan-ly-hoc-vien` | Tối đa 30 học viên mới nhất (trim); helper `QUAN_LY_HOC_VIEN_CACHE_MAX_STUDENTS`. |
+| `/admin/dashboard/quan-ly-nhan-su` | `QuanLyNhanSuBootstrap.tsx`, `quan-ly-nhan-su-local-cache.ts` | `sineart.admin.cache.v1.quan-ly-nhan-su` | Tối đa 30 nhân sự đầu danh sách (cùng sort API); `chi_nhanh` / ban / phòng giữ full để dropdown; helper `QUAN_LY_NHAN_SU_CACHE_MAX_STAFF`. |
+
+---
+
 ## Trang **không** ghi trong brief này (mặc định chưa cache client)
 
 | Nhóm | Lý do |
 |------|--------|
-| `src/app/admin/**` | Nội bộ; dữ liệu nhạy cảm; không dùng pattern “public cache” chung. |
+| `src/app/admin/**` (ngoài các route trong bảng Admin phía trên) | Nội bộ + PII — chỉ thêm khi có brief riêng. |
 | `src/app/hoc-vien/**` | Dữ liệu cá nhân — xử lý riêng, không gợi ý `localStorage` chung. |
 | `/donghocphi` | Công cụ thanh toán / tra cứu — không cache nhầm PII. |
 

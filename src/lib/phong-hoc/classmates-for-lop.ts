@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Một dòng học viên trong lớp — dùng tab Lớp / Qlý (ClassroomClient). */
 export type ClassmateListRow = {
+  /** `ql_quan_ly_hoc_vien.id` — khớp `hv_chatbox.name` khi HV gửi chat. */
+  enrollmentId: number;
   hvId: number;
   n: string;
   i: string;
@@ -162,6 +164,7 @@ export async function fetchClassmatesForLop(
 
   const out: ClassmateListRow[] = [];
   for (const r of uniqueRows) {
+    const enrollmentId = Number((r as QlhvRow).id);
     const hvId = Number(r.hoc_vien_id);
     if (!Number.isFinite(hvId)) continue;
     const n = nameByHv.get(hvId) ?? "Học viên";
@@ -181,6 +184,7 @@ export async function fetchClassmatesForLop(
       }
     }
     out.push({
+      enrollmentId: Number.isFinite(enrollmentId) && enrollmentId > 0 ? enrollmentId : 0,
       hvId,
       n,
       i: initialFromName(n),

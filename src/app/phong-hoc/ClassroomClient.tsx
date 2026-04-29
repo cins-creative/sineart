@@ -7,6 +7,8 @@ import {
   saveClassroomSession,
   type ClassroomSessionRecord,
 } from "@/lib/phong-hoc/classroom-session";
+import { vnCalendarDateString } from "@/lib/phong-hoc/diem-danh";
+import { parseHvIdFromDailyDisplayName } from "@/lib/phong-hoc/diem-danh-parse";
 import {
   fetchClassmatesForLop,
   formatClassmateProgressLine,
@@ -328,6 +330,7 @@ const SESSIONS = {
 
 const STUDENTS_MOCK: StudentRow[] = [
   {
+    enrollmentId: 800001,
     hvId: 900001,
     n: "Minh Anh",
     i: "M",
@@ -339,6 +342,7 @@ const STUDENTS_MOCK: StudentRow[] = [
     exMon: "Trang trí màu",
   },
   {
+    enrollmentId: 800002,
     hvId: 900002,
     n: "Hà Linh",
     i: "H",
@@ -350,6 +354,7 @@ const STUDENTS_MOCK: StudentRow[] = [
     exMon: "Hình họa",
   },
   {
+    enrollmentId: 800003,
     hvId: 900003,
     n: "Tuấn Kiệt",
     i: "T",
@@ -361,6 +366,7 @@ const STUDENTS_MOCK: StudentRow[] = [
     exMon: "Trang trí màu",
   },
   {
+    enrollmentId: 800004,
     hvId: 900004,
     n: "Phương Vy",
     i: "P",
@@ -372,6 +378,7 @@ const STUDENTS_MOCK: StudentRow[] = [
     exMon: "Trang trí màu",
   },
   {
+    enrollmentId: 800005,
     hvId: 900005,
     n: "Khải Minh",
     i: "K",
@@ -687,6 +694,11 @@ export default function ClassroomClient({
   );
   /** `undefined` = chưa tải; có session GV thì sau fetch là danh sách `ql_quan_ly_hoc_vien` + hồ sơ. */
   const [classmatesReal, setClassmatesReal] = useState<ClassmateListRow[] | undefined>(undefined);
+  /** `ql_thong_tin_hoc_vien.id` — parse từ Daily `user_name` suffix `#HV{id}`. */
+  const [dailyOnlineHvIds, setDailyOnlineHvIds] = useState<Set<number>>(() => new Set());
+  const diemDanhRecordedKeyRef = useRef<string | null>(null);
+  /** Session cũ có thể thiếu `data.id` — tra `hoc_vien_id` qua `qlhv_id` để Daily `#HV…` khớp sidebar GV. */
+  const [hvPkResolvedForDaily, setHvPkResolvedForDaily] = useState<number | null>(null);
   const [studentManageOpen, setStudentManageOpen] = useState(false);
   const [chatProgressPicker, setChatProgressPicker] = useState<ChatProgressPickerState>(null);
   /** Màn «không vào được lớp»: mở lại bảng đăng nhập như nút «Vào học» trên NavBar. */
@@ -902,6 +914,42 @@ export default function ClassroomClient({
     }
     return NaN;
   }, [storedSession]);
+
+  useEffect(() => {
+    if (storedSession?.userType !== "Student") {
+      setHvPkResolvedForDaily(null);
+      return;
+    }
+    const direct = storedSession.data.id;
+    if (Number.isFinite(direct) && direct > 0) {
+      setHvPkResolvedForDaily(null);
+      return;
+    }
+    const qlhv = storedSession.data.qlhv_id;
+    if (!browserSb || !Number.isFinite(qlhv) || qlhv <= 0) {
+      setHvPkResolvedForDaily(null);
+      return;
+    }
+    let cancelled = false;
+    void browserSb
+      .from("ql_quan_ly_hoc_vien")
+      .select("hoc_vien_id")
+      .eq("id", qlhv)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          setHvPkResolvedForDaily(null);
+          return;
+        }
+        const pk = Number((data as { hoc_vien_id?: unknown }).hoc_vien_id);
+        if (Number.isFinite(pk) && pk > 0) setHvPkResolvedForDaily(pk);
+        else setHvPkResolvedForDaily(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storedSession, browserSb]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -1235,14 +1283,75 @@ export default function ClassroomClient({
 
   const participantDisplayName = useMemo(() => {
     const n = d.full_name?.trim();
-    if (n) return n;
-    const e = d.email?.trim();
-    if (e) return e;
-    return "Thành viên";
-  }, [d.full_name, d.email]);
+    let base = n ? n : "";
+    if (!base) {
+      const e = d.email?.trim();
+      base = e ? e : "Thành viên";
+    }
+    if (storedSession?.userType !== "Student") return base;
+    const hvPk =
+      Number.isFinite(storedSession.data.id) && storedSession.data.id > 0
+        ? storedSession.data.id
+        : hvPkResolvedForDaily;
+    if (hvPk != null && Number.isFinite(hvPk) && hvPk > 0) {
+      return `${base} #HV${hvPk}`;
+    }
+    return base;
+  }, [
+    d.full_name,
+    d.email,
+    storedSession?.userType,
+    storedSession?.data.id,
+    hvPkResolvedForDaily,
+  ]);
 
   const liveChatEnabled =
     mounted && storedSession !== null && Number.isFinite(lopHocIdForDb);
+
+  const teacherPresenceSidebar =
+    isTeacher &&
+    storedSession?.userType === "Teacher" &&
+    classmatesReal !== undefined;
+
+  const photoVisitWhileOnline = useMemo(() => {
+    const set = new Set<number>();
+    if (!teacherPresenceSidebar || !liveChatEnabled) return set;
+    const enToHv = new Map(classmatesReal!.map((x) => [x.enrollmentId, x.hvId]));
+    for (const m of hvChatRows) {
+      if (m.usertype !== "Student" || !m.photo?.trim()) continue;
+      const en = parseQlhvKey(m.name);
+      if (en == null) continue;
+      const hvId = enToHv.get(en);
+      if (hvId != null && dailyOnlineHvIds.has(hvId)) set.add(hvId);
+    }
+    return set;
+  }, [
+    teacherPresenceSidebar,
+    liveChatEnabled,
+    classmatesReal,
+    hvChatRows,
+    dailyOnlineHvIds,
+  ]);
+
+  const sidebarAttendanceStyle = useCallback(
+    (s: ClassmateListRow): { dot: "dg" | "dy" | "dr"; nameCls: string } => {
+      if (!teacherPresenceSidebar) {
+        const dot: "dg" | "dy" | "dr" =
+          s.st === true ? "dg" : s.st === "late" ? "dy" : "dr";
+        const nameCls =
+          dot === "dg" ? "phc-o-ok" : dot === "dy" ? "phc-o-warn" : "phc-o-muted";
+        return { dot, nameCls };
+      }
+      if (!dailyOnlineHvIds.has(s.hvId)) {
+        return { dot: "dr", nameCls: "phc-o-muted" };
+      }
+      if (photoVisitWhileOnline.has(s.hvId)) {
+        return { dot: "dg", nameCls: "phc-o-ok" };
+      }
+      return { dot: "dy", nameCls: "phc-o-warn" };
+    },
+    [teacherPresenceSidebar, dailyOnlineHvIds, photoVisitWhileOnline]
+  );
 
   /** GV giờ cũng có tab «Bài giảng» (tab id `third`) — không còn redirect về `lop`. */
 
@@ -1496,6 +1605,7 @@ export default function ClassroomClient({
           if (dailyCallFrameRef.current === prev) dailyCallFrameRef.current = null;
         });
       }
+      setDailyOnlineHvIds(new Set());
       return;
     }
 
@@ -1503,6 +1613,10 @@ export default function ClassroomClient({
     if (!container) return;
 
     let cancelled = false;
+    const trackPresence = isTeacher;
+    const forStudentRecord =
+      storedSession?.userType === "Student" && Number.isFinite(lopHocIdForDb);
+    const lopIdRecord = lopHocIdForDb;
 
     void import("@daily-co/daily-js").then(({ default: DailyIframe }) => {
       if (cancelled || !dailyMeetContainerRef.current) return;
@@ -1530,14 +1644,58 @@ export default function ClassroomClient({
         });
         dailyCallFrameRef.current = frame;
 
-        void frame.join({ url: meetingRoomUrl, userName: participantDisplayName }).catch(() => {
-          /* lỗi join Daily — người dùng vẫn có thể thử tải lại trang */
+        const syncParticipants = () => {
+          if (!trackPresence) return;
+          try {
+            const p = frame.participants() as Record<
+              string,
+              { user_name?: string; local?: boolean }
+            >;
+            const ids = new Set<number>();
+            for (const part of Object.values(p)) {
+              const hid = parseHvIdFromDailyDisplayName(part?.user_name);
+              if (hid != null) ids.add(hid);
+            }
+            setDailyOnlineHvIds(ids);
+          } catch {
+            /* ignore */
+          }
+        };
+
+        if (trackPresence) {
+          frame.on("participant-joined", syncParticipants);
+          frame.on("participant-left", syncParticipants);
+        }
+
+        frame.on("joined-meeting", () => {
+          syncParticipants();
+          if (!forStudentRecord || cancelled || !Number.isFinite(lopIdRecord)) return;
+          const day = vnCalendarDateString();
+          const key = `${day}-${lopIdRecord}`;
+          if (diemDanhRecordedKeyRef.current === key) return;
+          diemDanhRecordedKeyRef.current = key;
+          void fetch("/api/phong-hoc/diem-danh/record", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ lopHocId: lopIdRecord }),
+          }).catch(() => {
+            /* ignore */
+          });
         });
+
+        try {
+          await frame.join({ url: meetingRoomUrl, userName: participantDisplayName });
+        } catch {
+          /* lỗi join Daily — người dùng vẫn có thể thử tải lại trang */
+        }
       })();
     });
 
     return () => {
       cancelled = true;
+      diemDanhRecordedKeyRef.current = null;
+      setDailyOnlineHvIds(new Set());
       const frame = dailyCallFrameRef.current;
       if (frame) {
         void frame.destroy().finally(() => {
@@ -1545,7 +1703,13 @@ export default function ClassroomClient({
         });
       }
     };
-  }, [meetingRoomUrl, participantDisplayName]);
+  }, [
+    meetingRoomUrl,
+    participantDisplayName,
+    isTeacher,
+    storedSession?.userType,
+    lopHocIdForDb,
+  ]);
 
   const toggleDark = () => {
     setDark((prev) => {
@@ -1641,8 +1805,10 @@ export default function ClassroomClient({
   };
 
   const myStudentId =
-    storedSession?.userType === "Student" && Number.isFinite(storedSession.data.id)
-      ? storedSession.data.id
+    storedSession?.userType === "Student"
+      ? Number.isFinite(storedSession.data.id) && storedSession.data.id > 0
+        ? storedSession.data.id
+        : hvPkResolvedForDaily
       : null;
 
   const classFilterLabel = useMemo(() => {
@@ -2042,23 +2208,21 @@ export default function ClassroomClient({
                           minWidth: 0,
                         }}
                       >
-                        {teacherClassmates.map((s) => (
-                          <div key={s.hvId} className="online-row">
-                            <div className="o-av" style={{ background: s.c }}>
-                              {s.i}
+                        {teacherClassmates.map((s) => {
+                          const { dot, nameCls } = sidebarAttendanceStyle(s);
+                          return (
+                            <div key={s.hvId} className="online-row">
+                              <div className="o-av" style={{ background: s.c }}>
+                                {s.i}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className={cx("o-name", nameCls)}>{s.n}</div>
+                                <div className="o-ex">{formatClassmateProgressLine(s)}</div>
+                              </div>
+                              <div className={cx("o-dot", dot)} />
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div className="o-name">{s.n}</div>
-                              <div className="o-ex">{formatClassmateProgressLine(s)}</div>
-                            </div>
-                            <div
-                              className={cx(
-                                "o-dot",
-                                s.st === true ? "dg" : s.st === "late" ? "dy" : "dr"
-                              )}
-                            />
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </>

@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
-import { HR_NHAN_SU_SELECT_MIN, mapHrNhanSuRow, type AdminNhanSuRow } from "@/lib/data/admin-quan-ly-nhan-su";
+import type { QuanLyNhanSuViewBundle } from "@/lib/admin/quan-ly-nhan-su-local-cache";
+import {
+  fetchAdminQuanLyNhanSuBundle,
+  HR_NHAN_SU_SELECT_MIN,
+  mapHrNhanSuRow,
+  type AdminNhanSuRow,
+} from "@/lib/data/admin-quan-ly-nhan-su";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const ADMIN_PATH = "/admin/dashboard/quan-ly-nhan-su";
@@ -562,4 +568,34 @@ export async function deleteHrBangTinhLuongFull(bang_tinh_luong_id: number): Pro
 
   revalidatePath(ADMIN_PATH);
   return { ok: true };
+}
+
+export async function fetchQuanLyNhanSuBundleAction(): Promise<
+  | { ok: true; bundle: QuanLyNhanSuViewBundle }
+  | { ok: false; error: string }
+> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ. Đăng nhập lại." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
+
+  const raw = await fetchAdminQuanLyNhanSuBundle(supabase);
+  if (raw.error) return { ok: false, error: raw.error };
+
+  const bundle: QuanLyNhanSuViewBundle = {
+    staff: raw.staff,
+    chiNhanhById: raw.chiNhanhById,
+    banById: raw.banById,
+    phongBanByStaffId: raw.phongBanByStaffId,
+    phongIdsByStaffId: raw.phongIdsByStaffId,
+    allPhongOptions: raw.allPhongOptions,
+    phongToBanId: raw.phongToBanId,
+    banIdsByStaffId: raw.banIdsByStaffId,
+    bangTinhLuongByStaffId: raw.bangTinhLuongByStaffId,
+    lopGiangByTeacherId: raw.lopGiangByTeacherId,
+    usedMinimalSelect: raw.usedMinimalSelect,
+  };
+
+  return { ok: true, bundle };
 }

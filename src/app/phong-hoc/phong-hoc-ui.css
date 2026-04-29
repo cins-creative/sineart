@@ -1559,6 +1559,16 @@
   min-width: 0;
 }
 
+.phc .o-name.phc-o-muted {
+  color: var(--phc-muted);
+}
+.phc .o-name.phc-o-warn {
+  color: #ca8a04;
+}
+.phc .o-name.phc-o-ok {
+  color: #15803d;
+}
+
 .phc .o-ex {
   font-size: 10px;
   color: var(--phc-muted);
@@ -3537,6 +3547,16 @@
 
 .phc.phc--dark .o-dot.dr {
   background: #575c66;
+}
+
+.phc.phc--dark .o-name.phc-o-muted {
+  color: var(--phc-muted2);
+}
+.phc.phc--dark .o-name.phc-o-warn {
+  color: #fbbf24;
+}
+.phc.phc--dark .o-name.phc-o-ok {
+  color: var(--phc-mint);
 }
 
 .phc.phc--dark .cbub.me {

@@ -163,11 +163,15 @@ export async function syncPhongHocCookiesWithStorage(): Promise<void> {
     if (s?.userType === "Teacher") {
       const hr_id = s.data.id;
       const lop_hoc_id = s.data.lop_hoc_id;
-      if (Number.isFinite(hr_id) && Number.isFinite(lop_hoc_id)) {
+      if (Number.isFinite(hr_id) && hr_id > 0) {
+        const payload: { hr_id: number; lop_hoc_id?: number } = { hr_id };
+        if (Number.isFinite(lop_hoc_id) && lop_hoc_id > 0) {
+          payload.lop_hoc_id = lop_hoc_id;
+        }
         await fetch("/api/phong-hoc/sync-gv-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ hr_id, lop_hoc_id }),
+          body: JSON.stringify(payload),
           credentials: "include",
         });
         return;

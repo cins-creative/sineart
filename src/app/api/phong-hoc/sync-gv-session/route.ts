@@ -9,8 +9,10 @@ export const runtime = "nodejs";
  * Đặt cookie httpOnly để SSR (vd. `/he-thong-bai-tap/[slug]`) nhận diện GV đã
  * đăng nhập Phòng học (localStorage không đi qua Supabase Auth).
  *
- * Body: `{ hr_id, lop_hoc_id }` — verify `ql_lop_hoc.teacher == hr_id` để đảm
- * bảo GV chủ nhiệm đúng lớp, rồi ký cookie theo `hr_nhan_su.id`.
+ * Body:
+ * - `{ hr_id, lop_hoc_id }` — verify `ql_lop_hoc.teacher == hr_id` (GV chủ nhiệm đúng lớp).
+ * - `{ hr_id }` — chỉ verify `hr_id` tồn tại trong `hr_nhan_su` (xem bài giảng khi session
+ *   không gắn lớp hoặc mở link trực tiếp).
  */
 export async function POST(req: Request): Promise<NextResponse> {
   const sb = createServiceRoleClient();
@@ -32,37 +34,38 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   const hrId = Number(body.hr_id);
-  const lopHocId = Number(body.lop_hoc_id);
-  if (
-    !Number.isFinite(hrId) ||
-    hrId <= 0 ||
-    !Number.isFinite(lopHocId) ||
-    lopHocId <= 0
-  ) {
+  if (!Number.isFinite(hrId) || hrId <= 0) {
     return NextResponse.json(
-      { ok: false, error: "hr_id / lop_hoc_id không hợp lệ.", code: "BAD_BODY" },
+      { ok: false, error: "hr_id không hợp lệ.", code: "BAD_BODY" },
       { status: 400 }
     );
   }
 
-  const { data: lopRow, error: eLop } = await sb
-    .from("ql_lop_hoc")
-    .select("id, teacher")
-    .eq("id", lopHocId)
-    .maybeSingle();
-  if (eLop || !lopRow) {
-    return NextResponse.json(
-      { ok: false, error: "Không tìm thấy lớp.", code: "NO_LOP" },
-      { status: 403 }
-    );
-  }
+  const rawLop = body.lop_hoc_id;
+  const lopHocId =
+    rawLop != null && rawLop !== "" && Number.isFinite(Number(rawLop)) ? Number(rawLop) : NaN;
+  const hasLop = Number.isFinite(lopHocId) && lopHocId > 0;
 
-  const assignedTeacher = Number((lopRow as { teacher?: unknown }).teacher);
-  if (!Number.isFinite(assignedTeacher) || assignedTeacher !== hrId) {
-    return NextResponse.json(
-      { ok: false, error: "GV không phải chủ nhiệm lớp này.", code: "FORBIDDEN" },
-      { status: 403 }
-    );
+  if (hasLop) {
+    const { data: lopRow, error: eLop } = await sb
+      .from("ql_lop_hoc")
+      .select("id, teacher")
+      .eq("id", lopHocId)
+      .maybeSingle();
+    if (eLop || !lopRow) {
+      return NextResponse.json(
+        { ok: false, error: "Không tìm thấy lớp.", code: "NO_LOP" },
+        { status: 403 }
+      );
+    }
+
+    const assignedTeacher = Number((lopRow as { teacher?: unknown }).teacher);
+    if (!Number.isFinite(assignedTeacher) || assignedTeacher !== hrId) {
+      return NextResponse.json(
+        { ok: false, error: "GV không phải chủ nhiệm lớp này.", code: "FORBIDDEN" },
+        { status: 403 }
+      );
+    }
   }
 
   const { data: nsRow, error: eNs } = await sb

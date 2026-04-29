@@ -1,13 +1,9 @@
 import { redirect } from "next/navigation";
 
-import QuanLyHocVienView from "@/app/admin/dashboard/quan-ly-hoc-vien/QuanLyHocVienView";
-import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
-import {
-  fetchAdminQuanLyHocVienBundle,
-  type AdminQlhvBaiTapBrief,
-} from "@/lib/data/admin-quan-ly-hoc-vien";
+import QuanLyHocVienBootstrap from "@/app/admin/dashboard/quan-ly-hoc-vien/QuanLyHocVienBootstrap";
 import { staffBelongsToTuVanPhong } from "@/lib/admin/dashboard-nav-visibility";
-import { fetchDhNguyenVongCatalog, type DhpDhCatalog } from "@/lib/donghocphi/dh-catalog";
+import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
+import { fetchDhNguyenVongCatalog } from "@/lib/donghocphi/dh-catalog";
 import {
   fetchAdminStaffShellPhongTenPhongs,
   fetchAdminStaffShellProfile,
@@ -27,11 +23,8 @@ export default async function QuanLyHocVienPageData() {
     );
   }
 
-  const [bundle, dhRes] = await Promise.all([
-    fetchAdminQuanLyHocVienBundle(supabase),
-    fetchDhNguyenVongCatalog(supabase),
-  ]);
-  const dhCatalog: DhpDhCatalog | null = !dhRes.error && dhRes.catalog ? dhRes.catalog : null;
+  const dhRes = await fetchDhNguyenVongCatalog(supabase);
+  const dhCatalog = !dhRes.error && dhRes.catalog ? dhRes.catalog : null;
 
   const [profile, phongTenPhongs] = await Promise.all([
     fetchAdminStaffShellProfile(supabase, session.staffId),
@@ -41,35 +34,13 @@ export default async function QuanLyHocVienPageData() {
     (profile.vai_tro ?? "").trim().toLowerCase() === "admin" ||
     staffBelongsToTuVanPhong(phongTenPhongs);
 
-  if (bundle.error) {
-    return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
-        Không tải được dữ liệu: {bundle.error}
-      </div>
-    );
-  }
-
-  const lopOptions = Object.values(bundle.lopById)
-    .map((l) => ({
-      id: l.id,
-      name: l.class_name || l.class_full_name || `Lớp #${l.id}`,
-      mon_hoc: l.mon_hoc,
-      special: l.special,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name, "vi"));
-
-  const baiTapById: Record<string, AdminQlhvBaiTapBrief> = {};
-  for (const [k, v] of Object.entries(bundle.baiTapById)) {
-    baiTapById[k] = v;
-  }
+  /** Đổi theo từng request RSC (kể cả `router.refresh()`) — client dùng để refetch bundle. */
+  // eslint-disable-next-line react-hooks/purity -- `Date.now` cố ý: không cần idempotent giữa các request
+  const reloadSignal = Date.now();
 
   return (
-    <QuanLyHocVienView
-      students={bundle.students}
-      enrollments={bundle.enrollments}
-      lopOptions={lopOptions}
-      baiTapById={baiTapById}
-      truongNganhByHvId={bundle.truongNganhByHvId}
+    <QuanLyHocVienBootstrap
+      reloadSignal={reloadSignal}
       dhCatalog={dhCatalog}
       adminStaffId={session.staffId}
       dhpShowExtraVndDiscount={dhpShowExtraVndDiscount}

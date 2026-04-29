@@ -14,8 +14,10 @@ import {
   fetchAdminStaffShellPhongTenPhongs,
   fetchAdminStaffShellProfile,
 } from "@/lib/data/admin-shell-user";
+import { fetchAdminQuanLyHocVienBundle } from "@/lib/data/admin-quan-ly-hoc-vien";
 import { insertQlQuanLyHocVienEnrollment } from "@/lib/supabase/insert-ql-quan-ly-hoc-vien";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import type { QuanLyHocVienViewBundle } from "@/lib/admin/quan-ly-hoc-vien-local-cache";
 
 export type QlhvActionState = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -929,7 +931,6 @@ export async function adminCreateHpDonThu(payload: {
   }
 
   const discountDong = Math.round(subtotal * (pct / 100));
-  const afterKm = Math.max(0, Math.round(subtotal - discountDong));
 
   // Kiểm tra combo discount dựa trên goi_ids trong hp_combo_mon
   let comboDiscountDong = 0;
@@ -1071,4 +1072,28 @@ export async function listHpComboMonForDhp(): Promise<
   });
 
   return { ok: true, rows };
+}
+
+export async function fetchQuanLyHocVienBundleAction(): Promise<
+  | { ok: true; bundle: QuanLyHocVienViewBundle }
+  | { ok: false; error: string }
+> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const raw = await fetchAdminQuanLyHocVienBundle(supabase);
+  if (raw.error) return { ok: false, error: raw.error };
+
+  const bundle: QuanLyHocVienViewBundle = {
+    students: raw.students,
+    enrollments: raw.enrollments,
+    lopById: raw.lopById,
+    baiTapById: raw.baiTapById,
+    truongNganhByHvId: raw.truongNganhByHvId,
+  };
+
+  return { ok: true, bundle };
 }

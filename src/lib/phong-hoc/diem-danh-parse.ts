@@ -15,12 +15,39 @@ export function parseHvIdFromDailyDisplayName(userName: string | null | undefine
   );
 }
 
-/** Trường Daily có thể là `user_name` hoặc `userName` (SDK). */
+/** Trường Daily có thể là `user_name` / `userName` / `name` (tùy bản SDK / prebuilt). */
 export function parseHvIdFromDailyParticipant(part: {
   user_name?: string | null;
   userName?: string | null;
+  name?: string | null;
 } | null): number | null {
   if (!part) return null;
-  const raw = part.user_name ?? part.userName;
+  const raw = part.user_name ?? part.userName ?? part.name;
   return parseHvIdFromDailyDisplayName(raw ?? undefined);
+}
+
+/**
+ * Duyệt nông các object lồng nhau (participant Daily đôi khi có `info`, …) để tìm chuỗi chứa `#HV{id}`.
+ */
+export function parseHvIdFromDailyParticipantDeep(part: unknown): number | null {
+  const flat = parseHvIdFromDailyParticipant(
+    part as {
+      user_name?: string | null;
+      userName?: string | null;
+      name?: string | null;
+    } | null
+  );
+  if (flat != null) return flat;
+
+  const walk = (o: unknown, depth: number): number | null => {
+    if (depth > 8 || o === null || o === undefined) return null;
+    if (typeof o === "string") return parseHvIdFromDailyDisplayName(o);
+    if (typeof o !== "object") return null;
+    for (const v of Object.values(o as Record<string, unknown>)) {
+      const id = walk(v, depth + 1);
+      if (id != null) return id;
+    }
+    return null;
+  };
+  return walk(part, 0);
 }

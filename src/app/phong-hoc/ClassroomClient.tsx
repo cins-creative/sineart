@@ -9,7 +9,7 @@ import {
   type ClassroomSessionRecord,
 } from "@/lib/phong-hoc/classroom-session";
 import { vnCalendarDateString } from "@/lib/phong-hoc/diem-danh";
-import { parseHvIdFromDailyParticipant } from "@/lib/phong-hoc/diem-danh-parse";
+import { parseHvIdFromDailyParticipantDeep } from "@/lib/phong-hoc/diem-danh-parse";
 import {
   fetchClassmatesForLop,
   formatClassmateProgressLine,
@@ -697,6 +697,8 @@ export default function ClassroomClient({
   const [classmatesReal, setClassmatesReal] = useState<ClassmateListRow[] | undefined>(undefined);
   /** `ql_thong_tin_hoc_vien.id` — parse từ Daily `user_name` suffix `#HV{id}`. */
   const [dailyOnlineHvIds, setDailyOnlineHvIds] = useState<Set<number>>(() => new Set());
+  /** Theo DB trong ngày (VN) — fallback khi Daily không trả đủ tên participant. */
+  const [dbVaoPhongTodayIds, setDbVaoPhongTodayIds] = useState<Set<number>>(() => new Set());
   const diemDanhRecordedKeyRef = useRef<string | null>(null);
   /** Session cũ có thể thiếu `data.id` — tra `hoc_vien_id` qua `qlhv_id` để Daily `#HV…` khớp sidebar GV. */
   const [hvPkResolvedForDaily, setHvPkResolvedForDaily] = useState<number | null>(null);
@@ -1368,16 +1370,64 @@ export default function ClassroomClient({
           dot === "dg" ? "phc-o-ok" : dot === "dy" ? "phc-o-warn" : "phc-o-muted";
         return { dot, nameCls };
       }
-      if (!dailyOnlineHvIds.has(s.hvId)) {
-        return { dot: "dr", nameCls: "phc-o-muted" };
+      const inDaily = dailyOnlineHvIds.has(s.hvId);
+      const inDbToday = dbVaoPhongTodayIds.has(s.hvId);
+      if (inDaily) {
+        if (photoVisitWhileOnline.has(s.hvId)) {
+          return { dot: "dg", nameCls: "phc-o-ok" };
+        }
+        return { dot: "dy", nameCls: "phc-o-warn" };
       }
-      if (photoVisitWhileOnline.has(s.hvId)) {
-        return { dot: "dg", nameCls: "phc-o-ok" };
+      if (inDbToday) {
+        return { dot: "dy", nameCls: "phc-o-warn" };
       }
-      return { dot: "dy", nameCls: "phc-o-warn" };
+      return { dot: "dr", nameCls: "phc-o-muted" };
     },
-    [teacherPresenceSidebar, dailyOnlineHvIds, photoVisitWhileOnline]
+    [teacherPresenceSidebar, dailyOnlineHvIds, dbVaoPhongTodayIds, photoVisitWhileOnline]
   );
+
+  /** GV: đồng bộ sidebar «Online» với DB trong ngày (HV đã gọi record) khi Daily không parse được tên. */
+  useEffect(() => {
+    if (!mounted || !teacherPresenceSidebar || !Number.isFinite(lopHocIdForDb)) {
+      setDbVaoPhongTodayIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      const day = vnCalendarDateString();
+      try {
+        const u = new URL("/api/phong-hoc/diem-danh", window.location.origin);
+        u.searchParams.set("lopHocId", String(lopHocIdForDb));
+        u.searchParams.set("ngayFrom", day);
+        u.searchParams.set("ngayTo", day);
+        const res = await fetch(u.toString(), { credentials: "include" });
+        if (cancelled || !res.ok) return;
+        const j = (await res.json()) as {
+          rows?: { hoc_vien_id?: number; da_vao_phong?: boolean }[];
+        };
+        const next = new Set<number>();
+        for (const r of j.rows ?? []) {
+          if (
+            r.da_vao_phong &&
+            typeof r.hoc_vien_id === "number" &&
+            Number.isFinite(r.hoc_vien_id) &&
+            r.hoc_vien_id > 0
+          ) {
+            next.add(r.hoc_vien_id);
+          }
+        }
+        if (!cancelled) setDbVaoPhongTodayIds(next);
+      } catch {
+        /* ignore */
+      }
+    };
+    void tick();
+    const id = window.setInterval(tick, 12_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [mounted, teacherPresenceSidebar, lopHocIdForDb]);
 
   /** GV giờ cũng có tab «Bài giảng» (tab id `third`) — không còn redirect về `lop`. */
 
@@ -1677,13 +1727,10 @@ export default function ClassroomClient({
         const syncParticipants = () => {
           if (!trackPresence) return;
           try {
-            const p = frame.participants() as Record<
-              string,
-              { user_name?: string; userName?: string; local?: boolean }
-            >;
+            const p = frame.participants() as Record<string, unknown>;
             const ids = new Set<number>();
             for (const part of Object.values(p)) {
-              const hid = parseHvIdFromDailyParticipant(part);
+              const hid = parseHvIdFromDailyParticipantDeep(part);
               if (hid != null) ids.add(hid);
             }
             setDailyOnlineHvIds(ids);
@@ -1722,14 +1769,12 @@ export default function ClassroomClient({
               });
               if (res.ok) {
                 diemDanhRecordedKeyRef.current = key;
-              } else if (process.env.NODE_ENV === "development") {
+              } else {
                 const t = await res.text().catch(() => "");
-                console.warn("[diem-danh/record]", res.status, t);
+                console.warn("[phong-hoc] diem-danh/record failed", res.status, t);
               }
             } catch (e) {
-              if (process.env.NODE_ENV === "development") {
-                console.warn("[diem-danh/record] fetch failed", e);
-              }
+              console.warn("[phong-hoc] diem-danh/record fetch error", e);
             }
           })();
         });

@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Thi thử — Sine Art",
+  description:
+    "Ôn luyện và thi thử kiến thức mỹ thuật — khu vực đang được mở rộng tại Sine Art.",
+  alternates: { canonical: "https://sineart.vn/thi-thu" },
+};
 
 export default function ThiThuPage() {
   return (

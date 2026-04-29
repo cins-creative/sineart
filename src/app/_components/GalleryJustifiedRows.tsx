@@ -212,7 +212,7 @@ export default function GalleryJustifiedRows({
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={thumb}
-                    alt=""
+                    alt={`${item.studentName} – bài ${item.tenMonHoc ?? item.categoryLabel} tại Sine Art`}
                     className="gallery-justified-img"
                     loading="lazy"
                     decoding="async"

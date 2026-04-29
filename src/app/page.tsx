@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import CtaBandSection from "./_components/CtaBandSection";
 import LuuBaiHocVienFab from "./_components/LuuBaiHocVienFab";
@@ -21,6 +22,14 @@ import "./sineart-home.css";
 
 /** ISR — dữ liệu public; admin có `revalidatePath` khi đổi môn/lớp. */
 export const revalidate = 300;
+
+export const metadata: Metadata = {
+  title: "Sine Art – Trường vẽ mỹ thuật nền tảng tại TP.HCM",
+  description:
+    "Học vẽ mỹ thuật tại TP.HCM — hình họa, bố cục màu, trang trí màu, luyện thi kiến trúc & đại học tại Sine Art.",
+  alternates: { canonical: "https://sineart.vn/" },
+  openGraph: { url: "https://sineart.vn/" },
+};
 
 export default async function Home() {
   const homeContent = await getHomeContent();

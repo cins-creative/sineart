@@ -1,3 +1,5 @@
+import { isWrongLopFkColumnError } from "@/app/api/phong-hoc/hv-chatbox/lop-column";
+import { vnCalendarDateString } from "@/lib/phong-hoc/diem-danh";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Một dòng học viên trong lớp — dùng tab Lớp / Qlý (ClassroomClient). */
@@ -9,6 +11,7 @@ export type ClassmateListRow = {
   i: string;
   c: string;
   st: true | false | "late";
+  /** Hôm nay (lịch VN) đã có bản ghi nộp `hv_bai_hoc_vien` cho `tien_do_hoc` trong lớp này. */
   sub: boolean;
   /** Nhãn «Bài 7» / «Bài 3.2» từ `bai_so` hoặc fallback tên ngắn. */
   ex: string | null;
@@ -62,6 +65,12 @@ export function formatClassmateProgressLine(s: ClassmateListRow): string {
   if (title) return title;
   if (label && s.exMon) return `${label} · ${s.exMon}`;
   return label || "Chưa có bài";
+}
+
+/** Sidebar «Online trong lớp» (GV): trạng thái nộp **trong ngày hôm nay** (VN) cho `tien_do_hoc`. */
+export function formatClassmateSubmissionStatus(s: ClassmateListRow): string {
+  if (!s.ex && !s.exTitle) return "Chưa có bài";
+  return s.sub ? "Đã nộp bài" : "Chưa nộp bài";
 }
 
 type QlhvRow = { id: unknown; hoc_vien_id: unknown; tien_do_hoc: unknown };
@@ -162,6 +171,42 @@ export async function fetchClassmatesForLop(
     }
   }
 
+  /** Cặp `hocVienId:thuocBaiTapId` đã nộp **trong ngày hôm nay** (Asia/Ho_Chi_Minh). */
+  const submittedKey = new Set<string>();
+  const ymd = vnCalendarDateString();
+  const vnDayStart = new Date(`${ymd}T00:00:00+07:00`);
+  const vnDayEndExcl = new Date(vnDayStart.getTime() + 24 * 60 * 60 * 1000);
+  const fromIso = vnDayStart.toISOString();
+  const toIso = vnDayEndExcl.toISOString();
+
+  if (hvIds.length) {
+    const tryWorks = async (lopCol: "lop_hoc" | "class") => {
+      const { data, error } = await supabase
+        .from("hv_bai_hoc_vien")
+        .select(`ten_hoc_vien, thuoc_bai_tap, ${lopCol}, created_at`)
+        .in("ten_hoc_vien", hvIds)
+        .eq(lopCol, lopHocId)
+        .gte("created_at", fromIso)
+        .lt("created_at", toIso);
+      if (error) return error;
+      for (const w of data ?? []) {
+        const row = w as {
+          ten_hoc_vien?: unknown;
+          thuoc_bai_tap?: unknown;
+        };
+        const hv = Number(row.ten_hoc_vien);
+        const bt = Number(row.thuoc_bai_tap);
+        if (!Number.isFinite(hv) || !Number.isFinite(bt)) continue;
+        submittedKey.add(`${hv}:${bt}`);
+      }
+      return null;
+    };
+    const errLop = await tryWorks("lop_hoc");
+    if (errLop && isWrongLopFkColumnError(errLop)) {
+      await tryWorks("class");
+    }
+  }
+
   const out: ClassmateListRow[] = [];
   for (const r of uniqueRows) {
     const enrollmentId = Number((r as QlhvRow).id);
@@ -183,6 +228,7 @@ export async function fetchClassmatesForLop(
         }
       }
     }
+    const sub = td != null && Number.isFinite(td) && submittedKey.has(`${hvId}:${td}`);
     out.push({
       enrollmentId: Number.isFinite(enrollmentId) && enrollmentId > 0 ? enrollmentId : 0,
       hvId,
@@ -190,7 +236,7 @@ export async function fetchClassmatesForLop(
       i: initialFromName(n),
       c: colorForHvId(hvId),
       st: true,
-      sub: false,
+      sub,
       ex,
       exTitle,
       exMon,

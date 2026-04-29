@@ -11,7 +11,7 @@ import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Thư viện tác phẩm học viên — Sine Art",
+  title: "Thư viện bài vẽ học viên | Sine Art",
   description:
     "Bộ sưu tập bài vẽ từ lớp học tại Sine Art — không chỉnh sửa. Lọc theo môn học (Hình họa, Trang trí màu, Bố cục màu…) hoặc xem các bài mẫu chuẩn.",
   alternates: { canonical: "https://sineart.vn/gallery" },

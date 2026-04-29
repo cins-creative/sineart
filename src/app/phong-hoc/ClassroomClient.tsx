@@ -16,7 +16,7 @@ import {
 } from "@/lib/phong-hoc/diem-danh";
 import {
   fetchClassmatesForLop,
-  formatClassmateProgressLine,
+  formatClassmateSubmissionStatus,
   type ClassmateListRow,
 } from "@/lib/phong-hoc/classmates-for-lop";
 import {
@@ -2292,9 +2292,7 @@ export default function ClassroomClient({
                               <div className="ss-name">{d.full_name}</div>
                               <span className="sess-tag tag-t">GV</span>
                             </div>
-                            <div className="ss-sub">
-                              {d.email} · {d.class_name}
-                            </div>
+                            <div className="ss-sub">{d.class_name}</div>
                           </div>
                         </div>
                         <div className="ss-divider" />
@@ -2338,7 +2336,7 @@ export default function ClassroomClient({
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div className={cx("o-name", nameCls)}>{s.n}</div>
-                                <div className="o-ex">{formatClassmateProgressLine(s)}</div>
+                                <div className="o-ex">{formatClassmateSubmissionStatus(s)}</div>
                               </div>
                               <div className={cx("o-dot", dot)} />
                             </div>

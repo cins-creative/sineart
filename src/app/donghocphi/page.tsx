@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { DongHocPhiNavSection } from "./_components/DongHocPhiNavSection";
 import { DongHocPhiNavSectionSkeleton } from "./_components/DongHocPhiNavSection.skeleton";
@@ -6,6 +7,13 @@ import { DongHocPhiPaymentSectionSkeleton } from "./_components/DongHocPhiPaymen
 import "./donghocphi.css";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Đóng học phí — Sine Art",
+  description:
+    "Thanh toán và gia hạn học phí khóa học tại Sine Art — an toàn, minh bạch.",
+  alternates: { canonical: "https://sineart.vn/donghocphi" },
+};
 
 type SearchParams = Record<string, string | string[] | undefined>;
 

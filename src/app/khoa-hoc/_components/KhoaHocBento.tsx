@@ -61,7 +61,11 @@ function CourseThumb({
     <div className={`kh-thumb kh-thumb--${tone} ${className}`.trim()}>
       {course.thumbnail ? (
         // eslint-disable-next-line @next/next/no-img-element -- URL từ ql_mon_hoc.thumbnail
-        <img src={course.thumbnail} alt="" className="kh-thumb-img" />
+        <img
+          src={course.thumbnail}
+          alt={`Khóa học ${course.tenMonHoc} tại Sine Art`}
+          className="kh-thumb-img"
+        />
       ) : (
         <div
           className="kh-thumb-inner"

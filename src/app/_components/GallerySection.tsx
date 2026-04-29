@@ -58,13 +58,15 @@ function GalleryCard({
     el.style.setProperty("--mi-pan", "0px");
   }, []);
 
+  const artworkAlt = `${item.studentName} – bài ${item.tenMonHoc ?? item.categoryLabel} tại Sine Art`;
+
   const inner = (
     <div className="mi-ph">
       {item.photo ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={cfImageForThumbnail(item.photo) || item.photo}
-          alt=""
+          alt={artworkAlt}
           className="mi-ph-img"
           loading="lazy"
         />

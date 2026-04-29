@@ -11,7 +11,7 @@ import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 export const revalidate = 600;
 
 export const metadata: Metadata = {
-  title: "Tra cứu thông tin tuyển sinh — Sine Art",
+  title: "Thông tin thi đại học mỹ thuật | Sine Art",
   description:
     "Điểm chuẩn, phương thức xét tuyển, cách tính điểm, chương trình học và kinh nghiệm thi từ các trường đại học đối tác — cập nhật thường xuyên bởi Sine Art.",
   alternates: { canonical: "https://sineart.vn/tra-cuu-thong-tin" },

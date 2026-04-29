@@ -7,9 +7,10 @@ import { KhoaHocPageContent } from "./KhoaHocPageContent";
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: "Khóa học — Sine Art",
+  title: "Các khóa học vẽ mỹ thuật tại Sine Art",
   description:
     "Danh sách khóa học mỹ thuật — theo dữ liệu môn học, lớp mở và ghi danh.",
+  alternates: { canonical: "https://sineart.vn/khoa-hoc" },
 };
 
 export default function KhoaHocPage({

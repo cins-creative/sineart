@@ -31,14 +31,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!id) return {};
   const post = await fetchBlogById(id);
   if (!post) return {};
+  const title = post.title?.trim() || "Bài viết";
+  const rawDesc = post.opening
+    ? post.opening.replace(/<[^>]+>/g, " ")
+    : post.content?.replace(/<[^>]+>/g, " ") ?? "";
+  const description = rawDesc.replace(/\s+/g, " ").trim().slice(0, 155);
+  const canonicalPath = `/blogs/${slug}`;
   return {
-    title: post.title ? `${post.title} — Sine Art` : "Sine Art Blog",
-    description: post.opening
-      ? post.opening.replace(/<[^>]+>/g, " ").slice(0, 160)
-      : post.content?.replace(/<[^>]+>/g, " ").slice(0, 160) ?? "",
+    title,
+    description: description || "Bài viết mỹ thuật và tuyển sinh tại Sine Art.",
+    alternates: { canonical: `https://sineart.vn${canonicalPath}` },
     openGraph: {
-      title: post.title ?? "Sine Art Blog",
-      images: post.thumbnail ? [{ url: post.thumbnail }] : [],
+      title,
+      description: description || undefined,
+      url: `https://sineart.vn${canonicalPath}`,
+      type: "article",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description: description || undefined,
     },
   };
 }

@@ -122,7 +122,12 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
               <span className="rp-av" aria-hidden="true">
                 {r.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.avatarUrl} alt="" loading="lazy" decoding="async" />
+                  <img
+                    src={r.avatarUrl}
+                    alt={`${r.name} — đánh giá tại Sine Art`}
+                    loading="lazy"
+                    decoding="async"
+                  />
                 ) : (
                   reviewInitials(r.name)
                 )}
@@ -143,7 +148,12 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
               <span className="rp-av" aria-hidden="true">
                 {r.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.avatarUrl} alt="" loading="lazy" decoding="async" />
+                  <img
+                    src={r.avatarUrl}
+                    alt={`${r.name} — đánh giá tại Sine Art`}
+                    loading="lazy"
+                    decoding="async"
+                  />
                 ) : (
                   reviewInitials(r.name)
                 )}
@@ -175,7 +185,11 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
               >
                 {rv.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={rv.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={rv.avatarUrl}
+                    alt={`${rv.name} — đánh giá tại Sine Art`}
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   <span className="rv-avatar-initials">{reviewInitials(rv.name)}</span>
                 )}

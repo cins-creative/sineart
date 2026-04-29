@@ -23,9 +23,9 @@ import { BlogStyles } from "./BlogStyles";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Blog mỹ thuật — Sine Art",
+  title: "Blog mỹ thuật – Kiến thức học vẽ | Sine Art",
   description:
-    "Kiến thức mỹ thuật bài bản từ giáo viên Sine Art, thông tin tuyển sinh và hoạt động từ các trường đại học đối tác.",
+    "Bài viết về kỹ thuật vẽ, kinh nghiệm luyện thi mỹ thuật và hành trình học viên tại Sine Art.",
   alternates: { canonical: "https://sineart.vn/blogs" },
 };
 

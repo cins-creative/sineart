@@ -9,7 +9,6 @@ import {
   type ClassroomSessionRecord,
 } from "@/lib/phong-hoc/classroom-session";
 import { vnCalendarDateString } from "@/lib/phong-hoc/diem-danh";
-import { parseHvIdFromDailyParticipantDeep } from "@/lib/phong-hoc/diem-danh-parse";
 import {
   fetchClassmatesForLop,
   formatClassmateProgressLine,
@@ -695,9 +694,7 @@ export default function ClassroomClient({
   );
   /** `undefined` = chưa tải; có session GV thì sau fetch là danh sách `ql_quan_ly_hoc_vien` + hồ sơ. */
   const [classmatesReal, setClassmatesReal] = useState<ClassmateListRow[] | undefined>(undefined);
-  /** `ql_thong_tin_hoc_vien.id` — parse từ Daily `user_name` suffix `#HV{id}`. */
-  const [dailyOnlineHvIds, setDailyOnlineHvIds] = useState<Set<number>>(() => new Set());
-  /** Theo DB trong ngày (VN) — fallback khi Daily không trả đủ tên participant. */
+  /** Theo DB trong ngày (VN): HV đã gọi record «đã vào phòng» khi mở Phòng học — không phụ thuộc Join Daily. */
   const [dbVaoPhongTodayIds, setDbVaoPhongTodayIds] = useState<Set<number>>(() => new Set());
   const diemDanhRecordedKeyRef = useRef<string | null>(null);
   /** Session cũ có thể thiếu `data.id` — tra `hoc_vien_id` qua `qlhv_id` để Daily `#HV…` khớp sidebar GV. */
@@ -717,7 +714,6 @@ export default function ClassroomClient({
 
   const dailyMeetContainerRef = useRef<HTMLDivElement>(null);
   const dailyCallFrameRef = useRef<DailyCall | null>(null);
-  const dailyPresencePollRef = useRef<number | null>(null);
   const gmeetSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Timer id (DOM `window.setTimeout`). */
   const teacherSaveToastTimerRef = useRef<number | null>(null);
@@ -915,6 +911,41 @@ export default function ClassroomClient({
     if (Number.isFinite(d.lop_hoc_id)) return d.lop_hoc_id;
     return NaN;
   }, [storedSession, d.lop_hoc_id]);
+
+  /**
+   * Điểm danh «đã vào phòng» — gọi khi HV mở Phòng học (chọn lớp xong), không bắt buộc chờ Daily `joined-meeting`.
+   * Vẫn gộp với lần gọi sau Daily; `diemDanhRecordedKeyRef` tránh trùng trong cùng ngày/lớp.
+   */
+  const recordDiemDanhWhenStudentInRoom = useCallback(async () => {
+    if (storedSession?.userType !== "Student") return;
+    if (!hasRoomAccess) return;
+    if (!Number.isFinite(lopHocIdForDb)) return;
+    await syncPhongHocCookiesWithStorage();
+    const day = vnCalendarDateString();
+    const key = `${day}-${lopHocIdForDb}`;
+    if (diemDanhRecordedKeyRef.current === key) return;
+    try {
+      const res = await fetch("/api/phong-hoc/diem-danh/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ lopHocId: lopHocIdForDb }),
+      });
+      if (res.ok) {
+        diemDanhRecordedKeyRef.current = key;
+      } else {
+        const t = await res.text().catch(() => "");
+        console.warn("[phong-hoc] diem-danh/record failed", res.status, t);
+      }
+    } catch (e) {
+      console.warn("[phong-hoc] diem-danh/record fetch error", e);
+    }
+  }, [storedSession?.userType, hasRoomAccess, lopHocIdForDb]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    void recordDiemDanhWhenStudentInRoom();
+  }, [mounted, recordDiemDanhWhenStudentInRoom]);
 
   /** `hr_nhan_su.id` của GV — chỉ có khi session là Teacher. Dùng để gọi API ghi
    * tiến độ học viên (bypass RLS + verify chủ nhiệm phía server). */
@@ -1350,7 +1381,7 @@ export default function ClassroomClient({
       const en = parseQlhvKey(m.name);
       if (en == null) continue;
       const hvId = enToHv.get(en);
-      if (hvId != null && dailyOnlineHvIds.has(hvId)) set.add(hvId);
+      if (hvId != null && dbVaoPhongTodayIds.has(hvId)) set.add(hvId);
     }
     return set;
   }, [
@@ -1358,7 +1389,7 @@ export default function ClassroomClient({
     liveChatEnabled,
     classmatesReal,
     hvChatRows,
-    dailyOnlineHvIds,
+    dbVaoPhongTodayIds,
   ]);
 
   const sidebarAttendanceStyle = useCallback(
@@ -1370,23 +1401,19 @@ export default function ClassroomClient({
           dot === "dg" ? "phc-o-ok" : dot === "dy" ? "phc-o-warn" : "phc-o-muted";
         return { dot, nameCls };
       }
-      const inDaily = dailyOnlineHvIds.has(s.hvId);
-      const inDbToday = dbVaoPhongTodayIds.has(s.hvId);
-      if (inDaily) {
-        if (photoVisitWhileOnline.has(s.hvId)) {
-          return { dot: "dg", nameCls: "phc-o-ok" };
-        }
-        return { dot: "dy", nameCls: "phc-o-warn" };
+      const here = dbVaoPhongTodayIds.has(s.hvId);
+      if (!here) {
+        return { dot: "dr", nameCls: "phc-o-muted" };
       }
-      if (inDbToday) {
-        return { dot: "dy", nameCls: "phc-o-warn" };
+      if (photoVisitWhileOnline.has(s.hvId)) {
+        return { dot: "dg", nameCls: "phc-o-ok" };
       }
-      return { dot: "dr", nameCls: "phc-o-muted" };
+      return { dot: "dy", nameCls: "phc-o-warn" };
     },
-    [teacherPresenceSidebar, dailyOnlineHvIds, dbVaoPhongTodayIds, photoVisitWhileOnline]
+    [teacherPresenceSidebar, dbVaoPhongTodayIds, photoVisitWhileOnline]
   );
 
-  /** GV: đồng bộ sidebar «Online» với DB trong ngày (HV đã gọi record) khi Daily không parse được tên. */
+  /** GV: sidebar «Online» — chỉ dựa vào DB trong ngày (HV mở Phòng học → record). Poll để cập nhật danh sách. */
   useEffect(() => {
     if (!mounted || !teacherPresenceSidebar || !Number.isFinite(lopHocIdForDb)) {
       setDbVaoPhongTodayIds(new Set());
@@ -1675,17 +1702,12 @@ export default function ClassroomClient({
 
   useLayoutEffect(() => {
     if (!meetingRoomUrl || !isDailyRoomUrl(meetingRoomUrl)) {
-      if (dailyPresencePollRef.current) {
-        clearInterval(dailyPresencePollRef.current);
-        dailyPresencePollRef.current = null;
-      }
       const prev = dailyCallFrameRef.current;
       if (prev) {
         void prev.destroy().finally(() => {
           if (dailyCallFrameRef.current === prev) dailyCallFrameRef.current = null;
         });
       }
-      setDailyOnlineHvIds(new Set());
       return;
     }
 
@@ -1693,7 +1715,6 @@ export default function ClassroomClient({
     if (!container) return;
 
     let cancelled = false;
-    const trackPresence = isTeacher;
     const forStudentRecord =
       storedSession?.userType === "Student" && Number.isFinite(lopHocIdForDb);
     const lopIdRecord = lopHocIdForDb;
@@ -1724,59 +1745,9 @@ export default function ClassroomClient({
         });
         dailyCallFrameRef.current = frame;
 
-        const syncParticipants = () => {
-          if (!trackPresence) return;
-          try {
-            const p = frame.participants() as Record<string, unknown>;
-            const ids = new Set<number>();
-            for (const part of Object.values(p)) {
-              const hid = parseHvIdFromDailyParticipantDeep(part);
-              if (hid != null) ids.add(hid);
-            }
-            setDailyOnlineHvIds(ids);
-          } catch {
-            /* ignore */
-          }
-        };
-
-        if (trackPresence) {
-          frame.on("participant-joined", syncParticipants);
-          frame.on("participant-left", syncParticipants);
-          if (dailyPresencePollRef.current) {
-            clearInterval(dailyPresencePollRef.current);
-            dailyPresencePollRef.current = null;
-          }
-          dailyPresencePollRef.current = window.setInterval(() => {
-            if (!cancelled) syncParticipants();
-          }, 2000);
-        }
-
         frame.on("joined-meeting", () => {
-          syncParticipants();
           if (!forStudentRecord || cancelled || !Number.isFinite(lopIdRecord)) return;
-          void (async () => {
-            await syncPhongHocCookiesWithStorage();
-            if (cancelled) return;
-            const day = vnCalendarDateString();
-            const key = `${day}-${lopIdRecord}`;
-            if (diemDanhRecordedKeyRef.current === key) return;
-            try {
-              const res = await fetch("/api/phong-hoc/diem-danh/record", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ lopHocId: lopIdRecord }),
-              });
-              if (res.ok) {
-                diemDanhRecordedKeyRef.current = key;
-              } else {
-                const t = await res.text().catch(() => "");
-                console.warn("[phong-hoc] diem-danh/record failed", res.status, t);
-              }
-            } catch (e) {
-              console.warn("[phong-hoc] diem-danh/record fetch error", e);
-            }
-          })();
+          void recordDiemDanhWhenStudentInRoom();
         });
 
         try {
@@ -1789,12 +1760,7 @@ export default function ClassroomClient({
 
     return () => {
       cancelled = true;
-      if (dailyPresencePollRef.current) {
-        clearInterval(dailyPresencePollRef.current);
-        dailyPresencePollRef.current = null;
-      }
       diemDanhRecordedKeyRef.current = null;
-      setDailyOnlineHvIds(new Set());
       const frame = dailyCallFrameRef.current;
       if (frame) {
         void frame.destroy().finally(() => {
@@ -1805,9 +1771,9 @@ export default function ClassroomClient({
   }, [
     meetingRoomUrl,
     participantDisplayName,
-    isTeacher,
     storedSession?.userType,
     lopHocIdForDb,
+    recordDiemDanhWhenStudentInRoom,
   ]);
 
   const toggleDark = () => {

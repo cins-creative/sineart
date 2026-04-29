@@ -39,7 +39,7 @@ export async function upsertDiemDanhJoin(
 
   const { data: existing, error: selErr } = await sb
     .from("hv_diem_danh")
-    .select("id, da_vao_phong, da_gui_anh, first_join_at, first_image_at")
+    .select("da_gui_anh, first_join_at, first_image_at")
     .eq("lop_hoc_id", lopHocId)
     .eq("ngay", ngay)
     .eq("hoc_vien_id", hocVienId)
@@ -48,16 +48,13 @@ export async function upsertDiemDanhJoin(
   if (selErr) return { ok: false, error: selErr.message };
 
   const ex = existing as {
-    id?: string;
-    da_vao_phong?: boolean;
     da_gui_anh?: boolean;
     first_join_at?: string | null;
     first_image_at?: string | null;
   } | null;
 
-  if (ex?.da_vao_phong) return { ok: true };
-
-  const row = {
+  /** Một lần upsert theo UNIQUE(lop_hoc_id, ngay, hoc_vien_id) — tránh UPDATE .eq('id') không khớp kiểu → 0 dòng đổi nhưng vẫn 200 OK. */
+  const payload = {
     lop_hoc_id: lopHocId,
     ngay,
     hoc_vien_id: hocVienId,
@@ -67,20 +64,11 @@ export async function upsertDiemDanhJoin(
     first_image_at: ex?.first_image_at ?? null,
   };
 
-  if (ex?.id) {
-    const { error: upErr } = await sb
-      .from("hv_diem_danh")
-      .update({
-        da_vao_phong: true,
-        first_join_at: ex.first_join_at ?? iso,
-      })
-      .eq("id", ex.id);
-    if (upErr) return { ok: false, error: upErr.message };
-    return { ok: true };
-  }
+  const { error: upErr } = await sb.from("hv_diem_danh").upsert(payload, {
+    onConflict: "lop_hoc_id,ngay,hoc_vien_id",
+  });
 
-  const { error: insErr } = await sb.from("hv_diem_danh").insert(row);
-  if (insErr) return { ok: false, error: insErr.message };
+  if (upErr) return { ok: false, error: upErr.message };
   return { ok: true };
 }
 
@@ -95,7 +83,7 @@ export async function upsertDiemDanhImage(
 
   const { data: existing, error: selErr } = await sb
     .from("hv_diem_danh")
-    .select("id, da_vao_phong, da_gui_anh, first_join_at, first_image_at")
+    .select("da_vao_phong, da_gui_anh, first_join_at, first_image_at")
     .eq("lop_hoc_id", lopHocId)
     .eq("ngay", ngay)
     .eq("hoc_vien_id", hocVienId)
@@ -104,7 +92,6 @@ export async function upsertDiemDanhImage(
   if (selErr) return { ok: false, error: selErr.message };
 
   const ex = existing as {
-    id?: string;
     da_vao_phong?: boolean;
     da_gui_anh?: boolean;
     first_join_at?: string | null;
@@ -123,20 +110,10 @@ export async function upsertDiemDanhImage(
     first_image_at: ex?.first_image_at ?? iso,
   };
 
-  if (ex?.id) {
-    const { error: upErr } = await sb
-      .from("hv_diem_danh")
-      .update({
-        da_gui_anh: true,
-        first_image_at: ex.first_image_at ?? iso,
-      })
-      .eq("id", ex.id);
-    if (upErr) return { ok: false, error: upErr.message };
-    return { ok: true };
-  }
-
-  const { error: insErr } = await sb.from("hv_diem_danh").insert(merged);
-  if (insErr) return { ok: false, error: insErr.message };
+  const { error: upErr } = await sb.from("hv_diem_danh").upsert(merged, {
+    onConflict: "lop_hoc_id,ngay,hoc_vien_id",
+  });
+  if (upErr) return { ok: false, error: upErr.message };
   return { ok: true };
 }
 

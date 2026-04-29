@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -16,6 +18,25 @@ function revalidateLopHocPublic(): void {
   revalidatePath(ADMIN_LOP);
   revalidatePath("/khoa-hoc", "page");
   revalidatePath("/khoa-hoc", "layout");
+}
+
+/**
+ * Xóa dòng gắn `lopId` theo từng cột FK lớp — gọi **hết** các cột (schema có thể có `lop_hoc` và/hoặc `class`).
+ */
+async function deleteRowsByLopFkColumn(
+  sb: SupabaseClient,
+  table: string,
+  lopId: number,
+  columns: readonly string[]
+): Promise<{ ok: false; error: string } | { ok: true }> {
+  let sawSuccess = false;
+  let lastErr = "";
+  for (const col of columns) {
+    const { error } = await sb.from(table).delete().eq(col, lopId);
+    if (!error) sawSuccess = true;
+    else lastErr = error.message || col;
+  }
+  return sawSuccess ? { ok: true } : { ok: false, error: lastErr };
 }
 
 function optionalText(fd: FormData, key: string): string | null {
@@ -252,14 +273,79 @@ export async function deleteLopHoc(id: number): Promise<LopHocFormState> {
   const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
   if (!delOk.ok) return { ok: false, error: delOk.error };
 
+  const { data: enRows, error: enListErr } = await supabase
+    .from("ql_quan_ly_hoc_vien")
+    .select("id")
+    .eq("lop_hoc", id);
+
+  if (enListErr) {
+    return { ok: false, error: enListErr.message || "Không đọc được ghi danh lớp." };
+  }
+
+  const enrollmentIds = (enRows ?? [])
+    .map((r) => Number((r as { id?: unknown }).id))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
+  if (enrollmentIds.length > 0) {
+    const { error: hpErr } = await supabase
+      .from("hp_thu_hp_chi_tiet")
+      .delete()
+      .in("khoa_hoc_vien", enrollmentIds);
+    if (hpErr) {
+      return {
+        ok: false,
+        error:
+          hpErr.message ||
+          "Không xóa được dòng học phí (hp_thu_hp_chi_tiet) — kiểm tra ràng buộc CSDL.",
+      };
+    }
+  }
+
+  const chatDel = await deleteRowsByLopFkColumn(supabase, "hv_chatbox", id, ["lop_hoc", "class"]);
+  if (!chatDel.ok) {
+    return {
+      ok: false,
+      error: `hv_chatbox: ${chatDel.error}`,
+    };
+  }
+
+  const { error: diemDanhErr } = await supabase.from("hv_diem_danh").delete().eq("lop_hoc_id", id);
+  if (diemDanhErr) {
+    return {
+      ok: false,
+      error: diemDanhErr.message || "Không xóa được điểm danh (hv_diem_danh).",
+    };
+  }
+
+  const hvBaiDel = await deleteRowsByLopFkColumn(supabase, "hv_bai_hoc_vien", id, [
+    "lop_hoc",
+    "class",
+  ]);
+  if (!hvBaiDel.ok) {
+    return {
+      ok: false,
+      error: `hv_bai_hoc_vien: ${hvBaiDel.error}`,
+    };
+  }
+
+  const { error: qlEnErr } = await supabase.from("ql_quan_ly_hoc_vien").delete().eq("lop_hoc", id);
+  if (qlEnErr) {
+    return {
+      ok: false,
+      error: qlEnErr.message || "Không xóa được ghi danh (ql_quan_ly_hoc_vien).",
+    };
+  }
+
   const { error } = await supabase.from("ql_lop_hoc").delete().eq("id", id);
   if (error) {
     return {
       ok: false,
-      error: error.message || "Không xóa được (có thể còn ghi danh hoặc dữ liệu liên quan).",
+      error:
+        error.message ||
+        "Không xóa được lớp (có thể còn bảng khác tham chiếu ql_lop_hoc — xem SQL Supabase).",
     };
   }
 
   revalidateLopHocPublic();
-  return { ok: true, message: "Đã xóa lớp học." };
+  return { ok: true, message: "Đã xóa lớp học và dữ liệu liên quan (ghi danh, học phí chi tiết, phòng học…)." };
 }

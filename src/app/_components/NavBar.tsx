@@ -337,6 +337,10 @@ export default function NavBar({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [classroomSignInOpen, setClassroomSignInOpen] = useState(false);
+  /** Email từ popup Đăng nhập Nav — prefill overlay «Vào học» tới bước chọn lớp. */
+  const [classroomOverlayEmail, setClassroomOverlayEmail] = useState<string | undefined>(
+    undefined
+  );
   const [dhpNavLoginOpen, setDhpNavLoginOpen] = useState(false);
   const [studentSession, setStudentSession] = useState<NavStudentSession | null>(null);
   const menuId = useId();
@@ -478,7 +482,10 @@ export default function NavBar({
           type="button"
           className="nav-cta-btn"
           aria-label="Vào học"
-          onClick={() => setClassroomSignInOpen(true)}
+          onClick={() => {
+            setClassroomOverlayEmail(undefined);
+            setClassroomSignInOpen(true);
+          }}
         >
           <PlayIcon />
           <span>Vào học</span>
@@ -487,7 +494,11 @@ export default function NavBar({
 
       <ClassroomSignInOverlay
         open={classroomSignInOpen}
-        onClose={() => setClassroomSignInOpen(false)}
+        initialEmail={classroomOverlayEmail}
+        onClose={() => {
+          setClassroomSignInOpen(false);
+          setClassroomOverlayEmail(undefined);
+        }}
       />
       <DongHocPhiEmailGateModal
         open={dhpNavLoginOpen}
@@ -495,6 +506,10 @@ export default function NavBar({
         monHocId={null}
         courseTitle=""
         fromNavLogin
+        onRequestClassroom={(email) => {
+          setClassroomOverlayEmail(email);
+          setClassroomSignInOpen(true);
+        }}
       />
 
       <AnimatePresence>

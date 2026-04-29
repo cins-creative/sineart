@@ -87,9 +87,11 @@ function ClassThumb({ src, isTeacher }: { src: string; isTeacher: boolean }) {
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** Ưu tiên hơn prefill từ session — vd. email đã xác nhận ở popup Đăng nhập Nav. */
+  initialEmail?: string;
 };
 
-export default function ClassroomSignInOverlay({ open, onClose }: Props) {
+export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: Props) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState("");
@@ -186,7 +188,9 @@ export default function ClassroomSignInOverlay({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    const em = readClassroomSessionEmailForPrefill();
+    const fromProp = initialEmail?.trim() ?? "";
+    const fromSession = readClassroomSessionEmailForPrefill() ?? "";
+    const em = fromProp.length > 0 ? fromProp : fromSession;
     if (!em) return;
     let cancelled = false;
     const isCancelled = () => cancelled;
@@ -195,7 +199,7 @@ export default function ClassroomSignInOverlay({ open, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, lookupWithEmail]);
+  }, [open, initialEmail, lookupWithEmail]);
 
   const enterClass = (item: ClassroomSessionRecord) => {
     const slug = phongHocSlugFromClassName(item.data.class_name);

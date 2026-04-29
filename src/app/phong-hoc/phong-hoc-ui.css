@@ -302,11 +302,15 @@
 
 .phc .phc-topbar-avatar .nav-user-avatar-dd {
   position: absolute;
+  /* NavBar mobile (sineart-home.css) đặt bottom + top:auto — nếu chỉ ghi đè top mà không reset bottom thì cả hai neo → co chiều cao ~ vài px */
+  bottom: auto;
   top: calc(100% + 8px);
   right: 0;
+  left: auto;
   z-index: 200;
-  min-width: 208px;
-  padding: 6px;
+  min-width: 220px;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 0;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.98);
   border: 1px solid rgba(45, 32, 32, 0.1);
@@ -315,6 +319,22 @@
     0 0 0 1px rgba(255, 255, 255, 0.6) inset;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+.phc .phc-topbar-avatar .nav-user-avatar-dd-head {
+  border-bottom-color: rgba(45, 32, 32, 0.1);
+}
+
+.phc .phc-topbar-avatar .nav-user-avatar-dd-name {
+  color: var(--phc-ink);
+}
+
+.phc .phc-topbar-avatar .nav-user-avatar-dd-email {
+  color: var(--phc-muted);
+}
+
+.phc .phc-topbar-avatar .nav-user-avatar-dd-actions {
+  padding: 6px;
 }
 
 .phc .phc-topbar-avatar .nav-user-avatar-dd-item {
@@ -3088,6 +3108,22 @@
 
 .phc.phc--dark .phc-topbar-avatar .nav-user-avatar-ring {
   background: var(--phc-surface2);
+}
+
+.phc.phc--dark .phc-topbar-avatar .nav-user-avatar-dd {
+  background: rgba(24, 24, 28, 0.97);
+  border-color: var(--phc-line2);
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+.phc.phc--dark .phc-topbar-avatar .nav-user-avatar-dd-head {
+  border-bottom-color: var(--phc-line2);
+}
+
+.phc.phc--dark .phc-topbar-avatar .nav-user-avatar-dd-email {
+  color: var(--phc-muted2);
 }
 
 .phc.phc--dark .topbar-home:hover {

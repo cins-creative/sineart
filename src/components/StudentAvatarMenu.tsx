@@ -31,6 +31,8 @@ export default function StudentAvatarMenu({ email, fullName, storedAvatar }: Stu
 
   const profileHref = hocVienProfileHref(email);
   const dhpHref = useMemo(() => buildNavDongHocPhiHref(email), [email]);
+  const displayName = fullName.trim() || "Học viên";
+  const displayEmail = email.trim();
 
   const initials = useMemo(() => {
     const n = fullName.trim();
@@ -112,39 +114,44 @@ export default function StudentAvatarMenu({ email, fullName, storedAvatar }: Stu
         </span>
       </button>
       {open ? (
-        <div
-          id={menuId}
-          role="menu"
-          aria-labelledby={btnId}
-          className="nav-user-avatar-dd"
-        >
-          <Link
-            href={dhpHref}
-            role="menuitem"
-            className="nav-user-avatar-dd-item"
-            onClick={() => setOpen(false)}
-          >
-            Gia hạn học phí
-          </Link>
-          <Link
-            href={profileHref}
-            role="menuitem"
-            className="nav-user-avatar-dd-item"
-            onClick={() => setOpen(false)}
-          >
-            Trang cá nhân
-          </Link>
-          <button
-            type="button"
-            role="menuitem"
-            className="nav-user-avatar-dd-item nav-user-avatar-dd-item--logout"
-            onClick={() => {
-              clearClassroomSession();
-              setOpen(false);
-            }}
-          >
-            Đăng xuất
-          </button>
+        <div className="nav-user-avatar-dd">
+          <div className="nav-user-avatar-dd-head" role="presentation">
+            <p className="nav-user-avatar-dd-name">{displayName}</p>
+            {displayEmail ? (
+              <p className="nav-user-avatar-dd-email" title={displayEmail}>
+                {displayEmail}
+              </p>
+            ) : null}
+          </div>
+          <div id={menuId} role="menu" aria-labelledby={btnId} className="nav-user-avatar-dd-actions">
+            <Link
+              href={dhpHref}
+              role="menuitem"
+              className="nav-user-avatar-dd-item"
+              onClick={() => setOpen(false)}
+            >
+              Gia hạn học phí
+            </Link>
+            <Link
+              href={profileHref}
+              role="menuitem"
+              className="nav-user-avatar-dd-item"
+              onClick={() => setOpen(false)}
+            >
+              Trang cá nhân
+            </Link>
+            <button
+              type="button"
+              role="menuitem"
+              className="nav-user-avatar-dd-item nav-user-avatar-dd-item--logout"
+              onClick={() => {
+                clearClassroomSession();
+                setOpen(false);
+              }}
+            >
+              Đăng xuất
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

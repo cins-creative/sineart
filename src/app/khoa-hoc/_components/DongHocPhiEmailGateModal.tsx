@@ -13,6 +13,32 @@ import { isValidStudentEmail, STUDENT_EMAIL_REQUIREMENT_VI } from "@/lib/donghoc
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
+function NavChooseIcon({ kind }: { kind: "renew" | "profile" | "classroom" }) {
+  const common = { className: "kd-dhp-nav-choose-ico", width: 18, height: 18, "aria-hidden": true as const };
+  if (kind === "renew") {
+    return (
+      <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M4 7h16v12a2 2 0 01-2 2H6a2 2 0 01-2-2V7z" />
+        <path d="M4 10h16" />
+        <path d="M9 14h2" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (kind === "profile") {
+    return (
+      <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="9" r="3.25" />
+        <path d="M6 19.5c0-3.5 3-5 6-5s6 1.5 6 5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M9.2 6.7c-.5-.3-1.1 0-1.1.6v10.4c0 .6.6 1 1.1.7l8.2-5.2c.5-.3.5-1 0-1.3L9.2 6.7z" />
+    </svg>
+  );
+}
+
 function buildDongHocPhiUrl(
   monHocId: number | null,
   courseTitle: string,
@@ -38,6 +64,8 @@ export type DongHocPhiEmailGateModalProps = {
    * false: từ trang khóa học — giữ hành vi cũ (vào `/donghocphi` kèm email).
    */
   fromNavLogin?: boolean;
+  /** Bước chọn (Nav): mở overlay «Vào học» / phòng học — truyền email đã xác nhận để bỏ qua bước nhập email. */
+  onRequestClassroom?: (email: string) => void;
 };
 
 export default function DongHocPhiEmailGateModal({
@@ -46,6 +74,7 @@ export default function DongHocPhiEmailGateModal({
   monHocId,
   courseTitle,
   fromNavLogin = false,
+  onRequestClassroom,
 }: DongHocPhiEmailGateModalProps) {
   const router = useRouter();
   const titleId = useId();
@@ -197,6 +226,11 @@ export default function DongHocPhiEmailGateModal({
           onClick={(e) => e.stopPropagation()}
         >
           <header className="kd-dhp-nav-choose-head">
+            <button type="button" className="kd-dhp-nav-choose-close" onClick={onClose} aria-label="Đóng hộp thoại">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+              </svg>
+            </button>
             <p className="kd-dhp-nav-choose-eyebrow">Đăng nhập học viên</p>
             <h2 id={titleId} className="kd-dhp-title kd-dhp-title--nav-choose">
               Bạn muốn làm gì tiếp theo?
@@ -207,19 +241,33 @@ export default function DongHocPhiEmailGateModal({
           </header>
 
           <div className="kd-dhp-nav-email-card" role="status">
-            <span className="kd-dhp-nav-email-card-label">Email đã xác nhận</span>
-            <span className="kd-dhp-nav-email-card-value" title={verifiedEmail}>
-              {verifiedEmail}
+            <span className="kd-dhp-nav-email-badge" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </span>
+            <div className="kd-dhp-nav-email-card-main">
+              <span className="kd-dhp-nav-email-card-label">Email đã xác nhận</span>
+              <span className="kd-dhp-nav-email-card-value" title={verifiedEmail}>
+                {verifiedEmail}
+              </span>
+            </div>
           </div>
 
-          <div className="kd-dhp-nav-choose-actions">
+          <div
+            className={
+              onRequestClassroom
+                ? "kd-dhp-nav-choose-actions kd-dhp-nav-choose-actions--with-classroom"
+                : "kd-dhp-nav-choose-actions"
+            }
+          >
             <button
               type="button"
-              className="kd-dhp-nav-choose-btn kd-dhp-nav-choose-btn--primary"
+              className="kd-dhp-nav-choose-btn kd-dhp-nav-choose-btn--secondary"
               onClick={handleNavRenew}
             >
-              Gia hạn học phí
+              <NavChooseIcon kind="renew" />
+              <span>Gia hạn học phí</span>
             </button>
             <button
               type="button"
@@ -227,8 +275,19 @@ export default function DongHocPhiEmailGateModal({
               disabled={profileLoading}
               onClick={() => void handleNavProfile()}
             >
-              {profileLoading ? "Đang mở…" : "Trang cá nhân"}
+              <NavChooseIcon kind="profile" />
+              <span>{profileLoading ? "Đang mở…" : "Trang cá nhân"}</span>
             </button>
+            {onRequestClassroom ? (
+              <button
+                type="button"
+                className="kd-dhp-nav-choose-btn kd-dhp-nav-choose-btn--classroom"
+                onClick={() => onRequestClassroom(verifiedEmail)}
+              >
+                <NavChooseIcon kind="classroom" />
+                <span>Vào học</span>
+              </button>
+            ) : null}
           </div>
 
           {error ? (
@@ -240,16 +299,16 @@ export default function DongHocPhiEmailGateModal({
           <footer className="kd-dhp-nav-choose-footer">
             <button
               type="button"
-              className="kd-dhp-btn-ghost kd-dhp-btn-back"
+              className="kd-dhp-nav-choose-back"
               onClick={() => {
                 setNavPhase("gate");
                 setError("");
               }}
             >
-              ← Quay lại nhập email
-            </button>
-            <button type="button" className="kd-dhp-btn-dismiss kd-dhp-btn-dismiss--nav-choose" onClick={onClose}>
-              Đóng
+              <span className="kd-dhp-nav-choose-back-ico" aria-hidden>
+                ←
+              </span>
+              Quay lại nhập email
             </button>
           </footer>
         </div>

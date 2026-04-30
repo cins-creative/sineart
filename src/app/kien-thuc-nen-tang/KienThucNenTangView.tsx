@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { LY_THUYET_LIST } from "@/data/ly-thuyet";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { buildLyThuyetHref } from "@/lib/data/ly-thuyet-shared";
 import type { LyThuyetCard } from "@/types/ly-thuyet";
@@ -60,6 +61,29 @@ export default function KienThucNenTangView({ groups }: { groups: LandingGroup[]
     () => filteredGroups.reduce((n, g) => n + g.items.length, 0),
     [filteredGroups]
   );
+
+  const catalogRows = useMemo(
+    () =>
+      LY_THUYET_LIST.map((it) => ({
+        stt: it.so_thu_tu,
+        nhom: it.nhom,
+        ten: it.ten,
+        slug: it.slug,
+        tags: it.tags,
+      })),
+    []
+  );
+
+  const filteredCatalog = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return catalogRows;
+    return catalogRows.filter((r) => {
+      const hay = [r.ten, r.nhom, r.slug, ...(r.tags ?? [])]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [catalogRows, query]);
 
   return (
     <div className="ktn-lib">
@@ -126,6 +150,51 @@ export default function KienThucNenTangView({ groups }: { groups: LandingGroup[]
               <span>{totalCount} bài học</span>
               <span>{groups.length} nhóm chủ đề</span>
               <span>Cập nhật liên tục</span>
+            </div>
+          </section>
+
+          <section
+            className="lib-catalog"
+            id="danh-muc-bai"
+            aria-labelledby="lib-catalog-heading"
+          >
+            <h2 id="lib-catalog-heading" className="lib-catalog-title">
+              Danh mục bài viết
+            </h2>
+            <p className="lib-catalog-desc">
+              Liệt kê toàn bộ bài theo thứ tự giáo trình (STT). Lọc theo ô tìm
+              kiếm bên trái.
+            </p>
+            <div className="lib-catalog-wrap">
+              {filteredCatalog.length === 0 ? (
+                <p className="lib-catalog-empty">
+                  Không có bài khớp với tìm kiếm — thử từ khoá khác hoặc xoá
+                  ô tìm.
+                </p>
+              ) : (
+                <table className="lib-catalog-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">STT</th>
+                      <th scope="col">Nhóm</th>
+                      <th scope="col">Tên bài</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCatalog.map((r) => (
+                      <tr key={r.slug}>
+                        <td>{r.stt}</td>
+                        <td>{r.nhom}</td>
+                        <td>
+                          <Link href={buildLyThuyetHref(r.slug)}>
+                            {r.ten}
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </section>
 

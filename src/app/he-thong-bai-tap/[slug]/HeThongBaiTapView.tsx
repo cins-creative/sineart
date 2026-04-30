@@ -173,7 +173,7 @@ export default function HeThongBaiTapView({
                 </span>
                 <span className="htbt-lt-callout-count">
                   <strong>{lyThuyetCount}</strong>
-                  &nbsp;video
+                  &nbsp;mục
                 </span>
               </div>
               <h3
@@ -183,8 +183,9 @@ export default function HeThongBaiTapView({
                 Lý thuyết cần nắm để làm được bài này
               </h3>
               <p className="htbt-lt-callout-sub">
-                Xem các video dưới đây trước khi bắt đầu bài tập để hiểu cơ sở lý
-                thuyết. Bấm vào từng video để mở YouTube.
+                Xem các bài Thư viện hoặc video lý thuyết dưới đây trước khi làm
+                bài tập. Bài viết mở tại trang kiến thức nền tảng; video mở
+                YouTube.
               </p>
               <HeThongBaiTapLyThuyetList videos={bai.video_ly_thuyet} />
             </section>

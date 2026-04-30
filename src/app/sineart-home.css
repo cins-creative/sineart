@@ -164,7 +164,8 @@
 /* Nút Vào học — mobile: fixed góc phải, cao hơn dock để không đè navigation */
 .nav-cta-fixed {
   position: fixed;
-  z-index: 88;
+  /* Trên thanh dock mobile (.nav-bottom-fixed z-index 102) để click luôn tới nút */
+  z-index: 120;
   bottom: max(
     100px,
     calc(80px + env(safe-area-inset-bottom, 0px) + 16px)
@@ -2026,7 +2027,8 @@ a.rv-source:focus-visible { outline:2px solid #4285F4; outline-offset:2px; borde
     border: none;
     background: transparent;
     box-shadow: none;
-    z-index: 95;
+    /* Trên sticky nav desktop (.sticky z-index 100) */
+    z-index: 120;
     pointer-events: none;
   }
   .nav-cta-fixed .nav-cta-btn {

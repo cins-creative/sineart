@@ -17,10 +17,14 @@ import {
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
+import AdminLyThuyetCatalogPicker from "@/app/admin/dashboard/he-thong-bai-tap/AdminLyThuyetCatalogPicker";
 import { createHeThongBaiTap, deleteHeThongBaiTap, updateHeThongBaiTap } from "@/app/admin/dashboard/he-thong-bai-tap/actions";
 import BaiTapListEditable from "@/app/admin/dashboard/he-thong-bai-tap/BaiTapListEditable";
+import { getBySlug } from "@/data/ly-thuyet";
 import type { AdminBaiTapRow, AdminHeThongBaiTapBundle, AdminMonHocOpt } from "@/lib/data/admin-he-thong-bai-tap";
+import { mergeCatalogSlugsWithExtra, partitionVideoLyThuyet } from "@/lib/he-thong-bai-tap/catalog-video-ly";
 import { cn } from "@/lib/utils";
+import { parseVideoBaiGiangEntries, youtubeVideoId } from "@/lib/utils/youtube";
 
 type ViewMode = "grid" | "list";
 
@@ -35,6 +39,14 @@ function urlArrayToLines(arr: string[] | null | undefined): string {
   return (arr ?? []).join("\n");
 }
 
+function firstYoutubeWatchFromLine(line: string): string | null {
+  const entries = parseVideoBaiGiangEntries(line.trim());
+  const e = entries[0];
+  if (!e) return null;
+  const id = youtubeVideoId(e.embed);
+  return id ? `https://www.youtube.com/watch?v=${id}` : null;
+}
+
 function firstNonEmptyLine(raw: string | null | undefined): string | null {
   if (!raw?.trim()) return null;
   const line = raw.split(/\r?\n/).find((s) => s.trim().length > 0);
@@ -43,11 +55,16 @@ function firstNonEmptyLine(raw: string | null | undefined): string | null {
 
 function primaryBaiTapUrl(item: AdminBaiTapRow): string | null {
   const vbg = firstNonEmptyLine(item.video_bai_giang);
-  if (vbg) return vbg;
-  const ly = item.video_ly_thuyet?.find((u) => u.trim());
-  if (ly) return ly.trim();
+  if (vbg && /^https?:\/\//i.test(vbg)) return vbg;
+  for (const raw of item.video_ly_thuyet ?? []) {
+    const t = raw.trim();
+    if (!t || getBySlug(t)) continue;
+    const w = firstYoutubeWatchFromLine(t);
+    if (w) return w;
+  }
   const tk = item.video_tham_khao?.find((u) => u.trim());
-  return tk?.trim() ?? null;
+  const tkTrim = tk?.trim();
+  return tkTrim && /^https?:\/\//i.test(tkTrim) ? tkTrim : null;
 }
 
 type Props = { bundle: AdminHeThongBaiTapBundle };
@@ -304,6 +321,13 @@ export default function HeThongBaiTapView({ bundle }: Props) {
         {panel !== "none" ? (
           <Fragment key={drawerKey}>
             <BaiTapDrawer
+              key={
+                panel === "create"
+                  ? `create-${drawerKey}`
+                  : editing
+                    ? `edit-${editing.id}`
+                    : "edit"
+              }
               mode={panel === "create" ? "create" : "edit"}
               row={panel === "create" ? null : editing}
             monList={bundle.monHoc}
@@ -418,9 +442,12 @@ function BaiTapDrawer({
   );
   const [moTa, setMoTa] = useState(() => (mode === "create" ? "" : row?.mo_ta_bai_tap ?? ""));
   const [loiSai, setLoiSai] = useState(() => (mode === "create" ? "" : row?.loi_sai ?? ""));
-  const [videoLyLines, setVideoLyLines] = useState(() =>
-    mode === "create" ? "" : urlArrayToLines(row?.video_ly_thuyet)
-  );
+  const lyPartInit =
+    mode === "create"
+      ? { slugs: [] as string[], extraLines: "" }
+      : partitionVideoLyThuyet(row?.video_ly_thuyet);
+  const [lyThuyetSlugs, setLyThuyetSlugs] = useState(() => lyPartInit.slugs);
+  const [videoLyExtra, setVideoLyExtra] = useState(() => lyPartInit.extraLines);
   const [videoThamLines, setVideoThamLines] = useState(() =>
     mode === "create" ? "" : urlArrayToLines(row?.video_tham_khao)
   );
@@ -472,7 +499,7 @@ function BaiTapDrawer({
       mo_ta_bai_tap: moTa.trim() || null,
       video_bai_giang: videoBaiGiang.trim() || null,
       loi_sai: loiSai.trim() || null,
-      video_ly_thuyet: linesToUrlArray(videoLyLines),
+      video_ly_thuyet: mergeCatalogSlugsWithExtra(lyThuyetSlugs, videoLyExtra),
       video_tham_khao: linesToUrlArray(videoThamLines),
       is_visible: isVisible,
       so_buoi,
@@ -613,15 +640,27 @@ function BaiTapDrawer({
                 </div>
                 <div>
                   <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-[#AAAAAA]">
-                    Video lý thuyết (mỗi dòng một URL)
+                    Lý thuyết nền tảng (Thư viện)
                   </div>
-                  <textarea
-                    value={videoLyLines}
-                    onChange={(e) => setVideoLyLines(e.target.value)}
-                    rows={3}
-                    className="w-full resize-y rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-[#BC8AF9]"
-                    placeholder={"https://…\nhttps://…"}
-                  />
+                  <p className="mb-2 text-[11px] leading-snug text-[#AAAAAA]">
+                    Chọn bài trong danh mục giống trang{" "}
+                    <span className="font-semibold text-[#888]">/kien-thuc-nen-tang</span>. Lưu vào cột{" "}
+                    <code className="rounded bg-[#f0f0f0] px-1 text-[10px]">video_ly_thuyet</code> dạng slug;
+                    có thể thêm video YouTube bên dưới.
+                  </p>
+                  <AdminLyThuyetCatalogPicker selected={lyThuyetSlugs} onChange={setLyThuyetSlugs} />
+                  <div className="mt-3">
+                    <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-[#AAAAAA]">
+                      Video lý thuyết thêm (YouTube, tuỳ chọn)
+                    </div>
+                    <textarea
+                      value={videoLyExtra}
+                      onChange={(e) => setVideoLyExtra(e.target.value)}
+                      rows={3}
+                      className="w-full resize-y rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-[#BC8AF9]"
+                      placeholder={"Mỗi dòng một URL hoặc «Nhãn - URL»\nhttps://…"}
+                    />
+                  </div>
                 </div>
                 <div>
                   <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-[#AAAAAA]">

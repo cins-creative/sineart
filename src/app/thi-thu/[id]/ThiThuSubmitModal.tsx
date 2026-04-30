@@ -3,6 +3,28 @@
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/** Ảnh chụp xuất Full HD dọc (thường dùng khi cầm điện thoại dọc chụp bài) */
+const CAPTURE_W = 1080;
+const CAPTURE_H = 1920;
+
+/** Crop kiểu cover từ khung video → kích thước đích cố định */
+function drawVideoCoverDest(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  destW: number,
+  destH: number,
+) {
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return;
+  const scale = Math.max(destW / vw, destH / vh);
+  const sw = destW / scale;
+  const sh = destH / scale;
+  const sx = (vw - sw) / 2;
+  const sy = (vh - sh) / 2;
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, destW, destH);
+}
+
 type UploadMethod = "cam" | "file";
 
 type Props = {
@@ -47,14 +69,22 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
     setCamErr(null);
     void (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: camFacing },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
-          audio: false,
-        });
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: camFacing },
+              width: { ideal: 1920, min: 640 },
+              height: { ideal: 1080, min: 480 },
+            },
+            audio: false,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: camFacing } },
+            audio: false,
+          });
+        }
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
@@ -63,6 +93,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
         const el = videoRef.current;
         if (el) {
           el.srcObject = stream;
+          el.playsInline = true;
           await el.play().catch(() => {});
         }
       } catch {
@@ -130,13 +161,19 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
     setErr(null);
     try {
       const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = CAPTURE_W;
+      canvas.height = CAPTURE_H;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Không tạo được ảnh.");
-      ctx.drawImage(video, 0, 0);
+      ctx.save();
+      if (camFacing === "user") {
+        ctx.translate(CAPTURE_W, 0);
+        ctx.scale(-1, 1);
+      }
+      drawVideoCoverDest(ctx, video, CAPTURE_W, CAPTURE_H);
+      ctx.restore();
       const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92),
+        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.93),
       );
       if (!blob) throw new Error("Không tạo được ảnh.");
       const url = await uploadBlob(blob, `thi-thu-${Date.now()}.jpg`);
@@ -146,7 +183,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
     } finally {
       setUploading(false);
     }
-  }, [uploadBlob]);
+  }, [camFacing, uploadBlob]);
 
   const submit = useCallback(async () => {
     setErr(null);
@@ -270,10 +307,17 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
               {method === "cam" ? (
                 <>
                   <p className="tti-method-hint">
-                    {camErr ?? "Nhấn nút chụp để chụp bài làm của bạn"}
+                    {camErr ??
+                      "Truy cập camera thiết bị — ảnh lưu Full HD dọc 1080×1920. Nhấn nút chụp khi đã căng khung bài."}
                   </p>
                   <div className="tti-cam-preview">
-                    <video ref={videoRef} className={camErr ? "hidden" : "absolute inset-0 h-full w-full object-cover"} playsInline muted />
+                    <video
+                      ref={videoRef}
+                      className={camErr ? "hidden" : "absolute inset-0 h-full w-full object-cover"}
+                      playsInline
+                      muted
+                      autoPlay
+                    />
                     {camErr ? (
                       <div className="tti-cam-preview-ph">{camErr}</div>
                     ) : null}

@@ -555,12 +555,14 @@
   background: var(--tti-grad);
   transition: width 0.5s ease;
 }
+/* Mốc là absolute → không kéo giãn chiều cao; cần đủ min-height để ghi chú nhiều dòng không đè thẻ terminal */
 .sa-thi-thu .tti-pb-mkrs {
   position: relative;
   width: 100%;
-  min-height: 72px;
+  min-height: clamp(168px, 54vw, 280px);
   margin-top: 10px;
-  padding: 0 6px;
+  padding: 0 6px 16px;
+  box-sizing: border-box;
 }
 .sa-thi-thu .tti-pb-mk {
   position: absolute;
@@ -599,12 +601,24 @@
   margin-top: 6px;
 }
 
+@media (max-width: 420px) {
+  .sa-thi-thu .tti-pb-mk-note {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .sa-thi-thu .tti-pb-mk-lbl {
+    font-size: 12px;
+  }
+}
+
 /* Nhóm “Nộp bài …” tại mốc kết — căn giữa, tách khỏi mép timeline */
 .sa-thi-thu .tti-pb-terminal {
   display: flex;
   justify-content: center;
-  margin-top: 16px;
+  margin-top: clamp(18px, 5vw, 32px);
   padding: 0 8px;
+  position: relative;
+  z-index: 1;
 }
 .sa-thi-thu .tti-pb-terminal-inner {
   display: inline-block;

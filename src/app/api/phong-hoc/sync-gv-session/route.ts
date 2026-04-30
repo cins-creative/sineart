@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { GV_SYNC_COOKIE, signGvSessionToken } from "@/lib/phong-hoc/gv-session-cookie";
 import { HV_SYNC_COOKIE } from "@/lib/phong-hoc/hv-session-cookie";
+import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -10,7 +11,7 @@ export const runtime = "nodejs";
  * đăng nhập Phòng học (localStorage không đi qua Supabase Auth).
  *
  * Body:
- * - `{ hr_id, lop_hoc_id }` — verify `ql_lop_hoc.teacher == hr_id` (GV chủ nhiệm đúng lớp).
+ * - `{ hr_id, lop_hoc_id }` — verify `hr_id` nằm trong `ql_lop_hoc.teacher` (bigint / mảng / JSON).
  * - `{ hr_id }` — chỉ verify `hr_id` tồn tại trong `hr_nhan_su` (xem bài giảng khi session
  *   không gắn lớp hoặc mở link trực tiếp).
  */
@@ -59,8 +60,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       );
     }
 
-    const assignedTeacher = Number((lopRow as { teacher?: unknown }).teacher);
-    if (!Number.isFinite(assignedTeacher) || assignedTeacher !== hrId) {
+    const teacherIds = parseTeacherIds((lopRow as { teacher?: unknown }).teacher);
+    if (!teacherIds.includes(hrId)) {
       return NextResponse.json(
         { ok: false, error: "GV không phải chủ nhiệm lớp này.", code: "FORBIDDEN" },
         { status: 403 }

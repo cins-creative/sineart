@@ -22,15 +22,19 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [camErr, setCamErr] = useState<string | null>(null);
+  /** Điện thoại: `environment` = camera sau (chụp bài); `user` = camera trước */
+  const [camFacing, setCamFacing] = useState<"environment" | "user">("environment");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       setCamErr(null);
+      setCamFacing("environment");
       return;
     }
     if (method !== "cam") {
@@ -44,7 +48,11 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
     void (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
+          video: {
+            facingMode: { ideal: camFacing },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
           audio: false,
         });
         if (cancelled) {
@@ -67,7 +75,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, method]);
+  }, [open, method, camFacing]);
 
   const uploadBlob = useCallback(async (blob: Blob, name: string) => {
     const fd = new FormData();
@@ -102,6 +110,15 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
     },
     [],
   );
+
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const selectUploadFile = useCallback(() => {
+    setMethod("file");
+    openFilePicker();
+  }, [openFilePicker]);
 
   const capturePhoto = useCallback(async () => {
     const video = videoRef.current;
@@ -223,7 +240,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                 <button
                   type="button"
                   className={`tti-upload-method tti-um-file ${method === "file" ? "picked" : ""}`}
-                  onClick={() => setMethod("file")}
+                  onClick={selectUploadFile}
                 >
                   <div className="tti-upload-method-icon text-[#7c6fcd]">
                     <svg width={22} height={22} viewBox="0 0 24 24" fill="none" strokeWidth={2} aria-hidden>
@@ -236,6 +253,19 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                   <div className="tti-upload-method-sub">Chọn ảnh từ thư viện hoặc máy tính</div>
                 </button>
               </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => {
+                  void addFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
 
               {method === "cam" ? (
                 <>
@@ -263,28 +293,21 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                         <circle cx="12" cy="12" r="8" stroke="white" />
                       </svg>
                     </button>
-                    <button type="button" className="tti-cam-retake" disabled>
+                    <button
+                      type="button"
+                      className="tti-cam-retake"
+                      disabled={uploading || !!camErr}
+                      onClick={() => setCamFacing((f) => (f === "environment" ? "user" : "environment"))}
+                    >
                       Đổi camera
                     </button>
                   </div>
                 </>
-              ) : (
-                <>
-                  <p className="tti-method-hint">Kéo thả hoặc chọn ảnh (jpg, png, webp)</p>
-                  <label className="tti-file-drop">
-                    Kéo thả hoặc click để chọn ảnh
-                    <span>Chấp nhận jpg, png, webp — có thể chọn nhiều ảnh</span>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      multiple
-                      className="hidden"
-                      disabled={uploading}
-                      onChange={(e) => void addFiles(e.target.files)}
-                    />
-                  </label>
-                </>
-              )}
+              ) : urls.length > 0 ? (
+                <p className="tti-method-hint">
+                  Ảnh đã chọn hiển thị bên dưới — bấm lại ô Upload file để chọn thêm.
+                </p>
+              ) : null}
 
               {uploading ? (
                 <p className="mt-2 flex items-center gap-2 text-sm text-[rgba(45,32,32,0.55)]">

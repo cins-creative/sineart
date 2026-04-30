@@ -135,8 +135,7 @@ export default function ThiThuRoomClient({
       : null;
   const showBreakMarker =
     cfg.co_giai_lao && GLs != null && (phase === "exam_1" || phase === "exam_2");
-  const nopTuMs = cfg.phut_hien_nop_bai * 60 * 1000;
-  const showNop = (phase === "exam_1" || phase === "exam_2") && elapsed >= nopTuMs;
+  const showNop = phase === "exam_1" || phase === "exam_2";
 
   const id = ky.id;
 
@@ -191,7 +190,6 @@ export default function ThiThuRoomClient({
 
   const yearLabel = useMemo(() => new Date(T).getFullYear(), [T]);
 
-  const startClock = new Date(T).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
   const endClock = new Date(endMs).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 
   return (
@@ -248,8 +246,7 @@ export default function ThiThuRoomClient({
             </div>
 
             <div className="tti-pb">
-              <div className="tti-pb-row">
-                <span className="tti-pb-s">{startClock}</span>
+              <div className="tti-pb-row tti-pb-row--end-only">
                 <div className="tti-pb-e">
                   <small>Kết thúc buổi thi</small>
                   <span>{endClock}</span>
@@ -261,6 +258,7 @@ export default function ThiThuRoomClient({
                 breakMarkerPct={breakMarkerPct}
                 breakRangeLabel={breakRangeLabel}
                 showBreakAbove={showBreakMarker}
+                onTerminalClick={() => setSubmitOpen(true)}
               />
             </div>
 
@@ -277,7 +275,7 @@ export default function ThiThuRoomClient({
                 <button type="button" className="tti-nop-btn" onClick={() => setSubmitOpen(true)}>
                   Nộp bài →
                 </button>
-                <p className="tti-nop-hint">Đã đến giờ nộp bài — upload ảnh bài làm của bạn</p>
+                <p className="tti-nop-hint">Có thể nộp bài bất cứ lúc nào trong giờ làm bài</p>
               </div>
             ) : null}
           </div>

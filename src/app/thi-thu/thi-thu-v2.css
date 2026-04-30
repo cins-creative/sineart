@@ -413,39 +413,41 @@
   padding-bottom: 40px;
 }
 .sa-thi-thu .tti-ex-body {
-  padding: 22px 24px 0;
-  max-width: 720px;
+  padding: 28px 20px 0;
+  max-width: min(840px, 100%);
   margin: 0 auto;
 }
 .sa-thi-thu .tti-ex-hd {
   text-align: center;
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }
 .sa-thi-thu .tti-ex-badge {
   display: inline-block;
   background: var(--tti-grad);
   color: #fff !important;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
-  padding: 6px 22px;
+  padding: 8px 24px;
   border-radius: var(--tti-rp);
-  letter-spacing: 0.6px;
-  margin-bottom: 6px;
+  letter-spacing: 0.55px;
+  margin-bottom: 8px;
 }
 .sa-thi-thu .tti-ex-mon {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: clamp(17px, 4.2vw, 20px);
+  font-weight: 800;
   color: var(--tti-ink);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 .sa-thi-thu .tti-ex-timer-lbl {
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--tti-ink2);
-  margin-bottom: 3px;
+  margin-bottom: 6px;
 }
 .sa-thi-thu .tti-ex-timer {
-  font-size: clamp(36px, 10vw, 52px);
+  font-size: clamp(40px, 11vw, 58px);
   font-weight: 800;
   letter-spacing: -2px;
   line-height: 1;
@@ -453,37 +455,42 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .sa-thi-thu .tti-pb {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 .sa-thi-thu .tti-pb-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  margin-bottom: 6px;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+.sa-thi-thu .tti-pb-row--end-only {
+  justify-content: flex-end;
 }
 .sa-thi-thu .tti-pb-s {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
   color: var(--tti-ink);
 }
 .sa-thi-thu .tti-pb-e {
   text-align: right;
 }
 .sa-thi-thu .tti-pb-e small {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
   color: var(--tti-ink2);
   display: block;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.45px;
 }
 .sa-thi-thu .tti-pb-e span {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
   color: var(--tti-ink);
 }
 .sa-thi-thu .tti-pb-track-wrap {
@@ -536,10 +543,11 @@
   line-height: 1.2;
 }
 .sa-thi-thu .tti-pb-track {
-  height: 13px;
+  height: 16px;
   border-radius: var(--tti-rp);
   background: rgba(45, 32, 32, 0.08);
   position: relative;
+  box-shadow: inset 0 0 0 1px rgba(45, 32, 32, 0.06);
 }
 .sa-thi-thu .tti-pb-fill {
   height: 100%;
@@ -549,42 +557,85 @@
 }
 .sa-thi-thu .tti-pb-mkrs {
   position: relative;
-  min-height: 76px;
-  margin-top: 6px;
-  padding: 0 2px;
+  width: 100%;
+  min-height: 72px;
+  margin-top: 10px;
+  padding: 0 6px;
 }
 .sa-thi-thu .tti-pb-mk {
   position: absolute;
   top: 0;
-  max-width: min(88px, 22vw);
+  max-width: min(100px, 24vw);
   pointer-events: none;
 }
+.sa-thi-thu .tti-pb-mk--last {
+  max-width: min(120px, 28vw);
+}
 .sa-thi-thu .tti-pb-mk-tri {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--tti-g0);
   display: block;
   line-height: 1;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .sa-thi-thu .tti-pb-mk-tri.sp {
   color: var(--tti-g1);
 }
 .sa-thi-thu .tti-pb-mk-lbl {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--tti-ink);
-  line-height: 1.35;
+  line-height: 1.3;
   white-space: pre-line;
   display: block;
 }
 .sa-thi-thu .tti-pb-mk-note {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--tti-g1);
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.35;
   white-space: pre-line;
   display: block;
-  margin-top: 4px;
+  margin-top: 6px;
+}
+
+/* Nhóm “Nộp bài …” tại mốc kết — căn giữa, tách khỏi mép timeline */
+.sa-thi-thu .tti-pb-terminal {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding: 0 8px;
+}
+.sa-thi-thu .tti-pb-terminal-inner {
+  display: inline-block;
+  max-width: 100%;
+  padding: 12px 20px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.45;
+  white-space: pre-line;
+  text-align: center;
+  color: var(--tti-ink);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1.5px solid rgba(238, 91, 159, 0.28);
+  box-shadow: 0 4px 18px rgba(45, 32, 32, 0.06);
+}
+.sa-thi-thu button.tti-pb-terminal-btn {
+  cursor: pointer;
+  font: inherit;
+  font-family: inherit;
+  width: auto;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.sa-thi-thu button.tti-pb-terminal-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(238, 91, 159, 0.45);
+  box-shadow: 0 8px 24px rgba(238, 91, 159, 0.15);
+}
+.sa-thi-thu button.tti-pb-terminal-btn:focus-visible {
+  outline: 2px solid rgba(238, 91, 159, 0.55);
+  outline-offset: 3px;
 }
 
 .sa-thi-thu .tti-de-sec {
@@ -878,8 +929,9 @@
   padding: 9px 12px;
   border-radius: var(--tti-rs);
   border: 1px solid var(--tti-ink3) !important;
-  background: var(--tti-bg) !important;
+  background: #fff !important;
   color: var(--tti-ink) !important;
+  color-scheme: light;
   outline: none;
   transition: 0.15s;
   display: block;
@@ -990,21 +1042,6 @@
   background: #fff !important;
   color: var(--tti-ink2) !important;
   cursor: pointer;
-}
-.sa-thi-thu .tti-file-drop {
-  border: 1.5px dashed var(--tti-ink3);
-  border-radius: var(--tti-rs);
-  padding: 16px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--tti-ink2);
-  cursor: pointer;
-  transition: 0.15s;
-  background: #fff !important;
-}
-.sa-thi-thu .tti-file-drop:hover {
-  border-color: var(--tti-g1);
-  background: rgba(238, 91, 159, 0.04) !important;
 }
 .sa-thi-thu .tti-thumb-row {
   display: flex;

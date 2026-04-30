@@ -254,9 +254,14 @@ export default function KienThucNenTangView({ groups }: { groups: LandingGroup[]
             <Link href="/khoa-hoc" className="btn-full">
               Xem khoá học →
             </Link>
-            <Link href="/hoc-thu" className="btn-out">
+            <a
+              href="https://www.facebook.com/sineart0102"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-out"
+            >
               🎨 Đăng ký học thử
-            </Link>
+            </a>
           </div>
         </aside>
       </div>

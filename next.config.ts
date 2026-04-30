@@ -21,6 +21,11 @@ const nextConfig: NextConfig = {
         destination: "/tra-cuu-thong-tin",
         permanent: true,
       },
+      {
+        source: "/hoc-thu",
+        destination: "https://www.facebook.com/sineart0102",
+        permanent: true,
+      },
     ];
   },
 };

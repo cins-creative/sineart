@@ -150,6 +150,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["munsell", "hue-value-chroma", "atelier"],
     doc_time: 10,
     thumbnail: "/img/he-thong-mau-munsell/thumbnail.png",
+    hero_image: "/img/he-thong-mau-munsell/hero-cover.png",
   },
   {
     slug: "mo-hinh-cong-tru-mau",
@@ -160,6 +161,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["RGB", "CMYK", "additive", "subtractive"],
     doc_time: 8,
     thumbnail: "/img/mo-hinh-cong-tru-mau/thumbnail.png",
+    hero_image: "/img/mo-hinh-cong-tru-mau/hero-cover.png",
   },
   {
     slug: "thuoc-tinh-mau-sac",
@@ -170,6 +172,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["HSL", "hue", "saturation", "value"],
     doc_time: 10,
     thumbnail: "/img/thuoc-tinh-mau-sac/thumbnail.png",
+    hero_image: "/img/thuoc-tinh-mau-sac/hero-cover.png",
   },
   {
     slug: "mau-sac-qua-thiet-bi-dien-tu",
@@ -180,6 +183,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["calibration", "màn-hình", "OLED", "IPS"],
     doc_time: 10,
     thumbnail: "/img/mau-sac-qua-thiet-bi-dien-tu/thumbnail.png",
+    hero_image: "/img/mau-sac-qua-thiet-bi-dien-tu/hero-cover.png",
   },
   {
     slug: "cac-he-mau-vat-ly",

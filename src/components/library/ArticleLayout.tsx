@@ -299,9 +299,14 @@ export function ArticleLayout({ slug, children, toc = [] }: Props) {
               <Link href="/khoa-hoc" className="rnav-cta-btn">
                 Xem khoá học →
               </Link>
-              <Link href="/hoc-thu" className="rnav-cta-btn rnav-cta-btn--out">
+              <a
+                href="https://www.facebook.com/sineart0102"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rnav-cta-btn rnav-cta-btn--out"
+              >
                 🎨 Đăng ký học thử
-              </Link>
+              </a>
             </div>
           </aside>
         </div>

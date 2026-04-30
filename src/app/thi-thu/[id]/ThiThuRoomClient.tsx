@@ -135,7 +135,6 @@ export default function ThiThuRoomClient({
       : null;
   const showBreakMarker =
     cfg.co_giai_lao && GLs != null && (phase === "exam_1" || phase === "exam_2");
-  const showNop = phase === "exam_1" || phase === "exam_2";
 
   const id = ky.id;
 
@@ -269,15 +268,6 @@ export default function ThiThuRoomClient({
               </div>
               <ThiThuExamDeAccordion items={deThiItems} />
             </div>
-
-            {showNop ? (
-              <div className="tti-nop-wrap">
-                <button type="button" className="tti-nop-btn" onClick={() => setSubmitOpen(true)}>
-                  Nộp bài →
-                </button>
-                <p className="tti-nop-hint">Có thể nộp bài bất cứ lúc nào trong giờ làm bài</p>
-              </div>
-            ) : null}
           </div>
         </div>
       )}

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import NavBar from "@/app/_components/NavBar";
-import ThiThuFooter from "../ThiThuFooter";
 import { ThiThuStyles } from "../ThiThuStyles";
 import ThiThuRoomClient from "./ThiThuRoomClient";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
@@ -69,7 +68,6 @@ export default async function ThiThuRoomPage(props: PageProps) {
           previewQuery={previewRaw}
           previewAllowed={previewAllowed}
         />
-        <ThiThuFooter />
       </div>
     </div>
   );

@@ -38,7 +38,7 @@ function terminalMilestone(cfg: MonThiConfig): { phut: number; label: string; no
 }
 
 /**
- * Timeline theo tỷ lệ phút. Nhãn nộp bài tại mốc **kết** (phút = tổng) hiển thị **căn giữa** dưới hàng mốc để không lệch mép phải.
+ * Timeline theo tỷ lệ phút: thanh tiến độ + mốc thời gian & nộp bài + thẻ “Nộp bài …” căn giữa (mốc kết).
  */
 export default function ThiThuExamProgressBar({
   cfg,

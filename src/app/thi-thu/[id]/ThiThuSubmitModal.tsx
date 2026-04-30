@@ -3,6 +3,8 @@
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { cn } from "@/lib/utils";
+
 /** Ảnh chụp xuất Full HD dọc (thường dùng khi cầm điện thoại dọc chụp bài) */
 const CAPTURE_W = 1080;
 const CAPTURE_H = 1920;
@@ -57,6 +59,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
       streamRef.current = null;
       setCamErr(null);
       setCamFacing("environment");
+      setMethod("file");
       return;
     }
     if (method !== "cam") {
@@ -214,194 +217,236 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
     }
   }, [facebook, ghiChu, hoTen, kyId, urls]);
 
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
   if (!open) return null;
 
+  const fullscreenCam = method === "cam" && !done;
+
   return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-5 tti-modal-bg font-[family-name:var(--font-quicksand)]">
-      <div role="dialog" aria-modal className="tti-modal max-h-[92vh] overflow-y-auto">
-        <div className="tti-modal-hd">
-          <span className="tti-modal-ttl">Nộp bài</span>
-          <button type="button" className="tti-modal-x" onClick={onClose} aria-label="Đóng">
-            ×
-          </button>
-        </div>
-
-        {done ? (
-          <p className="py-6 text-center text-base font-semibold text-emerald-700">
-            Đã nộp bài thành công
-          </p>
-        ) : (
-          <>
-            <div className="tti-f-group">
-              <label className="tti-f-lbl">Họ tên *</label>
-              <input
-                className="tti-f-in"
-                placeholder="Nguyễn Thị A"
-                value={hoTen}
-                onChange={(e) => setHoTen(e.target.value)}
-                autoComplete="name"
-              />
-            </div>
-            <div className="tti-f-group">
-              <label className="tti-f-lbl">Facebook (không bắt buộc)</label>
-              <input
-                className="tti-f-in"
-                placeholder="facebook.com/ten-cua-ban"
-                value={facebook}
-                onChange={(e) => setFacebook(e.target.value)}
-              />
-            </div>
-
-            <div className="tti-f-group">
-              <label className="tti-f-lbl">Ảnh bài làm *</label>
-              <div className="tti-upload-methods">
-                <button
-                  type="button"
-                  className={`tti-upload-method tti-um-cam ${method === "cam" ? "picked" : ""}`}
-                  onClick={() => setMethod("cam")}
-                >
-                  <div className="tti-upload-method-icon text-[#ee5b9f]">
-                    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" strokeWidth={2} aria-hidden>
-                      <path
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
-                      />
-                      <circle cx="12" cy="13" r="4" stroke="currentColor" />
-                    </svg>
-                  </div>
-                  <div className="tti-upload-method-ttl">Chụp ảnh</div>
-                  <div className="tti-upload-method-sub">Dùng camera thiết bị để chụp bài trực tiếp</div>
-                </button>
-                <button
-                  type="button"
-                  className={`tti-upload-method tti-um-file ${method === "file" ? "picked" : ""}`}
-                  onClick={selectUploadFile}
-                >
-                  <div className="tti-upload-method-icon text-[#7c6fcd]">
-                    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" strokeWidth={2} aria-hidden>
-                      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                      <polyline stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" points="17 8 12 3 7 8" />
-                      <line stroke="currentColor" strokeLinecap="round" x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                  </div>
-                  <div className="tti-upload-method-ttl">Upload file</div>
-                  <div className="tti-upload-method-sub">Chọn ảnh từ thư viện hoặc máy tính</div>
-                </button>
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                className="hidden"
-                disabled={uploading}
-                onChange={(e) => {
-                  void addFiles(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-
-              {method === "cam" ? (
-                <>
-                  <p className="tti-method-hint">
-                    {camErr ??
-                      "Truy cập camera thiết bị — ảnh lưu Full HD dọc 1080×1920. Nhấn nút chụp khi đã căng khung bài."}
-                  </p>
-                  <div className="tti-cam-preview">
-                    <video
-                      ref={videoRef}
-                      className={camErr ? "hidden" : "absolute inset-0 h-full w-full object-cover"}
-                      playsInline
-                      muted
-                      autoPlay
-                    />
-                    {camErr ? (
-                      <div className="tti-cam-preview-ph">{camErr}</div>
-                    ) : null}
-                  </div>
-                  <div className="tti-cam-btn-row">
-                    <button type="button" className="tti-cam-retake" disabled={uploading}>
-                      Chụp lại
-                    </button>
-                    <button
-                      type="button"
-                      className="tti-cam-shutter"
-                      disabled={uploading || !!camErr}
-                      onClick={() => void capturePhoto()}
-                      aria-label="Chụp ảnh"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} strokeLinecap="round" width={20} height={20}>
-                        <circle cx="12" cy="12" r="8" stroke="white" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      className="tti-cam-retake"
-                      disabled={uploading || !!camErr}
-                      onClick={() => setCamFacing((f) => (f === "environment" ? "user" : "environment"))}
-                    >
-                      Đổi camera
-                    </button>
-                  </div>
-                </>
-              ) : urls.length > 0 ? (
-                <p className="tti-method-hint">
-                  Ảnh đã chọn hiển thị bên dưới — bấm lại ô Upload file để chọn thêm.
-                </p>
-              ) : null}
-
-              {uploading ? (
-                <p className="mt-2 flex items-center gap-2 text-sm text-[rgba(45,32,32,0.55)]">
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Đang tải ảnh…
-                </p>
-              ) : null}
-
-              <div className="tti-thumb-row">
-                {urls.map((u, i) => (
-                  <div key={`${u}-${i}`} className="tti-thumb">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={u} alt="" className="h-full w-full object-cover" />
-                    <button
-                      type="button"
-                      className="tti-thumb-x"
-                      aria-label="Xóa ảnh"
-                      onClick={() => setUrls((prev) => prev.filter((_, j) => j !== i))}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="tti-f-group">
-              <label className="tti-f-lbl">Ghi chú</label>
-              <textarea
-                className="tti-f-in min-h-[72px]"
-                rows={2}
-                placeholder="Ghi chú thêm nếu có..."
-                value={ghiChu}
-                onChange={(e) => setGhiChu(e.target.value)}
-              />
-            </div>
-
-            {err ? <p className="mb-2 text-sm text-red-600">{err}</p> : null}
-
+    <div
+      className={cn(
+        "fixed inset-0 z-[500] font-[family-name:var(--font-quicksand)]",
+        fullscreenCam ? "bg-black" : "tti-modal-bg flex items-center justify-center p-5",
+      )}
+    >
+      {fullscreenCam ? (
+        <div role="dialog" aria-modal className="flex h-[100dvh] min-h-0 w-full flex-col bg-black text-white">
+          <header className="flex shrink-0 items-center justify-between gap-2 px-4 pb-2 pt-[max(10px,env(safe-area-inset-top))]">
             <button
               type="button"
-              disabled={busy || uploading}
-              className="tti-submit-btn"
-              onClick={() => void submit()}
+              className="rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-sm font-bold text-white"
+              onClick={() => setMethod("file")}
             >
-              {busy ? "Đang gửi…" : "Gửi bài →"}
+              ← Form nộp bài
             </button>
-          </>
-        )}
-      </div>
+            <span className="max-w-[42%] text-center text-[11px] font-semibold leading-snug text-white/85">
+              Camera toàn màn — ảnh 1080×1920
+            </span>
+            <button
+              type="button"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-xl leading-none text-white"
+              onClick={onClose}
+              aria-label="Đóng"
+            >
+              ×
+            </button>
+          </header>
+
+          <div className="relative min-h-0 flex-1 w-full bg-black">
+            <video
+              ref={videoRef}
+              className={camErr ? "hidden" : "absolute inset-0 h-full w-full object-cover"}
+              playsInline
+              muted
+              autoPlay
+            />
+            {camErr ? (
+              <div className="flex h-full items-center justify-center px-6 text-center text-sm text-white/90">{camErr}</div>
+            ) : null}
+          </div>
+
+          <footer className="flex shrink-0 flex-col gap-2 border-t border-white/10 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
+            {uploading ? (
+              <p className="flex items-center justify-center gap-2 text-sm text-white/75">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Đang tải ảnh…
+              </p>
+            ) : null}
+            <div className="tti-cam-btn-row tti-cam-btn-row--fullscreen">
+              <button type="button" className="tti-cam-retake" disabled={uploading}>
+                Chụp lại
+              </button>
+              <button
+                type="button"
+                className="tti-cam-shutter"
+                disabled={uploading || !!camErr}
+                onClick={() => void capturePhoto()}
+                aria-label="Chụp ảnh"
+              >
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} strokeLinecap="round" width={20} height={20}>
+                  <circle cx="12" cy="12" r="8" stroke="white" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="tti-cam-retake"
+                disabled={uploading || !!camErr}
+                onClick={() => setCamFacing((f) => (f === "environment" ? "user" : "environment"))}
+              >
+                Đổi camera
+              </button>
+            </div>
+          </footer>
+        </div>
+      ) : (
+        <div role="dialog" aria-modal className="tti-modal max-h-[92vh] overflow-y-auto">
+          <div className="tti-modal-hd">
+            <span className="tti-modal-ttl">Nộp bài</span>
+            <button type="button" className="tti-modal-x" onClick={onClose} aria-label="Đóng">
+              ×
+            </button>
+          </div>
+
+          {done ? (
+            <p className="py-6 text-center text-base font-semibold text-emerald-700">Đã nộp bài thành công</p>
+          ) : (
+            <>
+              <div className="tti-f-group">
+                <label className="tti-f-lbl">Họ tên *</label>
+                <input
+                  className="tti-f-in"
+                  placeholder="Nguyễn Thị A"
+                  value={hoTen}
+                  onChange={(e) => setHoTen(e.target.value)}
+                  autoComplete="name"
+                />
+              </div>
+              <div className="tti-f-group">
+                <label className="tti-f-lbl">Facebook (không bắt buộc)</label>
+                <input
+                  className="tti-f-in"
+                  placeholder="facebook.com/ten-cua-ban"
+                  value={facebook}
+                  onChange={(e) => setFacebook(e.target.value)}
+                />
+              </div>
+
+              <div className="tti-f-group">
+                <label className="tti-f-lbl">Ảnh bài làm *</label>
+                <div className="tti-upload-methods">
+                  <button
+                    type="button"
+                    className={`tti-upload-method tti-um-cam ${method === "cam" ? "picked" : ""}`}
+                    onClick={() => setMethod("cam")}
+                  >
+                    <div className="tti-upload-method-icon text-[#ee5b9f]">
+                      <svg width={22} height={22} viewBox="0 0 24 24" fill="none" strokeWidth={2} aria-hidden>
+                        <path
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+                        />
+                        <circle cx="12" cy="13" r="4" stroke="currentColor" />
+                      </svg>
+                    </div>
+                    <div className="tti-upload-method-ttl">Chụp ảnh</div>
+                    <div className="tti-upload-method-sub">Toàn màn hình — chụp trực tiếp</div>
+                  </button>
+                  <button
+                    type="button"
+                    className={`tti-upload-method tti-um-file ${method === "file" ? "picked" : ""}`}
+                    onClick={selectUploadFile}
+                  >
+                    <div className="tti-upload-method-icon text-[#7c6fcd]">
+                      <svg width={22} height={22} viewBox="0 0 24 24" fill="none" strokeWidth={2} aria-hidden>
+                        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                        <polyline stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" points="17 8 12 3 7 8" />
+                        <line stroke="currentColor" strokeLinecap="round" x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                    </div>
+                    <div className="tti-upload-method-ttl">Upload file</div>
+                    <div className="tti-upload-method-sub">Chọn ảnh từ thư viện hoặc máy tính</div>
+                  </button>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    void addFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+
+                {urls.length > 0 ? (
+                  <p className="tti-method-hint">
+                    Ảnh đã chọn hiển thị bên dưới — bấm lại ô Upload file để chọn thêm.
+                  </p>
+                ) : null}
+
+                {uploading ? (
+                  <p className="mt-2 flex items-center gap-2 text-sm text-[rgba(45,32,32,0.55)]">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Đang tải ảnh…
+                  </p>
+                ) : null}
+
+                <div className="tti-thumb-row">
+                  {urls.map((u, i) => (
+                    <div key={`${u}-${i}`} className="tti-thumb">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u} alt="" className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        className="tti-thumb-x"
+                        aria-label="Xóa ảnh"
+                        onClick={() => setUrls((prev) => prev.filter((_, j) => j !== i))}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="tti-f-group">
+                <label className="tti-f-lbl">Ghi chú</label>
+                <textarea
+                  className="tti-f-in min-h-[72px]"
+                  rows={2}
+                  placeholder="Ghi chú thêm nếu có..."
+                  value={ghiChu}
+                  onChange={(e) => setGhiChu(e.target.value)}
+                />
+              </div>
+
+              {err ? <p className="mb-2 text-sm text-red-600">{err}</p> : null}
+
+              <button
+                type="button"
+                disabled={busy || uploading}
+                className="tti-submit-btn"
+                onClick={() => void submit()}
+              >
+                {busy ? "Đang gửi…" : "Gửi bài →"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

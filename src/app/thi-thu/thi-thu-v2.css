@@ -555,13 +555,13 @@
   background: var(--tti-grad);
   transition: width 0.5s ease;
 }
-/* Mốc là absolute → không kéo giãn chiều cao; cần đủ min-height để ghi chú nhiều dòng không đè thẻ terminal */
+/* Mốc absolute — cần min-height đủ để nhãn + ghi chú nộp bài không đè thẻ terminal */
 .sa-thi-thu .tti-pb-mkrs {
   position: relative;
   width: 100%;
-  min-height: clamp(168px, 54vw, 280px);
+  min-height: clamp(132px, 42vw, 210px);
   margin-top: 10px;
-  padding: 0 6px 16px;
+  padding: 0 6px 10px;
   box-sizing: border-box;
 }
 .sa-thi-thu .tti-pb-mk {
@@ -611,7 +611,6 @@
   }
 }
 
-/* Nhóm “Nộp bài …” tại mốc kết — căn giữa, tách khỏi mép timeline */
 .sa-thi-thu .tti-pb-terminal {
   display: flex;
   justify-content: center;
@@ -1056,6 +1055,14 @@
   background: #fff !important;
   color: var(--tti-ink2) !important;
   cursor: pointer;
+}
+.sa-thi-thu .tti-cam-btn-row--fullscreen {
+  margin-bottom: 0;
+}
+.sa-thi-thu .tti-cam-btn-row--fullscreen .tti-cam-retake {
+  border-color: rgba(255, 255, 255, 0.38) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
 }
 .sa-thi-thu .tti-thumb-row {
   display: flex;

@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  fetchBlogById,
+  fetchBlogBySlug,
   fetchRelatedBlogs,
   fetchAdjacentBlogs,
-  idFromBlogSlug,
   buildBlogSlug,
   estimateReadMinutes,
   extractHeadings,
@@ -27,16 +26,14 @@ type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const id = idFromBlogSlug(slug);
-  if (!id) return {};
-  const post = await fetchBlogById(id);
+  const post = await fetchBlogBySlug(slug);
   if (!post) return {};
   const title = post.title?.trim() || "Bài viết";
   const rawDesc = post.opening
     ? post.opening.replace(/<[^>]+>/g, " ")
     : post.content?.replace(/<[^>]+>/g, " ") ?? "";
   const description = rawDesc.replace(/\s+/g, " ").trim().slice(0, 155);
-  const canonicalPath = `/blogs/${slug}`;
+  const canonicalPath = `/blogs/${buildBlogSlug(post.id, post.title)}`;
   return {
     title,
     description: description || "Bài viết mỹ thuật và tuyển sinh tại Sine Art.",
@@ -71,17 +68,14 @@ function initials(nguon: string | null | undefined) {
 
 export default async function BlogDetailPage({ params }: Props) {
   const { slug } = await params;
-  const id = idFromBlogSlug(slug);
-  if (!id) notFound();
+  const post = await fetchBlogBySlug(slug);
+  if (!post) notFound();
 
-  const [post, related, adjacent, { courses }] = await Promise.all([
-    fetchBlogById(id),
-    fetchRelatedBlogs(id, 3),
-    fetchAdjacentBlogs(id, new Date().toISOString()),
+  const [related, adjacent, { courses }] = await Promise.all([
+    fetchRelatedBlogs(post.id, 3),
+    fetchAdjacentBlogs(post.id, post.created_at),
     getKhoaHocPageData(),
   ]);
-
-  if (!post) notFound();
 
   const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 

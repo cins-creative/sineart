@@ -1,6 +1,6 @@
 /**
  * "Ba trụ cột" — 3 card giải thích vì sao chọn Sine Art.
- * Nội dung lấy từ dashboard admin; fallback giữ nguyên bản gốc.
+ * Trang chủ có thể ghi đè copy chuẩn từ `page.tsx` (CMS có thể lệch bản code).
  */
 import type { ReactElement } from "react";
 
@@ -92,19 +92,26 @@ export default function WhySection({ content = DEFAULT_HOME_CONTENT.why }: Props
         </div>
       </div>
 
+      {content.leadBody.trim() ? (
+        <p className="why-text why-text--lead">{content.leadBody}</p>
+      ) : null}
+
       <div className="why-grid">
-        {pillars.map(({ id, num, title, text, Icon }) => (
-          <article key={id} className={`why-card why-card--${id}`}>
-            <div className="why-num" aria-hidden>
-              {num}
-            </div>
-            <div className="why-icon" aria-hidden>
-              <Icon />
-            </div>
-            <h3 className="why-title">{title}</h3>
-            <p className="why-text">{text}</p>
-          </article>
-        ))}
+        {pillars.map(({ id, num, title, text, Icon }) => {
+          const showCardBody = Boolean(text.trim());
+          return (
+            <article key={id} className={`why-card why-card--${id}`}>
+              <div className="why-num" aria-hidden>
+                {num}
+              </div>
+              <div className="why-icon" aria-hidden>
+                <Icon />
+              </div>
+              <h3 className="why-title">{title}</h3>
+              {showCardBody ? <p className="why-text">{text}</p> : null}
+            </article>
+          );
+        })}
       </div>
     </section>
   );

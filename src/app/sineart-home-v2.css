@@ -1099,6 +1099,10 @@
   line-height: 1.6;
   margin: 0;
 }
+.sa-root .why-text--lead {
+  margin: 8px 0 22px;
+  max-width: 72ch;
+}
 
 /* ─────────────────────────────
   CTA BAND — khoá chốt gradient

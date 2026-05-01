@@ -24,6 +24,7 @@ import {
 
 import AdminRichTextEditor from "@/app/admin/_components/AdminRichTextEditor";
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
+import { buildBlogSlug } from "@/lib/data/blog-slug";
 
 export type AdminBlogRow = {
   id: number;
@@ -287,7 +288,7 @@ export default function QuanLyBlogView({ initialBlogs, missingServiceRole, loadE
                         </button>
                         <a
                           className="qlb-btn qlb-btn-ghost qlb-btn-sm"
-                          href={`/blogs/${b.id}-${slugify(b.title ?? "")}`}
+                          href={`/blogs/${buildBlogSlug(b.id, b.title)}`}
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -647,19 +648,6 @@ function ProgressStep({
       <span>{children}</span>
     </div>
   );
-}
-
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 80);
 }
 
 function tryDomain(url: string): string {

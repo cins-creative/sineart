@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-import { fetchBlogById, idFromBlogSlug } from "@/lib/data/blog";
+import { fetchBlogBySlug } from "@/lib/data/blog";
 
 export const runtime = "edge";
 
@@ -31,8 +31,7 @@ async function loadBeVietnamBold(): Promise<ArrayBuffer | undefined> {
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const id = idFromBlogSlug(slug);
-  const post = id ? await fetchBlogById(id) : null;
+  const post = await fetchBlogBySlug(slug);
   const title = post?.title?.trim() || "Sine Art Blog";
   const fontData = await loadBeVietnamBold();
 

@@ -5,6 +5,11 @@ import LuuBaiHocVienFab from "./_components/LuuBaiHocVienFab";
 import HeroSection from "./_components/HeroSection";
 import VideoSection from "./_components/VideoSection";
 import WhySection from "./_components/WhySection";
+import {
+  DEFAULT_HOME_CONTENT,
+  type WhyContent,
+} from "@/lib/admin/home-content-schema";
+import { getHomeStatStripData } from "@/lib/data/home";
 import { getHomeContent } from "@/lib/data/home-content";
 import { HomeCareerSection } from "./_components/home/HomeCareerSection";
 import { HomeCareerSectionSkeleton } from "./_components/home/HomeCareerSection.skeleton";
@@ -32,7 +37,29 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
-  const homeContent = await getHomeContent();
+  const [homeContent, statStrip] = await Promise.all([
+    getHomeContent(),
+    getHomeStatStripData(),
+  ]);
+
+  /** Eyebrow + số học viên khớp nội dung chuẩn (không lấy từ CMS). */
+  const heroContent = {
+    ...homeContent.hero,
+    eyebrow: DEFAULT_HOME_CONTENT.hero.eyebrow,
+    studentsTrust: `${statStrip.students} học viên`,
+  };
+
+  /** `mkt_home_content` thường ghi đè bản trong code; đồng bộ copy section “Tại sao”. */
+  const dw = DEFAULT_HOME_CONTENT.why;
+  const whyContent: WhyContent = {
+    ...homeContent.why,
+    leadBody: dw.leadBody,
+    pillars: [
+      { ...homeContent.why.pillars[0], text: dw.pillars[0].text },
+      { ...homeContent.why.pillars[1], text: dw.pillars[1].text },
+      { ...homeContent.why.pillars[2], text: dw.pillars[2].text },
+    ],
+  };
 
   return (
     <div className="sa-root">
@@ -40,14 +67,14 @@ export default async function Home() {
         <HomeNavSection />
       </Suspense>
 
-      <HeroSection content={homeContent.hero} />
+      <HeroSection content={heroContent} />
 
       <Suspense fallback={<HomeStatStripSectionSkeleton />}>
         <HomeStatStripSection />
       </Suspense>
 
       <div className="page-inner">
-        <WhySection content={homeContent.why} />
+        <WhySection content={whyContent} />
         <VideoSection content={homeContent.video} />
         <Suspense fallback={<HomeReviewsSectionSkeleton />}>
           <HomeReviewsSection />

@@ -72,6 +72,8 @@ export type WhyContent = {
   titleEmphasis: string;
   titleAfter: string;
   subtitle: string;
+  /** Đoạn <p class="why-text"> giữa tiêu đề section và lưới 3 card (nội dung trụ 01). */
+  leadBody: string;
   pillars: [WhyPillar, WhyPillar, WhyPillar];
 };
 
@@ -201,7 +203,7 @@ export type HomeContent = {
 
 export const DEFAULT_HOME_CONTENT: HomeContent = {
   hero: {
-    eyebrow: "Giáo trình khoa học · Từ 2015",
+    eyebrow: "Giáo trình khoa học từ 2020",
     headlineBefore: "Dành cho ",
     headlineEmphasis: "Họa sỹ",
     headlineAfter: "công nghệ",
@@ -224,7 +226,7 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
   },
   statStrip: {
     cards: [
-      { label: "Học viên đã theo học", sublabel: "Từ 2018 đến nay" },
+      { label: "Học viên đã theo học", sublabel: "Từ 2020 đến nay" },
       { label: "Năm kinh nghiệm giảng dạy", sublabel: "Đội ngũ giáo viên chuyên sâu" },
       { label: "Nhóm khoá học chuyên sâu", sublabel: "Hình họa · Bố cục · Digital" },
     ],
@@ -236,23 +238,25 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
     titleAfter: " — có người đồng hành",
     subtitle:
       "3 điểm cốt lõi làm nên khác biệt của Sine Art so với các lớp vẽ truyền thống.",
+    leadBody:
+      "Từ hình họa cơ bản đến digital painting chuyên sâu — được thiết kế bài bản theo chuẩn ĐH Mỹ thuật & Đại học Kiến trúc TP.HCM",
     pillars: [
       {
         num: "01",
         title: "Giáo trình khoa học",
-        text: "Từ hình họa cơ bản đến digital painting chuyên sâu — 6 cấp độ được thiết kế bài bản theo chuẩn ĐH Mỹ thuật Công nghiệp & SKĐA.",
+        text: "Từ Mỹ thuật nền tảng Hình họa, Trang trí màu, Bố cục màu đến digital — chuẩn ĐH Mỹ thuật, Kiến trúc TP.HCM và các trường Đại học hàng đầu khu vực miền Nam.",
         iconKey: "book",
       },
       {
         num: "02",
         title: "Giáo viên đồng hành",
-        text: "Lớp nhỏ tối đa 12 học viên. Giáo viên đi từ đầu đến cuối — chấm bài chi tiết, sửa từng nét, hỗ trợ cả khi bạn về nhà.",
+        text: "Giáo viên sửa bài riêng theo từng lỗi sai của từng học viên. Sĩ số lớp vừa đủ để mọi học viên đều được sửa bài đầy đủ. Kết hợp đẩy nhanh tiến độ bằng sửa bài ngoài giờ cho học viên.",
         iconKey: "users",
       },
       {
         num: "03",
         title: "Hướng nghiệp thực chiến",
-        text: "Kết nối với studio Hoạt hình, Game và Phim hàng đầu Việt Nam. Bạn ra trường với portfolio thật, kỹ năng thật, việc làm thật.",
+        text: "Dự án CINS định hướng nghề nghiệp thực tế với xã hội, giúp các bạn không chỉ vững nền tảng mỹ thuật mà còn chắc chắn về hướng đi.",
         iconKey: "pulse",
       },
     ],
@@ -262,7 +266,7 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
     titleBefore: "Bên trong lớp học ",
     titleEmphasis: "Sine Art",
     titleAfter: "",
-    subtitle: "Xem cách chúng tôi dạy và học — online và offline.",
+    subtitle: "Xem cách chúng tôi dạy và học — hiện giới thiệu lớp Online.",
     tabs: [
       {
         label: "📡 Lớp Online",
@@ -454,6 +458,7 @@ function mergeWhy(v: unknown): WhyContent {
     titleEmphasis: str(o.titleEmphasis, d.titleEmphasis),
     titleAfter: str(o.titleAfter, d.titleAfter),
     subtitle: str(o.subtitle, d.subtitle),
+    leadBody: str(o.leadBody, d.leadBody),
     pillars: [
       mergePillar(pillarsRaw[0], d.pillars[0]),
       mergePillar(pillarsRaw[1], d.pillars[1]),

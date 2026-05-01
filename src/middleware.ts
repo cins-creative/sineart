@@ -21,6 +21,20 @@ const PUBLIC_ADMIN_PATHS = new Set([
 
 export async function middleware(req: NextRequest): Promise<NextResponse> {
   const path = normalizePathname(req.nextUrl.pathname);
+
+  /* Blog: /blogs/123-ten-bai → /blogs/ten-bai (301/308 — khớp Framer, SEO) */
+  if (path.startsWith("/blogs/")) {
+    const rest = path.slice("/blogs/".length);
+    if (rest && /^\d+-/.test(rest)) {
+      const clean = rest.replace(/^\d+-/, "");
+      if (clean) {
+        const url = req.nextUrl.clone();
+        url.pathname = `/blogs/${clean}`;
+        return NextResponse.redirect(url, 308);
+      }
+    }
+  }
+
   if (!path.startsWith("/admin")) return NextResponse.next();
 
   if (PUBLIC_ADMIN_PATHS.has(path)) {
@@ -58,5 +72,5 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/blogs/:path*"],
 };

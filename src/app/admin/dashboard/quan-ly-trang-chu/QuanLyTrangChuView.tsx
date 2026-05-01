@@ -511,9 +511,21 @@ function ContentSection({
 
       <div className="qlh-content-block">
         <div className="qlh-content-block-head">
-          <span className="qlh-block-pill">Tại sao Sine Art · 3 trụ cột</span>
-          <code>article.why-card</code>
+          <span className="qlh-block-pill">Tại sao Sine Art · đoạn dẫn + 3 trụ cột</span>
+          <code>p.why-text--lead</code> · <code>article.why-card</code>
         </div>
+        <label className="qlh-field">
+          <span className="qlh-field-label">
+            Đoạn mô tả dưới tiêu đề section (trên lưới card — trụ 01)
+          </span>
+          <textarea
+            className="qlh-field-input qlh-field-ta"
+            rows={3}
+            value={why.leadBody}
+            onChange={(e) => onChangeWhy({ ...why, leadBody: e.target.value })}
+            placeholder="Từ hình họa cơ bản đến digital painting…"
+          />
+        </label>
         <div className="qlh-pillars-grid">
           {why.pillars.map((p, i) => (
             <PillarCard

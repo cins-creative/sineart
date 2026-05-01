@@ -31,7 +31,7 @@ File này là **bản tra cứu một chỗ** cho người làm product/dev; URL
 | Pattern | Nguồn |
 |---------|--------|
 | `/khoa-hoc/[slug]` | `ql_lop_hoc.url_class` (chuẩn hoá `normalizeClassSlug`) |
-| `/blogs/[slug]` | `mkt_blogs` + `buildBlogSlug(id, title)` |
+| `/blogs/[slug]` | `mkt_blogs` — `slug` = `slugifyTitle(title)` (không prefix `id-`; URL cũ `id-slug` → 308) |
 | `/tra-cuu-thong-tin/[slug]` | `tra_cuu_thong_tin.slug` |
 | `/tong-hop-de-thi/[slug]` | `fetchAllDeThiSlugs()` |
 | `/ebook/[slug]` | `fetchAllEbooks()` |

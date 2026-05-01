@@ -7,6 +7,9 @@ import {
   type VideoContent,
 } from "@/lib/admin/home-content-schema";
 
+/** Tạm chỉ public một video (Lớp Online). Khi có brief video Offline → đặt false. */
+const VIDEO_SECTION_ONLINE_ONLY = true;
+
 type TabId = "online" | "offline";
 
 type Props = {
@@ -14,11 +17,14 @@ type Props = {
 };
 
 export default function VideoSection({ content = DEFAULT_HOME_CONTENT.video }: Props) {
-  const [active, setActive] = useState<TabId>("online");
-  const tabs = content.tabs.map((tab, index) => ({
+  const allTabs = content.tabs.map((tab, index) => ({
     ...tab,
     id: (index === 0 ? "online" : "offline") as TabId,
   }));
+  const tabs = VIDEO_SECTION_ONLINE_ONLY ? allTabs.slice(0, 1) : allTabs;
+  const showTabBar = tabs.length > 1;
+
+  const [active, setActive] = useState<TabId>(tabs[0]?.id ?? "online");
 
   return (
     <div className="video-section">
@@ -33,18 +39,20 @@ export default function VideoSection({ content = DEFAULT_HOME_CONTENT.video }: P
           <p className="sec-sub">{content.subtitle}</p>
         </div>
       </div>
-      <div className="video-tabs">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`vtab${active === t.id ? " active" : ""}`}
-            onClick={() => setActive(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {showTabBar ? (
+        <div className="video-tabs">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`vtab${active === t.id ? " active" : ""}`}
+              onClick={() => setActive(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {tabs.map((t) => (
         <div
           key={t.id}

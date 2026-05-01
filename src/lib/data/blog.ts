@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { htmlToPlainText } from "@/lib/admin/sanitize-admin-html";
+import { buildBlogSlug } from "./blog-slug";
 
 export type MktBlog = {
   id: number;
@@ -32,31 +33,7 @@ export function sourceDomain(url: string | null | undefined): string {
   }
 }
 
-/** Chuyển title thành slug ASCII-safe. */
-export function slugifyTitle(title: string): string {
-  return title
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 80);
-}
-
-/** `/blog/{id}-{slug}` — id đứng đầu để reverse-extract khi fetch. */
-export function buildBlogSlug(id: number, title: string | null): string {
-  const tail = title ? slugifyTitle(title) : "bai-viet";
-  return `${id}-${tail}`;
-}
-
-/** Lấy `id` từ slug dạng `{id}-{tail}`. */
-export function idFromBlogSlug(slug: string): number | null {
-  const n = parseInt(slug, 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
+export { buildBlogSlug, idFromBlogSlug, slugifyTitle } from "./blog-slug";
 
 /** Ước tính số phút đọc (200 từ / phút). */
 export function estimateReadMinutes(...htmlParts: (string | null)[]): number {
@@ -104,6 +81,22 @@ async function fetchBlogByIdUncached(id: number): Promise<MktBlog | null> {
 }
 
 export const fetchBlogById = cache(fetchBlogByIdUncached);
+
+async function fetchBlogBySlugUncached(slug: string): Promise<MktBlog | null> {
+  const supabase = await createClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.from("mkt_blogs").select("id, title");
+  if (error || !data?.length) return null;
+
+  const hit = data.find((row) => buildBlogSlug(row.id, row.title) === slug);
+  if (!hit) return null;
+
+  return fetchBlogById(hit.id);
+}
+
+/** Tìm bài theo slug sạch (slugify tiêu đề). */
+export const fetchBlogBySlug = cache(fetchBlogBySlugUncached);
 
 async function fetchRelatedBlogsUncached(
   currentId: number,

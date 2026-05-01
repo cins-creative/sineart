@@ -107,6 +107,7 @@ export async function buildSitemapEntries(): Promise<MetadataRoute.Sitemap> {
     "/kien-thuc-nen-tang",
     "/thi-thu",
     "/donghocphi",
+    "/tinh-diem",
   ];
 
   for (const p of staticPaths) push(p);

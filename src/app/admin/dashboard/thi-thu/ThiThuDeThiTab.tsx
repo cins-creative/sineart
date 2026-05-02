@@ -1,14 +1,14 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import type { ThiThuDeThiItem } from "@/types/thi-thu";
 
 type Props = {
   items: ThiThuDeThiItem[];
-  onChange: (next: ThiThuDeThiItem[]) => void;
+  onChange: Dispatch<SetStateAction<ThiThuDeThiItem[]>>;
   readOnly?: boolean;
 };
 

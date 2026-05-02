@@ -6,6 +6,7 @@ import {
   adminStaffCanEditThiThuKy,
 } from "@/lib/admin/staff-mutation-access";
 import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
+import { parseThoiGianSuaBaiInputForPgTimeColumn } from "@/lib/thi-thu/replay-time";
 import { isMonThiKey } from "@/lib/thi-thu-config";
 import { formatSupabaseWriteError } from "@/lib/supabase/postgres-permission-hint";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -88,7 +89,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const supabase = supabaseGate;
 
-  const thoiGianSuaBai = parseTs(body.thoi_gian_sua_bai);
+  const thoiGianSuaBai = parseThoiGianSuaBaiInputForPgTimeColumn(body.thoi_gian_sua_bai);
   const videoSuaBai =
     typeof body.video_sua_bai === "string" && body.video_sua_bai.trim()
       ? body.video_sua_bai.trim()

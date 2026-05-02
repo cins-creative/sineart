@@ -90,10 +90,11 @@ export default function ThiThuEditorClient({
     parseDeThiJson(initial?.de_thi ?? null),
   );
 
+  /** Chỉ hydrate lại đề thi khi đổi kỳ (id). Không phụ thuộc `initial` trọn vẹn — tránh reset sau mỗi re-render RSC và xóa ảnh upload Cloudflare chưa lưu. */
   useEffect(() => {
-    if (!initial) return;
+    if (!initial?.id) return;
     setDeThiItems(parseDeThiJson(initial.de_thi ?? null));
-  }, [initial]);
+  }, [initial?.id]);
 
   useEffect(() => {
     if (!initialSavedFlash || clearedSavedFlash.current || !initial?.id) return;

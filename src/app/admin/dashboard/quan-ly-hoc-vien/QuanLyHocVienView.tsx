@@ -761,6 +761,10 @@ function CreateStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved
     }
   }
 
+  const lbl = "block text-[10px] font-bold uppercase tracking-wide text-[#64748B]";
+  const inp =
+    "mt-1 h-10 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] font-medium leading-normal text-[#323232] antialiased outline-none focus:border-[#BC8AF9]";
+
   return (
     <div
       className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
@@ -769,56 +773,48 @@ function CreateStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-xl"
+        className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white font-sans text-[#323232] shadow-xl"
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-          <h3 className="m-0 text-sm font-extrabold text-slate-900">Thêm học viên mới</h3>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600" aria-label="Đóng">
+        <div className="flex items-center justify-between border-b border-[#EEF1F4] px-5 py-3">
+          <h3 className="m-0 text-[15px] font-bold tracking-tight text-[#323232]">Thêm học viên mới</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-[#94A3B8] hover:bg-slate-50 hover:text-[#64748B]"
+            aria-label="Đóng"
+          >
             <X size={18} />
           </button>
         </div>
         <div className="max-h-[min(70vh,520px)] space-y-3 overflow-y-auto px-5 py-4">
-          {err ? <p className="m-0 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{err}</p> : null}
-          <label className="block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+          {err ? <p className="m-0 rounded-lg bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-700">{err}</p> : null}
+          <label className={lbl}>
             Họ tên
             <input
               value={full_name}
               onChange={(e) => setFullName(e.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-[#EAEAEA] px-3 text-sm font-semibold outline-none focus:border-[#BC8AF9]"
+              className={cn(inp, "font-semibold")}
             />
           </label>
-          <label className="block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+          <label className={lbl}>
             Email
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              type="email"
-              className="mt-1 h-10 w-full rounded-lg border border-[#EAEAEA] px-3 text-sm outline-none focus:border-[#BC8AF9]"
-            />
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className={inp} />
           </label>
-          <label className="block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+          <label className={lbl}>
             SĐT
-            <input
-              value={sdt}
-              onChange={(e) => setSdt(e.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-[#EAEAEA] px-3 text-sm outline-none focus:border-[#BC8AF9]"
-            />
+            <input value={sdt} onChange={(e) => setSdt(e.target.value)} className={inp} />
           </label>
-          <label className="block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+          <label className={lbl}>
             Facebook
-            <input
-              value={facebook}
-              onChange={(e) => setFacebook(e.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-[#EAEAEA] px-3 text-sm outline-none focus:border-[#BC8AF9]"
-            />
+            <input value={facebook} onChange={(e) => setFacebook(e.target.value)} className={inp} />
           </label>
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+            <label className={lbl}>
               Giới tính
               <select
                 value={sex}
                 onChange={(e) => setSex(e.target.value)}
-                className="mt-1 h-10 w-full rounded-lg border border-[#EAEAEA] bg-white px-2 text-sm outline-none focus:border-[#BC8AF9]"
+                className={cn(inp, "cursor-pointer bg-white px-2")}
               >
                 <option value="">—</option>
                 {SEX_OPTIONS.map((o) => (
@@ -828,12 +824,12 @@ function CreateStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved
                 ))}
               </select>
             </label>
-            <label className="block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+            <label className={lbl}>
               Loại khoá
               <select
                 value={loai}
                 onChange={(e) => setLoai(e.target.value)}
-                className="mt-1 h-10 w-full rounded-lg border border-[#EAEAEA] bg-white px-2 text-sm outline-none focus:border-[#BC8AF9]"
+                className={cn(inp, "cursor-pointer bg-white px-2")}
               >
                 <option value="">—</option>
                 {LOAI_KHOA_OPTIONS.map((o) => (
@@ -845,26 +841,16 @@ function CreateStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved
             </label>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+            <label className={lbl}>
               Ngày bắt đầu
-              <input
-                type="date"
-                value={nbd}
-                onChange={(e) => setNbd(e.target.value)}
-                className="mt-1 h-10 w-full rounded-lg border border-[#EAEAEA] px-2 text-sm outline-none focus:border-[#BC8AF9]"
-              />
+              <input type="date" value={nbd} onChange={(e) => setNbd(e.target.value)} className={cn(inp, "px-2")} />
             </label>
-            <label className="block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+            <label className={lbl}>
               Ngày kết thúc
-              <input
-                type="date"
-                value={nkt}
-                onChange={(e) => setNkt(e.target.value)}
-                className="mt-1 h-10 w-full rounded-lg border border-[#EAEAEA] px-2 text-sm outline-none focus:border-[#BC8AF9]"
-              />
+              <input type="date" value={nkt} onChange={(e) => setNkt(e.target.value)} className={cn(inp, "px-2")} />
             </label>
           </div>
-          <label className="block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+          <label className={lbl}>
             Năm thi
             <input
               type="number"
@@ -872,19 +858,23 @@ function CreateStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved
               onChange={(e) => setNamThi(e.target.value)}
               min={2000}
               max={2100}
-              className="mt-1 h-10 w-full rounded-lg border border-[#EAEAEA] px-3 text-sm outline-none focus:border-[#BC8AF9]"
+              className={inp}
             />
           </label>
         </div>
-        <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
+        <div className="flex justify-end gap-2 border-t border-[#EEF1F4] px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-[13px] font-semibold text-[#475569] hover:bg-slate-50"
+          >
             Hủy
           </button>
           <button
             type="button"
             disabled={saving}
             onClick={() => void submit()}
-            className="rounded-lg bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+            className="rounded-lg bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-4 py-2 text-[13px] font-bold text-white disabled:opacity-50"
           >
             {saving ? "Đang lưu…" : "Tạo học viên"}
           </button>

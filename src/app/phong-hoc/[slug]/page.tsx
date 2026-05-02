@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
-import { getHomeAdConfig, shouldShowAd } from "@/lib/data/home-ad";
-
-import ClassroomClient from "../ClassroomClient";
+import { PhongHocClassroomWithAd } from "./_components/PhongHocClassroomWithAd";
+import { PhongHocClassroomSkeleton } from "./_components/PhongHocClassroomSkeleton";
 
 export async function generateMetadata({
   params,
@@ -21,7 +21,10 @@ export default async function PhongHocSlugPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const adConfig = await getHomeAdConfig();
-  const adImageUrl = shouldShowAd(adConfig, "class") ? adConfig.ads : "";
-  return <ClassroomClient classSlug={slug} adImageUrl={adImageUrl} />;
+
+  return (
+    <Suspense fallback={<PhongHocClassroomSkeleton />}>
+      <PhongHocClassroomWithAd classSlug={slug} />
+    </Suspense>
+  );
 }

@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /** Giây — tránh fail build khi nhiều trang SSG + DB chậm (mặc định 60). */
+  staticPageGenerationTimeout: 120,
   outputFileTracingRoot: __dirname,
   images: {
     remotePatterns: [

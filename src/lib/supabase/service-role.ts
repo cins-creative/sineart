@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { createFetchWithTimeout } from "@/lib/supabase/fetch-timeout";
+
 function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
   try {
     const part = jwt.split(".")[1];
@@ -34,5 +36,8 @@ export function createServiceRoleClient(): SupabaseClient | null {
   warnIfServiceRoleKeyLooksWrong(key);
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: createFetchWithTimeout(),
+    },
   });
 }

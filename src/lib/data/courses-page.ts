@@ -221,31 +221,36 @@ function aggregate(
 async function getKhoaHocPageDataUncached(): Promise<{
   courses: KhoaHocCourseCard[];
 }> {
-  const supabase = await createClient();
-  if (!supabase) return { courses: [] };
-  const [monsRes, lopsRes] = await Promise.all([
-    supabase
-      .from("ql_mon_hoc")
-      .select(MON_HOC_CARD_SELECT)
-      .order("thu_tu_hien_thi", { ascending: true }),
-    supabase.from("ql_lop_hoc").select("id, mon_hoc, url_class"),
-  ]);
-  const mons = (monsRes.error ? [] : (monsRes.data ?? [])) as MonHoc[];
-  const lops = (lopsRes.error ? [] : (lopsRes.data ?? [])) as LopRow[];
-  const lopIdsOpen = lops
-    .filter((l) => l.mon_hoc != null)
-    .map((l) => Number(l.id))
-    .filter((id) => Number.isFinite(id) && id > 0);
-  const envRes =
-    lopIdsOpen.length > 0
-      ? await supabase
-          .from("ql_quan_ly_hoc_vien")
-          .select("lop_hoc")
-          .in("lop_hoc", lopIdsOpen)
-      : { data: [] as Record<string, unknown>[], error: null };
-  const enrollments = (envRes.error ? [] : (envRes.data ?? [])) as EnrollRow[];
-  if (!mons.length) return { courses: [] };
-  return { courses: aggregate(mons, lops, enrollments) };
+  try {
+    const supabase = await createClient();
+    if (!supabase) return { courses: [] };
+    const [monsRes, lopsRes] = await Promise.all([
+      supabase
+        .from("ql_mon_hoc")
+        .select(MON_HOC_CARD_SELECT)
+        .order("thu_tu_hien_thi", { ascending: true }),
+      supabase.from("ql_lop_hoc").select("id, mon_hoc, url_class"),
+    ]);
+    const mons = (monsRes.error ? [] : (monsRes.data ?? [])) as MonHoc[];
+    const lops = (lopsRes.error ? [] : (lopsRes.data ?? [])) as LopRow[];
+    const lopIdsOpen = lops
+      .filter((l) => l.mon_hoc != null)
+      .map((l) => Number(l.id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    const envRes =
+      lopIdsOpen.length > 0
+        ? await supabase
+            .from("ql_quan_ly_hoc_vien")
+            .select("lop_hoc")
+            .in("lop_hoc", lopIdsOpen)
+        : { data: [] as Record<string, unknown>[], error: null };
+    const enrollments = (envRes.error ? [] : (envRes.data ?? [])) as EnrollRow[];
+    if (!mons.length) return { courses: [] };
+    return { courses: aggregate(mons, lops, enrollments) };
+  } catch (e) {
+    console.warn("[courses-page] getKhoaHocPageData failed:", e);
+    return { courses: [] };
+  }
 }
 
 export const getKhoaHocPageData = cache(getKhoaHocPageDataUncached);

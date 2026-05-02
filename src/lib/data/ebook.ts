@@ -118,18 +118,23 @@ function mapRow(raw: Record<string, unknown>): EbookItem {
 }
 
 async function fetchAllEbooksUncached(): Promise<EbookItem[]> {
-  const supabase = createStaticClient();
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("mkt_ebooks")
-    .select(SELECT_COLS)
-    .order("featured", { ascending: false })
-    .order("created_at", { ascending: false });
-  if (error) {
-    console.error("[ebook] fetchAllEbooks error", error);
+  try {
+    const supabase = createStaticClient();
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from("mkt_ebooks")
+      .select(SELECT_COLS)
+      .order("featured", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("[ebook] fetchAllEbooks error", error);
+      return [];
+    }
+    return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+  } catch (e) {
+    console.warn("[ebook] fetchAllEbooks unexpected error:", e);
     return [];
   }
-  return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
 }
 
 export const fetchAllEbooks = cache(fetchAllEbooksUncached);

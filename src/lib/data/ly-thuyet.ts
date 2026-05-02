@@ -69,52 +69,57 @@ const FULL_COLUMNS =
  * grant / cột chưa tồn tại) → retry bỏ `slug` và log để debug.
  */
 async function fetchAllLyThuyetImpl(): Promise<LyThuyet[]> {
-  const supabase = createStaticClient();
-  if (!supabase) {
-    console.error(
-      "[ly-thuyet] createStaticClient() returned null — thiếu NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY?"
-    );
-    return [];
-  }
-
-  let rows: LyThuyetRow[] | null = null;
-
-  const first = await supabase
-    .from("dt_ly_thuyet_nen_tang")
-    .select(LIST_COLUMNS)
-    .order("thuoc_nhom", { ascending: true })
-    .order("id", { ascending: true });
-
-  if (first.error) {
-    console.warn(
-      "[ly-thuyet] fetchAllLyThuyet primary query failed, retrying without `slug` column:",
-      first.error.message
-    );
-    const retry = await supabase
-      .from("dt_ly_thuyet_nen_tang")
-      .select(LIST_COLUMNS.replace(", slug", ""))
-      .order("thuoc_nhom", { ascending: true })
-      .order("id", { ascending: true });
-    if (retry.error) {
+  try {
+    const supabase = createStaticClient();
+    if (!supabase) {
       console.error(
-        "[ly-thuyet] fetchAllLyThuyet retry also failed:",
-        retry.error.message,
-        "— check RLS (SELECT policy for anon) và GRANT trên dt_ly_thuyet_nen_tang. Xem sql/fix_dt_ly_thuyet_nen_tang_grants.sql."
+        "[ly-thuyet] createStaticClient() returned null — thiếu NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY?"
       );
       return [];
     }
-    rows = (retry.data ?? []) as unknown as LyThuyetRow[];
-  } else {
-    rows = (first.data ?? []) as unknown as LyThuyetRow[];
-  }
 
-  if (!rows || rows.length === 0) {
-    console.warn(
-      "[ly-thuyet] fetchAllLyThuyet returned 0 rows — table trống hoặc anon SELECT bị RLS chặn."
-    );
-  }
+    let rows: LyThuyetRow[] | null = null;
 
-  return rows.map(enrichLyThuyet).sort(sortByNhomOrder);
+    const first = await supabase
+      .from("dt_ly_thuyet_nen_tang")
+      .select(LIST_COLUMNS)
+      .order("thuoc_nhom", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (first.error) {
+      console.warn(
+        "[ly-thuyet] fetchAllLyThuyet primary query failed, retrying without `slug` column:",
+        first.error.message
+      );
+      const retry = await supabase
+        .from("dt_ly_thuyet_nen_tang")
+        .select(LIST_COLUMNS.replace(", slug", ""))
+        .order("thuoc_nhom", { ascending: true })
+        .order("id", { ascending: true });
+      if (retry.error) {
+        console.error(
+          "[ly-thuyet] fetchAllLyThuyet retry also failed:",
+          retry.error.message,
+          "— check RLS (SELECT policy for anon) và GRANT trên dt_ly_thuyet_nen_tang. Xem sql/fix_dt_ly_thuyet_nen_tang_grants.sql."
+        );
+        return [];
+      }
+      rows = (retry.data ?? []) as unknown as LyThuyetRow[];
+    } else {
+      rows = (first.data ?? []) as unknown as LyThuyetRow[];
+    }
+
+    if (!rows || rows.length === 0) {
+      console.warn(
+        "[ly-thuyet] fetchAllLyThuyet returned 0 rows — table trống hoặc anon SELECT bị RLS chặn."
+      );
+    }
+
+    return rows.map(enrichLyThuyet).sort(sortByNhomOrder);
+  } catch (e) {
+    console.warn("[ly-thuyet] fetchAllLyThuyet unexpected error:", e);
+    return [];
+  }
 }
 
 /**

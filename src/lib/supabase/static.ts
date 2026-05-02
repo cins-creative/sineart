@@ -1,6 +1,8 @@
 import { createClient as createJsClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { createFetchWithTimeout } from "@/lib/supabase/fetch-timeout";
+
 /**
  * Build-safe anon Supabase client — KHÔNG đụng `next/headers.cookies()`.
  *
@@ -22,6 +24,9 @@ export function createStaticClient(): SupabaseClient | null {
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
+    },
+    global: {
+      fetch: createFetchWithTimeout(),
     },
   });
 }

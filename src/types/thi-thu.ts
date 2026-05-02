@@ -15,18 +15,21 @@ export type ThiThuKyThiRow = {
   video_sua_bai: string | null;
   /** Lịch chiếu video sửa bài — ISO timestamptz hoặc (server) `time` ghép ngày thi. */
   thoi_gian_sua_bai: string | null;
+  /** Đề thi — mảng JSON (`jsonb`) trên `thi_thu_ky_thi`. */
+  de_thi?: ThiThuDeThiItem[] | null;
   trang_thai: ThiThuTrangThai;
   created_at?: string;
 };
 
-export type ThiThuDeThiRow = {
-  id: string;
-  ky_thi_id: string;
+/** Một đề trong kỳ thi (lưu trong `thi_thu_ky_thi.de_thi`). */
+export type ThiThuDeThiItem = {
   tieu_de: string;
   anh_urls: string[];
   thu_tu: number;
-  created_at?: string;
 };
+
+/** Giữ tên cũ — trùng `ThiThuDeThiItem` (không còn bảng `thi_thu_de_thi`). */
+export type ThiThuDeThiRow = ThiThuDeThiItem;
 
 export type ThiThuBaiNopRow = {
   id: string;

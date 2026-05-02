@@ -5,11 +5,7 @@ import NavBar from "@/app/_components/NavBar";
 import { ThiThuStyles } from "../ThiThuStyles";
 import ThiThuRoomClient from "./ThiThuRoomClient";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import {
-  fetchDeThiForKyPublic,
-  fetchThiThuKyByIdPublic,
-  fetchThiThuKyByIdService,
-} from "@/lib/data/thi-thu";
+import { fetchThiThuKyByIdPublic, fetchThiThuKyByIdService } from "@/lib/data/thi-thu";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 
@@ -21,19 +17,24 @@ type PageProps = {
 };
 
 export async function generateMetadata(props: PageProps): Promise<Metadata> {
-  const { id } = await props.params;
-  let row = await fetchThiThuKyByIdPublic(id);
-  if (!row) {
-    const admin = await getAdminSessionOrNull();
-    if (admin) row = await fetchThiThuKyByIdService(id);
+  try {
+    const { id } = await props.params;
+    let row = await fetchThiThuKyByIdPublic(id);
+    if (!row) {
+      const admin = await getAdminSessionOrNull();
+      if (admin) row = await fetchThiThuKyByIdService(id);
+    }
+    if (!row) {
+      return { title: "Không tìm thấy — Sine Art" };
+    }
+    return {
+      title: `${row.tieu_de} — Thi thử Sine Art`,
+      description: "Phòng thi thử trực tuyến Sine Art.",
+    };
+  } catch (e) {
+    console.error("[thi-thu metadata]", e);
+    return { title: "Thi thử — Sine Art" };
   }
-  if (!row) {
-    return { title: "Không tìm thấy — Sine Art" };
-  }
-  return {
-    title: `${row.tieu_de} — Thi thử Sine Art`,
-    description: "Phòng thi thử trực tuyến Sine Art.",
-  };
 }
 
 export default async function ThiThuRoomPage(props: PageProps) {
@@ -50,10 +51,7 @@ export default async function ThiThuRoomPage(props: PageProps) {
 
   const previewAllowed = Boolean(admin && previewRaw);
 
-  const [{ courses }, deThi] = await Promise.all([
-    getKhoaHocPageData(),
-    fetchDeThiForKyPublic(id),
-  ]);
+  const { courses } = await getKhoaHocPageData();
   const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 
   return (
@@ -62,12 +60,7 @@ export default async function ThiThuRoomPage(props: PageProps) {
       <NavBar khoaHocGroups={khoaHocGroups} />
       {/* Desktop: nav sticky top (~72px) — tránh đè lên nội dung phòng thi */}
       <div className="min-[900px]:pt-[76px]">
-        <ThiThuRoomClient
-          initialKy={row}
-          initialDeThi={deThi}
-          previewQuery={previewRaw}
-          previewAllowed={previewAllowed}
-        />
+        <ThiThuRoomClient initialKy={row} previewQuery={previewRaw} previewAllowed={previewAllowed} />
       </div>
     </div>
   );

@@ -1,101 +1,60 @@
 "use client";
 
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
-import type { ThiThuDeThiRow } from "@/types/thi-thu";
+import type { ThiThuDeThiItem } from "@/types/thi-thu";
 
-type DraftRow = ThiThuDeThiRow | Omit<ThiThuDeThiRow, "id"> & { id?: string };
-
-export default function ThiThuDeThiTab({
-  kyId,
-  initialRows,
-  readOnly = false,
-}: {
-  kyId: string;
-  initialRows: ThiThuDeThiRow[];
-  /** Không cho sửa đề (thiếu quyền chỉnh kỳ thi). */
+type Props = {
+  items: ThiThuDeThiItem[];
+  onChange: (next: ThiThuDeThiItem[]) => void;
   readOnly?: boolean;
-}) {
-  const [rows, setRows] = useState<DraftRow[]>(() =>
-    initialRows.length ? initialRows : [],
-  );
-  const [busyId, setBusyId] = useState<string | null>(null);
+};
 
-  const saveRow = useCallback(
-    async (row: DraftRow) => {
-      if (readOnly) return;
-      const payload = {
-        id: row.id,
-        ky_thi_id: kyId,
-        tieu_de: row.tieu_de.trim(),
-        anh_urls: row.anh_urls ?? [],
-        thu_tu: row.thu_tu,
-      };
-      setBusyId(row.id ?? "new");
-      try {
-        const res = await fetch("/admin/api/thi-thu-de-upsert", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const j = (await res.json()) as { ok?: boolean; id?: string; error?: string };
-        if (!res.ok || !j.ok) throw new Error(j.error ?? "Lưu thất bại");
-        if (j.id && !row.id) {
-          setRows((prev) =>
-            prev.map((r) => (r === row ? ({ ...r, id: j.id } as ThiThuDeThiRow) : r)),
-          );
-        }
-      } finally {
-        setBusyId(null);
-      }
-    },
-    [kyId, readOnly],
-  );
-
-  const deleteRow = useCallback(async (id: string | undefined) => {
-    if (readOnly) return;
-    if (!id) return;
-    if (!window.confirm("Xóa đề này?")) return;
-    setBusyId(id);
-    try {
-      const res = await fetch("/admin/api/thi-thu-de-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      const j = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !j.ok) throw new Error(j.error ?? "Xóa thất bại");
-      setRows((prev) => prev.filter((r) => r.id !== id));
-    } finally {
-      setBusyId(null);
-    }
-  }, [readOnly]);
+/**
+ * Block đề thi — state do parent giữ, lưu chung với kỳ thi (`thi_thu_ky_thi.de_thi` JSON).
+ */
+export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Props) {
+  const setRows = onChange;
+  const [deUpload, setDeUpload] = useState<{ idx: number; cur: number; total: number } | null>(null);
+  const [deUploadErr, setDeUploadErr] = useState<Record<number, string>>({});
 
   const addDe = useCallback(() => {
     if (readOnly) return;
-    const maxTu = rows.reduce((m, r) => Math.max(m, r.thu_tu), 0);
-    setRows((prev) => [
-      ...prev,
-      {
-        ky_thi_id: kyId,
-        tieu_de: "",
-        anh_urls: [],
-        thu_tu: maxTu + 1,
-      } as DraftRow,
+    const maxTu = items.reduce((m, r) => Math.max(m, r.thu_tu), 0);
+    setRows([
+      ...items,
+      { tieu_de: "", anh_urls: [], thu_tu: maxTu + 1 },
     ]);
-  }, [kyId, readOnly, rows]);
+  }, [items, readOnly, setRows]);
+
+  const deleteRow = useCallback(
+    (idx: number) => {
+      if (readOnly) return;
+      if (!window.confirm("Xóa đề này? (Nhớ bấm Lưu thông tin để ghi DB.)")) return;
+      setRows(items.filter((_, i) => i !== idx).map((r, i) => ({ ...r, thu_tu: i + 1 })));
+    },
+    [items, readOnly, setRows],
+  );
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-black/[0.06] bg-white/80 px-4 py-3">
+        <p className="text-[13px] font-bold text-[#2d2020]">Đề thi</p>
+        <p className="mt-1 text-[11px] text-[rgba(45,32,32,0.55)]">
+          Tiêu đề từng đề và ảnh đề — lưu chung khi bạn bấm «Lưu thông tin» bên dưới.
+        </p>
+      </div>
+
       {readOnly ? (
         <p className="rounded-lg border border-black/[0.08] bg-black/[0.03] px-3 py-2 text-[12px] text-[rgba(45,32,32,0.65)]">
-          Bạn không có quyền sửa đề thi trong kỳ này.
+          Bạn chỉ xem — không có quyền sửa đề thi.
         </p>
       ) : null}
-      {rows.map((row, idx) => (
-        <div key={row.id ?? `draft-${idx}`} className="tti-de-item-w">
+
+      {items.map((row, idx) => (
+        <div key={`de-${idx}-${row.thu_tu}`} className="tti-de-item-w">
           <div className="tti-de-item-hd">
             <div className="tti-de-item-num">{idx + 1}</div>
             <input
@@ -105,14 +64,14 @@ export default function ThiThuDeThiTab({
               value={row.tieu_de}
               onChange={(e) => {
                 const v = e.target.value;
-                setRows((p) => p.map((r, i) => (i === idx ? { ...r, tieu_de: v } : r)));
+                setRows(items.map((r, i) => (i === idx ? { ...r, tieu_de: v } : r)));
               }}
             />
             <button
               type="button"
               className="tti-de-del flex-shrink-0"
-              onClick={() => void deleteRow(row.id)}
-              disabled={readOnly || busyId !== null}
+              onClick={() => deleteRow(idx)}
+              disabled={readOnly}
             >
               Xóa đề
             </button>
@@ -121,32 +80,65 @@ export default function ThiThuDeThiTab({
           <div>
             <p className="mb-2 text-[12px] font-bold text-[#2d2020]">Ảnh đề</p>
             <label
-              className={`tti-de-add-img inline-flex border border-dashed ${readOnly ? "pointer-events-none opacity-45" : "cursor-pointer"}`}
+              aria-busy={deUpload?.idx === idx}
+              className={`tti-de-add-img inline-flex items-center gap-2 border border-dashed ${deUpload?.idx === idx ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-45" : "cursor-pointer"}`}
             >
-              + Thêm ảnh
+              {deUpload?.idx === idx ? (
+                <>
+                  <span className="tti-spinner tti-spinner--sm" aria-hidden />
+                  {deUpload.total > 1
+                    ? `Đang tải ${deUpload.cur}/${deUpload.total}…`
+                    : "Đang tải ảnh…"}
+                </>
+              ) : (
+                "+ Thêm ảnh"
+              )}
               <input
                 type="file"
                 accept="image/*"
                 multiple
-                disabled={readOnly}
+                disabled={readOnly || (deUpload !== null && deUpload.idx === idx)}
                 className="hidden"
                 onChange={async (e) => {
                   const files = e.target.files;
-                  if (!files?.length) return;
-                  const urlList: string[] = [];
-                  for (const f of Array.from(files)) {
-                    const url = await uploadAdminCfImage(f, f.name);
-                    urlList.push(url);
-                  }
-                  setRows((p) =>
-                    p.map((r, i) =>
-                      i === idx ? { ...r, anh_urls: [...(r.anh_urls ?? []), ...urlList] } : r,
-                    ),
-                  );
                   e.target.value = "";
+                  if (!files?.length) return;
+                  const list = Array.from(files);
+                  setDeUploadErr((m) => {
+                    const n = { ...m };
+                    delete n[idx];
+                    return n;
+                  });
+                  setDeUpload({ idx, cur: 0, total: list.length });
+                  const urlList: string[] = [];
+                  try {
+                    for (let i = 0; i < list.length; i++) {
+                      const f = list[i]!;
+                      setDeUpload({ idx, cur: i + 1, total: list.length });
+                      const url = await uploadAdminCfImage(f, f.name);
+                      urlList.push(url);
+                    }
+                    setRows((prev) =>
+                      prev.map((r, i) =>
+                        i === idx ? { ...r, anh_urls: [...(r.anh_urls ?? []), ...urlList] } : r,
+                      ),
+                    );
+                  } catch (err) {
+                    setDeUploadErr((m) => ({
+                      ...m,
+                      [idx]: err instanceof Error ? err.message : "Tải ảnh thất bại.",
+                    }));
+                  } finally {
+                    setDeUpload(null);
+                  }
                 }}
               />
             </label>
+            {deUploadErr[idx] ? (
+              <p className="tti-upload-err mt-1" role="alert">
+                {deUploadErr[idx]}
+              </p>
+            ) : null}
             <div className="tti-de-imgs">
               {(row.anh_urls ?? []).map((url, ui) => (
                 <div key={`${url}-${ui}`} className="tti-de-img-th">
@@ -158,8 +150,8 @@ export default function ThiThuDeThiTab({
                     aria-label="Xóa ảnh"
                     disabled={readOnly}
                     onClick={() =>
-                      setRows((p) =>
-                        p.map((r, i) =>
+                      setRows(
+                        items.map((r, i) =>
                           i === idx
                             ? {
                                 ...r,
@@ -175,21 +167,6 @@ export default function ThiThuDeThiTab({
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="tti-de-item-ft">
-            <button
-              type="button"
-              className="tti-save-btn tti-save-btn-sm"
-              disabled={readOnly || busyId !== null || !row.tieu_de.trim()}
-              onClick={() => void saveRow(row)}
-            >
-              {busyId === (row.id ?? "new") ? (
-                <Loader2 className="inline h-4 w-4 animate-spin" aria-hidden />
-              ) : (
-                "Lưu đề"
-              )}
-            </button>
           </div>
         </div>
       ))}

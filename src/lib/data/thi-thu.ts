@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import type { ThiThuBaiNopRow, ThiThuDeThiRow, ThiThuKyThiRow } from "@/types/thi-thu";
+import type { ThiThuBaiNopRow, ThiThuKyThiRow } from "@/types/thi-thu";
 
 const KY_SELECT =
-  "id,tieu_de,mon_thi,thoi_gian_bat_dau,thoi_gian_giai_lao_bat_dau,thoi_gian_giai_lao_ket_thuc,thumbnail_url,lich_cham_bai_url,video_sua_bai,thoi_gian_sua_bai,trang_thai,created_at";
+  "id,tieu_de,mon_thi,thoi_gian_bat_dau,thoi_gian_giai_lao_bat_dau,thoi_gian_giai_lao_ket_thuc,thumbnail_url,lich_cham_bai_url,video_sua_bai,thoi_gian_sua_bai,de_thi,trang_thai,created_at";
 
 export async function fetchThiThuPublishedList(): Promise<ThiThuKyThiRow[]> {
   const supabase = await createClient();
@@ -26,7 +26,10 @@ export async function fetchThiThuKyByIdPublic(id: string): Promise<ThiThuKyThiRo
     .eq("id", id)
     .eq("trang_thai", "published")
     .maybeSingle();
-  if (error) throw error;
+  if (error) {
+    console.error("[fetchThiThuKyByIdPublic]", id, error.message, error.code, error.details);
+    return null;
+  }
   return data as ThiThuKyThiRow | null;
 }
 
@@ -38,7 +41,10 @@ export async function fetchThiThuKyByIdService(id: string): Promise<ThiThuKyThiR
     .select(KY_SELECT)
     .eq("id", id)
     .maybeSingle();
-  if (error) throw error;
+  if (error) {
+    console.error("[fetchThiThuKyByIdService]", id, error.message, error.code, error.details);
+    return null;
+  }
   return data as ThiThuKyThiRow | null;
 }
 
@@ -51,30 +57,6 @@ export async function fetchThiThuAdminList(): Promise<ThiThuKyThiRow[]> {
     .order("thoi_gian_bat_dau", { ascending: false });
   if (error) throw error;
   return (data ?? []) as ThiThuKyThiRow[];
-}
-
-export async function fetchDeThiForKyPublic(kyId: string): Promise<ThiThuDeThiRow[]> {
-  const supabase = await createClient();
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("thi_thu_de_thi")
-    .select("id,ky_thi_id,tieu_de,anh_urls,thu_tu,created_at")
-    .eq("ky_thi_id", kyId)
-    .order("thu_tu", { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as ThiThuDeThiRow[];
-}
-
-export async function fetchDeThiForKyAdmin(kyId: string): Promise<ThiThuDeThiRow[]> {
-  const supabase = createServiceRoleClient();
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("thi_thu_de_thi")
-    .select("id,ky_thi_id,tieu_de,anh_urls,thu_tu,created_at")
-    .eq("ky_thi_id", kyId)
-    .order("thu_tu", { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as ThiThuDeThiRow[];
 }
 
 export async function fetchBaiNopForKy(kyId: string): Promise<ThiThuBaiNopRow[]> {

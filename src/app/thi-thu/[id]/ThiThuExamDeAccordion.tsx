@@ -30,8 +30,8 @@ export default function ThiThuExamDeAccordion({
 
   return (
     <div className="flex flex-col gap-0">
-      {items.map((it) => (
-        <details key={it.id} className="tti-acc-item group">
+      {items.map((it, idx) => (
+        <details key={`acc-${idx}-${it.thu_tu}`} className="tti-acc-item group">
           <summary className="tti-acc-head [&::-webkit-details-marker]:hidden">
             <span className="tti-acc-chev text-[rgba(45,32,32,0.55)] group-open:text-[#ee5b9f]">
               <ChevMini />
@@ -42,7 +42,7 @@ export default function ThiThuExamDeAccordion({
             <div className="tti-acc-grid">
               {(it.anh_urls ?? []).map((url, i) => (
                 <button
-                  key={`${it.id}-${i}`}
+                  key={`${idx}-${i}`}
                   type="button"
                   className="relative aspect-[4/3] overflow-hidden rounded-lg bg-neutral-100 ring-1 ring-black/5"
                   onClick={() => setLightbox(url)}

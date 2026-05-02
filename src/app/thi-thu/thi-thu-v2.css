@@ -119,7 +119,7 @@
   grid-template-columns: repeat(1, 1fr);
   gap: 18px;
   padding: 32px 24px 28px;
-  background: var(--tti-bg);
+  background: var(--tti-card);
 }
 @media (min-width: 768px) {
   .sa-thi-thu .tti-grid3 {
@@ -323,10 +323,10 @@
   color: rgba(255, 255, 255, 0.65);
 }
 
-/* Countdown */
+/* Countdown — full viewport gradient */
 .sa-thi-thu .tti-cd-wrap {
   background: linear-gradient(160deg, #fde0c4 0%, #fdf0f4 50%, #eef8e8 100%);
-  min-height: min(480px, 80vh);
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -334,6 +334,12 @@
   padding: 40px 24px;
   position: relative;
   overflow: hidden;
+  box-sizing: border-box;
+}
+@media (min-width: 900px) {
+  .sa-thi-thu .tti-cd-wrap {
+    min-height: calc(100dvh - 76px);
+  }
 }
 .sa-thi-thu .tti-cd-orb {
   position: absolute;
@@ -366,28 +372,14 @@
 .sa-thi-thu .tti-cd-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
   margin-bottom: 28px;
 }
-.sa-thi-thu .tti-cd-logo-mark {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: var(--tti-grad);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.sa-thi-thu .tti-cd-logo-txt {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--tti-ink);
-}
-.sa-thi-thu .tti-cd-logo-txt b {
-  background: var(--tti-grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.sa-thi-thu .tti-cd-logo-img {
+  width: min(160px, 72vw);
+  height: auto;
+  max-height: 56px;
+  object-fit: contain;
 }
 .sa-thi-thu .tti-cd-lbl {
   font-size: 14px;
@@ -779,16 +771,22 @@
   margin-top: 7px;
 }
 
-/* Waiting */
+/* Waiting — full viewport (nav offset on desktop via breakpoint aligned with page shell) */
 .sa-thi-thu .tti-wait-wrap {
   background: linear-gradient(160deg, #fde0c4 0%, #fdf0f4 50%, #eef8e8 100%);
-  min-height: min(480px, 75vh);
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 40px 24px;
   text-align: center;
+  box-sizing: border-box;
+}
+@media (min-width: 900px) {
+  .sa-thi-thu .tti-wait-wrap {
+    min-height: calc(100dvh - 76px);
+  }
 }
 
 /* Break */
@@ -1631,6 +1629,115 @@
   font-size: 12px;
   font-weight: 700;
   padding: 8px 22px;
+  border-radius: var(--tti-rp);
+  background: var(--tti-grad) !important;
+  border: none;
+  color: #fff !important;
+  cursor: pointer;
+}
+.sa-thi-thu-admin .tti-save-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+@keyframes tti-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.sa-thi-thu-admin .tti-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(45, 32, 32, 0.18);
+  border-top-color: var(--tti-g1);
+  border-radius: 50%;
+  animation: tti-spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+.sa-thi-thu-admin .tti-spinner--sm {
+  width: 11px;
+  height: 11px;
+  border-width: 1.5px;
+}
+.sa-thi-thu-admin .tti-upload-zone.is-busy {
+  pointer-events: none;
+  cursor: wait;
+  opacity: 0.92;
+}
+.sa-thi-thu-admin .tti-upload-zone-busy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.sa-thi-thu-admin .tti-upload-err {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b91c1c;
+}
+.sa-thi-thu-admin .tti-de-add-img.is-busy {
+  pointer-events: none;
+  cursor: wait;
+  opacity: 0.88;
+}
+.sa-thi-thu-admin .tti-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(45, 32, 32, 0.45);
+  backdrop-filter: blur(3px);
+}
+.sa-thi-thu-admin .tti-modal-card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: var(--tti-rc);
+  background: var(--tti-card);
+  border: 1px solid var(--tti-ink3);
+  box-shadow: var(--tti-sh-lg);
+  padding: 20px 22px;
+}
+.sa-thi-thu-admin .tti-modal-title {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--tti-ink);
+}
+.sa-thi-thu-admin .tti-modal-title--ok {
+  color: #15803d;
+}
+.sa-thi-thu-admin .tti-modal-title--err {
+  color: #b91c1c;
+}
+.sa-thi-thu-admin .tti-modal-body {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--tti-ink2);
+}
+.sa-thi-thu-admin .tti-modal-detail {
+  margin: 0 0 16px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.55;
+  font-weight: 600;
+  color: var(--tti-ink2);
+}
+.sa-thi-thu-admin .tti-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.sa-thi-thu-admin .tti-modal-btn {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 20px;
   border-radius: var(--tti-rp);
   background: var(--tti-grad) !important;
   border: none;

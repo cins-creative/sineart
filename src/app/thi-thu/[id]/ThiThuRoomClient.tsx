@@ -1,16 +1,18 @@
 "use client";
 
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 
 import ThiThuExamDeAccordion from "./ThiThuExamDeAccordion";
 import ThiThuExamProgressBar from "./ThiThuExamProgressBar";
 import ThiThuSubmitModal from "./ThiThuSubmitModal";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { parseDeThiJson } from "@/lib/thi-thu/de-thi-json";
 import { computeElapsedExamMs, computePhase } from "@/lib/thi-thu/phase";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
-import type { ThiThuDeThiRow, ThiThuKyThiRow, ThiThuPhase } from "@/types/thi-thu";
+import type { ThiThuKyThiRow, ThiThuPhase } from "@/types/thi-thu";
 
 const OPEN_MS = 15 * 60 * 1000;
 const LOGO_SRC =
@@ -24,14 +26,6 @@ const PREVIEW_PHASES: ThiThuPhase[] = [
   "exam_2",
   "ended",
 ];
-
-function LogoMark() {
-  return (
-    <svg viewBox="0 0 24 24" fill="white" width={26} height={26} aria-hidden>
-      <path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-    </svg>
-  );
-}
 
 function parsePreviewPhase(s: string | null): ThiThuPhase | null {
   if (!s) return null;
@@ -59,22 +53,24 @@ function fmtMMSS(ms: number): string {
   return `${pad2(m)}:${pad2(sec)}`;
 }
 
+/** Ease — mượt khi vào đề thi */
+const TI_EASE_OUT = [0.16, 1, 0.3, 1] as const;
+
 export default function ThiThuRoomClient({
   initialKy,
-  initialDeThi,
   previewQuery,
   previewAllowed,
 }: {
   initialKy: ThiThuKyThiRow;
-  initialDeThi: ThiThuDeThiRow[];
   previewQuery: string | null;
   previewAllowed: boolean;
 }) {
   const [ky, setKy] = useState(initialKy);
-  const [deThiItems, setDeThiItems] = useState(initialDeThi);
   const [offsetMs, setOffsetMs] = useState(0);
-  const [nowTick, setNowTick] = useState(0);
+  /** Thời “server-align” cập nhật trong effect — tránh Date.now() lúc render (eslint react-hooks/purity) */
+  const [now, setNow] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const forcedPhase =
     previewAllowed && previewQuery ? parsePreviewPhase(previewQuery) : null;
@@ -93,13 +89,17 @@ export default function ThiThuRoomClient({
     };
   }, []);
 
-  useEffect(() => {
-    const id = window.setInterval(() => setNowTick((t) => t + 1), 1000);
+  useLayoutEffect(() => {
+    const tick = () => {
+      setNow(Date.now() + offsetMs);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [offsetMs]);
 
   const mon = ky.mon_thi as MonThiKey;
-  const cfg = getMonConfig(mon);
+  const cfg = getMonConfig(ky.mon_thi);
   const T = new Date(ky.thoi_gian_bat_dau).getTime();
   const GLs = ky.thoi_gian_giai_lao_bat_dau
     ? new Date(ky.thoi_gian_giai_lao_bat_dau).getTime()
@@ -109,11 +109,6 @@ export default function ThiThuRoomClient({
     : null;
   const durMs = cfg.thoi_luong_phut * 60 * 1000;
   const endMs = T + durMs;
-
-  const now = useMemo(() => {
-    void nowTick;
-    return Date.now() + offsetMs;
-  }, [offsetMs, nowTick]);
 
   const phase: ThiThuPhase =
     forcedPhase ??
@@ -138,6 +133,8 @@ export default function ThiThuRoomClient({
 
   const id = ky.id;
 
+  const deThiItems = useMemo(() => parseDeThiJson(ky.de_thi ?? null), [ky.de_thi]);
+
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
     if (!supabase) return;
@@ -154,32 +151,8 @@ export default function ThiThuRoomClient({
       )
       .subscribe();
 
-    const ch2 = supabase
-      .channel(`thi-thu-de-${id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "thi_thu_de_thi",
-          filter: `ky_thi_id=eq.${id}`,
-        },
-        () => {
-          void supabase
-            .from("thi_thu_de_thi")
-            .select("id,ky_thi_id,tieu_de,anh_urls,thu_tu,created_at")
-            .eq("ky_thi_id", id)
-            .order("thu_tu", { ascending: true })
-            .then(({ data }) => {
-              if (data) setDeThiItems(data as ThiThuDeThiRow[]);
-            });
-        },
-      )
-      .subscribe();
-
     return () => {
       void supabase.removeChannel(ch1);
-      void supabase.removeChannel(ch2);
     };
   }, [id]);
 
@@ -187,9 +160,14 @@ export default function ThiThuRoomClient({
   const countdownToStart = Math.max(0, T - now);
   const remainingExam = Math.max(0, endMs - now);
 
-  const yearLabel = useMemo(() => new Date(T).getFullYear(), [T]);
+  const yearLabel = new Date(T).getFullYear();
 
   const endClock = new Date(endMs).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+
+  const tPhase = reduceMotion ? { duration: 0.15 } : { duration: 0.4, ease: TI_EASE_OUT };
+  const tExam = reduceMotion ? { duration: 0.15 } : { duration: 0.55, ease: TI_EASE_OUT };
+  const tBreak = reduceMotion ? { duration: 0.15 } : { duration: 0.45, ease: TI_EASE_OUT };
+  const tEnded = reduceMotion ? { duration: 0.15 } : { duration: 0.45, ease: TI_EASE_OUT };
 
   return (
     <div className="min-h-[100dvh] min-[900px]:min-h-[calc(100dvh-76px)] bg-[#fdf7f3] font-[family-name:var(--font-quicksand)] text-[#2d2020]">
@@ -199,140 +177,169 @@ export default function ThiThuRoomClient({
         </div>
       ) : null}
 
-      {phase === "waiting" ? (
-        <section className="tti-wait-wrap px-6">
-          <p className="text-sm font-semibold text-[rgba(45,32,32,0.55)]">Phòng thi chưa mở</p>
-          <p className="mt-2 text-lg font-bold">Mở phòng sau:</p>
-          <p className="tti-cd-timer mt-4">{fmtMMSS(countdownToOpen)}</p>
-          <Link href="/thi-thu" className="tti-cd-back mt-8">
-            ← Danh sách kỳ thi
-          </Link>
-        </section>
-      ) : null}
+      <AnimatePresence mode="wait" initial={false}>
+        {phase === "waiting" || phase === "countdown" ? (
+          <motion.section
+            key="pre-exam"
+            className={phase === "waiting" ? "tti-wait-wrap px-6" : "tti-cd-wrap"}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, y: reduceMotion ? 0 : -16, scale: reduceMotion ? 1 : 0.99 }}
+            transition={tPhase}
+          >
+            {phase === "waiting" ? (
+              <>
+                <p className="text-sm font-semibold text-[rgba(45,32,32,0.55)]">Phòng thi chưa mở</p>
+                <p className="mt-2 text-lg font-bold">Mở phòng sau:</p>
+                <p className="tti-cd-timer mt-4">{fmtMMSS(countdownToOpen)}</p>
+                <Link href="/thi-thu" className="tti-cd-back mt-8">
+                  ← Danh sách kỳ thi
+                </Link>
+              </>
+            ) : (
+              <>
+                <div className="tti-cd-orb tti-cd-orb-a" aria-hidden />
+                <div className="tti-cd-orb tti-cd-orb-b" aria-hidden />
+                <div className="tti-cd-orb tti-cd-orb-c" aria-hidden />
+                <div className="tti-cd-logo">
+                  {/* eslint-disable-next-line @next/next/no-img-element — logo CDN Cloudflare, đồng bộ NavBar */}
+                  <img
+                    src={LOGO_SRC}
+                    alt="Sine Art"
+                    className="tti-cd-logo-img"
+                    width={140}
+                    height={56}
+                    decoding="async"
+                  />
+                </div>
+                <p className="tti-cd-lbl">Đếm ngược trước khi bắt đầu thi</p>
+                <div className="tti-cd-timer">{fmtMMSS(countdownToStart)}</div>
+                <p className="tti-cd-sub">
+                  Phòng thi sẽ tự động mở — hãy chuẩn bị giấy, bút và dụng cụ vẽ
+                </p>
+                <Link href="/thi-thu" className="tti-cd-back">
+                  ← Danh sách kỳ thi
+                </Link>
+              </>
+            )}
+          </motion.section>
+        ) : phase === "exam_1" || phase === "exam_2" ? (
+          <motion.div
+            key="exam"
+            className="tti-ex-wrap"
+            initial={{ opacity: 0, y: reduceMotion ? 0 : 36 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: reduceMotion ? 0 : -20 }}
+            transition={tExam}
+          >
+            <div className="tti-ex-body">
+              <div className="tti-ex-hd">
+                <span className="tti-ex-badge">THI THỬ SINE ART {yearLabel}</span>
+                <p className="tti-ex-mon">Lớp {cfg.label} online</p>
+                <p className="tti-ex-timer-lbl">Thời gian làm bài thi còn lại</p>
+                <div className="tti-ex-timer">{fmtHMS(remainingExam)}</div>
+              </div>
 
-      {phase === "countdown" ? (
-        <section className="tti-cd-wrap">
-          <div className="tti-cd-orb tti-cd-orb-a" aria-hidden />
-          <div className="tti-cd-orb tti-cd-orb-b" aria-hidden />
-          <div className="tti-cd-orb tti-cd-orb-c" aria-hidden />
-          <div className="tti-cd-logo">
-            <div className="tti-cd-logo-mark">
-              <LogoMark />
+              <div className="tti-pb">
+                <div className="tti-pb-row tti-pb-row--end-only">
+                  <div className="tti-pb-e">
+                    <small>Kết thúc buổi thi</small>
+                    <span>{endClock}</span>
+                  </div>
+                </div>
+                <ThiThuExamProgressBar
+                  cfg={cfg}
+                  progress={progress}
+                  breakMarkerPct={breakMarkerPct}
+                  breakRangeLabel={breakRangeLabel}
+                  showBreakAbove={showBreakMarker}
+                  onTerminalClick={() => setSubmitOpen(true)}
+                />
+              </div>
+
+              <div className="tti-de-sec">
+                <div className="tti-de-sec-ttl">
+                  <div className="tti-de-ttl-bar" />
+                  Đề thi
+                </div>
+                <ThiThuExamDeAccordion items={deThiItems} />
+              </div>
             </div>
-            <span className="tti-cd-logo-txt">
-              Sine <b>Art</b>
-            </span>
-          </div>
-          <p className="tti-cd-lbl">Đếm ngược trước khi bắt đầu thi</p>
-          <div className="tti-cd-timer">{fmtMMSS(countdownToStart)}</div>
-          <p className="tti-cd-sub">
-            Phòng thi sẽ tự động mở — hãy chuẩn bị giấy, bút và dụng cụ vẽ
-          </p>
-          <Link href="/thi-thu" className="tti-cd-back">
-            ← Danh sách kỳ thi
-          </Link>
-        </section>
-      ) : null}
-
-      {(phase === "exam_1" || phase === "exam_2") && (
-        <div className="tti-ex-wrap">
-          <div className="tti-ex-body">
-            <div className="tti-ex-hd">
-              <span className="tti-ex-badge">THI THỬ SINE ART {yearLabel}</span>
-              <p className="tti-ex-mon">Lớp {cfg.label} online</p>
-              <p className="tti-ex-timer-lbl">Thời gian làm bài thi còn lại</p>
-              <div className="tti-ex-timer">{fmtHMS(remainingExam)}</div>
+          </motion.div>
+        ) : phase === "break" && GLs != null && GLe != null ? (
+          <motion.section
+            key="break"
+            className="tti-break-wrap"
+            initial={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: reduceMotion ? 0 : -16 }}
+            transition={tBreak}
+          >
+            <Image src={LOGO_SRC} alt="" width={140} height={56} className="mb-6 h-12 w-auto opacity-90" />
+            <h2 className="font-[family-name:var(--font-be-vietnam-pro)] text-2xl font-bold text-[#2d2020]">
+              Kết thúc buổi thi đợt 1
+            </h2>
+            <p className="mt-4 max-w-md text-sm text-[rgba(45,32,32,0.55)]">
+              Hẹn bạn lại lúc{" "}
+              {new Date(GLe).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+            <p className="tti-cd-timer mt-6">{fmtMMSS(Math.max(0, GLe - now))}</p>
+            {ky.lich_cham_bai_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={ky.lich_cham_bai_url}
+                alt="Lịch chấm bài"
+                className="mt-8 max-h-80 w-full max-w-md rounded-2xl object-contain shadow-md"
+              />
+            ) : null}
+            <Link href="/thi-thu" className="tti-cd-back mt-10">
+              ← Danh sách kỳ thi
+            </Link>
+          </motion.section>
+        ) : phase === "ended" ? (
+          <motion.section
+            key="ended"
+            className="tti-ended-wrap relative"
+            initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={tEnded}
+          >
+            <div className="tti-ended-orb-a" aria-hidden />
+            <div className="tti-ended-orb-b" aria-hidden />
+            <div className="tti-ended-check">
+              <svg viewBox="0 0 28 28" width={28} height={28} aria-hidden>
+                <polyline
+                  points="5,14 11,20 23,8"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </div>
-
-            <div className="tti-pb">
-              <div className="tti-pb-row tti-pb-row--end-only">
-                <div className="tti-pb-e">
-                  <small>Kết thúc buổi thi</small>
-                  <span>{endClock}</span>
+            <h2 className="tti-ended-h">Kết thúc buổi thi</h2>
+            <p className="tti-ended-s">
+              Cảm ơn các sĩ tử đã tham gia kỳ thi!
+              <br />
+              Đừng quên theo dõi lịch chấm / live chữa bài bên dưới nhé.
+            </p>
+            {ky.lich_cham_bai_url ? (
+              <div className="tti-ended-card">
+                <p className="tti-ended-card-tag">LỊCH CHẤM / LIVE CHỮA BÀI</p>
+                <div className="tti-ended-card-ph">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={ky.lich_cham_bai_url} alt="Lịch chấm bài" className="h-full w-full object-contain" />
                 </div>
               </div>
-              <ThiThuExamProgressBar
-                cfg={cfg}
-                progress={progress}
-                breakMarkerPct={breakMarkerPct}
-                breakRangeLabel={breakRangeLabel}
-                showBreakAbove={showBreakMarker}
-                onTerminalClick={() => setSubmitOpen(true)}
-              />
-            </div>
-
-            <div className="tti-de-sec">
-              <div className="tti-de-sec-ttl">
-                <div className="tti-de-ttl-bar" />
-                Đề thi
-              </div>
-              <ThiThuExamDeAccordion items={deThiItems} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {phase === "break" && GLs != null && GLe != null ? (
-        <section className="tti-break-wrap">
-          <Image src={LOGO_SRC} alt="" width={140} height={56} className="mb-6 h-12 w-auto opacity-90" />
-          <h2 className="font-[family-name:var(--font-be-vietnam-pro)] text-2xl font-bold text-[#2d2020]">
-            Kết thúc buổi thi đợt 1
-          </h2>
-          <p className="mt-4 max-w-md text-sm text-[rgba(45,32,32,0.55)]">
-            Hẹn bạn lại lúc{" "}
-            {new Date(GLe).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
-          </p>
-          <p className="tti-cd-timer mt-6">{fmtMMSS(Math.max(0, GLe - now))}</p>
-          {ky.lich_cham_bai_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={ky.lich_cham_bai_url}
-              alt="Lịch chấm bài"
-              className="mt-8 max-h-80 w-full max-w-md rounded-2xl object-contain shadow-md"
-            />
-          ) : null}
-          <Link href="/thi-thu" className="tti-cd-back mt-10">
-            ← Danh sách kỳ thi
-          </Link>
-        </section>
-      ) : null}
-
-      {phase === "ended" ? (
-        <section className="tti-ended-wrap relative">
-          <div className="tti-ended-orb-a" aria-hidden />
-          <div className="tti-ended-orb-b" aria-hidden />
-          <div className="tti-ended-check">
-            <svg viewBox="0 0 28 28" width={28} height={28} aria-hidden>
-              <polyline
-                points="5,14 11,20 23,8"
-                fill="none"
-                stroke="white"
-                strokeWidth={3}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-          <h2 className="tti-ended-h">Kết thúc buổi thi</h2>
-          <p className="tti-ended-s">
-            Cảm ơn các sĩ tử đã tham gia kỳ thi!
-            <br />
-            Đừng quên theo dõi lịch chấm / live chữa bài bên dưới nhé.
-          </p>
-          {ky.lich_cham_bai_url ? (
-            <div className="tti-ended-card">
-              <p className="tti-ended-card-tag">LỊCH CHẤM / LIVE CHỮA BÀI</p>
-              <div className="tti-ended-card-ph">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={ky.lich_cham_bai_url} alt="Lịch chấm bài" className="h-full w-full object-contain" />
-              </div>
-            </div>
-          ) : null}
-          <Link href="/thi-thu" className="tti-ended-back">
-            ← Về danh sách kỳ thi
-          </Link>
-        </section>
-      ) : null}
+            ) : null}
+            <Link href="/thi-thu" className="tti-ended-back">
+              ← Về danh sách kỳ thi
+            </Link>
+          </motion.section>
+        ) : null}
+      </AnimatePresence>
 
       <ThiThuSubmitModal kyId={id} open={submitOpen} onClose={() => setSubmitOpen(false)} />
     </div>

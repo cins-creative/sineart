@@ -1,16 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import ThiThuDeThiTab from "./ThiThuDeThiTab";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
+import { normalizeDeThiForSave, parseDeThiJson } from "@/lib/thi-thu/de-thi-json";
 import { parseThoiGianSuaBaiMs } from "@/lib/thi-thu/replay-time";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
 import type { ThiThuEditorTab } from "@/types/thi-thu-editor";
-import type { ThiThuBaiNopRow, ThiThuDeThiRow, ThiThuKyThiRow } from "@/types/thi-thu";
+import type { ThiThuBaiNopRow, ThiThuDeThiItem, ThiThuKyThiRow } from "@/types/thi-thu";
+
+type SaveReportState =
+  | {
+      ok: true;
+      title: string;
+      body: string;
+      detailLines?: string[];
+    }
+  | {
+      ok: false;
+      title: string;
+      body: string;
+      detailLines?: string[];
+    };
 
 function toDatetimeLocal(iso: string): string {
   const d = new Date(iso);
@@ -29,21 +44,29 @@ export type { ThiThuEditorTab };
 
 export default function ThiThuEditorClient({
   initial,
-  initialDeThi,
   baiNop,
   initialTab,
+  initialSavedFlash,
 }: {
   initial: ThiThuKyThiRow | null;
-  initialDeThi: ThiThuDeThiRow[];
   baiNop: ThiThuBaiNopRow[];
-  /** Từ query `?tab=` (vd. sau khi tạo kỳ → tab đề thi). */
+  /** Từ query `?tab=` */
   initialTab?: ThiThuEditorTab;
+  /** Một lần sau `POST` tạo kỳ — query `?saved=1` */
+  initialSavedFlash?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { canEditThiThuKy } = useAdminDashboardAbilities();
   const readOnly = !canEditThiThuKy;
   const [tab, setTab] = useState<ThiThuEditorTab>(initialTab ?? "info");
   const [saving, setSaving] = useState(false);
+  const [saveReport, setSaveReport] = useState<SaveReportState | null>(null);
+  const [uploadThumbBusy, setUploadThumbBusy] = useState(false);
+  const [uploadLichBusy, setUploadLichBusy] = useState(false);
+  const [uploadThumbErr, setUploadThumbErr] = useState<string | null>(null);
+  const [uploadLichErr, setUploadLichErr] = useState<string | null>(null);
+  const clearedSavedFlash = useRef(false);
   const [tieuDe, setTieuDe] = useState(initial?.tieu_de ?? "");
   const [monThi, setMonThi] = useState<MonThiKey>((initial?.mon_thi as MonThiKey) ?? "hinh_hoa");
   const [t0, setT0] = useState(initial ? toDatetimeLocal(initial.thoi_gian_bat_dau) : "");
@@ -60,12 +83,36 @@ export default function ThiThuEditorClient({
   );
   const [videoSuaBai, setVideoSuaBai] = useState(initial?.video_sua_bai ?? "");
   const [trangThai, setTrangThai] = useState(initial?.trang_thai ?? "draft");
+  const [deThiItems, setDeThiItems] = useState<ThiThuDeThiItem[]>(() =>
+    parseDeThiJson(initial?.de_thi ?? null),
+  );
+
+  useEffect(() => {
+    if (!initial) return;
+    setDeThiItems(parseDeThiJson(initial.de_thi ?? null));
+  }, [initial]);
+
+  useEffect(() => {
+    if (!initialSavedFlash || clearedSavedFlash.current || !initial?.id) return;
+    clearedSavedFlash.current = true;
+    setSaveReport({
+      ok: true,
+      title: "Lưu thành công",
+      body: "Kỳ thi mới đã được tạo và ghi vào cơ sở dữ liệu.",
+      detailLines: [
+        `Mã kỳ thi (admin): ${initial.id}`,
+        `Trang công khai: /thi-thu/${initial.id}`,
+      ],
+    });
+    router.replace(pathname);
+  }, [initial?.id, initialSavedFlash, pathname, router]);
 
   const cfg = useMemo(() => getMonConfig(monThi), [monThi]);
 
   const saveKy = useCallback(async () => {
     if (readOnly) return;
     setSaving(true);
+    setSaveReport(null);
     try {
       const body: Record<string, unknown> = {
         id: initial?.id,
@@ -78,6 +125,7 @@ export default function ThiThuEditorClient({
         lich_cham_bai_url: lich.trim() || null,
         thoi_gian_sua_bai: thoiGianSuaBaiLocal ? new Date(thoiGianSuaBaiLocal).toISOString() : null,
         video_sua_bai: videoSuaBai.trim() || null,
+        de_thi: normalizeDeThiForSave(deThiItems),
         trang_thai: trangThai,
       };
       const res = await fetch("/admin/api/thi-thu-upsert", {
@@ -85,15 +133,43 @@ export default function ThiThuEditorClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const j = (await res.json()) as { ok?: boolean; id?: string; error?: string };
-      if (!res.ok || !j.ok) throw new Error(j.error ?? "Lưu thất bại");
-      if (!initial?.id && j.id) {
-        router.replace(`/admin/dashboard/thi-thu/${j.id}?tab=de`);
-      } else {
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+      if (!res.ok || !j.ok) {
+        setSaveReport({
+          ok: false,
+          title: "Lưu thất bại",
+          body: typeof j.error === "string" && j.error.trim() ? j.error : "Không ghi được dữ liệu.",
+          detailLines: [`Mã phản hồi HTTP: ${res.status}`],
+        });
+        return;
+      }
+      const rowId = typeof j.id === "string" ? j.id : initial?.id;
+      if (initial?.id) {
+        setSaveReport({
+          ok: true,
+          title: "Lưu thành công",
+          body: "Thông tin kỳ thi đã được cập nhật.",
+          detailLines: rowId
+            ? [
+                `Mã kỳ thi: ${rowId}`,
+                `Trạng thái: ${trangThai === "published" ? "Công bố" : "Nháp"}`,
+                `Số đề thi: ${deThiItems.length}`,
+              ]
+            : undefined,
+        });
         router.refresh();
+      } else if (typeof j.id === "string" && j.id) {
+        router.replace(`/admin/dashboard/thi-thu/${j.id}?saved=1`);
       }
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Không lưu được. Kiểm tra quyền vai trò và Supabase (service_role, cột bảng).");
+      setSaveReport({
+        ok: false,
+        title: "Lưu thất bại",
+        body:
+          e instanceof Error
+            ? e.message
+            : "Không lưu được. Kiểm tra quyền vai trò và Supabase (service_role, cột bảng).",
+      });
     } finally {
       setSaving(false);
     }
@@ -108,6 +184,7 @@ export default function ThiThuEditorClient({
     thoiGianSuaBaiLocal,
     thumb,
     readOnly,
+    deThiItems,
     tieuDe,
     trangThai,
     videoSuaBai,
@@ -137,7 +214,6 @@ export default function ThiThuEditorClient({
 
   const tabLabels: Record<ThiThuEditorTab, string> = {
     info: "Thông tin",
-    de: "Đề thi",
     lich: "Lịch chấm bài",
     nop: "Bài nộp",
   };
@@ -182,7 +258,7 @@ export default function ThiThuEditorClient({
       ) : null}
 
       <div className="tti-adm-tabs">
-        {(["info", "de", "lich", "nop"] as const).map((k) => (
+        {(["info", "lich", "nop"] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -213,22 +289,51 @@ export default function ThiThuEditorClient({
         <div className="tti-adm-fc tti-adm-fc--editor mt-4">
           <div className="tti-f-group">
             <label className="tti-f-lbl">Thumbnail (cover 16:9)</label>
-            <label className={`tti-upload-zone ${readOnly ? "pointer-events-none opacity-50" : ""}`}>
-              Click hoặc chọn ảnh cover
-              <span>jpg, png, webp — khuyến nghị 1280×720px</span>
+            <label
+              aria-busy={uploadThumbBusy}
+              className={`tti-upload-zone ${uploadThumbBusy ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-50" : ""}`}
+            >
+              {uploadThumbBusy ? (
+                <>
+                  <span className="tti-upload-zone-busy">
+                    <span className="tti-spinner" aria-hidden />
+                    Đang tải ảnh lên…
+                  </span>
+                  <span>Vui lòng chờ trong giây lát</span>
+                </>
+              ) : (
+                <>
+                  Click hoặc chọn ảnh cover
+                  <span>jpg, png, webp — khuyến nghị 1280×720px</span>
+                </>
+              )}
               <input
                 type="file"
                 accept="image/*"
-                disabled={readOnly}
+                disabled={readOnly || uploadThumbBusy}
                 className="hidden"
                 onChange={async (e) => {
                   const f = e.target.files?.[0];
+                  e.target.value = "";
                   if (!f) return;
-                  const url = await uploadAdminCfImage(f, f.name);
-                  setThumb(url);
+                  setUploadThumbErr(null);
+                  setUploadThumbBusy(true);
+                  try {
+                    const url = await uploadAdminCfImage(f, f.name);
+                    setThumb(url);
+                  } catch (err) {
+                    setUploadThumbErr(err instanceof Error ? err.message : "Tải ảnh thất bại.");
+                  } finally {
+                    setUploadThumbBusy(false);
+                  }
                 }}
               />
             </label>
+            {uploadThumbErr ? (
+              <p className="tti-upload-err" role="alert">
+                {uploadThumbErr}
+              </p>
+            ) : null}
             {thumb ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={thumb} alt="" className="tti-upload-preview max-h-40" />
@@ -341,12 +446,15 @@ export default function ThiThuEditorClient({
             />
           </div>
 
+          <ThiThuDeThiTab items={deThiItems} onChange={setDeThiItems} readOnly={readOnly} />
+
           <div className="tti-f-group">
             <div className="tti-tog-row">
               <button
                 type="button"
                 className={`tti-tog ${trangThai === "draft" ? "off" : ""}`}
                 aria-pressed={trangThai === "published"}
+                disabled={readOnly}
                 onClick={() => setTrangThai((s) => (s === "published" ? "draft" : "published"))}
               />
               <span className={`tti-tog-lbl ${trangThai === "published" ? "grad" : "muted"}`}>
@@ -373,15 +481,6 @@ export default function ThiThuEditorClient({
         </div>
       ) : null}
 
-      {tab === "de" && initial?.id ? (
-        <div className="mt-4">
-          <ThiThuDeThiTab kyId={initial.id} initialRows={initialDeThi} readOnly={readOnly} />
-        </div>
-      ) : null}
-      {tab === "de" && !initial?.id ? (
-        <p className="mt-6 text-[rgba(45,32,32,0.55)]">Lưu thông tin kỳ thi trước, sau đó chỉnh đề thi.</p>
-      ) : null}
-
       {tab === "lich" ? (
         <div className="tti-adm-fc tti-adm-fc--editor mt-4">
           <div className="tti-f-group">
@@ -389,22 +488,51 @@ export default function ThiThuEditorClient({
             <p className="tti-f-hint">
               Ảnh hiển thị sau khi buổi thi kết thúc (trang kết thúc phòng thi).
             </p>
-            <label className={`tti-upload-zone ${readOnly ? "pointer-events-none opacity-50" : ""}`}>
-              Đổi ảnh lịch chấm
-              <span>jpg, png, webp</span>
+            <label
+              aria-busy={uploadLichBusy}
+              className={`tti-upload-zone ${uploadLichBusy ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-50" : ""}`}
+            >
+              {uploadLichBusy ? (
+                <>
+                  <span className="tti-upload-zone-busy">
+                    <span className="tti-spinner" aria-hidden />
+                    Đang tải ảnh lên…
+                  </span>
+                  <span>Vui lòng chờ trong giây lát</span>
+                </>
+              ) : (
+                <>
+                  Đổi ảnh lịch chấm
+                  <span>jpg, png, webp</span>
+                </>
+              )}
               <input
                 type="file"
                 accept="image/*"
-                disabled={readOnly}
+                disabled={readOnly || uploadLichBusy}
                 className="hidden"
                 onChange={async (e) => {
                   const f = e.target.files?.[0];
+                  e.target.value = "";
                   if (!f) return;
-                  const url = await uploadAdminCfImage(f, f.name);
-                  setLich(url);
+                  setUploadLichErr(null);
+                  setUploadLichBusy(true);
+                  try {
+                    const url = await uploadAdminCfImage(f, f.name);
+                    setLich(url);
+                  } catch (err) {
+                    setUploadLichErr(err instanceof Error ? err.message : "Tải ảnh thất bại.");
+                  } finally {
+                    setUploadLichBusy(false);
+                  }
                 }}
               />
             </label>
+            {uploadLichErr ? (
+              <p className="tti-upload-err" role="alert">
+                {uploadLichErr}
+              </p>
+            ) : null}
             {lich ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={lich} alt="" className="tti-upload-preview tti-upload-preview--contain max-h-64" />
@@ -466,6 +594,44 @@ export default function ThiThuEditorClient({
               </table>
             </div>
           )}
+        </div>
+      ) : null}
+
+      {saveReport ? (
+        <div
+          className="tti-modal-overlay"
+          role="presentation"
+          onMouseDown={(ev) => {
+            if (ev.target === ev.currentTarget) setSaveReport(null);
+          }}
+        >
+          <div
+            className="tti-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tti-save-report-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2
+              id="tti-save-report-title"
+              className={`tti-modal-title ${saveReport.ok ? "tti-modal-title--ok" : "tti-modal-title--err"}`}
+            >
+              {saveReport.title}
+            </h2>
+            <p className="tti-modal-body">{saveReport.body}</p>
+            {saveReport.detailLines?.length ? (
+              <ul className="tti-modal-detail">
+                {saveReport.detailLines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="tti-modal-actions">
+              <button type="button" className="tti-modal-btn" onClick={() => setSaveReport(null)}>
+                Đóng
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

@@ -6,6 +6,7 @@ import {
   adminStaffCanEditThiThuKy,
 } from "@/lib/admin/staff-mutation-access";
 import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
+import { normalizeDeThiForSave, parseDeThiJson } from "@/lib/thi-thu/de-thi-json";
 import { parseThoiGianSuaBaiInputForPgTimeColumn } from "@/lib/thi-thu/replay-time";
 import { isMonThiKey } from "@/lib/thi-thu-config";
 import { formatSupabaseWriteError } from "@/lib/supabase/postgres-permission-hint";
@@ -24,6 +25,8 @@ type Body = {
   lich_cham_bai_url?: unknown;
   video_sua_bai?: unknown;
   thoi_gian_sua_bai?: unknown;
+  /** Mảng đề thi (JSON) — lưu vào `thi_thu_ky_thi.de_thi`. */
+  de_thi?: unknown;
   trang_thai?: unknown;
 };
 
@@ -95,6 +98,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       ? body.video_sua_bai.trim()
       : null;
 
+  const deThiPacked = normalizeDeThiForSave(parseDeThiJson(body.de_thi ?? []));
+
   const row = {
     tieu_de: tieuDe,
     mon_thi: monThi,
@@ -111,6 +116,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         : null,
     video_sua_bai: videoSuaBai,
     thoi_gian_sua_bai: thoiGianSuaBai,
+    de_thi: deThiPacked,
     trang_thai: trangThai,
   };
 

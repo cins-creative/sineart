@@ -52,14 +52,6 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  const { error: eDe } = await supabase.from("thi_thu_de_thi").delete().eq("ky_thi_id", id);
-  if (eDe) {
-    return NextResponse.json(
-      { ok: false, error: formatSupabaseWriteError(eDe, "thi_thu_de_thi") },
-      { status: 500 },
-    );
-  }
-
   const { error: eKy } = await supabase.from("thi_thu_ky_thi").delete().eq("id", id);
   if (eKy) {
     return NextResponse.json(

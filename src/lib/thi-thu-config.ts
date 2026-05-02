@@ -81,8 +81,11 @@ export const MON_THI_CONFIG: Record<MonThiKey, MonThiConfig> = {
   },
 };
 
-export function getMonConfig(mon: MonThiKey): MonThiConfig {
-  return MON_THI_CONFIG[mon];
+/** Luôn trả config hợp lệ — giá trị `mon_thi` lạ/NULL trong DB thì dùng Hình họa để tránh crash UI. */
+export function getMonConfig(mon: string | null | undefined): MonThiConfig {
+  const s = mon == null ? "" : String(mon);
+  if (isMonThiKey(s)) return MON_THI_CONFIG[s];
+  return MON_THI_CONFIG.hinh_hoa;
 }
 
 export function isMonThiKey(s: string): s is MonThiKey {

@@ -2060,9 +2060,7 @@
 .sa-thi-thu-admin .tti-de-plain-file {
   display: block;
   width: 100%;
-  min-width: 0;
-  flex: 1 1 auto;
-  max-width: 100%;
+  max-width: min(100%, 520px);
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;

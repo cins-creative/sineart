@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import ThiThuDeThiTab, { blurFocusedThiThuManualUrlInput } from "./ThiThuDeThiTab";
+import ThiThuDeThiTab from "./ThiThuDeThiTab";
 import ThiThuUploadProgressBar from "./ThiThuUploadProgressBar";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
@@ -120,7 +120,6 @@ export default function ThiThuEditorClient({
 
   const saveKy = useCallback(async () => {
     if (readOnly) return;
-    blurFocusedThiThuManualUrlInput();
     setSaving(true);
     setSaveReport(null);
     try {

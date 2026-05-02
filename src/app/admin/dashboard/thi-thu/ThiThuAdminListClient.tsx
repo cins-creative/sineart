@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { formatThoiGianSuaBaiLabel } from "@/lib/thi-thu/replay-time";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
-import type { ThiThuKyThiRow, ThiThuTrangThai } from "@/types/thi-thu";
+import type { ThiThuBaiNopRow, ThiThuKyThiRow, ThiThuTrangThai } from "@/types/thi-thu";
 
 function badgeClass(mon: MonThiKey): string {
   if (mon === "hinh_hoa") return "tti-adm-badge-hh";
@@ -27,6 +27,11 @@ export default function ThiThuAdminListClient({
   const [monFilter, setMonFilter] = useState<"" | MonThiKey>("");
   const [stFilter, setStFilter] = useState<"" | ThiThuTrangThai>("");
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+  const [nopModalKyId, setNopModalKyId] = useState<string | null>(null);
+  const [nopModalTitle, setNopModalTitle] = useState("");
+  const [nopModalRows, setNopModalRows] = useState<ThiThuBaiNopRow[]>([]);
+  const [nopModalLoading, setNopModalLoading] = useState(false);
+  const [nopModalErr, setNopModalErr] = useState<string | null>(null);
 
   const onDeleteKy = useCallback(
     async (id: string, title: string) => {
@@ -52,6 +57,42 @@ export default function ThiThuAdminListClient({
     },
     [router],
   );
+
+  const closeNopModal = useCallback(() => {
+    setNopModalKyId(null);
+    setNopModalErr(null);
+    setNopModalRows([]);
+  }, []);
+
+  const openNopModal = useCallback(async (kyId: string, tieuDe: string) => {
+    setNopModalKyId(kyId);
+    setNopModalTitle(tieuDe);
+    setNopModalLoading(true);
+    setNopModalErr(null);
+    setNopModalRows([]);
+    try {
+      const res = await fetch(
+        `/admin/api/thi-thu-bai-nop-list?ky_thi_id=${encodeURIComponent(kyId)}`,
+        { credentials: "same-origin" },
+      );
+      const j = (await res.json()) as { ok?: boolean; rows?: ThiThuBaiNopRow[]; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Không tải được danh sách.");
+      setNopModalRows(j.rows ?? []);
+    } catch (e) {
+      setNopModalErr(e instanceof Error ? e.message : "Lỗi tải.");
+    } finally {
+      setNopModalLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!nopModalKyId) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") closeNopModal();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [nopModalKyId, closeNopModal]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -187,7 +228,14 @@ export default function ThiThuAdminListClient({
                       </span>
                     </td>
                     <td className="tti-adm-cell-nop">
-                      <span className="tti-adm-nop-pill">{nop}</span>
+                      <button
+                        type="button"
+                        className="tti-adm-nop-pill"
+                        title="Xem danh sách bài nộp"
+                        onClick={() => void openNopModal(r.id, r.tieu_de)}
+                      >
+                        {nop}
+                      </button>
                     </td>
                     <td className="tti-adm-cell-act">
                       <div className="tti-adm-act-row">
@@ -220,6 +268,106 @@ export default function ThiThuAdminListClient({
           </table>
         </div>
       </div>
+
+      {nopModalKyId ? (
+        <div
+          className="tti-modal-overlay"
+          role="presentation"
+          onMouseDown={(ev) => {
+            if (ev.target === ev.currentTarget) closeNopModal();
+          }}
+        >
+          <div
+            className="tti-modal-card tti-modal-card--nop-list"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tti-nop-list-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="tti-modal-nop-hd">
+              <h2 id="tti-nop-list-title" className="tti-modal-nop-title">
+                Bài nộp — {nopModalTitle}
+              </h2>
+              <p className="tti-modal-nop-sub">
+                {nopModalLoading
+                  ? "Đang tải…"
+                  : nopModalErr
+                    ? "—"
+                    : `${nopModalRows.length} bài trong kỳ này`}
+              </p>
+            </div>
+            <div className="tti-modal-nop-body">
+              {nopModalErr ? <p className="tti-modal-nop-err">{nopModalErr}</p> : null}
+              {!nopModalErr && nopModalLoading ? (
+                <p className="tti-adm-dash">Đang tải danh sách…</p>
+              ) : null}
+              {!nopModalErr && !nopModalLoading && nopModalRows.length === 0 ? (
+                <div className="tti-bai-nop-empty">Chưa có bài nộp cho kỳ thi này.</div>
+              ) : null}
+              {!nopModalErr && !nopModalLoading && nopModalRows.length > 0 ? (
+                <div className="tti-nop-gallery">
+                  {nopModalRows.map((b) => {
+                    const urls = b.anh_bai_nop_urls ?? [];
+                    return (
+                      <section key={b.id} className="tti-nop-submission">
+                        {urls.length > 0 ? (
+                          <div className="tti-nop-img-grid">
+                            {urls.map((url, idx) => (
+                              <a
+                                key={`${b.id}-${idx}`}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="tti-nop-img-cell"
+                                title={`Mở ảnh gốc ${idx + 1}/${urls.length}`}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={url}
+                                  alt={`Bài nộp ${b.ho_ten} — ảnh ${idx + 1}`}
+                                  loading="lazy"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="tti-nop-empty-imgs">Không có file ảnh trong bài nộp này.</div>
+                        )}
+                        <footer className="tti-nop-meta">
+                          <strong>{b.ho_ten}</strong>
+                          <div className="tti-nop-meta-row">
+                            <span className="tti-nop-meta-time">
+                              {new Date(b.thoi_gian_nop).toLocaleString("vi-VN")}
+                            </span>
+                            {b.facebook?.trim() ? (
+                              <span className="tti-nop-meta-fb">{b.facebook.trim()}</span>
+                            ) : null}
+                          </div>
+                          {b.ghi_chu?.trim() ? (
+                            <p className="tti-nop-meta-note">{b.ghi_chu.trim()}</p>
+                          ) : null}
+                        </footer>
+                      </section>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+            <div className="tti-modal-nop-foot">
+              <Link
+                href={`/admin/dashboard/thi-thu/${nopModalKyId}?tab=nop`}
+                className="tti-modal-nop-link"
+                onClick={closeNopModal}
+              >
+                Mở trang kỳ thi (tab Bài nộp) →
+              </Link>
+              <button type="button" className="tti-modal-btn" onClick={closeNopModal}>
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

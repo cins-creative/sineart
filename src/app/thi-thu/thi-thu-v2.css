@@ -1957,6 +1957,30 @@
   width: 100%;
   min-width: 0;
 }
+.sa-thi-thu-admin .tti-de-upload-zone-inner {
+  pointer-events: none;
+}
+.sa-thi-thu-admin .tti-de-file-trigger {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tti-g1);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.sa-thi-thu-admin .tti-de-file-trigger:hover {
+  color: #d9468a;
+}
+.sa-thi-thu-admin .tti-de-interaction-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #15803d;
+}
 .sa-thi-thu-admin .tti-de-upload-stack .tti-upload-progress-wrap {
   margin-top: 8px;
   max-width: 100%;

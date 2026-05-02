@@ -2,7 +2,14 @@
 
 import { Plus } from "lucide-react";
 import { flushSync } from "react-dom";
-import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useId,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import type { ThiThuDeThiItem } from "@/types/thi-thu";
@@ -20,7 +27,22 @@ type Props = {
  */
 export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Props) {
   const setRows = onChange;
+  const baseId = useId();
+  const fileInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const uploadLockRef = useRef(false);
+  const [interactionHint, setInteractionHint] = useState<Record<number, string>>({});
+
+  const flashInteractionHint = useCallback((idx: number, message: string) => {
+    setInteractionHint((m) => ({ ...m, [idx]: message }));
+    window.setTimeout(() => {
+      setInteractionHint((m) => {
+        const n = { ...m };
+        delete n[idx];
+        return n;
+      });
+    }, 6500);
+  }, []);
+
   const [deUpload, setDeUpload] = useState<{
     idx: number;
     cur: number;
@@ -91,15 +113,11 @@ export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Pr
           <div>
             <p className="mb-2 text-[12px] font-bold text-[#2d2020]">Ảnh đề</p>
             <div className="tti-de-upload-stack">
-              {/*
-                Vùng hiển thị pointer-events-none để không chặn file input (một số trình duyệt / layer
-                khiến click không tới input dù z-10). Input đặt cuối, z-[100], full vùng.
-              */}
               <div
                 aria-busy={thisRowUploading}
-                className={`tti-upload-zone relative min-h-[69px] ${thisRowUploading ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-50" : ""}`}
+                className={`tti-upload-zone relative isolate min-h-[72px] overflow-hidden ${thisRowUploading ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-50" : ""}`}
               >
-                <div className="pointer-events-none">
+                <div className="tti-de-upload-zone-inner">
                   {deUpload?.idx === idx ? (
                     <>
                       <span className="tti-upload-zone-busy">
@@ -130,24 +148,40 @@ export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Pr
                     </>
                   )}
                 </div>
-                {!readOnly ? (
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    disabled={thisRowUploading}
-                    className={
-                      thisRowUploading
-                        ? "sr-only"
-                        : "absolute inset-0 z-[100] m-0 block min-h-[69px] w-full cursor-pointer opacity-0"
+                <input
+                  id={`${baseId}-de-file-${idx}`}
+                  ref={(el) => {
+                    fileInputsRef.current[idx] = el;
+                  }}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={readOnly || thisRowUploading}
+                  aria-label={`Chọn ảnh đề thi cho đề ${idx + 1}`}
+                  className={
+                    readOnly || thisRowUploading
+                      ? "sr-only"
+                      : "absolute inset-0 z-[100] m-0 block min-h-[72px] h-full w-full cursor-pointer opacity-0"
+                  }
+                  style={{ fontSize: 0 }}
+                  title="Chọn ảnh đề thi"
+                  onClick={() => {
+                    if (!readOnly && !thisRowUploading) {
+                      flashInteractionHint(idx, "Đã nhận click — nếu không thấy hộp thoại, dùng nút «Chọn ảnh từ máy» bên dưới.");
                     }
-                    style={{ fontSize: 0 }}
-                    aria-label="Chọn ảnh đề thi"
-                    title="Chọn ảnh đề thi"
-                    onChange={async (e) => {
+                  }}
+                  onChange={async (e) => {
                     const files = e.target.files;
                     e.target.value = "";
-                    if (!files?.length) return;
+                    setInteractionHint((m) => {
+                      const n = { ...m };
+                      delete n[idx];
+                      return n;
+                    });
+                    if (!files?.length) {
+                      flashInteractionHint(idx, "Không có file được chọn (có thể bạn đã hủy hộp thoại).");
+                      return;
+                    }
                     if (uploadLockRef.current) return;
 
                     const list = Array.from(files);
@@ -196,9 +230,27 @@ export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Pr
                       setDeUpload(null);
                     }
                   }}
-                  />
-                ) : null}
+                />
               </div>
+              {!readOnly && !thisRowUploading ? (
+                <>
+                  <button
+                    type="button"
+                    className="tti-de-file-trigger"
+                    onClick={() => {
+                      flashInteractionHint(idx, "Đang mở hộp thoại chọn file…");
+                      fileInputsRef.current[idx]?.click();
+                    }}
+                  >
+                    Chọn ảnh từ máy (nếu vùng phía trên không phản hồi)
+                  </button>
+                  {interactionHint[idx] ? (
+                    <p className="tti-de-interaction-hint" role="status">
+                      {interactionHint[idx]}
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
             </div>
             {deUploadErr[idx] ? (
               <div className="tti-upload-err-banner" role="alert">

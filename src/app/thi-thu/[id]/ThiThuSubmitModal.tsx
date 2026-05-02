@@ -9,6 +9,16 @@ import { cn } from "@/lib/utils";
 const CAPTURE_W = 1080;
 const CAPTURE_H = 1920;
 
+/** iOS/Android: getUserMedia sau setState thường không được cấp quyền — dùng `<input capture>` như LuuBaiHocVien. */
+function preferNativeCameraCapture(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  if (/iPhone|iPod|Android/i.test(ua)) return true;
+  if (/iPad/.test(ua)) return true;
+  if (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua)) return true;
+  return false;
+}
+
 /** Crop kiểu cover từ khung video → kích thước đích cố định */
 function drawVideoCoverDest(
   ctx: CanvasRenderingContext2D,
@@ -52,6 +62,8 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /** Camera hệ thống (mobile) — `capture="environment"` */
+  const cameraCaptureRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) {
@@ -60,6 +72,12 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
       setCamErr(null);
       setCamFacing("environment");
       setMethod("file");
+      return;
+    }
+    // Trên mobile không dùng getUserMedia fullscreen — tránh gọi API ngoài gesture
+    if (preferNativeCameraCapture()) {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
       return;
     }
     if (method !== "cam") {
@@ -228,7 +246,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
 
   if (!open) return null;
 
-  const fullscreenCam = method === "cam" && !done;
+  const fullscreenCam = method === "cam" && !done && !preferNativeCameraCapture();
 
   return (
     <div
@@ -345,7 +363,13 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                   <button
                     type="button"
                     className={`tti-upload-method tti-um-cam ${method === "cam" ? "picked" : ""}`}
-                    onClick={() => setMethod("cam")}
+                    onClick={() => {
+                      if (preferNativeCameraCapture()) {
+                        cameraCaptureRef.current?.click();
+                        return;
+                      }
+                      setMethod("cam");
+                    }}
                   >
                     <div className="tti-upload-method-icon text-[#ee5b9f]">
                       <svg width={22} height={22} viewBox="0 0 24 24" fill="none" strokeWidth={2} aria-hidden>
@@ -359,7 +383,11 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                       </svg>
                     </div>
                     <div className="tti-upload-method-ttl">Chụp ảnh</div>
-                    <div className="tti-upload-method-sub">Toàn màn hình — chụp trực tiếp</div>
+                    <div className="tti-upload-method-sub">
+                      {preferNativeCameraCapture()
+                        ? "Mở camera máy — chụp bài (giống Lưu bài HV)"
+                        : "Toàn màn hình — chụp trực tiếp"}
+                    </div>
                   </button>
                   <button
                     type="button"
@@ -383,6 +411,18 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   multiple
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    void addFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+                <input
+                  ref={cameraCaptureRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
                   className="hidden"
                   disabled={uploading}
                   onChange={(e) => {

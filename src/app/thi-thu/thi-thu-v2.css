@@ -1059,6 +1059,54 @@
   color: var(--tti-ink2);
   line-height: 1.4;
 }
+
+/* Vùng Upload + Ctrl+V — cùng pattern TeacherPortfolioEditor */
+.sa-thi-thu .tti-upload-paste {
+  margin-top: 10px;
+  border-radius: var(--tti-rs);
+  border: 1.5px dashed var(--tti-ink3);
+  background: #fff;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.sa-thi-thu .tti-upload-paste:focus-visible {
+  border-color: var(--tti-g1);
+  box-shadow: 0 0 0 3px rgba(238, 91, 159, 0.12);
+}
+.sa-thi-thu .tti-upload-paste-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sa-thi-thu .tti-upload-paste-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--tti-rs);
+  border: 1.5px solid var(--tti-ink3);
+  background: rgba(45, 32, 32, 0.03);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tti-ink);
+  cursor: pointer;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+.sa-thi-thu .tti-upload-paste-btn:hover:not(:disabled) {
+  border-color: var(--tti-g1);
+}
+.sa-thi-thu .tti-upload-paste-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sa-thi-thu .tti-upload-paste-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tti-ink2);
+  line-height: 1.35;
+}
 .sa-thi-thu .tti-cam-preview {
   position: relative;
   border-radius: var(--tti-rs);

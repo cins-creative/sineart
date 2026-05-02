@@ -1,13 +1,16 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  CAPTURE_OUTPUT_HEIGHT,
+  CAPTURE_OUTPUT_WIDTH,
+  canvasToExamJpegBlob,
+  pickImageFileFromClipboard,
+  prepareExamImageFile,
+} from "@/lib/thi-thu/prepare-exam-image-client";
 import { cn } from "@/lib/utils";
-
-/** Ảnh chụp xuất Full HD dọc (thường dùng khi cầm điện thoại dọc chụp bài) */
-const CAPTURE_W = 1080;
-const CAPTURE_H = 1920;
 
 const UPLOAD_FETCH_MS = 120_000;
 
@@ -109,7 +112,6 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Camera hệ thống (mobile) — `capture="environment"` */
   const cameraCaptureRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
     if (!open) {
       streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -210,8 +212,13 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
           const file = list[i]!;
           const stepLabel = list.length > 1 ? `Ảnh ${i + 1}/${list.length}` : "Đang tải ảnh lên…";
           setUploadProgress((prev) => ({ pct: prev?.pct ?? 0, label: stepLabel }));
+          const prepared = await prepareExamImageFile(file);
           const fd = new FormData();
-          fd.append("file", file);
+          const name =
+            prepared === file
+              ? file.name
+              : `${file.name.replace(/\.[^.]+$/, "") || "thi-thu"}.jpg`;
+          fd.append("file", prepared, name);
           const url = await postUploadImage(fd, (pct) =>
             setUploadProgress({ pct, label: stepLabel }),
           );
@@ -247,21 +254,18 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
     setErr(null);
     try {
       const canvas = document.createElement("canvas");
-      canvas.width = CAPTURE_W;
-      canvas.height = CAPTURE_H;
+      canvas.width = CAPTURE_OUTPUT_WIDTH;
+      canvas.height = CAPTURE_OUTPUT_HEIGHT;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Không tạo được ảnh.");
       ctx.save();
       if (camFacing === "user") {
-        ctx.translate(CAPTURE_W, 0);
+        ctx.translate(CAPTURE_OUTPUT_WIDTH, 0);
         ctx.scale(-1, 1);
       }
-      drawVideoCoverDest(ctx, video, CAPTURE_W, CAPTURE_H);
+      drawVideoCoverDest(ctx, video, CAPTURE_OUTPUT_WIDTH, CAPTURE_OUTPUT_HEIGHT);
       ctx.restore();
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.93),
-      );
-      if (!blob) throw new Error("Không tạo được ảnh.");
+      const blob = await canvasToExamJpegBlob(canvas);
       const url = await uploadBlob(blob, `thi-thu-${Date.now()}.jpg`, "Đang tải ảnh lên…");
       setUrls((u) => [...u, url]);
     } catch (e) {
@@ -332,7 +336,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
               ← Form nộp bài
             </button>
             <span className="max-w-[42%] text-center text-[11px] font-semibold leading-snug text-white/85">
-              Camera toàn màn — ảnh 1080×1920
+              Camera toàn màn — ảnh {CAPTURE_OUTPUT_WIDTH}×{CAPTURE_OUTPUT_HEIGHT}
             </span>
             <button
               type="button"
@@ -483,6 +487,46 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                     <div className="tti-upload-method-ttl">Upload file</div>
                     <div className="tti-upload-method-sub">Chọn ảnh từ thư viện hoặc máy tính</div>
                   </button>
+                </div>
+
+                <div
+                  className="tti-upload-paste"
+                  tabIndex={0}
+                  onPaste={(e) => {
+                    const f = pickImageFileFromClipboard(e.clipboardData.items);
+                    if (!f) return;
+                    e.preventDefault();
+                    const dt = new DataTransfer();
+                    dt.items.add(f);
+                    void addFiles(dt.files);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (uploading) return;
+                    const { files } = e.dataTransfer;
+                    if (files?.length) void addFiles(files);
+                  }}
+                >
+                  <div className="tti-upload-paste-inner">
+                    <button
+                      type="button"
+                      className="tti-upload-paste-btn"
+                      disabled={uploading}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {uploading ? (
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
+                      ) : (
+                        <Upload className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+                      )}
+                      {uploading ? "Đang tải…" : "Upload"}
+                    </button>
+                    <span className="tti-upload-paste-hint">Có thể Ctrl+V ảnh vào khung này.</span>
+                  </div>
                 </div>
 
                 <input

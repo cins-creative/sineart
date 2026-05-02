@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import NavBar from "@/app/_components/NavBar";
 import ThiThuFooter from "./ThiThuFooter";
 import { ThiThuStyles } from "./ThiThuStyles";
-import ThiThuListClient from "./ThiThuListClient";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { fetchThiThuPublishedList } from "@/lib/data/thi-thu";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { ThiThuListSection } from "./_components/ThiThuListSection";
+import { ThiThuListSectionSkeleton } from "./_components/ThiThuListSection.skeleton";
+import { ThiThuNavBarSection } from "./_components/ThiThuNavBarSection";
+import { ThiThuNavBarSectionSkeleton } from "./_components/ThiThuNavBarSection.skeleton";
 
 export const revalidate = 60;
 
@@ -18,17 +17,14 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://sineart.vn/thi-thu" },
 };
 
-export default async function ThiThuPage() {
-  const [{ courses }, rows] = await Promise.all([
-    getKhoaHocPageData(),
-    fetchThiThuPublishedList(),
-  ]);
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
-
+export default function ThiThuPage() {
   return (
     <div className="sa-root sa-thi-thu">
       <ThiThuStyles />
-      <NavBar khoaHocGroups={khoaHocGroups} />
+
+      <Suspense fallback={<ThiThuNavBarSectionSkeleton />}>
+        <ThiThuNavBarSection />
+      </Suspense>
 
       <section className="tti-hero">
         <div className="tti-hero-orb tti-hero-orb-1" aria-hidden />
@@ -46,8 +42,8 @@ export default async function ThiThuPage() {
         </p>
       </section>
 
-      <Suspense fallback={<div className="py-16 text-center text-sm text-neutral-600">Đang tải…</div>}>
-        <ThiThuListClient rows={rows} />
+      <Suspense fallback={<ThiThuListSectionSkeleton />}>
+        <ThiThuListSection />
       </Suspense>
 
       <ThiThuFooter />

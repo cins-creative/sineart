@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 
-import NavBar from "@/app/_components/NavBar";
 import { ThiThuStyles } from "../ThiThuStyles";
 import ThiThuRoomClient from "./ThiThuRoomClient";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
+import { ThiThuNavBarSection } from "../_components/ThiThuNavBarSection";
+import { ThiThuNavBarSectionSkeleton } from "../_components/ThiThuNavBarSection.skeleton";
 import { fetchThiThuKyByIdPublic, fetchThiThuKyByIdService } from "@/lib/data/thi-thu";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -51,13 +51,12 @@ export default async function ThiThuRoomPage(props: PageProps) {
 
   const previewAllowed = Boolean(admin && previewRaw);
 
-  const { courses } = await getKhoaHocPageData();
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
-
   return (
     <div className="sa-root sa-thi-thu min-h-[100dvh]">
       <ThiThuStyles />
-      <NavBar khoaHocGroups={khoaHocGroups} />
+      <Suspense fallback={<ThiThuNavBarSectionSkeleton />}>
+        <ThiThuNavBarSection />
+      </Suspense>
       {/* Desktop: nav sticky top (~72px) — tránh đè lên nội dung phòng thi */}
       <div className="min-[900px]:pt-[76px]">
         <ThiThuRoomClient initialKy={row} previewQuery={previewRaw} previewAllowed={previewAllowed} />

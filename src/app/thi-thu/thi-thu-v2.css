@@ -945,6 +945,42 @@
   align-items: center;
   justify-content: center;
 }
+
+/* Upload progress — modal nộp bài */
+.sa-thi-thu .tti-upload-progress-wrap {
+  margin-top: 10px;
+}
+.sa-thi-thu .tti-upload-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tti-ink2);
+  margin-bottom: 6px;
+}
+.sa-thi-thu .tti-upload-progress-track {
+  height: 8px;
+  border-radius: var(--tti-rp);
+  background: rgba(45, 32, 32, 0.08);
+  overflow: hidden;
+}
+.sa-thi-thu .tti-upload-progress-fill {
+  height: 100%;
+  border-radius: var(--tti-rp);
+  background: var(--tti-grad);
+  transition: width 0.12s ease-out;
+}
+.sa-thi-thu .tti-upload-progress-wrap--dark .tti-upload-progress-meta {
+  color: rgba(255, 255, 255, 0.88);
+}
+.sa-thi-thu .tti-upload-progress-wrap--dark .tti-upload-progress-track {
+  background: rgba(255, 255, 255, 0.18);
+}
+.sa-thi-thu .tti-upload-progress-wrap--dark .tti-upload-progress-fill {
+  background: linear-gradient(90deg, #fff 0%, rgba(248, 166, 104, 0.95) 100%);
+}
+
 .sa-thi-thu .tti-f-lbl {
   font-size: 11px;
   font-weight: 700;

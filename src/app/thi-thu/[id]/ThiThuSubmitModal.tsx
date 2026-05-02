@@ -11,6 +11,47 @@ const CAPTURE_H = 1920;
 
 const UPLOAD_FETCH_MS = 120_000;
 
+/** Upload multipart qua XHR để có `upload.onprogress` (fetch không báo %). */
+function postThiThuUploadXhr(
+  formData: FormData,
+  opts: {
+    timeoutMs: number;
+    onProgress?: (pct: number) => void;
+  },
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/thi-thu/upload-image");
+    xhr.timeout = opts.timeoutMs;
+    xhr.responseType = "text";
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) {
+        opts.onProgress?.(Math.min(100, Math.round((100 * ev.loaded) / ev.total)));
+      } else {
+        opts.onProgress?.(0);
+      }
+    };
+    xhr.onload = () => {
+      let j: { ok?: boolean; url?: string; error?: string } = {};
+      try {
+        j = xhr.responseText ? (JSON.parse(xhr.responseText) as typeof j) : {};
+      } catch {
+        reject(new Error("Phản hồi upload không hợp lệ"));
+        return;
+      }
+      if (xhr.status < 200 || xhr.status >= 300 || !j.ok || !j.url) {
+        reject(new Error(j.error ?? `HTTP ${xhr.status}`));
+        return;
+      }
+      resolve(j.url);
+    };
+    xhr.onerror = () => reject(new Error("Mạng lỗi"));
+    xhr.ontimeout = () => reject(new Error("Upload quá lâu — kiểm tra mạng và thử lại."));
+    xhr.onabort = () => reject(new Error("Đã hủy"));
+    xhr.send(formData);
+  });
+}
+
 /** iOS/Android: getUserMedia sau setState thường không được cấp quyền — dùng `<input capture>` như LuuBaiHocVien. */
 function preferNativeCameraCapture(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -54,6 +95,8 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
   const [ghiChu, setGhiChu] = useState("");
   const [urls, setUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  /** Tiến trình tải ảnh lên server (XHR) */
+  const [uploadProgress, setUploadProgress] = useState<{ pct: number; label: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -74,6 +117,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
       setCamErr(null);
       setCamFacing("environment");
       setMethod("file");
+      setUploadProgress(null);
       return;
     }
     // Trên mobile không dùng getUserMedia fullscreen — tránh gọi API ngoài gesture
@@ -131,37 +175,24 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
     };
   }, [open, method, camFacing]);
 
-  const postUploadImage = useCallback(async (body: FormData) => {
-    const ac = new AbortController();
-    const timer = window.setTimeout(() => ac.abort(), UPLOAD_FETCH_MS);
-    try {
-      const res = await fetch("/api/thi-thu/upload-image", {
-        method: "POST",
-        body,
-        signal: ac.signal,
-      });
-      const j = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        url?: string;
-        error?: string;
-      };
-      if (!res.ok || !j.ok || !j.url) throw new Error(j.error ?? "Upload lỗi");
-      return j.url;
-    } catch (e) {
-      if (e instanceof Error && e.name === "AbortError") {
-        throw new Error("Upload quá lâu — kiểm tra mạng và thử lại.");
-      }
-      throw e;
-    } finally {
-      window.clearTimeout(timer);
-    }
+  const postUploadImage = useCallback(async (body: FormData, onPct?: (pct: number) => void) => {
+    return postThiThuUploadXhr(body, {
+      timeoutMs: UPLOAD_FETCH_MS,
+      onProgress: onPct,
+    });
   }, []);
 
   const uploadBlob = useCallback(
-    async (blob: Blob, name: string) => {
+    async (blob: Blob, name: string, label = "Đang tải ảnh lên…") => {
       const fd = new FormData();
       fd.append("file", blob, name);
-      return postUploadImage(fd);
+      setUploadProgress({ pct: 0, label });
+      try {
+        const url = await postUploadImage(fd, (pct) => setUploadProgress({ pct, label }));
+        return url;
+      } finally {
+        setUploadProgress(null);
+      }
     },
     [postUploadImage],
   );
@@ -169,14 +200,21 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
   const addFiles = useCallback(
     async (files: FileList | null) => {
       if (!files?.length) return;
+      const list = Array.from(files);
       setUploading(true);
       setErr(null);
+      setUploadProgress({ pct: 0, label: list.length > 1 ? `Ảnh 1/${list.length}` : "Đang tải ảnh lên…" });
       try {
         const next: string[] = [];
-        for (const file of Array.from(files)) {
+        for (let i = 0; i < list.length; i++) {
+          const file = list[i]!;
+          const stepLabel = list.length > 1 ? `Ảnh ${i + 1}/${list.length}` : "Đang tải ảnh lên…";
+          setUploadProgress((prev) => ({ pct: prev?.pct ?? 0, label: stepLabel }));
           const fd = new FormData();
           fd.append("file", file);
-          const url = await postUploadImage(fd);
+          const url = await postUploadImage(fd, (pct) =>
+            setUploadProgress({ pct, label: stepLabel }),
+          );
           next.push(url);
         }
         setUrls((u) => [...u, ...next]);
@@ -184,6 +222,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
         setErr(e instanceof Error ? e.message : "Upload lỗi");
       } finally {
         setUploading(false);
+        setUploadProgress(null);
       }
     },
     [postUploadImage],
@@ -223,12 +262,13 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
         canvas.toBlob((b) => resolve(b), "image/jpeg", 0.93),
       );
       if (!blob) throw new Error("Không tạo được ảnh.");
-      const url = await uploadBlob(blob, `thi-thu-${Date.now()}.jpg`);
+      const url = await uploadBlob(blob, `thi-thu-${Date.now()}.jpg`, "Đang tải ảnh lên…");
       setUrls((u) => [...u, url]);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Chụp ảnh lỗi");
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   }, [camFacing, uploadBlob]);
 
@@ -318,7 +358,20 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
           </div>
 
           <footer className="flex shrink-0 flex-col gap-2 border-t border-white/10 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
-            {uploading ? (
+            {uploading && uploadProgress ? (
+              <div className="tti-upload-progress-wrap tti-upload-progress-wrap--dark w-full">
+                <div className="tti-upload-progress-meta">
+                  <span className="truncate">{uploadProgress.label}</span>
+                  <span className="shrink-0 tabular-nums">{uploadProgress.pct}%</span>
+                </div>
+                <div className="tti-upload-progress-track">
+                  <div
+                    className="tti-upload-progress-fill"
+                    style={{ width: `${uploadProgress.pct}%` }}
+                  />
+                </div>
+              </div>
+            ) : uploading ? (
               <p className="flex items-center justify-center gap-2 text-sm text-white/75">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                 Đang tải ảnh…
@@ -463,7 +516,20 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                   </p>
                 ) : null}
 
-                {uploading ? (
+                {uploading && uploadProgress ? (
+                  <div className="tti-upload-progress-wrap mt-2">
+                    <div className="tti-upload-progress-meta">
+                      <span className="min-w-0 truncate">{uploadProgress.label}</span>
+                      <span className="shrink-0 tabular-nums">{uploadProgress.pct}%</span>
+                    </div>
+                    <div className="tti-upload-progress-track">
+                      <div
+                        className="tti-upload-progress-fill"
+                        style={{ width: `${uploadProgress.pct}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : uploading ? (
                   <p className="mt-2 flex items-center gap-2 text-sm text-[rgba(45,32,32,0.55)]">
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                     Đang tải ảnh…

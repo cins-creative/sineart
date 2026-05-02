@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import ThiThuDeThiTab from "./ThiThuDeThiTab";
+import ThiThuUploadProgressBar from "./ThiThuUploadProgressBar";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import { normalizeDeThiForSave, parseDeThiJson } from "@/lib/thi-thu/de-thi-json";
@@ -64,6 +65,8 @@ export default function ThiThuEditorClient({
   const [saveReport, setSaveReport] = useState<SaveReportState | null>(null);
   const [uploadThumbBusy, setUploadThumbBusy] = useState(false);
   const [uploadLichBusy, setUploadLichBusy] = useState(false);
+  const [uploadThumbPct, setUploadThumbPct] = useState(0);
+  const [uploadLichPct, setUploadLichPct] = useState(0);
   const [uploadThumbErr, setUploadThumbErr] = useState<string | null>(null);
   const [uploadLichErr, setUploadLichErr] = useState<string | null>(null);
   const clearedSavedFlash = useRef(false);
@@ -291,15 +294,16 @@ export default function ThiThuEditorClient({
             <label className="tti-f-lbl">Thumbnail (cover 16:9)</label>
             <label
               aria-busy={uploadThumbBusy}
-              className={`tti-upload-zone ${uploadThumbBusy ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-50" : ""}`}
+              className={`tti-upload-zone relative ${uploadThumbBusy ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-50" : ""}`}
             >
               {uploadThumbBusy ? (
                 <>
                   <span className="tti-upload-zone-busy">
                     <span className="tti-spinner" aria-hidden />
-                    Đang tải ảnh lên…
+                    Đang tải ảnh cover lên máy chủ…
                   </span>
-                  <span>Vui lòng chờ trong giây lát</span>
+                  <span>Không đóng trang trong lúc đang gửi file</span>
+                  <ThiThuUploadProgressBar pct={uploadThumbPct} fullWidth caption="Tiến độ tải lên" />
                 </>
               ) : (
                 <>
@@ -311,20 +315,28 @@ export default function ThiThuEditorClient({
                 type="file"
                 accept="image/*"
                 disabled={readOnly || uploadThumbBusy}
-                className="hidden"
+                className={
+                  readOnly || uploadThumbBusy
+                    ? "sr-only"
+                    : "absolute inset-0 z-10 m-0 block h-full w-full cursor-pointer opacity-0"
+                }
+                style={{ fontSize: 0 }}
+                title="Chọn ảnh cover"
                 onChange={async (e) => {
                   const f = e.target.files?.[0];
                   e.target.value = "";
                   if (!f) return;
                   setUploadThumbErr(null);
+                  setUploadThumbPct(0);
                   setUploadThumbBusy(true);
                   try {
-                    const url = await uploadAdminCfImage(f, f.name);
+                    const url = await uploadAdminCfImage(f, f.name, (p) => setUploadThumbPct(p));
                     setThumb(url);
                   } catch (err) {
                     setUploadThumbErr(err instanceof Error ? err.message : "Tải ảnh thất bại.");
                   } finally {
                     setUploadThumbBusy(false);
+                    setUploadThumbPct(0);
                   }
                 }}
               />
@@ -490,15 +502,16 @@ export default function ThiThuEditorClient({
             </p>
             <label
               aria-busy={uploadLichBusy}
-              className={`tti-upload-zone ${uploadLichBusy ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-50" : ""}`}
+              className={`tti-upload-zone relative ${uploadLichBusy ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-50" : ""}`}
             >
               {uploadLichBusy ? (
                 <>
                   <span className="tti-upload-zone-busy">
                     <span className="tti-spinner" aria-hidden />
-                    Đang tải ảnh lên…
+                    Đang tải ảnh lịch chấm lên máy chủ…
                   </span>
-                  <span>Vui lòng chờ trong giây lát</span>
+                  <span>Không đóng trang trong lúc đang gửi file</span>
+                  <ThiThuUploadProgressBar pct={uploadLichPct} fullWidth caption="Tiến độ tải lên" />
                 </>
               ) : (
                 <>
@@ -510,20 +523,28 @@ export default function ThiThuEditorClient({
                 type="file"
                 accept="image/*"
                 disabled={readOnly || uploadLichBusy}
-                className="hidden"
+                className={
+                  readOnly || uploadLichBusy
+                    ? "sr-only"
+                    : "absolute inset-0 z-10 m-0 block h-full w-full cursor-pointer opacity-0"
+                }
+                style={{ fontSize: 0 }}
+                title="Chọn ảnh lịch chấm"
                 onChange={async (e) => {
                   const f = e.target.files?.[0];
                   e.target.value = "";
                   if (!f) return;
                   setUploadLichErr(null);
+                  setUploadLichPct(0);
                   setUploadLichBusy(true);
                   try {
-                    const url = await uploadAdminCfImage(f, f.name);
+                    const url = await uploadAdminCfImage(f, f.name, (p) => setUploadLichPct(p));
                     setLich(url);
                   } catch (err) {
                     setUploadLichErr(err instanceof Error ? err.message : "Tải ảnh thất bại.");
                   } finally {
                     setUploadLichBusy(false);
+                    setUploadLichPct(0);
                   }
                 }}
               />

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const HV_SELECT = `
   id, photo, score, bai_mau, thuoc_bai_tap,
-  ten_hoc_vien:ql_thong_tin_hoc_vien(id, full_name),
+  ten_hoc_vien:ql_thong_tin_hoc_vien(id, full_name, email_prefix),
   bai_tap:hv_he_thong_bai_tap(ten_bai_tap, bai_so, mon_hoc:ql_mon_hoc(id, ten_mon_hoc))
 `;
 
@@ -24,8 +24,33 @@ type HvGalleryRawRow = {
     bai_so?: unknown;
     mon_hoc?: { id?: unknown; ten_mon_hoc?: unknown } | null;
   } | null;
-  ten_hoc_vien?: { id?: unknown; full_name?: unknown } | null;
+  ten_hoc_vien?: { id?: unknown; full_name?: unknown; email_prefix?: unknown } | null;
 };
+
+/** `full_name` đôi khi là placeholder «Ẩn danh» — ưu tiên tên thật, rồi email_prefix, rồi mã HV. */
+export function resolveClassroomGalleryStudentName(v: {
+  full_name?: string | null;
+  email_prefix?: string | null;
+  id?: number | null;
+}): string {
+  const raw = typeof v.full_name === "string" ? v.full_name.trim() : "";
+  const low = raw.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const isPlaceholder =
+    !raw ||
+    low === "an danh" ||
+    low === "ẩn danh" ||
+    /^an\s*danh$/i.test(raw.trim());
+
+  if (!isPlaceholder && raw) return raw;
+
+  const ep = typeof v.email_prefix === "string" ? v.email_prefix.trim() : "";
+  if (ep) return ep;
+
+  const hid = Number(v.id);
+  if (Number.isFinite(hid) && hid > 0) return `Học viên #${hid}`;
+
+  return "Học viên";
+}
 
 function mapHvRowToClassroomGalleryRow(row: HvGalleryRawRow): ClassroomGalleryRow {
   const id = Number(row.id);
@@ -33,10 +58,13 @@ function mapHvRowToClassroomGalleryRow(row: HvGalleryRawRow): ClassroomGalleryRo
   const rawSc = row.score;
   const score =
     rawSc != null && rawSc !== "" && Number.isFinite(Number(rawSc)) ? Number(rawSc) : null;
-  const name =
-    typeof row.ten_hoc_vien?.full_name === "string"
-      ? row.ten_hoc_vien.full_name.trim() || "Học viên"
-      : "Học viên";
+  const name = resolveClassroomGalleryStudentName({
+    full_name:
+      typeof row.ten_hoc_vien?.full_name === "string" ? row.ten_hoc_vien.full_name : null,
+    email_prefix:
+      typeof row.ten_hoc_vien?.email_prefix === "string" ? row.ten_hoc_vien.email_prefix : null,
+    id: Number.isFinite(hvStudentId) && hvStudentId > 0 ? hvStudentId : null,
+  });
   const photo = typeof row.photo === "string" && row.photo.trim() !== "" ? row.photo.trim() : null;
   const exId = Number(row.thuoc_bai_tap);
   const exOrder = Number(row.bai_tap?.bai_so);

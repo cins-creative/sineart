@@ -1,10 +1,13 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
+import { flushSync } from "react-dom";
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import type { ThiThuDeThiItem } from "@/types/thi-thu";
+
+import ThiThuUploadProgressBar from "./ThiThuUploadProgressBar";
 
 type Props = {
   items: ThiThuDeThiItem[];
@@ -17,7 +20,14 @@ type Props = {
  */
 export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Props) {
   const setRows = onChange;
-  const [deUpload, setDeUpload] = useState<{ idx: number; cur: number; total: number } | null>(null);
+  const fileInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  const uploadLockRef = useRef(false);
+  const [deUpload, setDeUpload] = useState<{
+    idx: number;
+    cur: number;
+    total: number;
+    pct: number;
+  } | null>(null);
   const [deUploadErr, setDeUploadErr] = useState<Record<number, string>>({});
 
   const addDe = useCallback(() => {
@@ -37,6 +47,8 @@ export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Pr
     },
     [items, readOnly, setRows],
   );
+
+  const uploadBusy = deUpload !== null;
 
   return (
     <div className="space-y-4">
@@ -79,45 +91,55 @@ export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Pr
 
           <div>
             <p className="mb-2 text-[12px] font-bold text-[#2d2020]">Ảnh đề</p>
-            <label
-              aria-busy={deUpload?.idx === idx}
-              className={`tti-de-add-img inline-flex items-center gap-2 border border-dashed ${deUpload?.idx === idx ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-45" : "cursor-pointer"}`}
-            >
-              {deUpload?.idx === idx ? (
-                <>
-                  <span className="tti-spinner tti-spinner--sm" aria-hidden />
-                  {deUpload.total > 1
-                    ? `Đang tải ${deUpload.cur}/${deUpload.total}…`
-                    : "Đang tải ảnh…"}
-                </>
-              ) : (
-                "+ Thêm ảnh"
-              )}
+            <div className="tti-de-upload-stack">
               <input
+                ref={(el) => {
+                  fileInputsRef.current[idx] = el;
+                }}
                 type="file"
                 accept="image/*"
                 multiple
-                disabled={readOnly || (deUpload !== null && deUpload.idx === idx)}
-                className="hidden"
+                disabled={readOnly}
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden
                 onChange={async (e) => {
                   const files = e.target.files;
                   e.target.value = "";
                   if (!files?.length) return;
+                  if (uploadLockRef.current) return;
+
                   const list = Array.from(files);
+                  uploadLockRef.current = true;
+
                   setDeUploadErr((m) => {
                     const n = { ...m };
                     delete n[idx];
                     return n;
                   });
-                  setDeUpload({ idx, cur: 0, total: list.length });
+
+                  flushSync(() => {
+                    setDeUpload({ idx, cur: 1, total: list.length, pct: 2 });
+                  });
+
                   const urlList: string[] = [];
                   try {
                     for (let i = 0; i < list.length; i++) {
                       const f = list[i]!;
-                      setDeUpload({ idx, cur: i + 1, total: list.length });
-                      const url = await uploadAdminCfImage(f, f.name);
+                      const url = await uploadAdminCfImage(f, f.name, (filePct) => {
+                        const overall = Math.round(((i + filePct / 100) / list.length) * 100);
+                        setDeUpload({
+                          idx,
+                          cur: i + 1,
+                          total: list.length,
+                          pct: Math.min(99, Math.max(2, overall)),
+                        });
+                      });
                       urlList.push(url);
                     }
+                    flushSync(() => {
+                      setDeUpload({ idx, cur: list.length, total: list.length, pct: 100 });
+                    });
                     setRows((prev) =>
                       prev.map((r, i) =>
                         i === idx ? { ...r, anh_urls: [...(r.anh_urls ?? []), ...urlList] } : r,
@@ -129,15 +151,57 @@ export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Pr
                       [idx]: err instanceof Error ? err.message : "Tải ảnh thất bại.",
                     }));
                   } finally {
+                    uploadLockRef.current = false;
                     setDeUpload(null);
                   }
                 }}
               />
-            </label>
+              <button
+                type="button"
+                aria-busy={deUpload?.idx === idx}
+                className={`tti-de-add-img relative inline-flex min-h-[44px] w-full max-w-full flex-wrap items-center gap-2 border border-dashed ${deUpload?.idx === idx ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-45" : "cursor-pointer"}`}
+                disabled={readOnly || uploadBusy}
+                onClick={() => {
+                  if (readOnly || uploadBusy) return;
+                  fileInputsRef.current[idx]?.click();
+                }}
+              >
+                {deUpload?.idx === idx ? (
+                  <>
+                    <span className="tti-spinner tti-spinner--sm" aria-hidden />
+                    <span className="text-left">
+                      {deUpload.total > 1
+                        ? `Đang gửi ảnh ${deUpload.cur}/${deUpload.total} lên máy chủ…`
+                        : "Đang gửi ảnh lên máy chủ…"}
+                    </span>
+                  </>
+                ) : (
+                  "+ Thêm ảnh"
+                )}
+              </button>
+
+              {deUpload?.idx === idx ? (
+                <>
+                  <ThiThuUploadProgressBar
+                    fullWidth
+                    pct={deUpload.pct}
+                    indeterminate={deUpload.pct < 5}
+                    caption={
+                      deUpload.total > 1
+                        ? `Tiến độ chung (${deUpload.cur}/${deUpload.total} ảnh)`
+                        : "Tiến độ tải lên"
+                    }
+                  />
+                  <p className="tti-de-upload-hint" role="status">
+                    Đang upload qua /admin/api/upload-cf-image — giữ tab mở cho đến khi xong.
+                  </p>
+                </>
+              ) : null}
+            </div>
             {deUploadErr[idx] ? (
-              <p className="tti-upload-err mt-1" role="alert">
-                {deUploadErr[idx]}
-              </p>
+              <div className="tti-upload-err-banner" role="alert">
+                <strong>Lỗi tải ảnh đề.</strong> {deUploadErr[idx]}
+              </div>
             ) : null}
             <div className="tti-de-imgs">
               {(row.anh_urls ?? []).map((url, ui) => (

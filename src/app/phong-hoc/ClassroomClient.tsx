@@ -2944,11 +2944,9 @@ export default function ClassroomClient({
                 </div>
                 <div className="gallery-grid">
                   {galleryLoading ? (
-                    <div className="gallery-grid-loading" style={{ gridColumn: "1 / -1" }}>
-                      Đang tải tác phẩm…
-                    </div>
+                    <div className="gallery-grid-loading">Đang tải tác phẩm…</div>
                   ) : filteredGallery.length === 0 ? (
-                    <div className="gallery-grid-empty" style={{ gridColumn: "1 / -1" }}>
+                    <div className="gallery-grid-empty">
                       {gFilter === "mine"
                         ? "Bạn chưa có bài hoàn thiện trong lớp này."
                         : gExerciseFilter !== "all"
@@ -2984,9 +2982,6 @@ export default function ClassroomClient({
                           ) : (
                             a.e
                           )}
-                        </div>
-                        <div className="ginfo">
-                          <div className="gname">{a.n}</div>
                         </div>
                       </div>
                     );
@@ -3153,6 +3148,18 @@ export default function ClassroomClient({
             />
             <div className="lb-meta">
               <span className="lb-name">{artworks[lightbox]!.n}</span>
+              {artworks[lightbox]!.exerciseTitle || artworks[lightbox]!.tenMonHoc || artworks[lightbox]!.exerciseLabel ? (
+                <div className="lb-detail">
+                  {artworks[lightbox]!.exerciseTitle ? (
+                    <span className="lb-ex">{artworks[lightbox]!.exerciseTitle}</span>
+                  ) : null}
+                  {artworks[lightbox]!.exerciseLabel || artworks[lightbox]!.tenMonHoc ? (
+                    <span className="lb-sub">
+                      {[artworks[lightbox]!.exerciseLabel, artworks[lightbox]!.tenMonHoc].filter(Boolean).join(" · ")}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
               <span className="lb-chip">{artworks[lightbox]!.cls}</span>
               {artworks[lightbox]!.mau ? <span className="lb-mau">✦ Bài mẫu</span> : null}
               {artworks[lightbox]!.score != null ? (

@@ -9,6 +9,7 @@ import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/Ad
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import { parseThoiGianSuaBaiMs } from "@/lib/thi-thu/replay-time";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
+import type { ThiThuEditorTab } from "@/types/thi-thu-editor";
 import type { ThiThuBaiNopRow, ThiThuDeThiRow, ThiThuKyThiRow } from "@/types/thi-thu";
 
 function toDatetimeLocal(iso: string): string {
@@ -24,21 +25,24 @@ function suaBaiToDatetimeLocal(row: ThiThuKyThiRow): string {
   return toDatetimeLocal(new Date(ms).toISOString());
 }
 
-type Tab = "info" | "de" | "lich" | "nop";
+export type { ThiThuEditorTab };
 
 export default function ThiThuEditorClient({
   initial,
   initialDeThi,
   baiNop,
+  initialTab,
 }: {
   initial: ThiThuKyThiRow | null;
   initialDeThi: ThiThuDeThiRow[];
   baiNop: ThiThuBaiNopRow[];
+  /** Từ query `?tab=` (vd. sau khi tạo kỳ → tab đề thi). */
+  initialTab?: ThiThuEditorTab;
 }) {
   const router = useRouter();
   const { canEditThiThuKy } = useAdminDashboardAbilities();
   const readOnly = !canEditThiThuKy;
-  const [tab, setTab] = useState<Tab>("info");
+  const [tab, setTab] = useState<ThiThuEditorTab>(initialTab ?? "info");
   const [saving, setSaving] = useState(false);
   const [tieuDe, setTieuDe] = useState(initial?.tieu_de ?? "");
   const [monThi, setMonThi] = useState<MonThiKey>((initial?.mon_thi as MonThiKey) ?? "hinh_hoa");
@@ -84,10 +88,12 @@ export default function ThiThuEditorClient({
       const j = (await res.json()) as { ok?: boolean; id?: string; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Lưu thất bại");
       if (!initial?.id && j.id) {
-        router.replace(`/admin/dashboard/thi-thu/${j.id}`);
+        router.replace(`/admin/dashboard/thi-thu/${j.id}?tab=de`);
       } else {
         router.refresh();
       }
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Không lưu được. Kiểm tra quyền vai trò và Supabase (service_role, cột bảng).");
     } finally {
       setSaving(false);
     }
@@ -129,7 +135,7 @@ export default function ThiThuEditorClient({
     URL.revokeObjectURL(a.href);
   }, [baiNop, initial?.id]);
 
-  const tabLabels: Record<Tab, string> = {
+  const tabLabels: Record<ThiThuEditorTab, string> = {
     info: "Thông tin",
     de: "Đề thi",
     lich: "Lịch chấm bài",

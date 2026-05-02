@@ -8,9 +8,15 @@
 export const ADMIN_DELETE_FORBIDDEN_MSG =
   "Tài khoản không có quyền xóa dữ liệu. Chỉ quản lý hoặc admin được xóa.";
 
-/** Chuẩn hóa để so khớp giá trị lưu DB (vd. `quan_ly`, `nhan_vien`, `admin`). */
+/**
+ * Chuẩn hóa để so khớp giá trị lưu DB (vd. `quan_ly`, `nhan_vien`, `admin`).
+ * Gộp khoảng trắng → `_` để `nhan vien` / `quan ly` vẫn khớp.
+ */
 export function normalizeStaffVaiTro(raw: string | null | undefined): string {
-  return (raw ?? "").trim().toLowerCase();
+  return (raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
 }
 
 /** Được gọi các server action `delete*` và UI nút xóa. */
@@ -39,10 +45,10 @@ export function adminStaffCanViewGiaTriTaiSanOverviewTab(vaiTro: string | null |
   return normalizeStaffVaiTro(vaiTro) === "admin";
 }
 
-/** Tạo / sửa kỳ thi thử (`thi_thu_ky_thi`) — `nhan_vien`, `quan_ly`, `admin`. */
+/** Tạo / sửa kỳ thi thử (`thi_thu_ky_thi`) — `nhan_vien`, `quan_ly`, `admin` (+ alias `nhanvien`). */
 export function adminStaffCanEditThiThuKy(vaiTro: string | null | undefined): boolean {
   const v = normalizeStaffVaiTro(vaiTro);
-  return v === "admin" || v === "quan_ly" || v === "nhan_vien";
+  return v === "admin" || v === "quan_ly" || v === "nhan_vien" || v === "nhanvien";
 }
 
 export const THI_THU_KY_EDIT_FORBIDDEN_MSG =

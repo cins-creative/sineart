@@ -28,7 +28,7 @@ import "../kien-thuc-library.css";
  * ISR — cùng chu kỳ với landing (10 phút). Trang detail chủ yếu là content
  * HTML do admin nhập, không đổi thường xuyên.
  */
-export const revalidate = 600;
+export const revalidate = 1800;
 
 /* ─────────────────────────────────────────────────────────────────
  * TOC auto-extract: tìm mọi `<h2>` trong `content`, gán `id` dạng

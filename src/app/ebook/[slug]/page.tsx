@@ -11,7 +11,7 @@ import { fetchAllEbooks, fetchEbookBySlug } from "@/lib/data/ebook";
 
 type Props = { params: Promise<{ slug: string }> };
 
-export const revalidate = 600;
+export const revalidate = 1800;
 
 /**
  * Pre-generate static params cho mọi slug hiện có trong `mkt_ebooks`.

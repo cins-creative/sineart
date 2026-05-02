@@ -2,7 +2,7 @@ import { cache } from "react";
 
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import { isHocPhiCapTocSpecial } from "@/lib/hocPhiDedupe";
-import { createClient } from "@/lib/supabase/server";
+import { createStaticClient } from "@/lib/supabase/static";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MonHoc } from "@/types/homepage";
@@ -222,7 +222,7 @@ async function getKhoaHocPageDataUncached(): Promise<{
   courses: KhoaHocCourseCard[];
 }> {
   try {
-    const supabase = await createClient();
+    const supabase = createStaticClient();
     if (!supabase) return { courses: [] };
     const [monsRes, lopsRes] = await Promise.all([
       supabase
@@ -334,7 +334,7 @@ function normalizeKetQuaDatDuoc(
 async function getKhoaHocReviewStatsUncached(
   monId: number | null,
 ): Promise<KhoaHocReviewStats> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return { avg: 0, count: 0 };
 
   const aggregate = (rows: { so_sao: number | null }[]): KhoaHocReviewStats => {
@@ -586,7 +586,7 @@ async function fetchGoiHocPhiForMon(
 async function resolveMonIdForKhoaSlugUncached(
   slug: string
 ): Promise<number | null> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return null;
 
   const { data: allMonsRows } = await supabase
@@ -630,7 +630,7 @@ export const resolveMonIdForKhoaSlug = cache(resolveMonIdForKhoaSlugUncached);
 async function getKhoaHocDetailBySlugUncached(
   slug: string
 ): Promise<KhoaHocDetailData | null> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return null;
 
   const { data: allMonsRows } = await supabase
@@ -754,7 +754,7 @@ export async function getOngoingClassesForMon(
   monId: number,
   hinhThucTag: HinhThucHocTag
 ): Promise<OngoingClassCard[]> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return [];
 
   const { data: lopRows, error: lopErr } = await supabase
@@ -876,7 +876,7 @@ export async function getOngoingClassesForMon(
 async function getGlobalTeacherPortfolioSlidesUncached(
   limit: number = 48
 ): Promise<TeacherPortfolioSlide[]> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return [];
 
   const normalizePortfolio = (raw: unknown): string[] => {
@@ -1096,7 +1096,7 @@ async function buildMonSlugMap(
 export async function getHocPhiBlockData(
   monId: number
 ): Promise<HocPhiBlockData> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) {
     return { gois: [], combos: [], monMap: {}, monSlugMap: {} };
   }

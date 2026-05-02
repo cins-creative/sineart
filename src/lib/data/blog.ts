@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { createClient } from "@/lib/supabase/server";
+import { createStaticClient } from "@/lib/supabase/static";
 import { htmlToPlainText } from "@/lib/admin/sanitize-admin-html";
 import { buildBlogSlug } from "./blog-slug";
 
@@ -67,7 +67,7 @@ export function formatDateVi(iso: string): string {
 // ─── Supabase queries ─────────────────────────────────────────────────────────
 
 async function fetchBlogByIdUncached(id: number): Promise<MktBlog | null> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return null;
 
   const { data, error } = await supabase
@@ -83,7 +83,7 @@ async function fetchBlogByIdUncached(id: number): Promise<MktBlog | null> {
 export const fetchBlogById = cache(fetchBlogByIdUncached);
 
 async function fetchBlogBySlugUncached(slug: string): Promise<MktBlog | null> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return null;
 
   const { data, error } = await supabase.from("mkt_blogs").select("id, title");
@@ -102,7 +102,7 @@ async function fetchRelatedBlogsUncached(
   currentId: number,
   limit = 4
 ): Promise<BlogListItem[]> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return [];
 
   const { data, error } = await supabase
@@ -122,7 +122,7 @@ async function fetchAdjacentBlogsUncached(
   currentId: number,
   createdAt: string
 ): Promise<{ prev: BlogListItem | null; next: BlogListItem | null }> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return { prev: null, next: null };
 
   const [prevRes, nextRes] = await Promise.all([
@@ -167,7 +167,7 @@ async function fetchBlogListUncached(opts: {
   search?: string;
 }): Promise<BlogListResult> {
   const { page = 1, perPage = 9, search } = opts;
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return { posts: [], total: 0, totalPages: 0 };
 
   const from = (page - 1) * perPage;
@@ -196,7 +196,7 @@ async function fetchBlogListUncached(opts: {
 export const fetchBlogList = cache(fetchBlogListUncached);
 
 async function fetchFeaturedBlogUncached(): Promise<BlogListItem | null> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return null;
 
   // Ưu tiên bài có feature=true, fallback latest
@@ -223,7 +223,7 @@ async function fetchFeaturedBlogUncached(): Promise<BlogListItem | null> {
 export const fetchFeaturedBlog = cache(fetchFeaturedBlogUncached);
 
 async function fetchPopularBlogsUncached(limit = 5): Promise<BlogListItem[]> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return [];
   const { data, error } = await supabase
     .from("mkt_blogs")

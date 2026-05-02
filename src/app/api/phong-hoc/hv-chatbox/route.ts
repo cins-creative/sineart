@@ -26,7 +26,10 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   try {
     const { rows } = await hvChatboxSelectByLop(sb, lop, { after });
-    return NextResponse.json({ messages: rows });
+    return NextResponse.json(
+      { messages: rows },
+      { headers: { "Cache-Control": "private, no-store, max-age=0" } }
+    );
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Lỗi truy vấn chat.";
     return NextResponse.json({ error: msg, code: "QUERY" }, { status: 500 });

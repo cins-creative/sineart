@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { createClient } from "@/lib/supabase/server";
+import { createStaticClient } from "@/lib/supabase/static";
 import { toJSONSafe } from "@/lib/serialize";
 import {
   CAREER_CARDS,
@@ -191,7 +191,7 @@ function mapMonHocToCourses(mon: MonHoc[]) {
 }
 
 async function getHomePageDataUncached(): Promise<HomePagePayload> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   /** Song song với Supabase — tránh chặn 1–2s do CINS. */
   const cinsPromise = fetchNganhHocCardsFromCins().catch((): CareerCard[] => []);
 
@@ -332,7 +332,7 @@ export const getHomePageData = cache(getHomePageDataUncached);
 
 /** Dữ liệu stat strip — cùng câu query như trong `getHomePageDataUncached`. */
 async function getHomeStatStripFieldsUncached(): Promise<HomePagePayload["stats"]> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return FALLBACK_STATS;
 
   try {
@@ -379,7 +379,7 @@ export const getHomeStatStripData = cache(getHomeStatStripFieldsUncached);
 
 /** Reviews — cùng select / filter như `getHomePageDataUncached`. */
 async function getHomeReviewsUncached(): Promise<HomeReview[]> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return FALLBACK_REVIEWS;
 
   try {
@@ -416,7 +416,7 @@ async function getHomeGallerySectionUncached(): Promise<
     galleryMonHocTabs: FALLBACK_GALLERY_MON_HOC_TABS,
   };
 
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return toJSONSafe(base);
 
   try {
@@ -451,7 +451,7 @@ export const getHomeGallerySectionData = cache(getHomeGallerySectionUncached);
 
 /** Giáo viên / portfolio — cùng query như trong `getHomePageDataUncached`. */
 async function getHomeTeacherArtSlidesUncached(): Promise<TeacherArtSlide[]> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return [];
 
   try {
@@ -499,7 +499,7 @@ async function getGalleryPagePayloadUncached(): Promise<{
     teacherArtSlides: [] as TeacherArtSlide[],
   };
 
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return toJSONSafe(base);
 
   try {

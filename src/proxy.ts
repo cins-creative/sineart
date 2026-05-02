@@ -19,7 +19,7 @@ const PUBLIC_ADMIN_PATHS = new Set([
   "/admin/setup",
 ]);
 
-export async function middleware(req: NextRequest): Promise<NextResponse> {
+export async function proxy(req: NextRequest): Promise<NextResponse> {
   const path = normalizePathname(req.nextUrl.pathname);
 
   /* Blog: /blogs/123-ten-bai → /blogs/ten-bai (301/308 — khớp Framer, SEO) */

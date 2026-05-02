@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createStaticClient } from "@/lib/supabase/static";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BaiHocVien, GalleryDisplayItem } from "@/types/homepage";
 
@@ -276,7 +276,7 @@ export async function getStudentGalleryForKhoaHocPage(
   detail: { id: number; tenMonHoc: string } | null,
   displayTitle: string
 ): Promise<GalleryDisplayItem[]> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return [];
 
   const cap = 48;
@@ -333,7 +333,7 @@ export async function getStudentGalleryForKhoaHocPage(
 export async function getTopLuyenThiStudentWorks(
   limit = 20
 ): Promise<GalleryDisplayItem[]> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return [];
   const items = await fetchGalleryItemsByLoaiKhoaHoc(
     supabase,
@@ -353,7 +353,7 @@ const HTBT_BAI_TAP_GALLERY_CAP = 120;
 export async function getGalleryItemsForBaiTapExercise(
   baiTapId: number
 ): Promise<GalleryDisplayItem[]> {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
   if (!supabase) return [];
   const id = Number(baiTapId);
   if (!Number.isFinite(id)) return [];

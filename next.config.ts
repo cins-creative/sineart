@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      /* Blog id-prefix → slug sạch: xem middleware.ts (next/config không nhận pattern an toàn cho một segment) */
+      /* Blog id-prefix → slug sạch: xem src/proxy.ts (next/config không nhận pattern an toàn cho một segment) */
       {
         source: "/hoc-thu",
         destination: "https://www.facebook.com/sineart0102",

@@ -95,7 +95,8 @@ const PHC_SIDEBAR_TWEEN = { type: "tween" as const, duration: 0.48, ease: PHC_SI
 
 const HV_CHAT_INITIAL = 30;
 const HV_CHAT_LOAD_MORE = 20;
-const HV_CHAT_POLL_MS = 2000;
+/** Giảm tải so với 2s; bỏ qua khi tab ẩn (xem `poll` trong effect chat). */
+const HV_CHAT_POLL_MS = 8000;
 
 /** Vòng tiến độ bài (theo prototype Class_Chatbox). GV có thể bấm để mở gán tiến độ. */
 function ChatMiniRing({
@@ -1725,6 +1726,7 @@ export default function ClassroomClient({
 
     const poll = async () => {
       if (cancelled) return;
+      if (document.visibilityState === "hidden") return;
       const since = hvLatestCreatedAtRef.current;
       if (!since) return;
       let rows: HvChatboxRow[];

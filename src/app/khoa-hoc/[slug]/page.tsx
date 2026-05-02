@@ -10,7 +10,7 @@ import { KhoaHocSlugNavSection } from "./_components/KhoaHocSlugNavSection";
 import { KhoaHocSlugNavSectionSkeleton } from "./_components/KhoaHocSlugNavSection.skeleton";
 import { SLUG_LABELS } from "./slug-labels";
 
-export const revalidate = 300;
+export const revalidate = 3600;
 
 function courseDescription(detail: NonNullable<Awaited<ReturnType<typeof getKhoaHocDetailBySlug>>>): string {
   const fromIntro = stripHtmlToPlain(detail.gioiThieuMonHocHtml, 155);

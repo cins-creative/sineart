@@ -226,7 +226,7 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
   },
   statStrip: {
     cards: [
-      { label: "Học viên đã theo học", sublabel: "Từ 2020 đến nay" },
+      { label: "Học viên đã và đang theo học", sublabel: "Từ 2020 đến nay" },
       { label: "Năm kinh nghiệm giảng dạy", sublabel: "Đội ngũ giáo viên chuyên sâu" },
       { label: "Nhóm khoá học chuyên sâu", sublabel: "Hình họa · Bố cục · Digital" },
     ],

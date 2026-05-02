@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import ThiThuDeThiTab from "./ThiThuDeThiTab";
+import ThiThuDeThiTab, { blurFocusedThiThuManualUrlInput } from "./ThiThuDeThiTab";
 import ThiThuUploadProgressBar from "./ThiThuUploadProgressBar";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
@@ -89,11 +89,16 @@ export default function ThiThuEditorClient({
   const [deThiItems, setDeThiItems] = useState<ThiThuDeThiItem[]>(() =>
     parseDeThiJson(initial?.de_thi ?? null),
   );
+  /** Luôn trùng state `deThiItems` mới nhất khi gọi `saveKy` (tránh race: thêm URL rồi bấm Lưu ngay). */
+  const deThiItemsRef = useRef(deThiItems);
+  deThiItemsRef.current = deThiItems;
 
   /** Chỉ hydrate lại đề thi khi đổi kỳ (id). Không phụ thuộc `initial` trọn vẹn — tránh reset sau mỗi re-render RSC và xóa ảnh upload Cloudflare chưa lưu. */
   useEffect(() => {
     if (!initial?.id) return;
     setDeThiItems(parseDeThiJson(initial.de_thi ?? null));
+    // Chỉ sync khi đổi kỳ (id), không khi `initial.de_thi` refresh từ server
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial?.id]);
 
   useEffect(() => {
@@ -115,6 +120,7 @@ export default function ThiThuEditorClient({
 
   const saveKy = useCallback(async () => {
     if (readOnly) return;
+    blurFocusedThiThuManualUrlInput();
     setSaving(true);
     setSaveReport(null);
     try {
@@ -129,7 +135,7 @@ export default function ThiThuEditorClient({
         lich_cham_bai_url: lich.trim() || null,
         thoi_gian_sua_bai: thoiGianSuaBaiLocal ? new Date(thoiGianSuaBaiLocal).toISOString() : null,
         video_sua_bai: videoSuaBai.trim() || null,
-        de_thi: normalizeDeThiForSave(deThiItems),
+        de_thi: normalizeDeThiForSave(deThiItemsRef.current),
         trang_thai: trangThai,
       };
       const res = await fetch("/admin/api/thi-thu-upsert", {
@@ -157,7 +163,7 @@ export default function ThiThuEditorClient({
             ? [
                 `Mã kỳ thi: ${rowId}`,
                 `Trạng thái: ${trangThai === "published" ? "Công bố" : "Nháp"}`,
-                `Số đề thi: ${deThiItems.length}`,
+                `Số đề thi: ${deThiItemsRef.current.length}`,
               ]
             : undefined,
         });
@@ -188,7 +194,6 @@ export default function ThiThuEditorClient({
     thoiGianSuaBaiLocal,
     thumb,
     readOnly,
-    deThiItems,
     tieuDe,
     trangThai,
     videoSuaBai,

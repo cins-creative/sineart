@@ -92,3 +92,21 @@ export function cfImageForThumbnail(url: string | null | undefined): string | nu
   if (url == null || url === "") return null;
   return cfImageWithVariant(url, envThumbVariant());
 }
+
+/**
+ * URL hiển thị đề thi / xem trước admin: sửa account hash CF (Allowed origins) + variant env nếu có.
+ * URL không phải imagedelivery.net giữ nguyên — phù hợp khi dán link ảnh ngoài.
+ */
+export function cfResolvedImageUrl(
+  url: string | null | undefined,
+  variant: "thumb" | "full",
+): string {
+  if (url == null || url === "") return "";
+  const u = url.trim();
+  if (!u) return "";
+  const normalized = cfImageNormalizeAccount(u) ?? u;
+  if (variant === "thumb") {
+    return cfImageForThumbnail(normalized) ?? normalized;
+  }
+  return cfImageForLightbox(normalized) ?? normalized;
+}

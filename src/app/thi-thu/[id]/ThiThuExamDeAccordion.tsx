@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 
+import { cfResolvedImageUrl } from "@/lib/cfImageUrl";
 import type { ThiThuDeThiRow } from "@/types/thi-thu";
 
 function ChevMini() {
@@ -45,9 +45,16 @@ export default function ThiThuExamDeAccordion({
                   key={`${idx}-${i}`}
                   type="button"
                   className="relative aspect-[4/3] overflow-hidden rounded-lg bg-neutral-100 ring-1 ring-black/5"
-                  onClick={() => setLightbox(url)}
+                  onClick={() => setLightbox(cfResolvedImageUrl(url, "full"))}
                 >
-                  <Image src={url} alt="" fill className="object-contain" sizes="(max-width:640px) 100vw, 50vw" />
+                  {/* eslint-disable-next-line @next/next/no-img-element -- URL đề từ admin; cần img tùy host + chuẩn hóa CF */}
+                  <img
+                    src={cfResolvedImageUrl(url, "thumb")}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-contain"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
                 </button>
               ))}
             </div>
@@ -63,7 +70,7 @@ export default function ThiThuExamDeAccordion({
           aria-label="Đóng"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox} alt="" className="max-h-[90vh] max-w-full object-contain" />
+          <img src={lightbox} alt="" className="max-h-[90vh] max-w-full object-contain" referrerPolicy="no-referrer" />
         </button>
       ) : null}
     </div>

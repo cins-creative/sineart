@@ -1,16 +1,51 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { flushSync } from "react-dom";
 
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
+import { cfResolvedImageUrl } from "@/lib/cfImageUrl";
 import type { ThiThuDeThiItem } from "@/types/thi-thu";
+
+/** Chuẩn hóa URL dán tay — bỏ BOM/nháy, chấp nhận `//cdn…`. Trả null nếu không phải http(s). */
+function normalizeManualImageUrl(raw: string): string | null {
+  let u = raw
+    .trim()
+    .replace(/^\uFEFF/, "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "");
+  if (
+    (u.startsWith('"') && u.endsWith('"')) ||
+    (u.startsWith("'") && u.endsWith("'"))
+  ) {
+    u = u.slice(1, -1).trim();
+  }
+  if (/^\/\/.+/.test(u)) {
+    u = `https:${u}`;
+  }
+  if (!/^https?:\/\/.+/i.test(u)) {
+    return null;
+  }
+  return u;
+}
 
 type Props = {
   items: ThiThuDeThiItem[];
   onChange: Dispatch<SetStateAction<ThiThuDeThiItem[]>>;
   readOnly?: boolean;
 };
+
+/** Gọi trước khi POST lưu kỳ — blur ô URL đang focus để kịp ghi `anh_urls` (tránh race với React batch). */
+export function blurFocusedThiThuManualUrlInput(): void {
+  if (typeof document === "undefined") return;
+  const inputs = document.querySelectorAll<HTMLInputElement>("[data-tti-de-manual-url]");
+  for (const el of inputs) {
+    if (document.activeElement === el) {
+      el.blur();
+      return;
+    }
+  }
+}
 
 /**
  * Một dòng đề — upload ảnh qua `/admin/api/upload-cf-image` (Cloudflare), URL gắn vào `anh_urls`;
@@ -34,11 +69,14 @@ function DeThiRow({
   const [uploadBatch, setUploadBatch] = useState<{ cur: number; total: number } | null>(null);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [manualUrl, setManualUrl] = useState("");
+  const manualUrlRef = useRef(manualUrl);
+  manualUrlRef.current = manualUrl;
 
   /** Không truyền `onProgress` → client dùng `fetch` (không XHR). Tránh lỗi proxy/trình duyệt chỉ với upload có tiến độ byte. */
   const handleFiles = useCallback(
     async (fileList: FileList | null) => {
       if (!fileList?.length || readOnly) return;
+      const targetThuTu = row.thu_tu;
       const list = Array.from(fileList);
       setUploadErr(null);
       setUploadBusy(true);
@@ -53,11 +91,15 @@ function DeThiRow({
           urlList.push(url);
           setUploadPct(Math.round(((i + 1) / list.length) * 100));
         }
-        setRows((prev) =>
-          prev.map((r, i) =>
-            i === idx ? { ...r, anh_urls: [...(r.anh_urls ?? []), ...urlList] } : r,
-          ),
-        );
+        flushSync(() => {
+          setRows((prev) =>
+            prev.map((r) =>
+              r.thu_tu === targetThuTu
+                ? { ...r, anh_urls: [...(r.anh_urls ?? []), ...urlList] }
+                : r,
+            ),
+          );
+        });
       } catch (e) {
         setUploadErr(e instanceof Error ? e.message : "Tải ảnh thất bại.");
       } finally {
@@ -66,22 +108,47 @@ function DeThiRow({
         setUploadBatch(null);
       }
     },
-    [idx, readOnly, setRows],
+    [readOnly, row.thu_tu, setRows],
+  );
+
+  /**
+   * Đưa text trong ô URL vào `anh_urls` (trùng thì bỏ qua).
+   * `silent`: blur — không báo lỗi nếu chưa phải URL hợp lệ; nút «Thêm URL» — báo lỗi.
+   */
+  const commitManualUrl = useCallback(
+    (opts: { silent: boolean }): boolean => {
+      const raw = manualUrlRef.current;
+      if (!raw.trim()) return false;
+      const normalized = normalizeManualImageUrl(raw);
+      if (!normalized) {
+        if (!opts.silent) {
+          setUploadErr(
+            "URL ảnh phải là http(s), ví dụ https://… Hoặc //cdn… (sẽ thêm https).",
+          );
+        }
+        return false;
+      }
+      setUploadErr(null);
+      const targetThuTu = row.thu_tu;
+      flushSync(() => {
+        setRows((prev) =>
+          prev.map((r) => {
+            if (r.thu_tu !== targetThuTu) return r;
+            const urls = r.anh_urls ?? [];
+            if (urls.includes(normalized)) return r;
+            return { ...r, anh_urls: [...urls, normalized] };
+          }),
+        );
+      });
+      setManualUrl("");
+      return true;
+    },
+    [row.thu_tu, setRows],
   );
 
   const appendManualImageUrl = useCallback(() => {
-    const u = manualUrl.trim();
-    if (!u) return;
-    if (!/^https?:\/\/.+/i.test(u)) {
-      setUploadErr("URL ảnh phải bắt đầu bằng http:// hoặc https://");
-      return;
-    }
-    setUploadErr(null);
-    setRows((prev) =>
-      prev.map((r, i) => (i === idx ? { ...r, anh_urls: [...(r.anh_urls ?? []), u] } : r)),
-    );
-    setManualUrl("");
-  }, [idx, manualUrl, setRows]);
+    void commitManualUrl({ silent: false });
+  }, [commitManualUrl]);
 
   return (
     <div className="tti-de-item-w">
@@ -94,7 +161,8 @@ function DeThiRow({
           value={row.tieu_de}
           onChange={(e) => {
             const v = e.target.value;
-            setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, tieu_de: v } : r)));
+            const tt = row.thu_tu;
+            setRows((prev) => prev.map((r) => (r.thu_tu === tt ? { ...r, tieu_de: v } : r)));
           }}
         />
         <button type="button" className="tti-de-del flex-shrink-0" onClick={onDelete} disabled={readOnly}>
@@ -140,14 +208,18 @@ function DeThiRow({
               <span className="mb-1 block text-[11px] font-bold text-[#2d2020]">Hoặc dán URL ảnh</span>
               <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch">
                 <input
-                  type="url"
+                  type="text"
                   inputMode="url"
                   autoComplete="off"
-                  placeholder="https://…"
+                  data-tti-de-manual-url
+                  placeholder="https://… (rời ô hoặc Lưu sẽ ghi vào đề)"
                   value={manualUrl}
                   disabled={uploadBusy}
                   className="tti-f-in min-w-0 flex-1"
                   onChange={(e) => setManualUrl(e.target.value)}
+                  onBlur={() => {
+                    void commitManualUrl({ silent: true });
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -180,24 +252,27 @@ function DeThiRow({
             <div key={`${url}-${ui}`} className="tti-de-img-th">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={url}
+                src={cfResolvedImageUrl(url, "thumb")}
                 alt=""
                 className="h-full w-full object-cover"
                 loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
+                referrerPolicy="no-referrer"
               />
               <button
                 type="button"
                 className="tti-de-img-x"
                 aria-label="Xóa ảnh"
                 disabled={readOnly}
-                onClick={() =>
+                onClick={() => {
+                  const tt = row.thu_tu;
                   setRows((prev) =>
-                    prev.map((r, i) =>
-                      i === idx ? { ...r, anh_urls: (r.anh_urls ?? []).filter((_, j) => j !== ui) } : r,
+                    prev.map((r) =>
+                      r.thu_tu === tt
+                        ? { ...r, anh_urls: (r.anh_urls ?? []).filter((_, j) => j !== ui) }
+                        : r,
                     ),
-                  )
-                }
+                  );
+                }}
               >
                 ×
               </button>
@@ -250,7 +325,7 @@ export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Pr
 
       {items.map((row, idx) => (
         <DeThiRow
-          key={`de-${idx}-${row.thu_tu}`}
+          key={`de-${row.thu_tu}-${idx}`}
           row={row}
           idx={idx}
           readOnly={readOnly}

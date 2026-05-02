@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 
+import { extractWorkerImageUploadUrl } from "@/lib/admin/cf-image-upload";
+
 export const runtime = "nodejs";
 
 const DEFAULT_WORKER = "https://sine-art-api.nguyenthanhtu-nkl.workers.dev";
 
-/** Public upload bài thi → Worker `upload-cf-images` (cùng luồng phòng học chat). */
+/** Public upload bài thi → Worker `upload-cf-images` (cùng luồng admin /cf-image-upload). */
 export async function POST(req: Request): Promise<NextResponse> {
   const secret =
     process.env.SINE_ART_WORKER_SECRET?.trim() || process.env.WORKER_API_SECRET?.trim();
@@ -45,7 +47,22 @@ export async function POST(req: Request): Promise<NextResponse> {
     body: out,
   });
 
-  const json: unknown = await res.json().catch(() => ({}));
+  const rawText = await res.text();
+  let json: unknown = {};
+  try {
+    json = rawText.trim() ? JSON.parse(rawText) : {};
+  } catch {
+    const preview = rawText.replace(/\s+/g, " ").trim().slice(0, 160);
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          preview || `Phản hồi worker không phải JSON (HTTP ${res.status}).`,
+      },
+      { status: 502 },
+    );
+  }
+
   if (!res.ok) {
     const msg =
       typeof json === "object" && json !== null && "error" in json
@@ -54,14 +71,23 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: msg }, { status: 502 });
   }
 
-  if (
-    typeof json === "object" &&
-    json !== null &&
-    (json as { success?: boolean }).success === true &&
-    typeof (json as { url?: unknown }).url === "string"
-  ) {
-    return NextResponse.json({ ok: true, url: (json as { url: string }).url });
+  const extracted = extractWorkerImageUploadUrl(json);
+  if (extracted) {
+    return NextResponse.json({ ok: true, url: extracted });
   }
 
-  return NextResponse.json({ ok: false, error: "Phản hồi worker không hợp lệ." }, { status: 502 });
+  const hint =
+    typeof json === "object" && json !== null && "error" in json
+      ? String((json as { error?: unknown }).error)
+      : rawText.slice(0, 280);
+  return NextResponse.json(
+    {
+      ok: false,
+      error:
+        hint && hint !== "[object Object]"
+          ? hint
+          : "Phản hồi worker không có URL ảnh hợp lệ.",
+    },
+    { status: 502 },
+  );
 }

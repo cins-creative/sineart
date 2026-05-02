@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 const CAPTURE_W = 1080;
 const CAPTURE_H = 1920;
 
+const UPLOAD_FETCH_MS = 120_000;
+
 /** iOS/Android: getUserMedia sau setState thường không được cấp quyền — dùng `<input capture>` như LuuBaiHocVien. */
 function preferNativeCameraCapture(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -129,14 +131,40 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
     };
   }, [open, method, camFacing]);
 
-  const uploadBlob = useCallback(async (blob: Blob, name: string) => {
-    const fd = new FormData();
-    fd.append("file", blob, name);
-    const res = await fetch("/api/thi-thu/upload-image", { method: "POST", body: fd });
-    const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
-    if (!res.ok || !j.ok || !j.url) throw new Error(j.error ?? "Upload lỗi");
-    return j.url;
+  const postUploadImage = useCallback(async (body: FormData) => {
+    const ac = new AbortController();
+    const timer = window.setTimeout(() => ac.abort(), UPLOAD_FETCH_MS);
+    try {
+      const res = await fetch("/api/thi-thu/upload-image", {
+        method: "POST",
+        body,
+        signal: ac.signal,
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        url?: string;
+        error?: string;
+      };
+      if (!res.ok || !j.ok || !j.url) throw new Error(j.error ?? "Upload lỗi");
+      return j.url;
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") {
+        throw new Error("Upload quá lâu — kiểm tra mạng và thử lại.");
+      }
+      throw e;
+    } finally {
+      window.clearTimeout(timer);
+    }
   }, []);
+
+  const uploadBlob = useCallback(
+    async (blob: Blob, name: string) => {
+      const fd = new FormData();
+      fd.append("file", blob, name);
+      return postUploadImage(fd);
+    },
+    [postUploadImage],
+  );
 
   const addFiles = useCallback(
     async (files: FileList | null) => {
@@ -148,10 +176,8 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
         for (const file of Array.from(files)) {
           const fd = new FormData();
           fd.append("file", file);
-          const res = await fetch("/api/thi-thu/upload-image", { method: "POST", body: fd });
-          const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
-          if (!res.ok || !j.ok || !j.url) throw new Error(j.error ?? "Upload lỗi");
-          next.push(j.url);
+          const url = await postUploadImage(fd);
+          next.push(url);
         }
         setUrls((u) => [...u, ...next]);
       } catch (e) {
@@ -160,7 +186,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
         setUploading(false);
       }
     },
-    [],
+    [postUploadImage],
   );
 
   const openFilePicker = useCallback(() => {
@@ -362,7 +388,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                 <div className="tti-upload-methods">
                   <button
                     type="button"
-                    className={`tti-upload-method tti-um-cam ${method === "cam" ? "picked" : ""}`}
+                    className="tti-upload-method tti-um-cam"
                     onClick={() => {
                       if (preferNativeCameraCapture()) {
                         cameraCaptureRef.current?.click();
@@ -391,7 +417,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                   </button>
                   <button
                     type="button"
-                    className={`tti-upload-method tti-um-file ${method === "file" ? "picked" : ""}`}
+                    className="tti-upload-method tti-um-file"
                     onClick={selectUploadFile}
                   >
                     <div className="tti-upload-method-icon text-[#7c6fcd]">
@@ -421,7 +447,7 @@ export default function ThiThuSubmitModal({ kyId, open, onClose }: Props) {
                 <input
                   ref={cameraCaptureRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/*"
                   capture="environment"
                   className="hidden"
                   disabled={uploading}

@@ -119,7 +119,7 @@ export async function handleAdminCfImageUpload(req: Request): Promise<NextRespon
 }
 
 /** Chuẩn hoá URL từ `{ success, url }` hoặc payload Cloudflare Images v4 lẫn vào. */
-function extractWorkerImageUploadUrl(json: unknown): string | null {
+export function extractWorkerImageUploadUrl(json: unknown): string | null {
   if (typeof json !== "object" || json === null) return null;
   const o = json as Record<string, unknown>;
 

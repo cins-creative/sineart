@@ -6,7 +6,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { staffBelongsToTuVanPhong } from "@/lib/admin/dashboard-nav-visibility";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
-import { isValidStudentEmail, STUDENT_EMAIL_REQUIREMENT_VI } from "@/lib/donghocphi/profile-step1";
+import {
+  isValidStudentEmail,
+  normalizeHocVienEmail,
+  STUDENT_EMAIL_REQUIREMENT_VI,
+} from "@/lib/donghocphi/profile-step1";
 import { firstApplicableComboDiscountDong } from "@/lib/donghocphi/combo-discount";
 import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
@@ -214,7 +218,10 @@ function hocVienProfileRow(payload: HocVienProfilePayload): Record<string, strin
   const nam_thi = payload.nam_thi != null && Number.isFinite(payload.nam_thi) ? Math.trunc(payload.nam_thi) : null;
   return {
     full_name,
-    email: payload.email != null && String(payload.email).trim() !== "" ? String(payload.email).trim() : null,
+    email:
+      payload.email != null && String(payload.email).trim() !== ""
+        ? normalizeHocVienEmail(String(payload.email))
+        : null,
     sdt: cleanPhone(payload.sdt),
     facebook: payload.facebook != null && String(payload.facebook).trim() !== "" ? String(payload.facebook).trim() : null,
     sex: payload.sex != null && String(payload.sex).trim() !== "" ? String(payload.sex).trim() : null,

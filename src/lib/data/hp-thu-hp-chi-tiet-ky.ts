@@ -15,6 +15,19 @@ const IN_CHUNK = 200;
  */
 export const HP_THU_HP_CHI_TIET_DA_THANH_TOAN = "Đã thanh toán";
 
+/** Trạng thái dòng chi tiết — không dùng để suy kỳ học trong `fetchKyByKhoaHocVienIds` (đơn chưa TT được bỏ qua như không tồn tại). */
+export const HP_THU_HP_CHI_TIET_CHO_THANH_TOAN = "Chờ thanh toán";
+
+/** Chuẩn hoá so khớp `status` (tránh lệch khoảng trắng / hậu tố DB). */
+export function hpChiTietIsPaidStatus(status: unknown): boolean {
+  const s = String(status ?? "")
+    .trim()
+    .normalize("NFC");
+  if (s === HP_THU_HP_CHI_TIET_DA_THANH_TOAN) return true;
+  const lower = s.toLowerCase();
+  return lower === "đã thanh toán" || lower === "da thanh toan";
+}
+
 /** @deprecated Dùng `HP_THU_HP_CHI_TIET_DA_THANH_TOAN` — cùng giá trị. */
 export const HP_DON_DA_THANH_TOAN = HP_THU_HP_CHI_TIET_DA_THANH_TOAN;
 
@@ -105,14 +118,112 @@ function maxIsoYmd(a: string | null, b: string): string | null {
   return b > a ? b : a;
 }
 
+type HpRowAgg = {
+  id: number;
+  khoa_hoc_vien: number;
+  status: string;
+  ngay_dau_ky: unknown;
+  ngay_cuoi_ky: unknown;
+  created_at: unknown;
+  goi_hoc_phi: number | null;
+  goi_so_buoi: number | null;
+};
+
+/**
+ * Gộp kỳ từ một tập dòng chi tiết đồng nhất (vd. chỉ đã TT hoặc chỉ chờ TT).
+ * Trả null nếu không suy ra được `ngay_cuoi_ky`.
+ */
+function aggregateKyFromChiTietRows(rows: HpRowAgg[]): HpResolvedKy | null {
+  if (!rows.length) return null;
+
+  let anchor: string | null = null;
+  for (const r of rows) {
+    const d = sliceKyDate(r.ngay_dau_ky);
+    if (d) anchor = minIsoYmd(anchor, d);
+  }
+
+  let totalBuoi = 0;
+  for (const r of rows) {
+    totalBuoi += linePurchasedBuoi(r);
+  }
+
+  const sortedNewestFirst = [...rows].sort((a, b) => {
+    const ca = pickCreatedAtMs(a.created_at);
+    const cb = pickCreatedAtMs(b.created_at);
+    if (cb !== ca) return cb - ca;
+    return b.id - a.id;
+  });
+  const chiTietId = sortedNewestFirst[0]!.id;
+
+  let ngay_dau_ky: string | null = anchor;
+  let ngay_cuoi_ky: string | null = null;
+
+  if (anchor && totalBuoi > 0) {
+    const anchorDt = parseLocalDateFromIso(anchor);
+    if (anchorDt) {
+      ngay_cuoi_ky = formatIsoLocalDate(addCalendarDays(anchorDt, totalBuoi - 1));
+    }
+  }
+
+  if (!ngay_cuoi_ky) {
+    let fallbackCuoi: string | null = null;
+    for (const r of rows) {
+      const c = sliceKyDate(r.ngay_cuoi_ky);
+      if (c) fallbackCuoi = maxIsoYmd(fallbackCuoi, c);
+    }
+    if (!fallbackCuoi) return null;
+    ngay_cuoi_ky = fallbackCuoi;
+    if (!ngay_dau_ky) {
+      for (const r of rows) {
+        const d = sliceKyDate(r.ngay_dau_ky);
+        if (d) ngay_dau_ky = minIsoYmd(ngay_dau_ky, d);
+      }
+    }
+  }
+
+  return {
+    chi_tiet_id: chiTietId,
+    ngay_dau_ky,
+    ngay_cuoi_ky,
+  };
+}
+
+/**
+ * Kỳ hiệu lực cho một ghi danh chỉ từ các dòng **đã thanh toán**.
+ * - Ưu tiên **`max(ngay_cuoi_ky)`** trên các dòng đã TT: khớp chuỗi gia hạn (gói sau neo ngày kết thúc xa hơn); các gói chưa TT không tham gia.
+ * - Nếu không có `ngay_cuoi_ky` hợp lệ trên bất kỳ dòng đã TT nào → fallback `aggregateKyFromChiTietRows` (min `ngay_dau` + tổng buổi).
+ */
+function resolvePaidEnrollmentKy(paidRows: HpRowAgg[]): HpResolvedKy | null {
+  if (!paidRows.length) return null;
+
+  let maxCuoi: string | null = null;
+  for (const r of paidRows) {
+    const c = sliceKyDate(r.ngay_cuoi_ky);
+    if (c) maxCuoi = maxIsoYmd(maxCuoi, c);
+  }
+
+  if (maxCuoi) {
+    let minDau: string | null = null;
+    for (const r of paidRows) {
+      const d = sliceKyDate(r.ngay_dau_ky);
+      if (d) minDau = minIsoYmd(minDau, d);
+    }
+    const atMax = paidRows.filter((r) => sliceKyDate(r.ngay_cuoi_ky) === maxCuoi);
+    const winner = atMax.reduce((a, b) => (b.id > a.id ? b : a));
+    return {
+      chi_tiet_id: winner.id,
+      ngay_dau_ky: minDau,
+      ngay_cuoi_ky: maxCuoi,
+    };
+  }
+
+  return aggregateKyFromChiTietRows(paidRows);
+}
+
 /**
  * Một ghi danh (`ql_quan_ly_hoc_vien.id` = `hp_thu_hp_chi_tiet.khoa_hoc_vien`):
- * chỉ dòng `hp_thu_hp_chi_tiet` có `status` = «Đã thanh toán».
- * **Cộng dồn kỳ:** `ngay_dau_ky` = mốc đầu sớm nhất trong các dòng đã TT;
- * tổng buổi = cộng từng dòng (ưu tiên `so_buoi` gói, không thì khoảng ngày trên dòng);
- * `ngay_cuoi_ky` = mốc đầu + (tổng buổi − 1) ngày lịch.
- * `chi_tiet_id` = dòng đã TT mới nhất (`created_at` ↓) để admin cập nhật một dòng đại diện.
- * Không có dòng đã TT → không ghi map.
+ * chỉ các dòng **Đã thanh toán** mới được cộng dồn thành kỳ học (`ngay_*`).
+ * Đơn «Chờ thanh toán» không làm thay đổi kỳ hiển thị — học viên vẫn thấy kỳ theo các lần đã TT trước đó (modal «Vào học», đóng học phí bootstrap).
  */
 export async function fetchKyByKhoaHocVienIds(
   supabase: SupabaseClient,
@@ -122,18 +233,7 @@ export async function fetchKyByKhoaHocVienIds(
   const unique = [...new Set(qlhvIds.filter((n) => Number.isFinite(n) && n > 0))] as number[];
   if (!unique.length) return map;
 
-  type HpRow = {
-    id: number;
-    khoa_hoc_vien: number;
-    status: string;
-    ngay_dau_ky: unknown;
-    ngay_cuoi_ky: unknown;
-    created_at: unknown;
-    goi_hoc_phi: number | null;
-    goi_so_buoi: number | null;
-  };
-
-  const allHp: HpRow[] = [];
+  const allHp: HpRowAgg[] = [];
   for (let i = 0; i < unique.length; i += IN_CHUNK) {
     const chunk = unique.slice(i, i + IN_CHUNK);
     let from = 0;
@@ -180,63 +280,21 @@ export async function fetchKyByKhoaHocVienIds(
     }
   }
 
-  const byKcv = new Map<number, HpRow[]>();
+  const byKcv = new Map<number, HpRowAgg[]>();
   for (const r of allHp) {
     if (!byKcv.has(r.khoa_hoc_vien)) byKcv.set(r.khoa_hoc_vien, []);
     byKcv.get(r.khoa_hoc_vien)!.push(r);
   }
 
   for (const [kcv, rows] of byKcv) {
-    const paidRows = rows.filter((r) => r.status === HP_THU_HP_CHI_TIET_DA_THANH_TOAN);
-    if (!paidRows.length) continue;
+    const paidRows = rows.filter((r) => hpChiTietIsPaidStatus(r.status));
+    const resolved = resolvePaidEnrollmentKy(paidRows);
+    if (!resolved) continue;
 
-    let anchor: string | null = null;
-    for (const r of paidRows) {
-      const d = sliceKyDate(r.ngay_dau_ky);
-      if (d) anchor = minIsoYmd(anchor, d);
-    }
-
-    let totalBuoi = 0;
-    for (const r of paidRows) {
-      totalBuoi += linePurchasedBuoi(r);
-    }
-
-    const sortedPaidNewestFirst = [...paidRows].sort((a, b) => {
-      const ca = pickCreatedAtMs(a.created_at);
-      const cb = pickCreatedAtMs(b.created_at);
-      if (cb !== ca) return cb - ca;
-      return b.id - a.id;
-    });
-    const chiTietId = sortedPaidNewestFirst[0]!.id;
-
-    let ngay_dau_ky: string | null = anchor;
-    let ngay_cuoi_ky: string | null = null;
-
-    if (anchor && totalBuoi > 0) {
-      const anchorDt = parseLocalDateFromIso(anchor);
-      if (anchorDt) {
-        ngay_cuoi_ky = formatIsoLocalDate(addCalendarDays(anchorDt, totalBuoi - 1));
-      }
-    }
-
-    if (!ngay_cuoi_ky) {
-      let fallbackCuoi: string | null = null;
-      for (const r of paidRows) {
-        const c = sliceKyDate(r.ngay_cuoi_ky);
-        if (c) fallbackCuoi = maxIsoYmd(fallbackCuoi, c);
-      }
-      if (!fallbackCuoi) continue;
-      ngay_cuoi_ky = fallbackCuoi;
-      if (!ngay_dau_ky) {
-        for (const r of paidRows) {
-          const d = sliceKyDate(r.ngay_dau_ky);
-          if (d) ngay_dau_ky = minIsoYmd(ngay_dau_ky, d);
-        }
-      }
-    }
+    const { chi_tiet_id, ngay_dau_ky, ngay_cuoi_ky } = resolved;
 
     map.set(kcv, {
-      chi_tiet_id: chiTietId,
+      chi_tiet_id,
       ngay_dau_ky,
       ngay_cuoi_ky,
     });

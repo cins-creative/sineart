@@ -6,6 +6,7 @@ import {
 import {
   dbRowToStep1Fields,
   isValidStudentEmail,
+  normalizeHocVienEmail,
   type QlHocVienStep1Fields,
 } from "@/lib/donghocphi/profile-step1";
 import {
@@ -87,18 +88,18 @@ export async function DongHocPhiPaymentSection({
   let initialHocVienId: number | null = null;
   let initialAvatarUrl: string | null = null;
 
-  // Ưu tiên email từ URL; nếu không có thì dùng email của user đang đăng nhập
-  let effectiveEmail = initialEmail;
+  // Ưu tiên email từ URL; nếu không có thì dùng email của user đang đăng nhập (đều chuẩn hoá lowercase phía server).
+  let effectiveEmail = initialEmail ? normalizeHocVienEmail(initialEmail) : null;
   if (!effectiveEmail && supabase) {
     const { data: authData } = await supabase.auth.getUser();
-    const authEmail = authData?.user?.email?.trim().toLowerCase() ?? null;
+    const authEmail = authData?.user?.email ? normalizeHocVienEmail(authData.user.email) : null;
     if (authEmail && isValidStudentEmail(authEmail)) {
       effectiveEmail = authEmail;
     }
   }
 
   if (supabase && effectiveEmail && isValidStudentEmail(effectiveEmail)) {
-    const em = effectiveEmail.trim().toLowerCase();
+    const em = normalizeHocVienEmail(effectiveEmail);
     const { data: hvRow, error: hvErr } = await supabase
       .from("ql_thong_tin_hoc_vien")
       .select("id, full_name, sdt, email, sex, nam_thi, loai_khoa_hoc, facebook, avatar")

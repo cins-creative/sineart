@@ -18,6 +18,7 @@ import HocVienAvatarEditor, {
 import {
   dbRowToStep1Fields,
   isValidStudentEmail,
+  normalizeHocVienEmail,
   profileCompleteForSkipStep1,
   type QlHocVienStep1Fields,
 } from "@/lib/donghocphi/profile-step1";
@@ -800,6 +801,8 @@ export default function DongHocPhiClient({
   const [serverOrder, setServerOrder] = useState<DongHocPhiServerOrder | null>(null);
   const [orderLoading, setOrderLoading] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
+  /** Bước 3 — tóm tắt đơn: mặc định gọn, mở rộng khi «Xem chi tiết». */
+  const [orderSummaryExpanded, setOrderSummaryExpanded] = useState(false);
 
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paidSnapshot, setPaidSnapshot] = useState<{
@@ -897,6 +900,12 @@ export default function DongHocPhiClient({
   const selectedClasses = useMemo(
     () => lopHoc.filter((c) => selectedClassIds.includes(c.id)),
     [lopHoc, selectedClassIds]
+  );
+
+  /** Tóm tắt cột phải chỉ liệt kê lớp vẫn gia hạn — ẩn «Không gia hạn» cho gọn. */
+  const summaryPayingClasses = useMemo(
+    () => selectedClasses.filter((c) => !skipRenewalByClassId[c.id]),
+    [selectedClasses, skipRenewalByClassId]
   );
 
   /**
@@ -1019,6 +1028,10 @@ export default function DongHocPhiClient({
   useEffect(() => {
     if (!paymentComplete) setPaySuccessModalOpen(false);
   }, [paymentComplete]);
+
+  useEffect(() => {
+    if (step !== 3) setOrderSummaryExpanded(false);
+  }, [step]);
 
   useEffect(() => {
     if (paymentComplete && paidSnapshot) setPaySuccessModalOpen(true);
@@ -1667,7 +1680,7 @@ export default function DongHocPhiClient({
       const studentBody: Record<string, unknown> = {
         full_name: fullName.trim(),
         sdt: phone.trim(),
-        email: email.trim(),
+        email: normalizeHocVienEmail(email),
         sex: sex || null,
         nam_thi: namThiNum != null && Number.isFinite(namThiNum) ? namThiNum : null,
         loai_khoa_hoc: loaiKhoaHoc.trim() || null,
@@ -2369,139 +2382,195 @@ export default function DongHocPhiClient({
                 <div className="dhp-s3-card">
                   <div className="dhp-s3-sec-label">Tóm tắt đơn</div>
                   <div className="dhp-sum-box">
-                    {selectedClasses.map((cls) => {
-                      const skipRenew = Boolean(skipRenewalByClassId[cls.id]);
-                      const selectedFeeId = skipRenew
-                        ? undefined
-                        : pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
-                      const fee =
-                        selectedFeeId != null
-                          ? goiHocPhi.find((f) => f.id === selectedFeeId)
-                          : undefined;
-                      const themBuoiSum =
-                        fee != null && fee.soBuoi != null && Number.isFinite(fee.soBuoi)
-                          ? Math.max(0, Math.round(fee.soBuoi))
-                          : 0;
-                      const sumBlock = computeRenewalBlock(
-                        qlKyByLopId[cls.id],
-                        themBuoiSum,
-                        startOfTodayLocal()
-                      );
-                      return (
-                        <div key={cls.id} className="dhp-sum-block">
-                          <div className="dhp-sr">
-                            <span className="dhp-sk">{cls.tenLop}</span>
-                            <span className="dhp-sv">
-                              {skipRenew
-                                ? "Không gia hạn"
-                                : fee
-                                  ? `${fee.numberValue} ${fee.donVi}`
-                                  : "—"}
-                            </span>
-                          </div>
-                          {!skipRenew && fee && fee.giaGoc > fee.giaThucDong ? (
-                            <div className="dhp-sr">
-                              <span className="dhp-sk dhp-sk--muted">Giá niêm yết</span>
-                              <span className="dhp-sv dhp-sv--strike">{formatVnd(fee.giaGoc)}</span>
-                            </div>
-                          ) : null}
-                          {!skipRenew && fee && fee.discount > 0 ? (
-                            <div className="dhp-sr">
-                              <span className="dhp-sk dhp-sk--muted">Chiết khấu gói</span>
-                              <span className="dhp-sv dhp-sv--disc">−{Math.round(fee.discount)}%</span>
-                            </div>
-                          ) : null}
-                          <div className="dhp-sr">
-                            <span className="dhp-sk dhp-sk--muted">Thành tiền</span>
-                            <span className="dhp-sv dhp-sv--money">
-                              {skipRenew ? "—" : fee ? formatVnd(fee.giaThucDong) : "—"}
-                            </span>
-                          </div>
-                          <div className="dhp-sr">
-                            <span className="dhp-sk dhp-sk--muted">Buổi sau gia hạn</span>
-                            <span className="dhp-sv dhp-sv--sessions">
-                              {skipRenew ? "—" : fee ? `${sumBlock.tongBuoi} buổi` : "—"}
-                            </span>
-                          </div>
-                          <div className="dhp-sdiv" />
-                        </div>
-                      );
-                    })}
-                    {matchedCombo && matchedCombo.giam > 0 ? (
-                      <div
-                        className="dhp-st-row dhp-st-row--combo"
-                        role="status"
-                        aria-label={`Đạt combo ${matchedCombo.combo.ten_combo}, giảm thêm ${formatVnd(matchedCombo.giam)}`}
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: 8,
-                          padding: "8px 12px",
-                          margin: "4px 0",
-                          borderRadius: 10,
-                          border: "1px solid #10b98133",
-                          background: "linear-gradient(90deg, #ecfdf508, #d1fae520)",
-                        }}
+                    <div className="dhp-sum-toggle-row">
+                      <button
+                        type="button"
+                        className="dhp-sum-toggle"
+                        aria-expanded={orderSummaryExpanded}
+                        onClick={() => setOrderSummaryExpanded((v) => !v)}
                       >
-                        <span style={{ fontSize: 14, lineHeight: "18px" }}>🎉</span>
-                        <div
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 2,
-                          }}
-                        >
-                          <span
+                        {orderSummaryExpanded ? (
+                          <>
+                            Thu gọn <span aria-hidden>▴</span>
+                          </>
+                        ) : (
+                          <>
+                            Xem chi tiết <span aria-hidden>▾</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {orderSummaryExpanded ? (
+                      <>
+                        {summaryPayingClasses.map((cls) => {
+                          const selectedFeeId = pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
+                          const fee =
+                            selectedFeeId != null
+                              ? goiHocPhi.find((f) => f.id === selectedFeeId)
+                              : undefined;
+                          const themBuoiSum =
+                            fee != null && fee.soBuoi != null && Number.isFinite(fee.soBuoi)
+                              ? Math.max(0, Math.round(fee.soBuoi))
+                              : 0;
+                          const sumBlock = computeRenewalBlock(
+                            qlKyByLopId[cls.id],
+                            themBuoiSum,
+                            startOfTodayLocal()
+                          );
+                          return (
+                            <div key={cls.id} className="dhp-sum-block">
+                              <div className="dhp-sr">
+                                <span className="dhp-sk">{cls.tenLop}</span>
+                                <span className="dhp-sv">
+                                  {fee ? `${fee.numberValue} ${fee.donVi}` : "—"}
+                                </span>
+                              </div>
+                              {fee && fee.giaGoc > fee.giaThucDong ? (
+                                <div className="dhp-sr">
+                                  <span className="dhp-sk dhp-sk--muted">Giá niêm yết</span>
+                                  <span className="dhp-sv dhp-sv--strike">{formatVnd(fee.giaGoc)}</span>
+                                </div>
+                              ) : null}
+                              {fee && fee.discount > 0 ? (
+                                <div className="dhp-sr">
+                                  <span className="dhp-sk dhp-sk--muted">Chiết khấu gói</span>
+                                  <span className="dhp-sv dhp-sv--disc">−{Math.round(fee.discount)}%</span>
+                                </div>
+                              ) : null}
+                              <div className="dhp-sr">
+                                <span className="dhp-sk dhp-sk--muted">Thành tiền</span>
+                                <span className="dhp-sv dhp-sv--money">
+                                  {fee ? formatVnd(fee.giaThucDong) : "—"}
+                                </span>
+                              </div>
+                              <div className="dhp-sr">
+                                <span className="dhp-sk dhp-sk--muted">Buổi sau gia hạn</span>
+                                <span className="dhp-sv dhp-sv--sessions">
+                                  {fee ? `${sumBlock.tongBuoi} buổi` : "—"}
+                                </span>
+                              </div>
+                              <div className="dhp-sdiv" />
+                            </div>
+                          );
+                        })}
+                        {matchedCombo && matchedCombo.giam > 0 ? (
+                          <div
+                            className="dhp-st-row dhp-st-row--combo"
+                            role="status"
+                            aria-label={`Đạt combo ${matchedCombo.combo.ten_combo}, giảm thêm ${formatVnd(matchedCombo.giam)}`}
                             style={{
-                              fontSize: 12,
-                              color: "#047857",
-                              fontWeight: 600,
-                              wordBreak: "break-word",
-                              lineHeight: 1.35,
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: 8,
+                              padding: "8px 12px",
+                              margin: "4px 0",
+                              borderRadius: 10,
+                              border: "1px solid #10b98133",
+                              background: "linear-gradient(90deg, #ecfdf508, #d1fae520)",
                             }}
                           >
-                            Đạt combo:{" "}
-                            <strong style={{ fontWeight: 700 }}>
-                              {matchedCombo.combo.ten_combo}
-                            </strong>
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "#047857",
-                              fontWeight: 500,
-                            }}
-                          >
-                            Giảm thêm{" "}
-                            <strong
+                            <span style={{ fontSize: 14, lineHeight: "18px" }}>🎉</span>
+                            <div
                               style={{
-                                fontWeight: 700,
-                                fontVariantNumeric: "tabular-nums",
+                                flex: 1,
+                                minWidth: 0,
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 2,
                               }}
                             >
-                              {formatVnd(matchedCombo.giam)}
-                            </strong>
-                          </span>
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  color: "#047857",
+                                  fontWeight: 600,
+                                  wordBreak: "break-word",
+                                  lineHeight: 1.35,
+                                }}
+                              >
+                                Đạt combo:{" "}
+                                <strong style={{ fontWeight: 700 }}>
+                                  {matchedCombo.combo.ten_combo}
+                                </strong>
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: "#047857",
+                                  fontWeight: 500,
+                                }}
+                              >
+                                Giảm thêm{" "}
+                                <strong
+                                  style={{
+                                    fontWeight: 700,
+                                    fontVariantNumeric: "tabular-nums",
+                                  }}
+                                >
+                                  {formatVnd(matchedCombo.giam)}
+                                </strong>
+                              </span>
+                            </div>
+                          </div>
+                        ) : null}
+                        {summaryDiscountTotalDong > 0 ? (
+                          <div className="dhp-st-row dhp-st-row--save" role="status">
+                            <span className="dhp-st-label dhp-st-label--save">Tổng đã giảm giá</span>
+                            <span
+                              className="dhp-st-val dhp-st-val--save"
+                              aria-label={`Tổng đã giảm giá ${formatVnd(summaryDiscountTotalDong)}`}
+                            >
+                              {formatVnd(summaryDiscountTotalDong)}
+                            </span>
+                          </div>
+                        ) : null}
+                        <div className="dhp-st-row">
+                          <span className="dhp-st-label">Tổng</span>
+                          <span className="dhp-st-val">{formatVnd(displayInvoiceTotal)}</span>
                         </div>
-                      </div>
-                    ) : null}
-                    {summaryDiscountTotalDong > 0 ? (
-                      <div className="dhp-st-row dhp-st-row--save" role="status">
-                        <span className="dhp-st-label dhp-st-label--save">Tổng đã giảm giá</span>
-                        <span
-                          className="dhp-st-val dhp-st-val--save"
-                          aria-label={`Tổng đã giảm giá ${formatVnd(summaryDiscountTotalDong)}`}
-                        >
-                          {formatVnd(summaryDiscountTotalDong)}
-                        </span>
-                      </div>
-                    ) : null}
-                    <div className="dhp-st-row">
-                      <span className="dhp-st-label">Tổng</span>
-                      <span className="dhp-st-val">{formatVnd(displayInvoiceTotal)}</span>
-                    </div>
+                      </>
+                    ) : (
+                      <>
+                        {summaryPayingClasses.length === 0 ? (
+                          <p className="dhp-sum-empty">
+                            Không có khoản gia hạn trong tóm tắt — các lớp «Không gia hạn» được ẩn khỏi bảng này.
+                          </p>
+                        ) : (
+                          <div className="dhp-sum-compact">
+                            {summaryPayingClasses.map((cls) => {
+                              const selectedFeeId = pickFeeIdForClass(cls, goiHocPhi, feeByClassId);
+                              const fee =
+                                selectedFeeId != null
+                                  ? goiHocPhi.find((f) => f.id === selectedFeeId)
+                                  : undefined;
+                              const sub = fee ? `${fee.numberValue} ${fee.donVi}` : "—";
+                              const money = fee ? formatVnd(fee.giaThucDong) : "—";
+                              return (
+                                <div key={cls.id} className="dhp-sum-compact-item">
+                                  <div className="dhp-sum-compact-meta">
+                                    <span className="dhp-sum-compact-name">{cls.tenLop}</span>
+                                    <span className="dhp-sum-compact-sub">{sub}</span>
+                                  </div>
+                                  <span className="dhp-sum-compact-money">{money}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {summaryDiscountTotalDong > 0 ? (
+                          <div className="dhp-sum-compact-save" role="status">
+                            <span>Tổng đã giảm (gói + combo)</span>
+                            <span className="dhp-sum-compact-save-amt">
+                              {formatVnd(summaryDiscountTotalDong)}
+                            </span>
+                          </div>
+                        ) : null}
+                        <div className="dhp-st-row dhp-st-row--compact-total">
+                          <span className="dhp-st-label">Tổng</span>
+                          <span className="dhp-st-val">{formatVnd(displayInvoiceTotal)}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 

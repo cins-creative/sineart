@@ -1801,6 +1801,114 @@
   gap: 6px;
 }
 
+.dhp-sum-toggle-row {
+  width: 100%;
+  margin: 0 0 8px;
+}
+
+.dhp-sum-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px dashed #d6d3d1;
+  background: #fff;
+  color: #57534e;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.dhp-sum-toggle:hover {
+  background: #fafaf9;
+  border-color: #c4c2bf;
+  color: #292524;
+}
+
+.dhp-sum-empty {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f5f5f4;
+  border: 1px solid #e7e5e4;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #78716c;
+}
+
+.dhp-sum-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dhp-sum-compact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.dhp-sum-compact-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dhp-sum-compact-name {
+  font-weight: 800;
+  color: var(--ink, #1c1917);
+  line-height: 1.3;
+}
+
+.dhp-sum-compact-sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: #78716c;
+  line-height: 1.3;
+}
+
+.dhp-sum-compact-money {
+  flex-shrink: 0;
+  font-weight: 800;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink, #1c1917);
+}
+
+.dhp-sum-compact-save {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #065f46;
+}
+
+.dhp-sum-compact-save-amt {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.dhp-st-row--compact-total {
+  margin-top: 2px;
+}
+
 .dhp-sum-block:last-of-type .dhp-sdiv {
   display: none;
 }
@@ -1838,7 +1946,7 @@
 
 .dhp-sv--money {
   font-size: 14px;
-  color: #be185d;
+  color: var(--ink, #1c1917);
   font-weight: 800;
 }
 

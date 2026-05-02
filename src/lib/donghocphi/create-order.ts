@@ -1,4 +1,4 @@
-import { isValidStudentEmail } from "@/lib/donghocphi/profile-step1";
+import { isValidStudentEmail, normalizeHocVienEmail } from "@/lib/donghocphi/profile-step1";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import {
   firstApplicableComboDiscountDong,
@@ -193,7 +193,7 @@ export async function createDongHocPhiOrder(
 ): Promise<DhpCreateOrderResult> {
   const name = student.full_name?.trim() ?? "";
   const sdt = student.sdt?.trim() ?? "";
-  const email = student.email?.trim().toLowerCase() ?? "";
+  const email = normalizeHocVienEmail(student.email);
   const fb = student.facebook?.trim() ?? "";
   if (name.length < 2 || sdt.length < 8 || !isValidStudentEmail(email)) {
     return { ok: false, error: "Thiếu hoặc sai thông tin học viên (họ tên, SĐT, email).", code: "VALIDATION" };
@@ -372,7 +372,7 @@ export async function createDongHocPhiOrder(
   const { data: existingHv, error: hvSelErr } = await supabase
     .from("ql_thong_tin_hoc_vien")
     .select("id")
-    .eq("email", email)
+    .ilike("email", email)
     .order("id", { ascending: false })
     .limit(1)
     .maybeSingle();

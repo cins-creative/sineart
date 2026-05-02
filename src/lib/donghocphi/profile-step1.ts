@@ -32,6 +32,11 @@ export function isValidStudentEmail(s: string): boolean {
   return STUDENT_EMAIL_ALLOWED_DOMAINS.has(domain);
 }
 
+/** Email lưu `ql_thong_tin_hoc_vien.email` và mọi so khớp server — luôn trim + lowercase. */
+export function normalizeHocVienEmail(raw: string | null | undefined): string {
+  return String(raw ?? "").trim().toLowerCase();
+}
+
 /** Đủ điều kiện bỏ qua bước 1 — cần họ tên + SĐT + email hợp lệ */
 export function profileCompleteForSkipStep1(p: QlHocVienStep1Fields): boolean {
   return (
@@ -44,7 +49,7 @@ export function profileCompleteForSkipStep1(p: QlHocVienStep1Fields): boolean {
 export function dbRowToStep1Fields(row: unknown): QlHocVienStep1Fields | null {
   if (row == null || typeof row !== "object") return null;
   const r = row as Record<string, unknown>;
-  const email = String(r.email ?? "").trim().toLowerCase();
+  const email = normalizeHocVienEmail(String(r.email ?? ""));
   if (!email) return null;
   const namRaw = r.nam_thi;
   const namThiNum =

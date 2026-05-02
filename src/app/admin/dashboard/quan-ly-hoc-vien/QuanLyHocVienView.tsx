@@ -55,6 +55,7 @@ import {
   updateQlHvTruongNganhRow,
 } from "@/app/admin/dashboard/quan-ly-hoc-vien/actions";
 import type { DhpDhCatalog } from "@/lib/donghocphi/dh-catalog";
+import { normalizeHocVienEmail } from "@/lib/donghocphi/profile-step1";
 import StudentAvatarCircle from "@/components/StudentAvatarCircle";
 import { calendarDaysRemainingInclusive, cn } from "@/lib/utils";
 
@@ -743,7 +744,7 @@ function CreateStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved
     const namNum = namThi.trim() === "" ? null : Number(namThi);
     const payload = {
       full_name: full_name.trim(),
-      email: email.trim() || null,
+      email: email.trim() ? normalizeHocVienEmail(email) : null,
       sdt: sdt.trim() || null,
       facebook: facebook.trim() || null,
       sex: sex.trim() || null,
@@ -1320,7 +1321,7 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
     const nkt = isoDateInput(student.ngay_ket_thuc).trim();
     const payload = {
       full_name: full_name.trim(),
-      email: email.trim() || null,
+      email: email.trim() ? normalizeHocVienEmail(email) : null,
       sdt: sdt.trim() || null,
       facebook: facebook.trim() || null,
       sex: sex.trim() || null,

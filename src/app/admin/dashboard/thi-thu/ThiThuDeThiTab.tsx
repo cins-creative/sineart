@@ -72,12 +72,16 @@ function DeThiRow({
   const manualUrlRef = useRef(manualUrl);
   manualUrlRef.current = manualUrl;
 
-  /** Không truyền `onProgress` → client dùng `fetch` (không XHR). Tránh lỗi proxy/trình duyệt chỉ với upload có tiến độ byte. */
+  /**
+   * Cập nhật theo **chỉ số dòng `idx`** (khớp `items.map`), không chỉ `thu_tu` — tránh đề trùng/sai `thu_tu`
+   * sau thêm–xóa đề khiến upload không gắn vào đúng hàng (nhìn như «chọn file không có gì»).
+   * Dùng XHR (`onProgress`) giống ảnh cover để luôn có tiến độ.
+   */
   const handleFiles = useCallback(
-    async (fileList: FileList | null) => {
-      if (!fileList?.length || readOnly) return;
-      const targetThuTu = row.thu_tu;
-      const list = Array.from(fileList);
+    async (files: File[] | null) => {
+      if (!files?.length || readOnly) return;
+      const rowIndex = idx;
+      const list = files;
       setUploadErr(null);
       setUploadBusy(true);
       setUploadPct(1);
@@ -87,18 +91,17 @@ function DeThiRow({
         for (let i = 0; i < list.length; i++) {
           const f = list[i]!;
           setUploadBatch({ cur: i + 1, total: list.length });
-          const url = await uploadAdminCfImage(f, f.name);
+          const url = await uploadAdminCfImage(f, f.name, (p) => setUploadPct(p));
           urlList.push(url);
           setUploadPct(Math.round(((i + 1) / list.length) * 100));
         }
         flushSync(() => {
-          setRows((prev) =>
-            prev.map((r) =>
-              r.thu_tu === targetThuTu
-                ? { ...r, anh_urls: [...(r.anh_urls ?? []), ...urlList] }
-                : r,
-            ),
-          );
+          setRows((prev) => {
+            if (rowIndex < 0 || rowIndex >= prev.length) return prev;
+            return prev.map((r, j) =>
+              j === rowIndex ? { ...r, anh_urls: [...(r.anh_urls ?? []), ...urlList] } : r,
+            );
+          });
         });
       } catch (e) {
         setUploadErr(e instanceof Error ? e.message : "Tải ảnh thất bại.");
@@ -108,7 +111,7 @@ function DeThiRow({
         setUploadBatch(null);
       }
     },
-    [readOnly, row.thu_tu, setRows],
+    [idx, readOnly, setRows],
   );
 
   /**
@@ -129,21 +132,21 @@ function DeThiRow({
         return false;
       }
       setUploadErr(null);
-      const targetThuTu = row.thu_tu;
+      const rowIndex = idx;
       flushSync(() => {
-        setRows((prev) =>
-          prev.map((r) => {
-            if (r.thu_tu !== targetThuTu) return r;
-            const urls = r.anh_urls ?? [];
-            if (urls.includes(normalized)) return r;
-            return { ...r, anh_urls: [...urls, normalized] };
-          }),
-        );
+        setRows((prev) => {
+          if (rowIndex < 0 || rowIndex >= prev.length) return prev;
+          const urls = prev[rowIndex]!.anh_urls ?? [];
+          if (urls.includes(normalized)) return prev;
+          return prev.map((r, j) =>
+            j === rowIndex ? { ...r, anh_urls: [...urls, normalized] } : r,
+          );
+        });
       });
       setManualUrl("");
       return true;
     },
-    [row.thu_tu, setRows],
+    [idx, setRows],
   );
 
   const appendManualImageUrl = useCallback(() => {
@@ -161,8 +164,8 @@ function DeThiRow({
           value={row.tieu_de}
           onChange={(e) => {
             const v = e.target.value;
-            const tt = row.thu_tu;
-            setRows((prev) => prev.map((r) => (r.thu_tu === tt ? { ...r, tieu_de: v } : r)));
+            const j = idx;
+            setRows((prev) => prev.map((r, i) => (i === j ? { ...r, tieu_de: v } : r)));
           }}
         />
         <button type="button" className="tti-de-del flex-shrink-0" onClick={onDelete} disabled={readOnly}>
@@ -181,19 +184,37 @@ function DeThiRow({
           <div className="flex flex-col gap-3">
             <div>
               <span className="mb-1 block text-[11px] font-bold text-[#2d2020]">Chọn file từ máy</span>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                multiple
-                disabled={uploadBusy}
-                className="tti-de-plain-file max-w-full"
-                aria-label={`Chọn ảnh đề ${idx + 1}`}
-                onChange={(e) => {
-                  const files = e.target.files;
-                  e.target.value = "";
-                  void handleFiles(files);
-                }}
-              />
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={uploadBusy}
+                  className="tti-de-plain-file min-w-0 flex-1 max-w-full"
+                  aria-label={`Chọn ảnh đề ${idx + 1}`}
+                  onChange={(e) => {
+                    const input = e.target;
+                    /** Chụp `File[]` ngay — `FileList` gắn input, sau `value=""` có thể rỗng trước khi async chạy (im lặng, không upload). */
+                    const picked = input.files?.length ? Array.from(input.files) : [];
+                    input.value = "";
+                    if (picked.length === 0) return;
+                    void handleFiles(picked);
+                  }}
+                />
+                <span
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-black/[0.08] bg-black/[0.03] px-3 py-2 text-center text-[10px] font-bold leading-snug text-[rgba(45,32,32,0.48)] sm:max-w-[118px] sm:py-2.5"
+                  aria-hidden
+                >
+                  image/* — giống cover
+                </span>
+              </div>
+              <p className="mt-1.5 text-[10px] leading-snug text-[rgba(45,32,32,0.48)]">
+                Upload đề và ảnh cover dùng chung API{" "}
+                <code className="rounded bg-black/[0.06] px-1">POST /admin/api/upload-cf-image</code>. Nếu cover lên được mà đề báo lỗi:
+                mở F12 → Network → chọn request đó → xem Status và Response (tin nhắn lỗi từ server/Worker). Biến server:{" "}
+                <code className="rounded bg-black/[0.06] px-1">SINE_ART_WORKER_SECRET</code>,{" "}
+                <code className="rounded bg-black/[0.06] px-1">SINE_ART_WORKER_URL</code> (không phải key CF trong trình duyệt).
+              </p>
               {uploadBusy ? (
                 <p className="tti-de-upload-line" role="status">
                   <span className="tti-spinner tti-spinner--sm mr-2 inline-block align-middle" aria-hidden />
@@ -252,11 +273,11 @@ function DeThiRow({
             <div key={`${url}-${ui}`} className="tti-de-img-th">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={cfResolvedImageUrl(url, "thumb")}
+                src={cfResolvedImageUrl(url, "thumb") || url}
                 alt=""
                 className="h-full w-full object-cover"
                 loading="lazy"
-                referrerPolicy="no-referrer"
+                referrerPolicy="no-referrer-when-downgrade"
               />
               <button
                 type="button"
@@ -264,12 +285,10 @@ function DeThiRow({
                 aria-label="Xóa ảnh"
                 disabled={readOnly}
                 onClick={() => {
-                  const tt = row.thu_tu;
+                  const j = idx;
                   setRows((prev) =>
-                    prev.map((r) =>
-                      r.thu_tu === tt
-                        ? { ...r, anh_urls: (r.anh_urls ?? []).filter((_, j) => j !== ui) }
-                        : r,
+                    prev.map((r, i) =>
+                      i === j ? { ...r, anh_urls: (r.anh_urls ?? []).filter((_, k) => k !== ui) } : r,
                     ),
                   );
                 }}

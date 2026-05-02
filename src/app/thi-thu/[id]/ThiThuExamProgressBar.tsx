@@ -6,6 +6,8 @@ import type { MonThiConfig } from "@/lib/thi-thu-config";
 
 type Props = {
   cfg: MonThiConfig;
+  /** Thời lượng hiển thị (vd. kỳ `[DEBUG 3m]` = 3). Mặc định lấy từ `cfg.thoi_luong_phut`. */
+  durationPhut?: number;
   /** 0..1 — elapsed / thoi_luong_phut */
   progress: number;
   /** Vị trí giải lao (0..1) — Hình họa */
@@ -28,9 +30,12 @@ function markerStyle(phut: number, dur: number): CSSProperties {
   return { left: `${leftPct}%`, transform: "translateX(-50%)", textAlign: "center" as const };
 }
 
-function terminalMilestone(cfg: MonThiConfig): { phut: number; label: string; note: string } | null {
-  const dur = cfg.thoi_luong_phut;
-  const last = [...cfg.moc_timeline].reverse().find((m) => m.phut >= dur);
+function terminalMilestone(
+  cfg: MonThiConfig,
+  dur: number,
+): { phut: number; label: string; note: string } | null {
+  const eligible = cfg.moc_timeline.filter((m) => m.phut <= dur);
+  const last = eligible.length ? eligible[eligible.length - 1]! : null;
   if (!last) return null;
   const note = cfg.nhan_moc_dac_biet[last.phut];
   if (!note) return null;
@@ -42,15 +47,17 @@ function terminalMilestone(cfg: MonThiConfig): { phut: number; label: string; no
  */
 export default function ThiThuExamProgressBar({
   cfg,
+  durationPhut,
   progress,
   breakMarkerPct,
   breakRangeLabel,
   showBreakAbove,
   onTerminalClick,
 }: Props) {
-  const dur = cfg.thoi_luong_phut;
+  const dur = durationPhut ?? cfg.thoi_luong_phut;
   const pct = Math.min(100, Math.max(0, progress * 100));
-  const terminal = terminalMilestone(cfg);
+  const milestones = cfg.moc_timeline.filter((m) => m.phut <= dur);
+  const terminal = terminalMilestone(cfg, dur);
 
   const breakPctNum =
     showBreakAbove && breakMarkerPct != null && Number.isFinite(breakMarkerPct) && dur > 0
@@ -80,7 +87,7 @@ export default function ThiThuExamProgressBar({
         </div>
       </div>
       <div className="tti-pb-mkrs">
-        {cfg.moc_timeline.map((m, i) => {
+        {milestones.map((m, i) => {
           const dacBiet = cfg.nhan_moc_dac_biet[m.phut];
           const isLast = m.phut >= dur;
           const hideInlineNote = Boolean(isLast && dacBiet && terminal && m.phut === terminal.phut);

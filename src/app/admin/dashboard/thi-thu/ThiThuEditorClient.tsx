@@ -8,6 +8,7 @@ import ThiThuDeThiTab from "./ThiThuDeThiTab";
 import ThiThuUploadProgressBar from "./ThiThuUploadProgressBar";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
+import { DEBUG_THI_THU_TITLE_PREFIX } from "@/lib/thi-thu/debug-exam";
 import { normalizeDeThiForSave, parseDeThiJson } from "@/lib/thi-thu/de-thi-json";
 import { parseThoiGianSuaBaiMs } from "@/lib/thi-thu/replay-time";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
@@ -118,6 +119,19 @@ export default function ThiThuEditorClient({
 
   const cfg = useMemo(() => getMonConfig(monThi), [monThi]);
 
+  /** Form «Tạo kỳ mới»: preset để test phòng thi với thời lượng 3 phút (xem `debug-exam.ts`). */
+  const fillDebugMockKy = useCallback(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 2);
+    setTieuDe(`${DEBUG_THI_THU_TITLE_PREFIX}Kiểm tra phòng thi`);
+    setMonThi("trang_tri_mau");
+    setT0(toDatetimeLocal(d.toISOString()));
+    setGlStart("");
+    setGlEnd("");
+    setDeThiItems([{ tieu_de: "Đề mock", anh_urls: [], thu_tu: 1 }]);
+    setTrangThai("published");
+  }, []);
+
   const saveKy = useCallback(async () => {
     if (readOnly) return;
     setSaving(true);
@@ -222,7 +236,6 @@ export default function ThiThuEditorClient({
 
   const tabLabels: Record<ThiThuEditorTab, string> = {
     info: "Thông tin",
-    lich: "Lịch chấm bài",
     nop: "Bài nộp",
   };
 
@@ -256,6 +269,24 @@ export default function ThiThuEditorClient({
 
       <h1 className="tti-adm-editor-title">{initial ? "Sửa kỳ thi" : "Tạo kỳ thi mới"}</h1>
 
+      {!initial?.id && !readOnly ? (
+        <div className="mb-4 rounded-xl border border-violet-200/80 bg-violet-50/90 px-4 py-3">
+          <p className="text-[12px] font-bold text-violet-950">Kỳ DEBUG — thi 3 phút</p>
+          <p className="mt-1 text-[11px] leading-snug text-violet-900/85">
+            Tiêu đề có prefix{" "}
+            <code className="rounded bg-black/[0.06] px-1 font-mono text-[10px]">{DEBUG_THI_THU_TITLE_PREFIX.trimEnd()}</code> để
+            rút thời lượng làm bài còn 3 phút trên trang /thi-thu. Đặt môn «Trang trí màu» (không giải lao). Giờ bắt đầu gợi ý +2 phút — có thể sửa.
+          </p>
+          <button
+            type="button"
+            className="mt-2 rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-bold text-white hover:bg-violet-700"
+            onClick={fillDebugMockKy}
+          >
+            Điền nhanh các trường
+          </button>
+        </div>
+      ) : null}
+
       {readOnly ? (
         <div
           className="mb-4 rounded-xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-950"
@@ -266,7 +297,7 @@ export default function ThiThuEditorClient({
       ) : null}
 
       <div className="tti-adm-tabs">
-        {(["info", "lich", "nop"] as const).map((k) => (
+        {(["info", "nop"] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -294,82 +325,106 @@ export default function ThiThuEditorClient({
       </div>
 
       {tab === "info" ? (
-        <div className="tti-adm-fc tti-adm-fc--editor mt-4">
-          <div className="tti-f-group">
-            <label className="tti-f-lbl">Thumbnail (cover 16:9)</label>
-            <label
-              aria-busy={uploadThumbBusy}
-              className={`tti-upload-zone relative ${uploadThumbBusy ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-50" : ""}`}
-            >
-              {uploadThumbBusy ? (
-                <>
-                  <span className="tti-upload-zone-busy">
-                    <span className="tti-spinner" aria-hidden />
-                    Đang tải ảnh cover lên máy chủ…
-                  </span>
-                  <span>Không đóng trang trong lúc đang gửi file</span>
-                  <ThiThuUploadProgressBar pct={uploadThumbPct} fullWidth caption="Tiến độ tải lên" />
-                </>
-              ) : (
-                <>
-                  Click hoặc chọn ảnh cover
-                  <span>jpg, png, webp — khuyến nghị 1280×720px</span>
-                </>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                disabled={readOnly || uploadThumbBusy}
-                className={
-                  readOnly || uploadThumbBusy
-                    ? "sr-only"
-                    : "absolute inset-0 z-10 m-0 block h-full w-full cursor-pointer opacity-0"
-                }
-                style={{ fontSize: 0 }}
-                title="Chọn ảnh cover"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!f) return;
-                  setUploadThumbErr(null);
-                  setUploadThumbPct(0);
-                  setUploadThumbBusy(true);
-                  try {
-                    const url = await uploadAdminCfImage(f, f.name, (p) => setUploadThumbPct(p));
-                    setThumb(url);
-                  } catch (err) {
-                    setUploadThumbErr(err instanceof Error ? err.message : "Tải ảnh thất bại.");
-                  } finally {
-                    setUploadThumbBusy(false);
-                    setUploadThumbPct(0);
-                  }
-                }}
-              />
-            </label>
-            {uploadThumbErr ? (
-              <p className="tti-upload-err" role="alert">
-                {uploadThumbErr}
-              </p>
-            ) : null}
-            {thumb ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={thumb} alt="" className="tti-upload-preview max-h-40" />
-            ) : null}
-          </div>
+        <div className="tti-adm-editor-stack mt-4">
+          <section className="tti-adm-session" aria-labelledby="tti-sess-cover">
+            <header className="tti-adm-session-hd">
+              <span className="tti-adm-session-ix" aria-hidden>
+                01
+              </span>
+              <h2 id="tti-sess-cover" className="tti-adm-session-ttl">
+                Hiển thị trên danh sách
+              </h2>
+            </header>
+            <div className="tti-adm-session-bd">
+              <div className="tti-adm-session-split">
+                <div className="tti-f-group">
+                  <label className="tti-f-lbl">Thumbnail (cover 16:9)</label>
+                  <label
+                    aria-busy={uploadThumbBusy}
+                    className={`tti-upload-zone relative ${uploadThumbBusy ? "is-busy" : ""} ${readOnly ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {uploadThumbBusy ? (
+                      <>
+                        <span className="tti-upload-zone-busy">
+                          <span className="tti-spinner" aria-hidden />
+                          Đang tải ảnh cover lên máy chủ…
+                        </span>
+                        <span>Không đóng trang trong lúc đang gửi file</span>
+                        <ThiThuUploadProgressBar pct={uploadThumbPct} fullWidth caption="Tiến độ tải lên" />
+                      </>
+                    ) : (
+                      <>
+                        Click hoặc chọn ảnh cover
+                        <span>jpg, png, webp — khuyến nghị 1280×720px</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={readOnly || uploadThumbBusy}
+                      className={
+                        readOnly || uploadThumbBusy
+                          ? "sr-only"
+                          : "absolute inset-0 z-10 m-0 block h-full w-full cursor-pointer opacity-0"
+                      }
+                      style={{ fontSize: 0 }}
+                      title="Chọn ảnh cover"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!f) return;
+                        setUploadThumbErr(null);
+                        setUploadThumbPct(0);
+                        setUploadThumbBusy(true);
+                        try {
+                          const url = await uploadAdminCfImage(f, f.name, (p) => setUploadThumbPct(p));
+                          setThumb(url);
+                        } catch (err) {
+                          setUploadThumbErr(err instanceof Error ? err.message : "Tải ảnh thất bại.");
+                        } finally {
+                          setUploadThumbBusy(false);
+                          setUploadThumbPct(0);
+                        }
+                      }}
+                    />
+                  </label>
+                  {uploadThumbErr ? (
+                    <p className="tti-upload-err" role="alert">
+                      {uploadThumbErr}
+                    </p>
+                  ) : null}
+                  {thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={thumb} alt="" className="tti-upload-preview max-h-40" />
+                  ) : null}
+                </div>
 
-          <div className="tti-f-group">
-            <label htmlFor="tti-ky-tieu-de" className="tti-f-lbl">
-              Tiêu đề kỳ thi *
-            </label>
-            <input
-              id="tti-ky-tieu-de"
-              className="tti-f-in"
-              readOnly={readOnly}
-              value={tieuDe}
-              onChange={(e) => setTieuDe(e.target.value)}
-            />
-          </div>
+                <div className="tti-f-group">
+                  <label htmlFor="tti-ky-tieu-de" className="tti-f-lbl">
+                    Tiêu đề kỳ thi *
+                  </label>
+                  <input
+                    id="tti-ky-tieu-de"
+                    className="tti-f-in"
+                    readOnly={readOnly}
+                    value={tieuDe}
+                    onChange={(e) => setTieuDe(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
 
+          <section className="tti-adm-session" aria-labelledby="tti-sess-schedule">
+            <header className="tti-adm-session-hd">
+              <span className="tti-adm-session-ix" aria-hidden>
+                02
+              </span>
+              <h2 id="tti-sess-schedule" className="tti-adm-session-ttl">
+                Lịch buổi thi
+              </h2>
+            </header>
+            <div className="tti-adm-session-bd">
           <div className="tti-f-row">
             <div className="tti-f-group">
               <label htmlFor="tti-ky-mon" className="tti-f-lbl">
@@ -429,6 +484,19 @@ export default function ThiThuEditorClient({
             </div>
           ) : null}
 
+            </div>
+          </section>
+
+          <section className="tti-adm-session" aria-labelledby="tti-sess-after">
+            <header className="tti-adm-session-hd">
+              <span className="tti-adm-session-ix" aria-hidden>
+                03
+              </span>
+              <h2 id="tti-sess-after" className="tti-adm-session-ttl">
+                Sau buổi thi
+              </h2>
+            </header>
+            <div className="tti-adm-session-bd">
           <div className="tti-f-group">
             <label htmlFor="tti-ky-sua-time" className="tti-f-lbl">
               Thời gian phát video sửa bài
@@ -463,47 +531,10 @@ export default function ThiThuEditorClient({
             />
           </div>
 
-          <ThiThuDeThiTab items={deThiItems} onChange={setDeThiItems} readOnly={readOnly} />
-
-          <div className="tti-f-group">
-            <div className="tti-tog-row">
-              <button
-                type="button"
-                className={`tti-tog ${trangThai === "draft" ? "off" : ""}`}
-                aria-pressed={trangThai === "published"}
-                disabled={readOnly}
-                onClick={() => setTrangThai((s) => (s === "published" ? "draft" : "published"))}
-              />
-              <span className={`tti-tog-lbl ${trangThai === "published" ? "grad" : "muted"}`}>
-                {trangThai === "published" ? "Published — đang công bố" : "Draft — chưa công bố"}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              disabled={readOnly || saving || !tieuDe.trim() || !t0}
-              className="tti-save-btn"
-              onClick={() => void saveKy()}
-            >
-              {saving ? "Đang lưu…" : initial?.id ? "Lưu thông tin" : "Lưu và tiếp tục →"}
-            </button>
-            {initial?.id ? (
-              <span className="text-[11px] text-[rgba(45,32,32,0.55)]">
-                <code>/thi-thu/{initial.id}</code>
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      {tab === "lich" ? (
-        <div className="tti-adm-fc tti-adm-fc--editor mt-4">
           <div className="tti-f-group">
             <span className="tti-f-lbl">Ảnh lịch chấm bài</span>
             <p className="tti-f-hint">
-              Ảnh hiển thị sau khi buổi thi kết thúc (trang kết thúc phòng thi).
+              Hiển thị sau buổi thi và trong phòng thi (thanh chạy) khi học viên đang làm bài — nhắc ngày chấm / live chữa.
             </p>
             <label
               aria-busy={uploadLichBusy}
@@ -520,7 +551,7 @@ export default function ThiThuEditorClient({
                 </>
               ) : (
                 <>
-                  Đổi ảnh lịch chấm
+                  Click hoặc chọn ảnh lịch chấm
                   <span>jpg, png, webp</span>
                 </>
               )}
@@ -564,14 +595,71 @@ export default function ThiThuEditorClient({
               <img src={lich} alt="" className="tti-upload-preview tti-upload-preview--contain max-h-64" />
             ) : null}
           </div>
-          <button
-            type="button"
-            disabled={readOnly || saving}
-            className="tti-save-btn"
-            onClick={() => void saveKy()}
-          >
-            Lưu lịch chấm
-          </button>
+
+            </div>
+          </section>
+
+          <section className="tti-adm-session" aria-labelledby="tti-sess-dethi">
+            <header className="tti-adm-session-hd">
+              <span className="tti-adm-session-ix" aria-hidden>
+                04
+              </span>
+              <h2 id="tti-sess-dethi" className="tti-adm-session-ttl">
+                Đề thi
+              </h2>
+            </header>
+            <div className="tti-adm-session-bd">
+              <ThiThuDeThiTab
+                variant="embedded"
+                items={deThiItems}
+                onChange={setDeThiItems}
+                readOnly={readOnly}
+              />
+            </div>
+          </section>
+
+          <section className="tti-adm-session" aria-labelledby="tti-sess-pub">
+            <header className="tti-adm-session-hd">
+              <span className="tti-adm-session-ix" aria-hidden>
+                05
+              </span>
+              <h2 id="tti-sess-pub" className="tti-adm-session-ttl">
+                Công bố và lưu
+              </h2>
+            </header>
+            <div className="tti-adm-session-bd tti-adm-session-bd--footer">
+          <div className="tti-f-group">
+            <div className="tti-tog-row">
+              <button
+                type="button"
+                className={`tti-tog ${trangThai === "draft" ? "off" : ""}`}
+                aria-pressed={trangThai === "published"}
+                disabled={readOnly}
+                onClick={() => setTrangThai((s) => (s === "published" ? "draft" : "published"))}
+              />
+              <span className={`tti-tog-lbl ${trangThai === "published" ? "grad" : "muted"}`}>
+                {trangThai === "published" ? "Published — đang công bố" : "Draft — chưa công bố"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={readOnly || saving || !tieuDe.trim() || !t0}
+              className="tti-save-btn"
+              onClick={() => void saveKy()}
+            >
+              {saving ? "Đang lưu…" : initial?.id ? "Lưu thông tin" : "Lưu và tiếp tục →"}
+            </button>
+            {initial?.id ? (
+              <span className="text-[11px] text-[rgba(45,32,32,0.55)]">
+                <code>/thi-thu/{initial.id}</code>
+              </span>
+            ) : null}
+          </div>
+            </div>
+          </section>
         </div>
       ) : null}
 

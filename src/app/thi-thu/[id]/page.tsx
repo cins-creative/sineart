@@ -55,7 +55,7 @@ export default async function ThiThuRoomPage(props: PageProps) {
     <div className="sa-root sa-thi-thu min-h-[100dvh]">
       <ThiThuStyles />
       <Suspense fallback={<ThiThuNavBarSectionSkeleton />}>
-        <ThiThuNavBarSection />
+        <ThiThuNavBarSection lichChamUrl={row.lich_cham_bai_url} navKey={id} />
       </Suspense>
       {/* Desktop: nav sticky top (~72px) — tránh đè lên nội dung phòng thi */}
       <div className="min-[900px]:pt-[76px]">

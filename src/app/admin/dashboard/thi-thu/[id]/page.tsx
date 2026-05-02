@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 function tabFromSearchParams(sp: Record<string, string | string[] | undefined>): ThiThuEditorTab | undefined {
   const raw = sp.tab;
   const t = Array.isArray(raw) ? raw[0] : raw;
-  if (t === "lich" || t === "nop" || t === "info") return t;
-  if (t === "de") return "info";
+  if (t === "nop" || t === "info") return t;
+  if (t === "lich" || t === "de") return "info";
   return undefined;
 }
 

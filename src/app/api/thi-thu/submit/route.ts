@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { resolveExamDurationPhut } from "@/lib/thi-thu/debug-exam";
 import { computeExamEndMs } from "@/lib/thi-thu/phase";
-import { getMonConfig, isMonThiKey } from "@/lib/thi-thu-config";
+import { isMonThiKey } from "@/lib/thi-thu-config";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
@@ -49,7 +50,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const { data: ky, error: kyErr } = await supabase
     .from("thi_thu_ky_thi")
-    .select("id,mon_thi,thoi_gian_bat_dau,trang_thai")
+    .select("id,mon_thi,thoi_gian_bat_dau,trang_thai,tieu_de")
     .eq("id", kyId)
     .eq("trang_thai", "published")
     .maybeSingle();
@@ -65,9 +66,10 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "Môn thi không hợp lệ." }, { status: 400 });
   }
 
-  const T = new Date(String((ky as { thoi_gian_bat_dau: string }).thoi_gian_bat_dau)).getTime();
-  const cfg = getMonConfig(monRaw);
-  const endMs = computeExamEndMs(T, cfg.thoi_luong_phut);
+  const rowKy = ky as { thoi_gian_bat_dau: string; tieu_de?: string | null };
+  const T = new Date(String(rowKy.thoi_gian_bat_dau)).getTime();
+  const examPhut = resolveExamDurationPhut({ tieu_de: rowKy.tieu_de, mon_thi: monRaw });
+  const endMs = computeExamEndMs(T, examPhut);
   const now = Date.now();
 
   if (now > endMs + 60_000) {

@@ -1,3 +1,4 @@
+import { getDebugExamDurationPhut } from "@/lib/thi-thu/debug-exam";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
 import type { ThiThuPhase } from "@/types/thi-thu";
 
@@ -13,18 +14,25 @@ type PhaseInput = {
   GL_start: number | null;
   GL_end: number | null;
   now: number;
+  /** Tiêu đề kỳ — để nhận [DEBUG 3m] */
+  tieu_de?: string | null;
 };
 
 /** Phase theo state machine trong brief (client dùng `now = Date.now() + serverOffset`). */
 export function computePhase(input: PhaseInput): ThiThuPhase {
   const cfg = getMonConfig(input.mon_thi);
-  const durMs = cfg.thoi_luong_phut * 60 * 1000;
+  const debugPhut = getDebugExamDurationPhut({ tieu_de: input.tieu_de });
+  const phut = debugPhut ?? cfg.thoi_luong_phut;
+  const durMs = phut * 60 * 1000;
   const endMs = input.T + durMs;
   const { now } = input;
 
   if (now >= endMs) return "ended";
 
+  const skipBreak = debugPhut != null;
+
   const coGiaiLao =
+    !skipBreak &&
     cfg.co_giai_lao &&
     input.GL_start != null &&
     input.GL_end != null &&

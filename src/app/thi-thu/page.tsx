@@ -23,7 +23,7 @@ export default function ThiThuPage() {
       <ThiThuStyles />
 
       <Suspense fallback={<ThiThuNavBarSectionSkeleton />}>
-        <ThiThuNavBarSection />
+        <ThiThuNavBarSection navKey="thi-thu-list" />
       </Suspense>
 
       <section className="tti-hero">

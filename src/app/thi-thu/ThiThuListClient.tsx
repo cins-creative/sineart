@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { resolveExamDurationPhut } from "@/lib/thi-thu/debug-exam";
 import {
   computeExamEndMs,
   computeListCardStatus,
@@ -70,19 +71,21 @@ export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
     };
   }, []);
 
+  // eslint-disable-next-line react-hooks/purity -- now + server clock offset for card status
   const now = Date.now() + offsetMs;
 
   const cards = useMemo(() => {
     const enriched = rows.map((row) => {
       const mon = row.mon_thi as MonThiKey;
       const cfg = getMonConfig(mon);
+      const examPhut = resolveExamDurationPhut(row);
       const T = new Date(row.thoi_gian_bat_dau).getTime();
-      const endMs = computeExamEndMs(T, cfg.thoi_luong_phut);
-      const st = computeListCardStatus(T, cfg.thoi_luong_phut, now);
+      const endMs = computeExamEndMs(T, examPhut);
+      const st = computeListCardStatus(T, examPhut, now);
       const roomOpen = now >= T - OPEN_ROOM_MS;
       const sortKey = computeKyListSortKey({
         thoiGianBatDauIso: row.thoi_gian_bat_dau,
-        thoiLuongPhut: cfg.thoi_luong_phut,
+        thoiLuongPhut: examPhut,
         thoiGianSuaBaiRaw: row.thoi_gian_sua_bai,
         now,
       });

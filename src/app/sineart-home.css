@@ -185,6 +185,92 @@
 .nav-cta-fixed .nav-cta-btn {
   pointer-events: auto;
 }
+.nav-cta-fixed .nav-cta-lich-stack {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.nav-cta-lich-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-family: var(--font);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  color: #fff;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: linear-gradient(145deg, #fbc08a 0%, #f8a668 22%, #ee5b9f 78%, #d9468a 100%);
+  box-shadow:
+    0 6px 22px rgba(232, 72, 150, 0.35),
+    0 2px 8px rgba(45, 32, 32, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.nav-cta-lich-toggle:active {
+  transform: scale(0.97);
+}
+.nav-cta-fixed .nav-cta-lich-wrap {
+  pointer-events: auto;
+  position: relative;
+  max-width: min(94vw, 440px);
+  max-height: min(70vh, 336px);
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 8px 28px rgba(45, 32, 32, 0.14),
+    0 2px 10px rgba(232, 72, 150, 0.12);
+}
+.nav-cta-lich-pin {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  color: #fff;
+  background: rgba(35, 28, 32, 0.52);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+  transition: transform 0.15s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-cta-lich-pin:hover {
+  background: rgba(35, 28, 32, 0.68);
+}
+.nav-cta-lich-pin:active {
+  transform: scale(0.94);
+}
+.nav-cta-lich-pin .nav-cta-lich-pin-ico {
+  display: block;
+  flex-shrink: 0;
+}
+.nav-cta-lich-img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(70vh, 336px);
+  object-fit: contain;
+}
 .nav-cta-btn {
   display: inline-flex;
   align-items: center;

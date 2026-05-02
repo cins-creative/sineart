@@ -66,6 +66,14 @@ const PlayIcon = () => (
   </span>
 );
 
+/** Thu nhỏ / gập panel ảnh — icon minimize nhỏ trong nút góc ảnh */
+const LichThuNhoIcon = () => (
+  <svg className="nav-cta-lich-pin-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <rect x="5" y="5" width="14" height="11" rx="2" stroke="currentColor" strokeWidth="1.75" />
+    <path d="M8 18.5h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
 type NavStudentSession = {
   email: string;
   fullName: string;
@@ -330,9 +338,15 @@ function MobileNavContent({
 
 export default function NavBar({
   khoaHocGroups,
+  thiThuLichChamUrl,
 }: {
   /** Từ `ql_mon_hoc` — nhóm + nhãn tên môn + Online/tại lớp */
   khoaHocGroups?: NavKhoaHocGroup[] | null;
+  /**
+   * Chỉ truyền từ `ThiThuNavBarSection`: thay nút «Vào học» (fixed góc màn hình).
+   * `undefined` — giữ nút mặc định. `null` / chuỗi rỗng — ẩn slot. Chuỗi URL — hiện ảnh lịch chấm.
+   */
+  thiThuLichChamUrl?: string | null;
 } = {}) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -343,6 +357,8 @@ export default function NavBar({
   );
   const [dhpNavLoginOpen, setDhpNavLoginOpen] = useState(false);
   const [studentSession, setStudentSession] = useState<NavStudentSession | null>(null);
+  /** Trang thi thử: mặc định mở ảnh lịch; nút chỉ icon để thu gọn. */
+  const [thiThuLichOpen, setThiThuLichOpen] = useState(true);
   const menuId = useId();
   const reducedMotion = useReducedMotion();
 
@@ -387,6 +403,11 @@ export default function NavBar({
   }, [mobileOpen]);
 
   const prefersReducedMotion = reducedMotion === true;
+
+  const thiThuLichTrimmed =
+    typeof thiThuLichChamUrl === "string" ? thiThuLichChamUrl.trim() : "";
+  const thiThuReplacesEnterCta = thiThuLichChamUrl !== undefined;
+  const thiThuShowLichImg = thiThuLichTrimmed.length > 0;
 
   const sheetTransition = prefersReducedMotion
     ? { duration: 0.2, ease: "easeOut" as const }
@@ -477,20 +498,70 @@ export default function NavBar({
         </div>
       </div>
 
-      <div className="nav-cta-fixed">
-        <button
-          type="button"
-          className="nav-cta-btn"
-          aria-label="Vào học"
-          onClick={() => {
-            setClassroomOverlayEmail(undefined);
-            setClassroomSignInOpen(true);
-          }}
-        >
-          <PlayIcon />
-          <span>Vào học</span>
-        </button>
-      </div>
+      {thiThuReplacesEnterCta ? (
+        thiThuShowLichImg ? (
+          <div className="nav-cta-fixed">
+            <div className="nav-cta-lich-stack">
+              {!thiThuLichOpen ? (
+                <button
+                  type="button"
+                  className="nav-cta-lich-toggle"
+                  aria-expanded={false}
+                  aria-controls="nav-cta-lich-panel"
+                  id="nav-cta-lich-toggle"
+                  aria-label="Mở lịch chấm thi thử"
+                  onClick={() => setThiThuLichOpen(true)}
+                >
+                  <span>Lịch chấm thi thử</span>
+                </button>
+              ) : null}
+              {thiThuLichOpen ? (
+                <div
+                  className="nav-cta-lich-wrap"
+                  id="nav-cta-lich-panel"
+                  role="region"
+                  aria-label="Ảnh lịch chấm thi thử"
+                >
+                  <button
+                    type="button"
+                    className="nav-cta-lich-pin"
+                    aria-expanded={true}
+                    aria-controls="nav-cta-lich-panel"
+                    id="nav-cta-lich-toggle"
+                    aria-label="Thu gọn lịch chấm"
+                    onClick={() => setThiThuLichOpen(false)}
+                  >
+                    <LichThuNhoIcon />
+                  </button>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={thiThuLichTrimmed}
+                    alt="Lịch chấm bài"
+                    className="nav-cta-lich-img"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null
+      ) : (
+        <div className="nav-cta-fixed">
+          <button
+            type="button"
+            className="nav-cta-btn"
+            aria-label="Vào học"
+            onClick={() => {
+              setClassroomOverlayEmail(undefined);
+              setClassroomSignInOpen(true);
+            }}
+          >
+            <PlayIcon />
+            <span>Vào học</span>
+          </button>
+        </div>
+      )}
 
       <ClassroomSignInOverlay
         open={classroomSignInOpen}

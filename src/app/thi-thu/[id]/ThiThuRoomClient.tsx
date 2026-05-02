@@ -9,7 +9,10 @@ import ThiThuExamDeAccordion from "./ThiThuExamDeAccordion";
 import ThiThuExamProgressBar from "./ThiThuExamProgressBar";
 import ThiThuSubmitModal from "./ThiThuSubmitModal";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { getDebugExamDurationPhut, resolveExamDurationPhut } from "@/lib/thi-thu/debug-exam";
 import { parseDeThiJson } from "@/lib/thi-thu/de-thi-json";
+import { formatThoiGianSuaBaiLabel, parseThoiGianSuaBaiMs } from "@/lib/thi-thu/replay-time";
+import { parseYouTubeEmbedSrc } from "@/lib/thi-thu/youtube-embed";
 import { computeElapsedExamMs, computePhase } from "@/lib/thi-thu/phase";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
 import type { ThiThuKyThiRow, ThiThuPhase } from "@/types/thi-thu";
@@ -107,7 +110,9 @@ export default function ThiThuRoomClient({
   const GLe = ky.thoi_gian_giai_lao_ket_thuc
     ? new Date(ky.thoi_gian_giai_lao_ket_thuc).getTime()
     : null;
-  const durMs = cfg.thoi_luong_phut * 60 * 1000;
+  const examPhut = resolveExamDurationPhut(ky);
+  const debugPhut = getDebugExamDurationPhut(ky);
+  const durMs = examPhut * 60 * 1000;
   const endMs = T + durMs;
 
   const phase: ThiThuPhase =
@@ -118,22 +123,78 @@ export default function ThiThuRoomClient({
       GL_start: GLs,
       GL_end: GLe,
       now,
+      tieu_de: ky.tieu_de,
     });
 
   const elapsed = computeElapsedExamMs(phase, T, GLs, GLe, now);
-  const progress = Math.min(1, elapsed / durMs);
+  const progress = durMs > 0 ? Math.min(1, elapsed / durMs) : 0;
   const breakMarkerPct =
-    cfg.co_giai_lao && GLs != null ? (GLs - T) / durMs : null;
+    debugPhut == null && cfg.co_giai_lao && GLs != null ? (GLs - T) / durMs : null;
   const breakRangeLabel =
     GLs != null && GLe != null
       ? `${new Date(GLs).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} – ${new Date(GLe).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`
       : null;
   const showBreakMarker =
-    cfg.co_giai_lao && GLs != null && (phase === "exam_1" || phase === "exam_2");
+    debugPhut == null &&
+    cfg.co_giai_lao &&
+    GLs != null &&
+    (phase === "exam_1" || phase === "exam_2");
 
   const id = ky.id;
 
   const deThiItems = useMemo(() => parseDeThiJson(ky.de_thi ?? null), [ky.de_thi]);
+
+  const endedChamTimeLabel = useMemo(
+    () => formatThoiGianSuaBaiLabel(ky.thoi_gian_bat_dau, ky.thoi_gian_sua_bai),
+    [ky.thoi_gian_bat_dau, ky.thoi_gian_sua_bai],
+  );
+
+  const suaBaiMs = useMemo(
+    () => parseThoiGianSuaBaiMs(ky.thoi_gian_bat_dau, ky.thoi_gian_sua_bai),
+    [ky.thoi_gian_bat_dau, ky.thoi_gian_sua_bai],
+  );
+
+  const youtubeEmbedSrc = useMemo(() => parseYouTubeEmbedSrc(ky.video_sua_bai), [ky.video_sua_bai]);
+
+  /** Ngày buổi thi (theo «Giờ bắt đầu» admin) — tiêu đề session video sửa bài. */
+  const suaSessionExamDayLabel = useMemo(() => {
+    const d = new Date(ky.thoi_gian_bat_dau);
+    if (!Number.isFinite(d.getTime())) return "";
+    return d.toLocaleDateString("vi-VN", {
+      weekday: "long",
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+    });
+  }, [ky.thoi_gian_bat_dau]);
+
+  const previewGradingSession = Boolean(previewAllowed && previewQuery === "sua_bai");
+
+  /**
+   * Session 4 (video chấm): chỉ sau session 3 — giữ màn «kết thúc kì thi» đến đúng mốc phát video.
+   * Mốc thực tế = max(kết thúc làm bài, giờ lịch phát) để tránh giờ «time-only» trùng ngày thi
+   * nhưng đứng trước giờ kết thúc trong timeline gây nhảy sớm sang video.
+   */
+  const session4VideoStartMs =
+    suaBaiMs != null && Number.isFinite(suaBaiMs) ? Math.max(endMs, suaBaiMs) : null;
+
+  const isGradingVideoSession =
+    youtubeEmbedSrc != null &&
+    (previewGradingSession ||
+      (phase === "ended" &&
+        session4VideoStartMs != null &&
+        now >= session4VideoStartMs));
+
+  const examGradingTickerText = useMemo(() => {
+    const sua = formatThoiGianSuaBaiLabel(ky.thoi_gian_bat_dau, ky.thoi_gian_sua_bai);
+    if (sua) return `Lịch phát video sửa bài / chấm bài: ${sua}`;
+    if (ky.lich_cham_bai_url?.trim())
+      return "Nhớ xem ảnh lịch chấm bài sau buổi thi — chi tiết trên trang kết thúc.";
+    return null;
+  }, [ky.thoi_gian_bat_dau, ky.thoi_gian_sua_bai, ky.lich_cham_bai_url]);
+
+  const showExamGradingTicker =
+    (phase === "exam_1" || phase === "exam_2") && examGradingTickerText != null;
 
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
@@ -176,6 +237,11 @@ export default function ThiThuRoomClient({
           PREVIEW MODE — {forcedPhase}
         </div>
       ) : null}
+      {!forcedPhase && debugPhut != null ? (
+        <div className="sticky top-0 z-[199] bg-violet-100 px-3 py-2 text-center text-[11px] font-bold text-violet-950">
+          DEBUG — thời lượng làm bài 3 phút (tiêu đề kỳ có prefix [DEBUG 3m])
+        </div>
+      ) : null}
 
       <AnimatePresence mode="wait" initial={false}>
         {phase === "waiting" || phase === "countdown" ? (
@@ -202,7 +268,7 @@ export default function ThiThuRoomClient({
                 <div className="tti-cd-orb tti-cd-orb-b" aria-hidden />
                 <div className="tti-cd-orb tti-cd-orb-c" aria-hidden />
                 <div className="tti-cd-logo">
-                  {/* eslint-disable-next-line @next/next/no-img-element — logo CDN Cloudflare, đồng bộ NavBar */}
+                  {/* eslint-disable-next-line @next/next/no-img-element -- logo CDN */}
                   <img
                     src={LOGO_SRC}
                     alt="Sine Art"
@@ -226,7 +292,7 @@ export default function ThiThuRoomClient({
         ) : phase === "exam_1" || phase === "exam_2" ? (
           <motion.div
             key="exam"
-            className="tti-ex-wrap"
+            className={`tti-ex-wrap${showExamGradingTicker ? " tti-ex-wrap--ticker" : ""}`}
             initial={{ opacity: 0, y: reduceMotion ? 0 : 36 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: reduceMotion ? 0 : -20 }}
@@ -249,6 +315,7 @@ export default function ThiThuRoomClient({
                 </div>
                 <ThiThuExamProgressBar
                   cfg={cfg}
+                  durationPhut={examPhut}
                   progress={progress}
                   breakMarkerPct={breakMarkerPct}
                   breakRangeLabel={breakRangeLabel}
@@ -265,6 +332,31 @@ export default function ThiThuRoomClient({
                 <ThiThuExamDeAccordion items={deThiItems} />
               </div>
             </div>
+
+            {showExamGradingTicker && examGradingTickerText ? (
+              <div
+                className={`tti-exam-ticker${reduceMotion ? " tti-exam-ticker--static" : ""}`}
+                role="region"
+                aria-label="Nhắc lịch chấm bài"
+              >
+                {reduceMotion ? (
+                  <p className="tti-exam-ticker-static-txt">{examGradingTickerText}</p>
+                ) : (
+                  <div className="tti-exam-ticker-inner">
+                    <div className="tti-exam-ticker-track">
+                      <span className="tti-exam-ticker-seg">
+                        {examGradingTickerText}
+                        &nbsp;&nbsp;•&nbsp;&nbsp;
+                      </span>
+                      <span className="tti-exam-ticker-seg" aria-hidden>
+                        {examGradingTickerText}
+                        &nbsp;&nbsp;•&nbsp;&nbsp;
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </motion.div>
         ) : phase === "break" && GLs != null && GLe != null ? (
           <motion.section
@@ -296,6 +388,38 @@ export default function ThiThuRoomClient({
               ← Danh sách kỳ thi
             </Link>
           </motion.section>
+        ) : isGradingVideoSession ? (
+          <motion.section
+            key="sua-bai-session"
+            className="tti-sua-wrap relative"
+            initial={{ opacity: 0, y: reduceMotion ? 0 : 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={tEnded}
+          >
+            <div className="tti-ended-orb-a" aria-hidden />
+            <div className="tti-ended-orb-b" aria-hidden />
+            <h2 className="tti-sua-h">
+              {suaSessionExamDayLabel ? (
+                <>Video sửa bài thi thử ngày {suaSessionExamDayLabel}</>
+              ) : (
+                <>Video sửa bài thi thử</>
+              )}
+            </h2>
+            <div className="tti-sua-vid-frame">
+              <iframe
+                title="Video sửa bài thi thử Sine Art"
+                src={youtubeEmbedSrc}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            </div>
+            <Link href="/thi-thu" className="tti-ended-back">
+              ← Về danh sách kỳ thi
+            </Link>
+          </motion.section>
         ) : phase === "ended" ? (
           <motion.section
             key="ended"
@@ -320,6 +444,12 @@ export default function ThiThuRoomClient({
               </svg>
             </div>
             <h2 className="tti-ended-h">Kết thúc buổi thi</h2>
+            {endedChamTimeLabel ? (
+              <p className="tti-ended-cham">
+                <span className="tti-ended-cham-k">Thời gian chấm / phát video sửa bài</span>
+                <span className="tti-ended-cham-v">{endedChamTimeLabel}</span>
+              </p>
+            ) : null}
             <p className="tti-ended-s">
               Cảm ơn các sĩ tử đã tham gia kỳ thi!
               <br />

@@ -12,6 +12,8 @@ type Props = {
   items: ThiThuDeThiItem[];
   onChange: Dispatch<SetStateAction<ThiThuDeThiItem[]>>;
   readOnly?: boolean;
+  /** Gộp trong card «Đề thi» ở editor — ẩn khối giới thiệu trùng lặp. */
+  variant?: "standalone" | "embedded";
 };
 
 /** Một dòng đề — upload ảnh file qua `/admin/api/upload-cf-image`; «Lưu thông tin» ghi `de_thi`. */
@@ -143,14 +145,16 @@ function DeThiRow({
         <div className="tti-de-imgs">
           {(row.anh_urls ?? []).map((url, ui) => (
             <div key={`${url}-${ui}`} className="tti-de-img-th">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={cfResolvedImageUrl(url, "thumb") || url}
-                alt=""
-                className="h-full w-full object-cover"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
+              <div className="tti-de-img-th-fill">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={cfResolvedImageUrl(url, "thumb") || url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </div>
               <button
                 type="button"
                 className="tti-de-img-x"
@@ -178,7 +182,12 @@ function DeThiRow({
 /**
  * Block đề thi — state do parent giữ (`thi_thu_ky_thi.de_thi` JSON).
  */
-export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Props) {
+export default function ThiThuDeThiTab({
+  items,
+  onChange,
+  readOnly = false,
+  variant = "standalone",
+}: Props) {
   const setRows = onChange;
 
   const addDe = useCallback(() => {
@@ -201,12 +210,14 @@ export default function ThiThuDeThiTab({ items, onChange, readOnly = false }: Pr
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-black/[0.06] bg-white/80 px-4 py-3">
-        <p className="text-[13px] font-bold text-[#2d2020]">Đề thi</p>
-        <p className="mt-1 text-[11px] text-[rgba(45,32,32,0.55)]">
-          Tiêu đề từng đề và ảnh đề — lưu chung khi bạn bấm «Lưu thông tin».
-        </p>
-      </div>
+      {variant === "standalone" ? (
+        <div className="rounded-xl border border-black/[0.06] bg-white/80 px-4 py-3">
+          <p className="text-[13px] font-bold text-[#2d2020]">Đề thi</p>
+          <p className="mt-1 text-[11px] text-[rgba(45,32,32,0.55)]">
+            Tiêu đề từng đề và ảnh đề — lưu chung khi bạn bấm «Lưu thông tin».
+          </p>
+        </div>
+      ) : null}
 
       {readOnly ? (
         <p className="rounded-lg border border-black/[0.08] bg-black/[0.03] px-3 py-2 text-[12px] text-[rgba(45,32,32,0.65)]">

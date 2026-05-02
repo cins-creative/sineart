@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
+import {
+  THI_THU_KY_EDIT_FORBIDDEN_MSG,
+  adminStaffCanEditThiThuKy,
+} from "@/lib/admin/staff-mutation-access";
+import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
 import { formatSupabaseWriteError } from "@/lib/supabase/postgres-permission-hint";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -18,6 +23,18 @@ export async function POST(req: Request): Promise<NextResponse> {
   const session = await getAdminSessionOrNull();
   if (!session) {
     return NextResponse.json({ ok: false, error: "Chưa đăng nhập admin." }, { status: 401 });
+  }
+
+  const supabaseGate = createServiceRoleClient();
+  if (!supabaseGate) {
+    return NextResponse.json(
+      { ok: false, error: "Thiếu SUPABASE_SERVICE_ROLE_KEY trên server." },
+      { status: 503 },
+    );
+  }
+  const profileGate = await fetchAdminStaffShellProfile(supabaseGate, session.staffId);
+  if (!adminStaffCanEditThiThuKy(profileGate.vai_tro)) {
+    return NextResponse.json({ ok: false, error: THI_THU_KY_EDIT_FORBIDDEN_MSG }, { status: 403 });
   }
 
   let body: Body;
@@ -44,13 +61,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  const supabase = createServiceRoleClient();
-  if (!supabase) {
-    return NextResponse.json(
-      { ok: false, error: "Thiếu SUPABASE_SERVICE_ROLE_KEY trên server." },
-      { status: 503 },
-    );
-  }
+  const supabase = supabaseGate;
 
   const id = typeof body.id === "string" && body.id.length > 0 ? body.id.trim() : null;
 

@@ -1,0 +1,72 @@
+import { NextResponse } from "next/server";
+
+import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
+import {
+  ADMIN_DELETE_FORBIDDEN_MSG,
+  adminStaffCanDeleteRecords,
+} from "@/lib/admin/staff-mutation-access";
+import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
+import { formatSupabaseWriteError } from "@/lib/supabase/postgres-permission-hint";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
+
+export const runtime = "nodejs";
+
+type Body = { id?: unknown };
+
+export async function POST(req: Request): Promise<NextResponse> {
+  const session = await getAdminSessionOrNull();
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "Chưa đăng nhập admin." }, { status: 401 });
+  }
+
+  let body: Body;
+  try {
+    body = (await req.json()) as Body;
+  } catch {
+    return NextResponse.json({ ok: false, error: "Body JSON không hợp lệ." }, { status: 400 });
+  }
+
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  if (!id) {
+    return NextResponse.json({ ok: false, error: "Thiếu id kỳ thi." }, { status: 400 });
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) {
+    return NextResponse.json(
+      { ok: false, error: "Thiếu SUPABASE_SERVICE_ROLE_KEY trên server." },
+      { status: 503 },
+    );
+  }
+
+  const profile = await fetchAdminStaffShellProfile(supabase, session.staffId);
+  if (!adminStaffCanDeleteRecords(profile.vai_tro)) {
+    return NextResponse.json({ ok: false, error: ADMIN_DELETE_FORBIDDEN_MSG }, { status: 403 });
+  }
+
+  const { error: eNop } = await supabase.from("thi_thu_bai_nop").delete().eq("ky_thi_id", id);
+  if (eNop) {
+    return NextResponse.json(
+      { ok: false, error: formatSupabaseWriteError(eNop, "thi_thu_bai_nop") },
+      { status: 500 },
+    );
+  }
+
+  const { error: eDe } = await supabase.from("thi_thu_de_thi").delete().eq("ky_thi_id", id);
+  if (eDe) {
+    return NextResponse.json(
+      { ok: false, error: formatSupabaseWriteError(eDe, "thi_thu_de_thi") },
+      { status: 500 },
+    );
+  }
+
+  const { error: eKy } = await supabase.from("thi_thu_ky_thi").delete().eq("id", id);
+  if (eKy) {
+    return NextResponse.json(
+      { ok: false, error: formatSupabaseWriteError(eKy, "thi_thu_ky_thi") },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true });
+}

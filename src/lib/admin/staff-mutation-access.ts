@@ -39,6 +39,15 @@ export function adminStaffCanViewGiaTriTaiSanOverviewTab(vaiTro: string | null |
   return normalizeStaffVaiTro(vaiTro) === "admin";
 }
 
+/** Tạo / sửa kỳ thi thử (`thi_thu_ky_thi`) — `nhan_vien`, `quan_ly`, `admin`. */
+export function adminStaffCanEditThiThuKy(vaiTro: string | null | undefined): boolean {
+  const v = normalizeStaffVaiTro(vaiTro);
+  return v === "admin" || v === "quan_ly" || v === "nhan_vien";
+}
+
+export const THI_THU_KY_EDIT_FORBIDDEN_MSG =
+  "Tài khoản không có quyền tạo hoặc sửa kỳ thi. Chỉ nhân viên, quản lý hoặc admin.";
+
 /** Trang Agent tư vấn (`/admin/agent`) — admin, quản lý, hoặc vai trò tư vấn (`tu_van`). */
 export function adminStaffCanAccessAgentPage(vaiTro: string | null | undefined): boolean {
   const v = normalizeStaffVaiTro(vaiTro);

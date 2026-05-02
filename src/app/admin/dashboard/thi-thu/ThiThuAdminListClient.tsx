@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
+import { formatThoiGianSuaBaiLabel } from "@/lib/thi-thu/replay-time";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
 import type { ThiThuKyThiRow, ThiThuTrangThai } from "@/types/thi-thu";
 
@@ -19,8 +22,36 @@ export default function ThiThuAdminListClient({
   rows: ThiThuKyThiRow[];
   counts: Record<string, number>;
 }) {
+  const router = useRouter();
+  const { canDelete, canEditThiThuKy } = useAdminDashboardAbilities();
   const [monFilter, setMonFilter] = useState<"" | MonThiKey>("");
   const [stFilter, setStFilter] = useState<"" | ThiThuTrangThai>("");
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+
+  const onDeleteKy = useCallback(
+    async (id: string, title: string) => {
+      const ok = window.confirm(
+        `Xóa kỳ thi «${title}»? Toàn bộ đề thi và bài nộp của kỳ này sẽ bị xóa. Không hoàn tác.`,
+      );
+      if (!ok) return;
+      setDeleteBusyId(id);
+      try {
+        const res = await fetch("/admin/api/thi-thu-ky-delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        const j = (await res.json()) as { ok?: boolean; error?: string };
+        if (!res.ok || !j.ok) throw new Error(j.error ?? "Không xóa được.");
+        router.refresh();
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : "Lỗi khi xóa.");
+      } finally {
+        setDeleteBusyId(null);
+      }
+    },
+    [router],
+  );
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -65,9 +96,11 @@ export default function ThiThuAdminListClient({
           <p>Marketing</p>
           <h1>Thi thử</h1>
         </div>
-        <Link href="/admin/dashboard/thi-thu/new" className="tti-adm-cta">
-          + Tạo kỳ thi mới
-        </Link>
+        {canEditThiThuKy ? (
+          <Link href="/admin/dashboard/thi-thu/new" className="tti-adm-cta">
+            + Tạo kỳ thi mới
+          </Link>
+        ) : null}
       </div>
 
       <div className="tti-adm-filt">
@@ -92,54 +125,100 @@ export default function ThiThuAdminListClient({
         </select>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="tti-adm-tbl">
-          <thead>
-            <tr>
-              <th style={{ width: 60 }}>Ảnh</th>
-              <th>Tiêu đề</th>
-              <th style={{ width: 100 }}>Môn</th>
-              <th style={{ width: 130 }}>Giờ bắt đầu</th>
-              <th style={{ width: 90 }}>Trạng thái</th>
-              <th style={{ width: 48 }}>Bài</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r) => {
-              const cfg = getMonConfig(r.mon_thi as MonThiKey);
-              const mon = r.mon_thi as MonThiKey;
-              return (
-                <tr key={r.id}>
-                  <td>
-                    <div className="tti-adm-tbl-th overflow-hidden">
-                      {r.thumbnail_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={r.thumbnail_url} alt="" className="h-full w-full object-cover" />
-                      ) : null}
-                    </div>
-                  </td>
-                  <td>
-                    <Link href={`/admin/dashboard/thi-thu/${r.id}`} className="tti-adm-tbl-link">
-                      {r.tieu_de}
-                    </Link>
-                  </td>
-                  <td>
-                    <span className={badgeClass(mon)}>{cfg.label}</span>
-                  </td>
-                  <td style={{ fontSize: 11 }}>
-                    {new Date(r.thoi_gian_bat_dau).toLocaleString("vi-VN")}
-                  </td>
-                  <td>
-                    <span className={r.trang_thai === "published" ? "tti-sp tti-sp-p" : "tti-sp tti-sp-d"}>
-                      {r.trang_thai}
-                    </span>
-                  </td>
-                  <td style={{ fontWeight: 800 }}>{counts[r.id] ?? 0}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="tti-adm-tbl-shell">
+        <div className="tti-adm-tbl-cap">
+          <span className="tti-adm-tbl-cap-k">Danh sách kỳ thi</span>
+          <span className="tti-adm-tbl-cap-n">{filtered.length}</span>
+        </div>
+        <div className="tti-adm-tbl-scroll">
+          <table className="tti-adm-tbl">
+            <thead>
+              <tr>
+                <th className="tti-adm-col-thumb">Ảnh</th>
+                <th className="tti-adm-col-title">Tiêu đề</th>
+                <th className="tti-adm-col-mon">Môn</th>
+                <th className="tti-adm-col-time">Giờ bắt đầu</th>
+                <th className="tti-adm-col-sua">Thời gian sửa bài</th>
+                <th className="tti-adm-col-yt">Link Youtube sửa bài</th>
+                <th className="tti-adm-col-st">Trạng thái</th>
+                <th className="tti-adm-col-nop">Bài nộp</th>
+                <th className="tti-adm-col-act">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r) => {
+                const mon = r.mon_thi as MonThiKey;
+                const cfg = getMonConfig(mon);
+                const nop = counts[r.id] ?? 0;
+                const suaLabel = formatThoiGianSuaBaiLabel(r.thoi_gian_bat_dau, r.thoi_gian_sua_bai);
+                const yt = r.video_sua_bai?.trim() ?? "";
+                return (
+                  <tr key={r.id}>
+                    <td>
+                      <div className="tti-adm-tbl-th overflow-hidden">
+                        {r.thumbnail_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={r.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                        ) : null}
+                      </div>
+                    </td>
+                    <td>
+                      <Link href={`/admin/dashboard/thi-thu/${r.id}`} className="tti-adm-tbl-link">
+                        {r.tieu_de}
+                      </Link>
+                    </td>
+                    <td>
+                      <span className={badgeClass(mon)}>{cfg.label}</span>
+                    </td>
+                    <td className="tti-adm-cell-muted">{new Date(r.thoi_gian_bat_dau).toLocaleString("vi-VN")}</td>
+                    <td className="tti-adm-cell-muted tti-adm-cell-sua">{suaLabel ?? "—"}</td>
+                    <td className="tti-adm-cell-yt">
+                      {yt ? (
+                        <a href={yt} target="_blank" rel="noopener noreferrer" className="tti-adm-yt-link">
+                          {yt.length > 36 ? `${yt.slice(0, 34)}…` : yt}
+                        </a>
+                      ) : (
+                        <span className="tti-adm-dash">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={r.trang_thai === "published" ? "tti-sp tti-sp-p" : "tti-sp tti-sp-d"}>
+                        {r.trang_thai}
+                      </span>
+                    </td>
+                    <td className="tti-adm-cell-nop">
+                      <span className="tti-adm-nop-pill">{nop}</span>
+                    </td>
+                    <td className="tti-adm-cell-act">
+                      <div className="tti-adm-act-row">
+                        {canEditThiThuKy ? (
+                          <Link href={`/admin/dashboard/thi-thu/${r.id}`} className="tti-adm-act-edit">
+                            Sửa
+                          </Link>
+                        ) : null}
+                        {canDelete ? (
+                          <button
+                            type="button"
+                            className="tti-adm-act-del"
+                            disabled={deleteBusyId === r.id}
+                            onClick={() => void onDeleteKy(r.id, r.tieu_de)}
+                          >
+                            {deleteBusyId === r.id ? "…" : "Xóa"}
+                          </button>
+                        ) : null}
+                        {!canEditThiThuKy && !canDelete ? (
+                          <span className="tti-adm-dash" title="Không có quyền thao tác">
+                            —
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

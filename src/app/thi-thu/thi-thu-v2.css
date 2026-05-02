@@ -213,6 +213,16 @@
   align-items: center;
   gap: 5px;
 }
+.sa-thi-thu .tti-ttc-sua {
+  font-size: 11px;
+  color: var(--tti-ink2);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+.sa-thi-thu .tti-ttc-sua-k {
+  font-weight: 700;
+  color: var(--tti-ink);
+}
 .sa-thi-thu .tti-dot-live {
   width: 7px;
   height: 7px;
@@ -256,6 +266,18 @@
   background: var(--tti-ink4) !important;
   color: var(--tti-ink2) !important;
   cursor: not-allowed;
+}
+.sa-thi-thu .tti-ttc-b .tti-ttc-btn + .tti-ttc-btn {
+  margin-top: 8px;
+}
+.sa-thi-thu .tti-btn-yt {
+  background: var(--tti-card) !important;
+  color: var(--tti-g1) !important;
+  border: 2px solid var(--tti-g0);
+  cursor: pointer;
+}
+.sa-thi-thu .tti-btn-yt:hover {
+  opacity: 0.9;
 }
 
 /* Footer */
@@ -1133,7 +1155,22 @@
   --tti-rs: 9px;
   --tti-rp: 999px;
   --tti-r: 14px;
+  --tti-rc: 16px;
+  --tti-sh-card: 0 4px 28px rgba(45, 32, 32, 0.07);
   font-family: var(--font-be-vietnam-pro), system-ui, sans-serif;
+}
+
+.sa-thi-thu-admin .tti-f-group {
+  margin-bottom: 18px;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  box-sizing: border-box;
+}
+.sa-thi-thu-admin .tti-adm-fc--editor > .tti-f-group:last-of-type {
+  margin-bottom: 0;
 }
 
 .sa-thi-thu-admin .tti-adm-stat-row {
@@ -1213,39 +1250,178 @@
   color: var(--tti-ink) !important;
   cursor: pointer;
 }
+.sa-thi-thu-admin .tti-adm-tbl-shell {
+  background: #fff;
+  border-radius: var(--tti-rc);
+  border: 1px solid var(--tti-ink3);
+  box-shadow: var(--tti-sh-card);
+  overflow: hidden;
+}
+.sa-thi-thu-admin .tti-adm-tbl-cap {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px 12px;
+  background: linear-gradient(180deg, rgba(248, 166, 104, 0.07) 0%, rgba(255, 255, 255, 0.92) 100%);
+  border-bottom: 1px solid var(--tti-ink4);
+}
+.sa-thi-thu-admin .tti-adm-tbl-cap-k {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tti-ink2);
+}
+.sa-thi-thu-admin .tti-adm-tbl-cap-n {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--tti-g1);
+  min-width: 1.5rem;
+  text-align: right;
+}
+.sa-thi-thu-admin .tti-adm-tbl-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .sa-thi-thu-admin .tti-adm-tbl {
   width: 100%;
   background: #fff;
-  border-radius: var(--tti-rs);
-  border: 1px solid var(--tti-ink3);
   border-collapse: separate;
   border-spacing: 0;
-  overflow: hidden;
   table-layout: fixed;
 }
 .sa-thi-thu-admin .tti-adm-tbl th {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--tti-ink2);
   text-align: left;
-  padding: 9px 12px;
-  background: rgba(45, 32, 32, 0.025);
+  padding: 11px 14px;
+  background: rgba(45, 32, 32, 0.04);
   border-bottom: 1px solid var(--tti-ink3);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.45px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  box-shadow: 0 1px 0 rgba(45, 32, 32, 0.06);
+}
+.sa-thi-thu-admin .tti-adm-col-thumb {
+  width: 64px;
+}
+.sa-thi-thu-admin .tti-adm-col-title {
+  width: auto;
+}
+.sa-thi-thu-admin .tti-adm-col-mon {
+  width: 112px;
+}
+.sa-thi-thu-admin .tti-adm-col-time {
+  width: 148px;
+}
+.sa-thi-thu-admin .tti-adm-col-sua {
+  min-width: 150px;
+  max-width: 200px;
+}
+.sa-thi-thu-admin .tti-adm-col-yt {
+  min-width: 120px;
+  max-width: 220px;
+}
+.sa-thi-thu-admin .tti-adm-col-st {
+  width: 104px;
+}
+.sa-thi-thu-admin .tti-adm-col-nop {
+  width: 84px;
+  text-align: center;
+}
+.sa-thi-thu-admin .tti-adm-col-act {
+  width: 112px;
+  min-width: 100px;
+}
+.sa-thi-thu-admin .tti-adm-cell-act {
+  vertical-align: middle;
+}
+.sa-thi-thu-admin .tti-adm-act-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sa-thi-thu-admin .tti-adm-act-edit {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tti-g1);
+  text-decoration: underline;
+}
+.sa-thi-thu-admin .tti-adm-act-edit:hover {
+  opacity: 0.88;
+}
+.sa-thi-thu-admin .tti-adm-act-del {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--tti-rs);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  background: rgba(254, 242, 242, 0.9);
+  color: #b91c1c;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.sa-thi-thu-admin .tti-adm-act-del:hover:not(:disabled) {
+  background: rgba(254, 226, 226, 0.95);
+}
+.sa-thi-thu-admin .tti-adm-act-del:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .sa-thi-thu-admin .tti-adm-tbl td {
   font-size: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--tti-ink3);
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--tti-ink4);
   color: var(--tti-ink);
   vertical-align: middle;
+}
+.sa-thi-thu-admin .tti-adm-cell-muted {
+  font-size: 11px;
+  color: var(--tti-ink2);
+  font-variant-numeric: tabular-nums;
+}
+.sa-thi-thu-admin .tti-adm-cell-sua {
+  line-height: 1.35;
+}
+.sa-thi-thu-admin .tti-adm-cell-yt {
+  max-width: 220px;
+  word-break: break-all;
+}
+.sa-thi-thu-admin .tti-adm-yt-link {
+  color: var(--tti-g1);
+  text-decoration: underline;
+  font-size: 11px;
+}
+.sa-thi-thu-admin .tti-adm-dash {
+  color: var(--tti-ink3);
+}
+.sa-thi-thu-admin .tti-adm-cell-nop {
+  text-align: center;
+}
+.sa-thi-thu-admin .tti-adm-nop-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 4px 10px;
+  border-radius: var(--tti-rp);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: rgba(248, 166, 104, 0.14);
+  color: var(--tti-ink);
+  border: 1px solid rgba(248, 166, 104, 0.35);
 }
 .sa-thi-thu-admin .tti-adm-tbl tr:last-child td {
   border-bottom: none;
 }
-.sa-thi-thu-admin .tti-adm-tbl tr:hover td {
-  background: rgba(248, 166, 104, 0.04);
+.sa-thi-thu-admin .tti-adm-tbl tbody tr:hover td {
+  background: rgba(248, 166, 104, 0.06);
 }
 .sa-thi-thu-admin .tti-adm-tbl-th {
   width: 52px;
@@ -1371,12 +1547,23 @@
 }
 .sa-thi-thu-admin .tti-adm-fc {
   background: #fff;
-  border-radius: var(--tti-rs);
+  border-radius: var(--tti-rc);
   border: 1px solid var(--tti-ink3);
-  padding: 16px;
+  padding: 18px 20px;
   margin-bottom: 12px;
+  box-shadow: var(--tti-sh-card);
+}
+.sa-thi-thu-admin .tti-adm-fc--editor {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
 }
 .sa-thi-thu-admin .tti-gl-box {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: rgba(248, 166, 104, 0.08);
   border-radius: var(--tti-rs);
   padding: 13px;
@@ -1553,6 +1740,9 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 11px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 @media (min-width: 640px) {
   .sa-thi-thu-admin .tti-f-row {
@@ -1566,6 +1756,13 @@
   display: block;
   margin-bottom: 5px;
 }
+.sa-thi-thu-admin .tti-f-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--tti-ink2);
+}
 .sa-thi-thu-admin .tti-f-in {
   width: 100%;
   font-size: 13px;
@@ -1576,44 +1773,196 @@
   color: var(--tti-ink) !important;
 }
 .sa-thi-thu-admin .tti-upload-zone {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
   border: 1.5px dashed var(--tti-ink3);
   border-radius: var(--tti-rs);
   padding: 16px;
   text-align: center;
   font-size: 12px;
+  font-weight: 600;
   color: var(--tti-ink2);
   cursor: pointer;
-  background: #fff !important;
+  background: rgba(253, 247, 243, 0.65) !important;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.sa-thi-thu-admin .tti-upload-zone:hover {
+  border-color: rgba(248, 166, 104, 0.55);
+  background: rgba(248, 166, 104, 0.07) !important;
+  box-shadow: inset 0 0 0 1px rgba(248, 166, 104, 0.12);
 }
 .sa-thi-thu-admin .tti-upload-zone span {
   display: block;
   font-size: 10px;
-  margin-top: 3px;
+  font-weight: 600;
+  margin-top: 4px;
+  color: var(--tti-ink2);
+  opacity: 0.9;
+}
+.sa-thi-thu-admin .tti-upload-preview {
+  margin-top: 12px;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--tti-rs);
+  object-fit: cover;
+  box-sizing: border-box;
+}
+.sa-thi-thu-admin .tti-upload-preview--contain {
+  object-fit: contain;
+  background: rgba(45, 32, 32, 0.04);
+}
+.sa-thi-thu-admin .tti-bai-nop-shell {
+  background: #fff;
+  border-radius: var(--tti-rc);
+  border: 1px solid var(--tti-ink3);
+  box-shadow: var(--tti-sh-card);
+  overflow: hidden;
+}
+.sa-thi-thu-admin .tti-bai-nop-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(248, 166, 104, 0.1) 0%, rgba(238, 91, 159, 0.06) 100%);
+  border-bottom: 1px solid var(--tti-ink4);
+}
+.sa-thi-thu-admin .tti-bai-nop-toolbar-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 10px;
+}
+.sa-thi-thu-admin .tti-bai-nop-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tti-ink2);
+}
+.sa-thi-thu-admin .tti-bai-nop-count {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  background: var(--tti-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.sa-thi-thu-admin .tti-bai-nop-count-lbl {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tti-ink2);
+}
+.sa-thi-thu-admin .tti-csv-btn {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 8px 16px;
+  border-radius: var(--tti-rp);
+  border: 1.5px solid rgba(238, 91, 159, 0.35) !important;
+  background: #fff !important;
+  color: var(--tti-g1) !important;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.sa-thi-thu-admin .tti-csv-btn:hover {
+  background: rgba(238, 91, 159, 0.06) !important;
+  box-shadow: 0 4px 14px rgba(45, 32, 32, 0.06);
+}
+.sa-thi-thu-admin .tti-bai-nop-empty {
+  padding: 28px 18px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tti-ink2);
+  background: rgba(45, 32, 32, 0.03);
+}
+.sa-thi-thu-admin .tti-bai-nop-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .sa-thi-thu-admin .tti-bai-nop-tbl {
   width: 100%;
+  min-width: 520px;
   background: #fff;
-  border-radius: var(--tti-rs);
-  border: 1px solid var(--tti-ink3);
   border-collapse: separate;
   border-spacing: 0;
-  overflow: hidden;
 }
 .sa-thi-thu-admin .tti-bai-nop-tbl th {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--tti-ink2);
   text-align: left;
-  padding: 9px 12px;
-  background: rgba(45, 32, 32, 0.025);
+  padding: 11px 14px;
+  background: rgba(45, 32, 32, 0.04);
   border-bottom: 1px solid var(--tti-ink3);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.45px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.sa-thi-thu-admin .tti-bai-nop-col-name {
+  min-width: 140px;
+}
+.sa-thi-thu-admin .tti-bai-nop-col-fb {
+  min-width: 120px;
+}
+.sa-thi-thu-admin .tti-bai-nop-col-time {
+  width: 158px;
+  white-space: nowrap;
+}
+.sa-thi-thu-admin .tti-bai-nop-col-img {
+  width: 76px;
+  text-align: center;
 }
 .sa-thi-thu-admin .tti-bai-nop-tbl td {
+  font-size: 13px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--tti-ink4);
+  vertical-align: middle;
+}
+.sa-thi-thu-admin .tti-bai-nop-cell-name {
+  font-weight: 800;
+  color: var(--tti-ink);
+}
+.sa-thi-thu-admin .tti-bai-nop-cell-fb {
   font-size: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--tti-ink3);
+  font-weight: 600;
+  color: var(--tti-ink2);
+  word-break: break-word;
+}
+.sa-thi-thu-admin .tti-bai-nop-cell-time {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tti-ink2);
+  font-variant-numeric: tabular-nums;
+}
+.sa-thi-thu-admin .tti-bai-nop-cell-img {
+  text-align: center;
+}
+.sa-thi-thu-admin .tti-bn-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  padding: 5px 11px;
+  border-radius: var(--tti-rp);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(135deg, rgba(248, 166, 104, 0.18), rgba(238, 91, 159, 0.12));
+  color: var(--tti-ink);
+  border: 1px solid rgba(238, 91, 159, 0.25);
+}
+.sa-thi-thu-admin .tti-bai-nop-tbl tbody tr:hover td {
+  background: rgba(248, 166, 104, 0.05);
 }
 .sa-thi-thu-admin .tti-bai-nop-tbl tr:last-child td {
   border-bottom: none;

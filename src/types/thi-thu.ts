@@ -11,6 +11,10 @@ export type ThiThuKyThiRow = {
   thoi_gian_giai_lao_ket_thuc: string | null;
   thumbnail_url: string | null;
   lich_cham_bai_url: string | null;
+  /** Link Youtube phát lại / sửa bài (điền sau khi có video). */
+  video_sua_bai: string | null;
+  /** Lịch chiếu video sửa bài — ISO timestamptz hoặc (server) `time` ghép ngày thi. */
+  thoi_gian_sua_bai: string | null;
   trang_thai: ThiThuTrangThai;
   created_at?: string;
 };

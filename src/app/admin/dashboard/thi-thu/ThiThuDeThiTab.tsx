@@ -11,9 +11,12 @@ type DraftRow = ThiThuDeThiRow | Omit<ThiThuDeThiRow, "id"> & { id?: string };
 export default function ThiThuDeThiTab({
   kyId,
   initialRows,
+  readOnly = false,
 }: {
   kyId: string;
   initialRows: ThiThuDeThiRow[];
+  /** Không cho sửa đề (thiếu quyền chỉnh kỳ thi). */
+  readOnly?: boolean;
 }) {
   const [rows, setRows] = useState<DraftRow[]>(() =>
     initialRows.length ? initialRows : [],
@@ -22,6 +25,7 @@ export default function ThiThuDeThiTab({
 
   const saveRow = useCallback(
     async (row: DraftRow) => {
+      if (readOnly) return;
       const payload = {
         id: row.id,
         ky_thi_id: kyId,
@@ -47,10 +51,11 @@ export default function ThiThuDeThiTab({
         setBusyId(null);
       }
     },
-    [kyId],
+    [kyId, readOnly],
   );
 
   const deleteRow = useCallback(async (id: string | undefined) => {
+    if (readOnly) return;
     if (!id) return;
     if (!window.confirm("Xóa đề này?")) return;
     setBusyId(id);
@@ -66,9 +71,10 @@ export default function ThiThuDeThiTab({
     } finally {
       setBusyId(null);
     }
-  }, []);
+  }, [readOnly]);
 
   const addDe = useCallback(() => {
+    if (readOnly) return;
     const maxTu = rows.reduce((m, r) => Math.max(m, r.thu_tu), 0);
     setRows((prev) => [
       ...prev,
@@ -79,10 +85,15 @@ export default function ThiThuDeThiTab({
         thu_tu: maxTu + 1,
       } as DraftRow,
     ]);
-  }, [kyId, rows]);
+  }, [kyId, readOnly, rows]);
 
   return (
     <div className="space-y-4">
+      {readOnly ? (
+        <p className="rounded-lg border border-black/[0.08] bg-black/[0.03] px-3 py-2 text-[12px] text-[rgba(45,32,32,0.65)]">
+          Bạn không có quyền sửa đề thi trong kỳ này.
+        </p>
+      ) : null}
       {rows.map((row, idx) => (
         <div key={row.id ?? `draft-${idx}`} className="tti-de-item-w">
           <div className="tti-de-item-hd">
@@ -90,6 +101,7 @@ export default function ThiThuDeThiTab({
             <input
               className="tti-f-in min-w-0 flex-1"
               placeholder="Tiêu đề đề thi"
+              readOnly={readOnly}
               value={row.tieu_de}
               onChange={(e) => {
                 const v = e.target.value;
@@ -100,7 +112,7 @@ export default function ThiThuDeThiTab({
               type="button"
               className="tti-de-del flex-shrink-0"
               onClick={() => void deleteRow(row.id)}
-              disabled={busyId !== null}
+              disabled={readOnly || busyId !== null}
             >
               Xóa đề
             </button>
@@ -108,12 +120,15 @@ export default function ThiThuDeThiTab({
 
           <div>
             <p className="mb-2 text-[12px] font-bold text-[#2d2020]">Ảnh đề</p>
-            <label className="tti-de-add-img inline-flex cursor-pointer border border-dashed">
+            <label
+              className={`tti-de-add-img inline-flex border border-dashed ${readOnly ? "pointer-events-none opacity-45" : "cursor-pointer"}`}
+            >
               + Thêm ảnh
               <input
                 type="file"
                 accept="image/*"
                 multiple
+                disabled={readOnly}
                 className="hidden"
                 onChange={async (e) => {
                   const files = e.target.files;
@@ -141,6 +156,7 @@ export default function ThiThuDeThiTab({
                     type="button"
                     className="tti-de-img-x"
                     aria-label="Xóa ảnh"
+                    disabled={readOnly}
                     onClick={() =>
                       setRows((p) =>
                         p.map((r, i) =>
@@ -165,7 +181,7 @@ export default function ThiThuDeThiTab({
             <button
               type="button"
               className="tti-save-btn tti-save-btn-sm"
-              disabled={busyId !== null || !row.tieu_de.trim()}
+              disabled={readOnly || busyId !== null || !row.tieu_de.trim()}
               onClick={() => void saveRow(row)}
             >
               {busyId === (row.id ?? "new") ? (
@@ -178,7 +194,12 @@ export default function ThiThuDeThiTab({
         </div>
       ))}
 
-      <button type="button" className="tti-de-add-new inline-flex items-center justify-center gap-2" onClick={addDe}>
+      <button
+        type="button"
+        className="tti-de-add-new inline-flex items-center justify-center gap-2"
+        disabled={readOnly}
+        onClick={addDe}
+      >
         <Plus className="h-4 w-4" aria-hidden />
         Thêm đề
       </button>

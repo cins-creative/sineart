@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
 import ThiThuDeThiTab from "./ThiThuDeThiTab";
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
+import { parseThoiGianSuaBaiMs } from "@/lib/thi-thu/replay-time";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
 import type { ThiThuBaiNopRow, ThiThuDeThiRow, ThiThuKyThiRow } from "@/types/thi-thu";
 
@@ -13,6 +15,13 @@ function toDatetimeLocal(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function suaBaiToDatetimeLocal(row: ThiThuKyThiRow): string {
+  if (!row.thoi_gian_sua_bai) return "";
+  const ms = parseThoiGianSuaBaiMs(row.thoi_gian_bat_dau, row.thoi_gian_sua_bai);
+  if (ms == null) return "";
+  return toDatetimeLocal(new Date(ms).toISOString());
 }
 
 type Tab = "info" | "de" | "lich" | "nop";
@@ -27,6 +36,8 @@ export default function ThiThuEditorClient({
   baiNop: ThiThuBaiNopRow[];
 }) {
   const router = useRouter();
+  const { canEditThiThuKy } = useAdminDashboardAbilities();
+  const readOnly = !canEditThiThuKy;
   const [tab, setTab] = useState<Tab>("info");
   const [saving, setSaving] = useState(false);
   const [tieuDe, setTieuDe] = useState(initial?.tieu_de ?? "");
@@ -40,11 +51,16 @@ export default function ThiThuEditorClient({
   );
   const [thumb, setThumb] = useState(initial?.thumbnail_url ?? "");
   const [lich, setLich] = useState(initial?.lich_cham_bai_url ?? "");
+  const [thoiGianSuaBaiLocal, setThoiGianSuaBaiLocal] = useState(
+    initial ? suaBaiToDatetimeLocal(initial) : "",
+  );
+  const [videoSuaBai, setVideoSuaBai] = useState(initial?.video_sua_bai ?? "");
   const [trangThai, setTrangThai] = useState(initial?.trang_thai ?? "draft");
 
   const cfg = useMemo(() => getMonConfig(monThi), [monThi]);
 
   const saveKy = useCallback(async () => {
+    if (readOnly) return;
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
@@ -56,6 +72,8 @@ export default function ThiThuEditorClient({
         thoi_gian_giai_lao_ket_thuc: monThi === "hinh_hoa" && glEnd ? new Date(glEnd).toISOString() : null,
         thumbnail_url: thumb.trim() || null,
         lich_cham_bai_url: lich.trim() || null,
+        thoi_gian_sua_bai: thoiGianSuaBaiLocal ? new Date(thoiGianSuaBaiLocal).toISOString() : null,
+        video_sua_bai: videoSuaBai.trim() || null,
         trang_thai: trangThai,
       };
       const res = await fetch("/admin/api/thi-thu-upsert", {
@@ -81,9 +99,12 @@ export default function ThiThuEditorClient({
     monThi,
     router,
     t0,
+    thoiGianSuaBaiLocal,
     thumb,
+    readOnly,
     tieuDe,
     trangThai,
+    videoSuaBai,
   ]);
 
   const exportCsv = useCallback(() => {
@@ -116,7 +137,7 @@ export default function ThiThuEditorClient({
   };
 
   return (
-    <div className="sa-thi-thu-admin mx-auto max-w-4xl px-4 py-8">
+    <div className="sa-thi-thu-admin flex min-h-0 w-full min-w-0 max-w-6xl flex-1 flex-col px-4 py-6 md:py-8 mx-auto">
       <div className="tti-adm-editor-hd">
         <Link href="/admin/dashboard/thi-thu" className="tti-adm-back">
           ← Danh sách
@@ -144,6 +165,15 @@ export default function ThiThuEditorClient({
       </div>
 
       <h1 className="tti-adm-editor-title">{initial ? "Sửa kỳ thi" : "Tạo kỳ thi mới"}</h1>
+
+      {readOnly ? (
+        <div
+          className="mb-4 rounded-xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-950"
+          role="status"
+        >
+          Bạn chỉ xem — không có quyền tạo hoặc sửa kỳ thi (cần vai trò nhân viên, quản lý hoặc admin).
+        </div>
+      ) : null}
 
       <div className="tti-adm-tabs">
         {(["info", "de", "lich", "nop"] as const).map((k) => (
@@ -174,15 +204,16 @@ export default function ThiThuEditorClient({
       </div>
 
       {tab === "info" ? (
-        <div className="tti-adm-fc mt-4 space-y-0">
+        <div className="tti-adm-fc tti-adm-fc--editor mt-4">
           <div className="tti-f-group">
             <label className="tti-f-lbl">Thumbnail (cover 16:9)</label>
-            <label className="tti-upload-zone">
+            <label className={`tti-upload-zone ${readOnly ? "pointer-events-none opacity-50" : ""}`}>
               Click hoặc chọn ảnh cover
               <span>jpg, png, webp — khuyến nghị 1280×720px</span>
               <input
                 type="file"
                 accept="image/*"
+                disabled={readOnly}
                 className="hidden"
                 onChange={async (e) => {
                   const f = e.target.files?.[0];
@@ -194,20 +225,32 @@ export default function ThiThuEditorClient({
             </label>
             {thumb ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={thumb} alt="" className="mt-3 max-h-40 rounded-lg object-cover" />
+              <img src={thumb} alt="" className="tti-upload-preview max-h-40" />
             ) : null}
           </div>
 
           <div className="tti-f-group">
-            <label className="tti-f-lbl">Tiêu đề kỳ thi *</label>
-            <input className="tti-f-in" value={tieuDe} onChange={(e) => setTieuDe(e.target.value)} />
+            <label htmlFor="tti-ky-tieu-de" className="tti-f-lbl">
+              Tiêu đề kỳ thi *
+            </label>
+            <input
+              id="tti-ky-tieu-de"
+              className="tti-f-in"
+              readOnly={readOnly}
+              value={tieuDe}
+              onChange={(e) => setTieuDe(e.target.value)}
+            />
           </div>
 
           <div className="tti-f-row">
             <div className="tti-f-group">
-              <label className="tti-f-lbl">Môn thi *</label>
+              <label htmlFor="tti-ky-mon" className="tti-f-lbl">
+                Môn thi *
+              </label>
               <select
+                id="tti-ky-mon"
                 className="tti-f-in"
+                disabled={readOnly}
                 value={monThi}
                 onChange={(e) => setMonThi(e.target.value as MonThiKey)}
               >
@@ -217,10 +260,14 @@ export default function ThiThuEditorClient({
               </select>
             </div>
             <div className="tti-f-group">
-              <label className="tti-f-lbl">Giờ bắt đầu *</label>
+              <label htmlFor="tti-ky-t0" className="tti-f-lbl">
+                Giờ bắt đầu *
+              </label>
               <input
+                id="tti-ky-t0"
                 type="datetime-local"
                 className="tti-f-in"
+                readOnly={readOnly}
                 value={t0}
                 onChange={(e) => setT0(e.target.value)}
               />
@@ -236,6 +283,7 @@ export default function ThiThuEditorClient({
                   <input
                     type="datetime-local"
                     className="tti-f-in"
+                    readOnly={readOnly}
                     value={glStart}
                     onChange={(e) => setGlStart(e.target.value)}
                   />
@@ -254,6 +302,40 @@ export default function ThiThuEditorClient({
           ) : null}
 
           <div className="tti-f-group">
+            <label htmlFor="tti-ky-sua-time" className="tti-f-lbl">
+              Thời gian phát video sửa bài
+            </label>
+            <p className="tti-f-hint">
+              Có thể chọn ngay lúc tạo kỳ. Giờ phát lại thường cùng ngày với buổi thi; có thể chọn ngày giờ
+              khác nếu lịch phát nằm hôm sau.
+            </p>
+            <input
+              id="tti-ky-sua-time"
+              type="datetime-local"
+              className="tti-f-in"
+              readOnly={readOnly}
+              value={thoiGianSuaBaiLocal}
+              onChange={(e) => setThoiGianSuaBaiLocal(e.target.value)}
+            />
+          </div>
+
+          <div className="tti-f-group">
+            <label htmlFor="tti-ky-yt" className="tti-f-lbl">
+              Link Youtube sửa bài
+            </label>
+            <p className="tti-f-hint">Thường điền sau khi kỳ thi kết thúc và đã có link phát lại.</p>
+            <input
+              id="tti-ky-yt"
+              type="url"
+              className="tti-f-in"
+              placeholder="https://www.youtube.com/..."
+              readOnly={readOnly}
+              value={videoSuaBai}
+              onChange={(e) => setVideoSuaBai(e.target.value)}
+            />
+          </div>
+
+          <div className="tti-f-group">
             <div className="tti-tog-row">
               <button
                 type="button"
@@ -270,7 +352,7 @@ export default function ThiThuEditorClient({
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={saving || !tieuDe.trim() || !t0}
+              disabled={readOnly || saving || !tieuDe.trim() || !t0}
               className="tti-save-btn"
               onClick={() => void saveKy()}
             >
@@ -287,7 +369,7 @@ export default function ThiThuEditorClient({
 
       {tab === "de" && initial?.id ? (
         <div className="mt-4">
-          <ThiThuDeThiTab kyId={initial.id} initialRows={initialDeThi} />
+          <ThiThuDeThiTab kyId={initial.id} initialRows={initialDeThi} readOnly={readOnly} />
         </div>
       ) : null}
       {tab === "de" && !initial?.id ? (
@@ -295,18 +377,19 @@ export default function ThiThuEditorClient({
       ) : null}
 
       {tab === "lich" ? (
-        <div className="tti-adm-fc mt-4">
+        <div className="tti-adm-fc tti-adm-fc--editor mt-4">
           <div className="tti-f-group">
-            <label className="tti-f-lbl">Ảnh lịch chấm bài</label>
-            <p className="mb-2 text-[12px] leading-relaxed text-[rgba(45,32,32,0.55)]">
+            <span className="tti-f-lbl">Ảnh lịch chấm bài</span>
+            <p className="tti-f-hint">
               Ảnh hiển thị sau khi buổi thi kết thúc (trang kết thúc phòng thi).
             </p>
-            <label className="tti-upload-zone">
+            <label className={`tti-upload-zone ${readOnly ? "pointer-events-none opacity-50" : ""}`}>
               Đổi ảnh lịch chấm
               <span>jpg, png, webp</span>
               <input
                 type="file"
                 accept="image/*"
+                disabled={readOnly}
                 className="hidden"
                 onChange={async (e) => {
                   const f = e.target.files?.[0];
@@ -318,47 +401,65 @@ export default function ThiThuEditorClient({
             </label>
             {lich ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={lich} alt="" className="mt-4 max-h-64 rounded-xl object-contain" />
+              <img src={lich} alt="" className="tti-upload-preview tti-upload-preview--contain max-h-64" />
             ) : null}
           </div>
-          <button type="button" disabled={saving} className="tti-save-btn" onClick={() => void saveKy()}>
+          <button
+            type="button"
+            disabled={readOnly || saving}
+            className="tti-save-btn"
+            onClick={() => void saveKy()}
+          >
             Lưu lịch chấm
           </button>
         </div>
       ) : null}
 
       {tab === "nop" ? (
-        <div className="mt-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <span className="text-[13px] font-bold text-[#2d2020]">{baiNop.length} bài nộp</span>
-            <button type="button" className="tti-view-btn" onClick={exportCsv}>
+        <div className="tti-bai-nop-shell mt-4">
+          <div className="tti-bai-nop-toolbar">
+            <div className="tti-bai-nop-toolbar-text">
+              <span className="tti-bai-nop-kicker">Bài nộp học viên</span>
+              <strong className="tti-bai-nop-count">{baiNop.length}</strong>
+              <span className="tti-bai-nop-count-lbl">bài trong kỳ này</span>
+            </div>
+            <button type="button" className="tti-csv-btn" onClick={exportCsv}>
               Export CSV
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="tti-bai-nop-tbl">
-              <thead>
-                <tr>
-                  <th style={{ width: 120 }}>Họ tên</th>
-                  <th>Facebook</th>
-                  <th style={{ width: 110 }}>Giờ nộp</th>
-                  <th style={{ width: 56 }}>Ảnh</th>
-                </tr>
-              </thead>
-              <tbody>
-                {baiNop.map((b) => (
-                  <tr key={b.id}>
-                    <td style={{ fontWeight: 700 }}>{b.ho_ten}</td>
-                    <td style={{ fontSize: 11, color: "rgba(45,32,32,0.55)" }}>{b.facebook ?? "—"}</td>
-                    <td style={{ fontSize: 11 }}>
-                      {new Date(b.thoi_gian_nop).toLocaleString("vi-VN")}
-                    </td>
-                    <td style={{ fontWeight: 800 }}>{b.anh_bai_nop_urls?.length ?? 0}</td>
+          {baiNop.length === 0 ? (
+            <div className="tti-bai-nop-empty">Chưa có bài nộp cho kỳ thi này.</div>
+          ) : (
+            <div className="tti-bai-nop-scroll">
+              <table className="tti-bai-nop-tbl">
+                <thead>
+                  <tr>
+                    <th className="tti-bai-nop-col-name">Họ tên</th>
+                    <th className="tti-bai-nop-col-fb">Facebook</th>
+                    <th className="tti-bai-nop-col-time">Giờ nộp</th>
+                    <th className="tti-bai-nop-col-img">Ảnh</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {baiNop.map((b) => {
+                    const n = b.anh_bai_nop_urls?.length ?? 0;
+                    return (
+                      <tr key={b.id}>
+                        <td className="tti-bai-nop-cell-name">{b.ho_ten}</td>
+                        <td className="tti-bai-nop-cell-fb">{b.facebook?.trim() ? b.facebook : "—"}</td>
+                        <td className="tti-bai-nop-cell-time" title={new Date(b.thoi_gian_nop).toISOString()}>
+                          {new Date(b.thoi_gian_nop).toLocaleString("vi-VN")}
+                        </td>
+                        <td className="tti-bai-nop-cell-img">
+                          <span className="tti-bn-pill">{n}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       ) : null}
     </div>

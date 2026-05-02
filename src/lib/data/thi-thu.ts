@@ -3,7 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import type { ThiThuBaiNopRow, ThiThuDeThiRow, ThiThuKyThiRow } from "@/types/thi-thu";
 
 const KY_SELECT =
-  "id,tieu_de,mon_thi,thoi_gian_bat_dau,thoi_gian_giai_lao_bat_dau,thoi_gian_giai_lao_ket_thuc,thumbnail_url,lich_cham_bai_url,trang_thai,created_at";
+  "id,tieu_de,mon_thi,thoi_gian_bat_dau,thoi_gian_giai_lao_bat_dau,thoi_gian_giai_lao_ket_thuc,thumbnail_url,lich_cham_bai_url,video_sua_bai,thoi_gian_sua_bai,trang_thai,created_at";
 
 export async function fetchThiThuPublishedList(): Promise<ThiThuKyThiRow[]> {
   const supabase = await createClient();

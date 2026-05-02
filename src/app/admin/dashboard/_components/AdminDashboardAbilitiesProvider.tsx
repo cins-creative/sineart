@@ -4,6 +4,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import {
   adminStaffCanDeleteRecords,
+  adminStaffCanEditThiThuKy,
   adminStaffCanEditThuChiKhacPhieu,
   adminStaffCanViewBctcDetailCharts,
   adminStaffCanViewGiaTriTaiSanOverviewTab,
@@ -12,6 +13,8 @@ import {
 export type AdminDashboardAbilities = {
   /** Theo `hr_nhan_su.vai_tro`: chỉ `quan_ly` và `admin`. */
   canDelete: boolean;
+  /** Tạo / sửa kỳ thi thử — `nhan_vien`, `quan_ly`, `admin`. */
+  canEditThiThuKy: boolean;
   /** Sửa phiếu Thu chi khác — chỉ `quan_ly` và `admin`. */
   canEditThuChiKhacPhieu: boolean;
   /** Tab overview «BCTC chi tiết» — chỉ `quan_ly` và `admin`. */
@@ -23,6 +26,7 @@ export type AdminDashboardAbilities = {
 
 const AdminDashboardAbilitiesContext = createContext<AdminDashboardAbilities>({
   canDelete: false,
+  canEditThiThuKy: false,
   canEditThuChiKhacPhieu: false,
   canViewBctcDetail: false,
   canViewGiaTriTaiSanOverview: false,
@@ -39,6 +43,7 @@ export function AdminDashboardAbilitiesProvider({
   const value = useMemo<AdminDashboardAbilities>(
     () => ({
       canDelete: adminStaffCanDeleteRecords(staffRole),
+      canEditThiThuKy: adminStaffCanEditThiThuKy(staffRole),
       canEditThuChiKhacPhieu: adminStaffCanEditThuChiKhacPhieu(staffRole),
       canViewBctcDetail: adminStaffCanViewBctcDetailCharts(staffRole),
       canViewGiaTriTaiSanOverview: adminStaffCanViewGiaTriTaiSanOverviewTab(staffRole),

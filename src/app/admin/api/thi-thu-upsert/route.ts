@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
+import {
+  THI_THU_KY_EDIT_FORBIDDEN_MSG,
+  adminStaffCanEditThiThuKy,
+} from "@/lib/admin/staff-mutation-access";
+import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
 import { isMonThiKey } from "@/lib/thi-thu-config";
 import { formatSupabaseWriteError } from "@/lib/supabase/postgres-permission-hint";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -16,6 +21,8 @@ type Body = {
   thoi_gian_giai_lao_ket_thuc?: unknown;
   thumbnail_url?: unknown;
   lich_cham_bai_url?: unknown;
+  video_sua_bai?: unknown;
+  thoi_gian_sua_bai?: unknown;
   trang_thai?: unknown;
 };
 
@@ -30,6 +37,18 @@ export async function POST(req: Request): Promise<NextResponse> {
   const session = await getAdminSessionOrNull();
   if (!session) {
     return NextResponse.json({ ok: false, error: "Chưa đăng nhập admin." }, { status: 401 });
+  }
+
+  const supabaseGate = createServiceRoleClient();
+  if (!supabaseGate) {
+    return NextResponse.json(
+      { ok: false, error: "Thiếu SUPABASE_SERVICE_ROLE_KEY trên server." },
+      { status: 503 },
+    );
+  }
+  const profileGate = await fetchAdminStaffShellProfile(supabaseGate, session.staffId);
+  if (!adminStaffCanEditThiThuKy(profileGate.vai_tro)) {
+    return NextResponse.json({ ok: false, error: THI_THU_KY_EDIT_FORBIDDEN_MSG }, { status: 403 });
   }
 
   let body: Body;
@@ -67,13 +86,13 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  const supabase = createServiceRoleClient();
-  if (!supabase) {
-    return NextResponse.json(
-      { ok: false, error: "Thiếu SUPABASE_SERVICE_ROLE_KEY trên server." },
-      { status: 503 },
-    );
-  }
+  const supabase = supabaseGate;
+
+  const thoiGianSuaBai = parseTs(body.thoi_gian_sua_bai);
+  const videoSuaBai =
+    typeof body.video_sua_bai === "string" && body.video_sua_bai.trim()
+      ? body.video_sua_bai.trim()
+      : null;
 
   const row = {
     tieu_de: tieuDe,
@@ -89,6 +108,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       typeof body.lich_cham_bai_url === "string" && body.lich_cham_bai_url.trim()
         ? body.lich_cham_bai_url.trim()
         : null,
+    video_sua_bai: videoSuaBai,
+    thoi_gian_sua_bai: thoiGianSuaBai,
     trang_thai: trangThai,
   };
 

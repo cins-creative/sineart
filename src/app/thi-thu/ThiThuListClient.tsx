@@ -10,6 +10,7 @@ import {
   listCardStatusLabel,
 } from "@/lib/thi-thu/phase";
 import type { ListCardStatus } from "@/lib/thi-thu/phase";
+import { computeKyListSortKey, formatThoiGianSuaBaiLabel } from "@/lib/thi-thu/replay-time";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
 import type { ThiThuKyThiRow } from "@/types/thi-thu";
 
@@ -72,15 +73,26 @@ export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
   const now = Date.now() + offsetMs;
 
   const cards = useMemo(() => {
-    return rows.map((row) => {
+    const enriched = rows.map((row) => {
       const mon = row.mon_thi as MonThiKey;
       const cfg = getMonConfig(mon);
       const T = new Date(row.thoi_gian_bat_dau).getTime();
       const endMs = computeExamEndMs(T, cfg.thoi_luong_phut);
       const st = computeListCardStatus(T, cfg.thoi_luong_phut, now);
       const roomOpen = now >= T - OPEN_ROOM_MS;
-      return { row, mon, cfg, T, endMs, st, roomOpen };
+      const sortKey = computeKyListSortKey({
+        thoiGianBatDauIso: row.thoi_gian_bat_dau,
+        thoiLuongPhut: cfg.thoi_luong_phut,
+        thoiGianSuaBaiRaw: row.thoi_gian_sua_bai,
+        now,
+      });
+      return { row, mon, cfg, T, endMs, st, roomOpen, sortKey };
     });
+    enriched.sort((a, b) => {
+      if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey;
+      return a.row.thoi_gian_bat_dau.localeCompare(b.row.thoi_gian_bat_dau);
+    });
+    return enriched;
   }, [rows, now]);
 
   if (rows.length === 0) {
@@ -95,6 +107,11 @@ export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
     <div className="tti-grid3">
       {cards.map(({ row, mon, cfg, st, roomOpen }) => {
         const canEnter = roomOpen && st !== "da_ket_thuc";
+        const suaLabel =
+          st === "da_ket_thuc"
+            ? formatThoiGianSuaBaiLabel(row.thoi_gian_bat_dau, row.thoi_gian_sua_bai)
+            : null;
+        const yt = row.video_sua_bai?.trim() ?? "";
         return (
           <article key={row.id} className="tti-ttc">
             <div className={`tti-ttc-img ${imgCls(mon)}`}>
@@ -121,6 +138,11 @@ export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
                 <span className={`tti-dot-live ${dotCls(st)}`} aria-hidden />
                 {listCardStatusLabel(st)}
               </p>
+              {suaLabel ? (
+                <p className="tti-ttc-sua">
+                  <span className="tti-ttc-sua-k">Lịch sửa bài:</span> {suaLabel}
+                </p>
+              ) : null}
               {canEnter ? (
                 <Link href={`/thi-thu/${row.id}`} className="tti-ttc-btn tti-btn-grad">
                   Vào phòng thi →
@@ -130,6 +152,16 @@ export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
                   {st === "da_ket_thuc" ? "Đã kết thúc" : "Chưa mở phòng"}
                 </span>
               )}
+              {st === "da_ket_thuc" && yt ? (
+                <a
+                  href={yt}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tti-ttc-btn tti-btn-yt"
+                >
+                  Xem video sửa bài ↗
+                </a>
+              ) : null}
             </div>
           </article>
         );

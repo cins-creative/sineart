@@ -31,24 +31,27 @@ function DeThiRow({
 }) {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
+  const [uploadBatch, setUploadBatch] = useState<{ cur: number; total: number } | null>(null);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
+  const [manualUrl, setManualUrl] = useState("");
 
+  /** Không truyền `onProgress` → client dùng `fetch` (không XHR). Tránh lỗi proxy/trình duyệt chỉ với upload có tiến độ byte. */
   const handleFiles = useCallback(
     async (fileList: FileList | null) => {
       if (!fileList?.length || readOnly) return;
       const list = Array.from(fileList);
       setUploadErr(null);
       setUploadBusy(true);
-      setUploadPct(0);
+      setUploadPct(1);
+      setUploadBatch({ cur: 1, total: list.length });
       const urlList: string[] = [];
       try {
         for (let i = 0; i < list.length; i++) {
           const f = list[i]!;
-          const url = await uploadAdminCfImage(f, f.name, (p) => {
-            const overall = Math.round(((i + p / 100) / list.length) * 100);
-            setUploadPct(Math.min(99, Math.max(0, overall)));
-          });
+          setUploadBatch({ cur: i + 1, total: list.length });
+          const url = await uploadAdminCfImage(f, f.name);
           urlList.push(url);
+          setUploadPct(Math.round(((i + 1) / list.length) * 100));
         }
         setRows((prev) =>
           prev.map((r, i) =>
@@ -60,10 +63,25 @@ function DeThiRow({
       } finally {
         setUploadBusy(false);
         setUploadPct(0);
+        setUploadBatch(null);
       }
     },
     [idx, readOnly, setRows],
   );
+
+  const appendManualImageUrl = useCallback(() => {
+    const u = manualUrl.trim();
+    if (!u) return;
+    if (!/^https?:\/\/.+/i.test(u)) {
+      setUploadErr("URL ảnh phải bắt đầu bằng http:// hoặc https://");
+      return;
+    }
+    setUploadErr(null);
+    setRows((prev) =>
+      prev.map((r, i) => (i === idx ? { ...r, anh_urls: [...(r.anh_urls ?? []), u] } : r)),
+    );
+    setManualUrl("");
+  }, [idx, manualUrl, setRows]);
 
   return (
     <div className="tti-de-item-w">
@@ -84,38 +102,70 @@ function DeThiRow({
         </button>
       </div>
 
-      <div>
+      <div className="tti-de-img-block">
         <p className="mb-1 text-[12px] font-bold text-[#2d2020]">Ảnh đề</p>
-        <p className="mb-2 text-[11px] font-semibold leading-snug text-[rgba(45,32,32,0.55)]">
-          Chọn file → upload Cloudflare Images → xem trước bên dưới. Bấm «Lưu thông tin» (form kỳ thi) để ghi JSON vào cột{" "}
-          <code className="rounded bg-black/[0.06] px-1 text-[10px]">de_thi</code>.
+        <p className="mb-2 text-[11px] leading-snug text-[rgba(45,32,32,0.58)]">
+          (1) Chọn file — server upload lên Cloudflare giống ảnh cover. (2) Hoặc dán URL ảnh đã có (vd. imagedelivery.net). «Lưu thông tin»
+          ghi vào cột <code className="rounded bg-black/[0.06] px-1 text-[10px]">de_thi</code>.
         </p>
 
         {!readOnly ? (
-          <div className="tti-de-upload-toolbar">
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              disabled={uploadBusy}
-              className="tti-de-file-native"
-              onChange={(e) => {
-                const files = e.target.files;
-                e.target.value = "";
-                void handleFiles(files);
-              }}
-            />
-            {uploadBusy ? (
-              <p className="tti-de-upload-status" role="status">
-                Đang upload… {uploadPct}%
-              </p>
-            ) : null}
+          <div className="flex flex-col gap-3">
+            <div>
+              <span className="mb-1 block text-[11px] font-bold text-[#2d2020]">Chọn file từ máy</span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                disabled={uploadBusy}
+                className="tti-de-plain-file max-w-full"
+                aria-label={`Chọn ảnh đề ${idx + 1}`}
+                onChange={(e) => {
+                  const files = e.target.files;
+                  e.target.value = "";
+                  void handleFiles(files);
+                }}
+              />
+              {uploadBusy ? (
+                <p className="tti-de-upload-line" role="status">
+                  <span className="tti-spinner tti-spinner--sm mr-2 inline-block align-middle" aria-hidden />
+                  Đang upload…{" "}
+                  {uploadBatch ? `${uploadBatch.cur}/${uploadBatch.total} ảnh · ` : ""}
+                  {uploadPct}%
+                </p>
+              ) : null}
+            </div>
+
+            <div>
+              <span className="mb-1 block text-[11px] font-bold text-[#2d2020]">Hoặc dán URL ảnh</span>
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch">
+                <input
+                  type="url"
+                  inputMode="url"
+                  autoComplete="off"
+                  placeholder="https://…"
+                  value={manualUrl}
+                  disabled={uploadBusy}
+                  className="tti-f-in min-w-0 flex-1"
+                  onChange={(e) => setManualUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      appendManualImageUrl();
+                    }
+                  }}
+                />
+                <button type="button" className="tti-save-btn-sm shrink-0 px-4 py-2" disabled={uploadBusy} onClick={appendManualImageUrl}>
+                  Thêm URL
+                </button>
+              </div>
+            </div>
           </div>
         ) : null}
 
         {uploadErr ? (
           <div className="tti-upload-err-banner" role="alert">
-            <strong>Lỗi upload.</strong> {uploadErr}
+            <strong>Lỗi.</strong> {uploadErr}
           </div>
         ) : null}
 

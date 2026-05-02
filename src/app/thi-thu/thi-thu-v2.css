@@ -1953,41 +1953,6 @@
   font-variant-numeric: tabular-nums;
   color: var(--tti-ink);
 }
-.sa-thi-thu-admin .tti-de-upload-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-}
-.sa-thi-thu-admin .tti-de-file-native {
-  width: 100%;
-  max-width: 100%;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--tti-ink2);
-}
-.sa-thi-thu-admin .tti-de-file-native::file-selector-button {
-  margin-right: 10px;
-  padding: 8px 14px;
-  border-radius: var(--tti-rs);
-  border: 1px solid var(--tti-ink3);
-  background: var(--tti-card);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  color: var(--tti-ink);
-}
-.sa-thi-thu-admin .tti-de-file-native:disabled::file-selector-button {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.sa-thi-thu-admin .tti-de-upload-status {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--tti-g1);
-}
 .sa-thi-thu-admin .tti-upload-err {
   margin: 8px 0 0;
   font-size: 12px;
@@ -2088,6 +2053,39 @@
 .sa-thi-thu-admin .tti-save-btn-sm {
   font-size: 11px;
   padding: 6px 15px;
+}
+.sa-thi-thu-admin .tti-de-img-block {
+  margin-top: 2px;
+}
+.sa-thi-thu-admin .tti-de-plain-file {
+  display: block;
+  width: 100%;
+  max-width: min(100%, 520px);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tti-ink2);
+}
+.sa-thi-thu-admin .tti-de-plain-file::file-selector-button {
+  margin-right: 12px;
+  padding: 8px 14px;
+  border-radius: var(--tti-rs);
+  border: 1px solid var(--tti-ink3);
+  background: rgba(253, 247, 243, 0.95);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  color: var(--tti-ink);
+}
+.sa-thi-thu-admin .tti-de-plain-file:disabled::file-selector-button {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sa-thi-thu-admin .tti-de-upload-line {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tti-ink2);
 }
 .sa-thi-thu-admin .tti-de-item-w {
   background: #fff;

@@ -1,6 +1,11 @@
 /** POST multipart `file` → `/admin/api/upload-cf-image` (cookie admin). */
 export type UploadCfImageProgress = (percent: number) => void;
 
+function safeImageFilename(filename: string): string {
+  const t = typeof filename === "string" ? filename.trim() : "";
+  return t.length > 0 ? t : "image.jpg";
+}
+
 function parseXhrUploadJson(xhr: XMLHttpRequest): { ok: boolean; url?: string; error?: string } {
   try {
     const json: unknown = JSON.parse(xhr.responseText || "{}");
@@ -78,7 +83,7 @@ function uploadAdminCfImageWithProgress(blob: Blob, filename: string, onProgress
     });
 
     const fd = new FormData();
-    fd.append("file", blob, filename);
+    fd.append("file", blob, safeImageFilename(filename));
     xhr.send(fd);
   });
 }
@@ -93,14 +98,14 @@ export async function uploadAdminCfImage(
   }
 
   const fd = new FormData();
-  fd.append("file", blob, filename);
+  fd.append("file", blob, safeImageFilename(filename));
   const res = await fetch("/admin/api/upload-cf-image", { method: "POST", body: fd, credentials: "same-origin" });
   const json: unknown = await res.json().catch(() => ({}));
   if (!res.ok || typeof json !== "object" || json === null || (json as { ok?: unknown }).ok !== true) {
     const err =
-      typeof json === "object" && json !== null && "error" in json
+      typeof json === "object" && json !== null && "error" in json && String((json as { error?: unknown }).error).trim()
         ? String((json as { error?: unknown }).error)
-        : "Tải ảnh thất bại.";
+        : `Tải ảnh thất bại (HTTP ${res.status}).`;
     throw new Error(err);
   }
   const url = (json as { url?: unknown }).url;

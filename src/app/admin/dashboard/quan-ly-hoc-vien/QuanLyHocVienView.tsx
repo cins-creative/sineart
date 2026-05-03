@@ -1810,6 +1810,20 @@ export default function QuanLyHocVienView({
     return m;
   }, [enrollments]);
 
+  /** ID học viên mẫu — không tính vào sĩ số / ghi danh / bucket (chỉ lọc riêng «Học viên mẫu»). */
+  const mauStudentIds = useMemo(() => {
+    const s = new Set<number>();
+    for (const hv of students) {
+      if (hv.is_hoc_vien_mau) s.add(hv.id);
+    }
+    return s;
+  }, [students]);
+
+  const nonMauStudentCount = useMemo(
+    () => students.filter((h) => !h.is_hoc_vien_mau).length,
+    [students],
+  );
+
   const allClasses = useMemo(() => {
     const s = new Set<string>();
     for (const e of enrollments) {
@@ -1823,6 +1837,7 @@ export default function QuanLyHocVienView({
   const hvCountByClassName = useMemo(() => {
     const m = new Map<string, Set<number>>();
     for (const e of enrollments) {
+      if (mauStudentIds.has(e.hoc_vien_id)) continue;
       const name = lopDisplayName(e.lop);
       if (!name || name === "—") continue;
       if (!m.has(name)) m.set(name, new Set());
@@ -1831,11 +1846,15 @@ export default function QuanLyHocVienView({
     const out = new Map<string, number>();
     for (const [k, set] of m) out.set(k, set.size);
     return out;
-  }, [enrollments]);
+  }, [enrollments, mauStudentIds]);
 
   const filtered = useMemo(() => {
     let list = students;
-    if (filterMau) list = list.filter((hv) => hv.is_hoc_vien_mau);
+    if (filterMau) {
+      list = list.filter((hv) => hv.is_hoc_vien_mau);
+    } else {
+      list = list.filter((hv) => !hv.is_hoc_vien_mau);
+    }
     if (filterTuVan !== "all") {
       list = list.filter((hv) => hv.trang_thai_tu_van === filterTuVan);
     }
@@ -1877,10 +1896,11 @@ export default function QuanLyHocVienView({
   const activeLopEnrollmentCount = useMemo(() => {
     let n = 0;
     for (const row of enrollments) {
+      if (mauStudentIds.has(row.hoc_vien_id)) continue;
       if (deriveEnrollmentStatus(row) === "Đang học") n += 1;
     }
     return n;
-  }, [enrollments]);
+  }, [enrollments, mauStudentIds]);
 
   /** Số học viên theo số lớp (khoá) đang còn hạn — mỗi khoá `deriveEnrollmentStatus === "Đang học"`. */
   const hvDangHocLopBuckets = useMemo(() => {
@@ -1888,6 +1908,7 @@ export default function QuanLyHocVienView({
     let twoLop = 0;
     let threePlusLop = 0;
     for (const hv of students) {
+      if (hv.is_hoc_vien_mau) continue;
       const khs = byHv.get(hv.id) ?? [];
       const nActive = khs.filter((k) => deriveEnrollmentStatus(k) === "Đang học").length;
       if (nActive === 1) oneLop += 1;
@@ -1919,6 +1940,7 @@ export default function QuanLyHocVienView({
     let dang_hoc = 0;
     let nghi = 0;
     for (const hv of students) {
+      if (hv.is_hoc_vien_mau) continue;
       if (hv.trang_thai_tu_van === "nghi") nghi++;
       else dang_hoc++;
     }
@@ -2134,7 +2156,7 @@ export default function QuanLyHocVienView({
             </div>
           </div>
           <p className="m-0 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-            Lọc nhanh — dropdown (sĩ số lớp = số HV có ghi danh ít nhất một khoá tên lớp đó)
+            Lọc nhanh — các số trong ngoặc không tính học viên mẫu (sĩ số lớp = HV thật có ghi danh theo tên lớp đó)
           </p>
           <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-stretch">
             <select
@@ -2143,7 +2165,7 @@ export default function QuanLyHocVienView({
               value={bulkFilterSelectValue}
               onChange={(e) => onBulkFilterSelect(e.target.value)}
             >
-              <option value="all">{`Tất cả học viên (${students.length})`}</option>
+              <option value="all">{`Tất cả học viên (${nonMauStudentCount})`}</option>
               <option value="tv_dang">{`Đang học — tư vấn (${countsTuVan.dang_hoc})`}</option>
               <option value="tv_nghi">{`Nghỉ — tư vấn (${countsTuVan.nghi})`}</option>
               <option value="bucket_1">{`Một lớp còn hạn (${hvDangHocLopBuckets.oneLop})`}</option>

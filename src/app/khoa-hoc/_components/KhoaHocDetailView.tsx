@@ -103,40 +103,65 @@ function starRow(soSao: number): string {
   return `${"★".repeat(n)}${"☆".repeat(5 - n)}`;
 }
 
-function KdReviewCard({ r }: { r: KhoaHocReviewListItem }) {
+/** Cùng bảng màu avatar đánh giá trang chủ (`mapReviews` trong `home.ts`). */
+const KD_REVIEW_AVATAR_GRADS = [
+  "linear-gradient(135deg,#f8a668,#ee5b9f)",
+  "linear-gradient(135deg,#6efec0,#fde859)",
+  "linear-gradient(135deg,#bb89f8,#ee5b9f)",
+  "linear-gradient(135deg,#f8a668,#fde859)",
+  "linear-gradient(135deg,#ee5b9f,#bb89f8)",
+] as const;
+
+function reviewStarsEmoji(soSao: number): string {
+  return "⭐".repeat(Math.min(5, Math.max(1, Math.round(soSao))));
+}
+
+function KdReviewCard({
+  r,
+  courseLabel,
+  index,
+}: {
+  r: KhoaHocReviewListItem;
+  courseLabel: string;
+  index: number;
+}) {
   const [imgErr, setImgErr] = useState(false);
   const thumb =
     r.avatarUrl && !imgErr ? cfImageForThumbnail(r.avatarUrl) || r.avatarUrl : null;
+  const grad = KD_REVIEW_AVATAR_GRADS[index % KD_REVIEW_AVATAR_GRADS.length];
+  const courseLine = [courseLabel.trim() || "Khoá học", r.thoiGianHoc?.trim()]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <article className="kd-review">
-      <div className="kd-rv-top">
-        {thumb ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <div className="kd-rv-av kd-rv-av--img">
-            <img
+    <article className="kd-rv-big">
+      <div className="kd-rv-head">
+        <div className="kd-rv-avatar overflow-hidden" style={{ background: grad }}>
+          {thumb ? (
+            <Image
               src={thumb}
               alt=""
-              className="h-full w-full rounded-full object-cover"
+              width={40}
+              height={40}
+              className="h-full w-full object-cover"
+              loading="lazy"
+              unoptimized={nextImageShouldUnoptimize(thumb)}
               onError={() => setImgErr(true)}
             />
-          </div>
-        ) : (
-          <div className="kd-rv-av">{reviewInitials(r.tenNguoi)}</div>
-        )}
-        <div>
+          ) : (
+            <span className="kd-rv-avatar-initials">{reviewInitials(r.tenNguoi)}</span>
+          )}
+        </div>
+        <div className="kd-rv-meta">
           <div className="kd-rv-name">{r.tenNguoi}</div>
+          <div className="kd-rv-course">{courseLine}</div>
           <div className="kd-rv-stars" aria-label={`${r.soSao} trên 5 sao`}>
-            {starRow(r.soSao)}
+            {reviewStarsEmoji(r.soSao)}
           </div>
         </div>
+        {r.nguon ? <span className="kd-rv-source">{r.nguon}</span> : null}
       </div>
-      <p className="kd-rv-text">{r.noiDung}</p>
-      {r.thoiGianHoc || r.nguon ? (
-        <p className="kd-rv-meta">
-          {[r.thoiGianHoc, r.nguon].filter(Boolean).join(" · ")}
-        </p>
-      ) : null}
+      <div className="kd-rv-text-big">{r.noiDung}</div>
     </article>
   );
 }
@@ -767,9 +792,9 @@ export default function KhoaHocDetailView({
                     })}
                   </div>
                 </div>
-                <div className="kd-review-grid">
-                  {reviewList.map((r) => (
-                    <KdReviewCard key={r.id} r={r} />
+                <div className="kd-review-stack">
+                  {reviewList.map((r, i) => (
+                    <KdReviewCard key={r.id} r={r} courseLabel={title} index={i} />
                   ))}
                 </div>
               </>

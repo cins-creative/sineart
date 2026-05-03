@@ -50,7 +50,7 @@ export function computeOverallStatus(khs: AdminQlhvEnrollment[]): string {
   return "Nghỉ";
 }
 
-/** Số học viên có `computeOverallStatus === "Đang học"` — trùng với dropdown «Đang học — tổng». */
+/** Số học viên có `computeOverallStatus === "Đang học"` — không tính học viên mẫu (`is_hoc_vien_mau`). */
 export function countHocVienDangHoc(students: AdminQlhvStudent[], enrollments: AdminQlhvEnrollment[]): number {
   const byHv = new Map<number, AdminQlhvEnrollment[]>();
   for (const e of enrollments) {
@@ -60,6 +60,7 @@ export function countHocVienDangHoc(students: AdminQlhvStudent[], enrollments: A
   }
   let n = 0;
   for (const hv of students) {
+    if (hv.is_hoc_vien_mau) continue;
     if (computeOverallStatus(byHv.get(hv.id) ?? []) === "Đang học") n++;
   }
   return n;

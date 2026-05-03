@@ -1139,74 +1139,105 @@
   border-radius: 2px;
 }
 
-.kd-review-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 9px;
-}
-
-@media (min-width: 640px) {
-  .kd-review-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.kd-review {
-  border: 0.5px solid var(--kd-border);
-  border-radius: 10px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.85);
-}
-
-.kd-rv-top {
+/* Đánh giá: layout giống trang chủ `.rv-big` — một cột, nội dung đọc hết */
+.kd-review-stack {
   display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 8px;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
 }
 
-.kd-rv-av {
-  width: 30px;
-  height: 30px;
+.kd-rv-big {
+  background: #fff;
+  border: 1.5px solid rgba(45, 32, 32, 0.07);
+  border-radius: 12px;
+  padding: 18px 18px 20px;
+  min-width: 0;
+}
+
+.kd-rv-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kd-rv-avatar {
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: var(--kd-purple-light);
-  color: var(--kd-purple);
-  font-size: 11px;
-  font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 18px;
   flex-shrink: 0;
 }
 
-.kd-rv-av--img {
-  overflow: hidden;
-  padding: 0;
-  background: var(--kd-border);
-}
-
-.kd-rv-name {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--kd-ink);
-}
-
-.kd-rv-stars {
-  color: var(--kd-gold);
-  font-size: 10px;
-}
-
-.kd-rv-text {
-  font-size: 12px;
-  color: var(--kd-ink2);
-  line-height: 1.65;
+.kd-rv-avatar-initials {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  user-select: none;
 }
 
 .kd-rv-meta {
-  margin: 8px 0 0;
-  font-size: 11px;
+  flex: 1;
+  min-width: 0;
+}
+
+.kd-rv-name {
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--kd-ink);
+}
+
+.kd-rv-course {
+  font-size: 12px;
   color: var(--kd-ink2);
-  opacity: 0.85;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.kd-rv-stars {
+  font-size: 13px;
+  margin-top: 2px;
+  line-height: 1.2;
+}
+
+.kd-rv-source {
+  flex-shrink: 0;
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--kd-ink2);
+  max-width: 38%;
+  text-align: right;
+  line-height: 1.35;
+}
+
+.kd-rv-text-big {
+  font-size: 14px;
+  line-height: 1.75;
+  color: rgba(45, 32, 32, 0.88);
+  font-weight: 600;
+  font-style: italic;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (min-width: 768px) {
+  .kd-rv-text-big {
+    font-size: 16px;
+  }
+
+  .kd-rv-big {
+    padding: 20px 22px 22px;
+  }
 }
 
 /* FAQ */

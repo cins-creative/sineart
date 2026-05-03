@@ -85,7 +85,8 @@ const css = `
   .sa-ebook .eb-empty{text-align:center;padding:80px 20px;color:rgba(45,32,32,.45);font-weight:600}
 
   /* Preview slide-over */
-  .sa-ebook .eb-preview-backdrop{position:fixed;inset:0;background:rgba(20,12,12,.55);backdrop-filter:blur(4px);z-index:100;display:flex;justify-content:flex-end}
+  /* Trên .nav-bottom-fixed (102), .nav-cta-fixed (120), .nav-mobile-overlay (200), .gallery-lightbox (300) */
+  .sa-ebook .eb-preview-backdrop{position:fixed;inset:0;background:rgba(20,12,12,.55);backdrop-filter:blur(4px);z-index:400;display:flex;justify-content:flex-end}
   .sa-ebook .eb-preview{position:relative;width:min(560px,96vw);max-height:100vh;height:100vh;background:#fefcf9;overflow-y:auto;border-left:1px solid rgba(45,32,32,.08);display:flex;flex-direction:column}
   .sa-ebook .eb-preview-close{position:absolute;top:14px;right:14px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.85);color:#2d2020;border:0;display:grid;place-items:center;cursor:pointer;z-index:2;transition:background .15s;box-shadow:0 2px 8px rgba(0,0,0,.12)}
   .sa-ebook .eb-preview-close:hover{background:#fff}
@@ -109,6 +110,10 @@ const css = `
 
   @media (max-width:900px){
     .sa-ebook .page-hero-inner{grid-template-columns:1fr;gap:32px}
+    /* Thanh nav dock + iPhone home indicator — tránh che .eb-preview-ctas khi cuộn tới cuối */
+    .sa-ebook .eb-preview-body{
+      padding-bottom:max(32px,calc(96px + env(safe-area-inset-bottom, 0px)));
+    }
   }
   @media (max-width:540px){
     .sa-ebook .eb-grid{grid-template-columns:repeat(2,1fr);gap:16px}

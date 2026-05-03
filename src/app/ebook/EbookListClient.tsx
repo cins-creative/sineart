@@ -5,7 +5,6 @@ import {
   BookOpen,
   Calendar,
   ChevronDown,
-  ExternalLink,
   FileText,
   Filter,
   Search,
@@ -15,6 +14,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import {
   buildEbookHref,
@@ -51,6 +51,7 @@ function FeaturedBadge() {
 }
 
 export default function EbookListClient({ items, categories }: Props) {
+  const router = useRouter();
   const [q, setQ] = useState("");
   const [activeCat, setActiveCat] = useState<string>(""); // "" = tất cả
   const [catOpen, setCatOpen] = useState(false);
@@ -237,7 +238,10 @@ export default function EbookListClient({ items, categories }: Props) {
                 key={b.id}
                 type="button"
                 className="eb-card"
-                onClick={() => setPreviewId(b.id)}
+                onClick={() => {
+                  router.prefetch(buildEbookHref(b.slug));
+                  setPreviewId(b.id);
+                }}
                 aria-label={`Xem chi tiết ${b.title}`}
               >
                 <div
@@ -329,6 +333,12 @@ function EbookPreview({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const href = buildEbookHref(ebook.slug);
+
+  // Chủ động prefetch RSC /ebook/[slug] (bấm «Đọc sách» phản hồi nhanh hơn).
+  useEffect(() => {
+    router.prefetch(href);
+  }, [router, href]);
 
   // Esc to close + lock body scroll while open
   useEffect(() => {
@@ -354,25 +364,25 @@ function EbookPreview({
       : ebook.img_src_link.slice(0, 4);
 
   const year = formatYear(ebook.created_at);
-  const href = buildEbookHref(ebook.slug);
   const contentSafe = useMemo(() => {
     // Tóm tắt HTML từ admin — strip <script> để an toàn. Trust level tương
     // đương blog.
     return ebook.content.replace(/<\/?(script|iframe)[^>]*>/gi, "");
   }, [ebook.content]);
 
-  return (
-    <motion.div
-      className="eb-preview-backdrop"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Chi tiết ${ebook.title}`}
-    >
+  const overlay = (
+    <div className="sa-root sa-ebook">
+      <motion.div
+        className="eb-preview-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        onClick={onClose}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Chi tiết ${ebook.title}`}
+      >
       <motion.div
         className="eb-preview"
         initial={{ x: "100%" }}
@@ -493,21 +503,22 @@ function EbookPreview({
           )}
 
           <div className="eb-preview-ctas">
-            <button
-              type="button"
+            <Link
+              href={href}
+              prefetch
               className="eb-btn eb-btn--primary"
-              onClick={() => router.push(href)}
+              onClick={() => onClose()}
             >
               <BookOpen size={16} strokeWidth={2.4} />
               Đọc sách
-            </button>
-            <Link href={href} className="eb-btn eb-btn--ghost">
-              <ExternalLink size={16} strokeWidth={2.4} />
-              Trang chi tiết
             </Link>
           </div>
         </div>
       </motion.div>
     </motion.div>
+    </div>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(overlay, document.body);
 }

@@ -1,16 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
+
+import { Skeleton } from "@/components/ui/Skeleton";
 
 import { EbookDetailFlipbook } from "../EbookDetailFlipbook";
 import { EbookDetailReadCTA } from "../EbookDetailReadCTA";
-import {
-  buildEbookHref,
-  ebookCatColor,
-  ebookGradFor,
-  fetchAdjacentEbooks,
-  fetchEbookBySlug,
-  fetchRelatedEbooks,
-} from "@/lib/data/ebook";
+import { EbookDetailPrevNext } from "./EbookDetailPrevNext";
+import { EbookDetailRelatedAside } from "./EbookDetailRelatedAside";
+import { ebookCatColor, ebookGradFor, fetchEbookBySlug } from "@/lib/data/ebook";
 import { EbookFlipbook } from "../EbookFlipbook";
 
 /** Strip `<script>` / `<iframe>` — nội dung admin nhưng vẫn filter an toàn. */
@@ -21,15 +19,35 @@ function sanitizeHtml(html: string): string {
     .replace(/javascript:/gi, "");
 }
 
+function EbookDetailPrevNextSkeleton() {
+  return (
+    <div className="ebd-navpn" aria-hidden>
+      <Skeleton style={{ minHeight: 88, borderRadius: 14, width: "100%" }} />
+      <Skeleton style={{ minHeight: 88, borderRadius: 14, width: "100%" }} />
+    </div>
+  );
+}
+
+function EbookDetailRelatedAsideSkeleton() {
+  return (
+    <div className="ebd-sb-section" aria-hidden>
+      <Skeleton style={{ width: 120, height: 12, borderRadius: 6, marginBottom: 12 }} />
+      {[0, 1, 2].map((i) => (
+        <div key={i} style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+          <Skeleton style={{ width: 48, height: 64, borderRadius: 10, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Skeleton style={{ width: "95%", height: 14, borderRadius: 8, marginBottom: 6 }} />
+            <Skeleton style={{ width: "55%", height: 11, borderRadius: 6 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export async function EbookDetailMain({ slug }: { slug: string }) {
   const ebook = await fetchEbookBySlug(slug);
   if (!ebook) notFound();
-
-  const [related, adjacent] = await Promise.all([
-    fetchRelatedEbooks(ebook.id, ebook.categories, 4),
-    fetchAdjacentEbooks(ebook.id),
-  ]);
-  const { prev, next } = adjacent;
 
   const publishedYear = ebook.created_at ? new Date(ebook.created_at).getFullYear() : null;
 
@@ -149,87 +167,9 @@ export async function EbookDetailMain({ slug }: { slug: string }) {
             </section>
           )}
 
-          {(prev || next) && (
-            <div className="ebd-navpn">
-              {prev ? (
-                <Link href={buildEbookHref(prev.slug)} className="ebd-navpn-item">
-                  <span className="ebd-navpn-icon" aria-hidden>
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    >
-                      <polyline points="15 18 9 12 15 6" />
-                    </svg>
-                  </span>
-                  <div
-                    className="ebd-navpn-thumb"
-                    style={prev.thumbnail ? undefined : { background: ebookGradFor(prev.id) }}
-                  >
-                    {prev.thumbnail && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={prev.thumbnail}
-                        alt=""
-                        className="ebd-navpn-thumb-img"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    )}
-                  </div>
-                  <div className="ebd-navpn-text">
-                    <div className="ebd-navpn-label">Ebook trước</div>
-                    <div className="ebd-navpn-title">{prev.title}</div>
-                  </div>
-                </Link>
-              ) : (
-                <div />
-              )}
-
-              {next ? (
-                <Link href={buildEbookHref(next.slug)} className="ebd-navpn-item ebd-navpn-item--next">
-                  <div className="ebd-navpn-text">
-                    <div className="ebd-navpn-label">Ebook kế</div>
-                    <div className="ebd-navpn-title">{next.title}</div>
-                  </div>
-                  <div
-                    className="ebd-navpn-thumb"
-                    style={next.thumbnail ? undefined : { background: ebookGradFor(next.id) }}
-                  >
-                    {next.thumbnail && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={next.thumbnail}
-                        alt=""
-                        className="ebd-navpn-thumb-img"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    )}
-                  </div>
-                  <span className="ebd-navpn-icon" aria-hidden>
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    >
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </span>
-                </Link>
-              ) : (
-                <div />
-              )}
-            </div>
-          )}
+          <Suspense fallback={<EbookDetailPrevNextSkeleton />}>
+            <EbookDetailPrevNext currentId={ebook.id} />
+          </Suspense>
         </main>
 
         <aside className="ebd-sidebar" aria-label="Thông tin ebook">
@@ -252,34 +192,12 @@ export async function EbookDetailMain({ slug }: { slug: string }) {
             </div>
           </div>
 
-          {related.length > 0 && (
-            <div className="ebd-sb-section">
-              <div className="ebd-sb-label">Ebook liên quan</div>
-              <div className="ebd-sb-list">
-                {related.map((r) => (
-                  <Link key={r.id} href={buildEbookHref(r.slug)} className="ebd-sb-item">
-                    <div
-                      className="ebd-sb-thumb"
-                      style={
-                        r.thumbnail
-                          ? {
-                              backgroundImage: `url(${JSON.stringify(r.thumbnail)})`,
-                            }
-                          : { background: ebookGradFor(r.id) }
-                      }
-                    />
-                    <div>
-                      <div className="ebd-sb-title">{r.title}</div>
-                      <div className="ebd-sb-meta">
-                        {r.pages != null ? `${r.pages} trang` : "Ebook"}
-                        {r.categories[0] ? ` · ${r.categories[0]}` : ""}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
+          <Suspense fallback={<EbookDetailRelatedAsideSkeleton />}>
+            <EbookDetailRelatedAside
+              currentId={ebook.id}
+              categories={ebook.categories}
+            />
+          </Suspense>
         </aside>
       </div>
     </div>

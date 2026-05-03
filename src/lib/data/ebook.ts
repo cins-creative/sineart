@@ -46,6 +46,25 @@ export {
 const SELECT_COLS =
   "id, slug, title, so_trang, featured, categories, thumbnail, image_demo, img_src_link, html_embed, content, noi_dung_sach, created_at, updated_at";
 
+/** Không gồm mảng ảnh / embed / chi tiết — tránh 400 khi schema chưa có cột mới. */
+const SELECT_COMPACT =
+  "id, slug, title, so_trang, featured, categories, thumbnail, content, created_at, updated_at";
+
+/** Tối thiểu để vẫn list được ebook — chỉ sort theo `created_at`. */
+const SELECT_MINIMAL = "id, slug, title, created_at";
+
+function logSupabaseError(context: string, err: unknown, level: "error" | "warn" = "error"): void {
+  const payload =
+    err && typeof err === "object"
+      ? (() => {
+          const o = err as { message?: string; code?: string; details?: string; hint?: string };
+          return { message: o.message, code: o.code, details: o.details, hint: o.hint };
+        })()
+      : err;
+  if (level === "warn") console.warn(context, payload);
+  else console.error(context, payload);
+}
+
 /** Alias — cùng logic `normalizeEbookSlugSegment` (decode % + mọi dash Unicode). */
 function normalizeEbookSlugForLookup(slug: string): string {
   return normalizeEbookSlugSegment(slug);
@@ -123,20 +142,58 @@ function mapRow(raw: Record<string, unknown>): EbookItem {
   };
 }
 
+/**
+ * Thử từng tầng `select` + (nếu schema có) `order(featured)`; nếu lỗi thì sort chỉ theo `created_at`.
+ * `SELECT_MINIMAL` không có `featured` — chỉ sort theo `created_at`.
+ */
+async function fetchMktEbooksList(
+  supabase: NonNullable<ReturnType<typeof createStaticClient>>,
+): Promise<{ data: Record<string, unknown>[]; usedSelect: string } | null> {
+  const trySelectList = async (selectList: string, label: string) => {
+    const onlyCreated = selectList === SELECT_MINIMAL;
+    const orderModes: boolean[] = onlyCreated ? [false] : [true, false];
+    for (const useFeatured of orderModes) {
+      let q = supabase.from("mkt_ebooks").select(selectList);
+      if (useFeatured) q = q.order("featured", { ascending: false });
+      const { data, error } = await q.order("created_at", { ascending: false });
+      if (!error) {
+        if (selectList !== SELECT_COLS || !useFeatured) {
+          console.warn("[ebook] fetchAllEbooks: using fallback", { label, useFeaturedOrder: useFeatured });
+        }
+        return {
+          data: (data ?? []) as unknown as Record<string, unknown>[],
+          usedSelect: selectList,
+        };
+      }
+      logSupabaseError(
+        `[ebook] mkt_ebooks list (${label}, featuredOrder=${useFeatured})`,
+        error,
+        "warn",
+      );
+    }
+    return null;
+  };
+
+  let pack = await trySelectList(SELECT_COLS, "full");
+  if (pack) return pack;
+
+  pack = await trySelectList(SELECT_COMPACT, "compact");
+  if (pack) return pack;
+
+  pack = await trySelectList(SELECT_MINIMAL, "minimal");
+  return pack;
+}
+
 async function fetchAllEbooksUncached(): Promise<EbookItem[]> {
   try {
     const supabase = createStaticClient();
     if (!supabase) return [];
-    const { data, error } = await supabase
-      .from("mkt_ebooks")
-      .select(SELECT_COLS)
-      .order("featured", { ascending: false })
-      .order("created_at", { ascending: false });
-    if (error) {
-      console.error("[ebook] fetchAllEbooks error", error);
+    const pack = await fetchMktEbooksList(supabase);
+    if (!pack) {
+      console.error("[ebook] fetchAllEbooks: all select tiers failed");
       return [];
     }
-    return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+    return pack.data.map((r) => mapRow(r));
   } catch (e) {
     console.warn("[ebook] fetchAllEbooks unexpected error:", e);
     return [];
@@ -153,25 +210,33 @@ async function fetchEbookBySlugUncached(
   const key = normalizeEbookSlugForLookup(slug);
   if (!key) return null;
 
-  const { data, error } = await supabase
-    .from("mkt_ebooks")
-    .select(SELECT_COLS)
-    .eq("slug", key)
-    .limit(1)
-    .maybeSingle();
+  const tryOne = async (selectList: string) => {
+    const { data, error } = await supabase
+      .from("mkt_ebooks")
+      .select(selectList)
+      .eq("slug", key)
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      logSupabaseError("[ebook] fetchEbookBySlug query", error, "warn");
+      return null;
+    }
+    return data ? mapRow(data as unknown as Record<string, unknown>) : null;
+  };
 
-  if (error) {
-    console.error("[ebook] fetchEbookBySlug error", error);
-    return null;
-  }
-  if (data) return mapRow(data as Record<string, unknown>);
+  let hit = await tryOne(SELECT_COLS);
+  if (hit) return hit;
+  hit = await tryOne(SELECT_COMPACT);
+  if (hit) return hit;
+  hit = await tryOne(SELECT_MINIMAL);
+  if (hit) return hit;
 
   /** Fallback: slug trong DB có thể chứa dash Unicode / ký tự ẩn — so khớp sau normalize. */
   const all = await fetchAllEbooks();
-  const hit =
+  const fromList =
     all.find((e) => normalizeEbookSlugForLookup(e.slug) === key) ??
     all.find((e) => normalizeEbookSlugForLookup(e.slug).toLowerCase() === key.toLowerCase());
-  return hit ?? null;
+  return fromList ?? null;
 }
 
 export const fetchEbookBySlug = cache(fetchEbookBySlugUncached);

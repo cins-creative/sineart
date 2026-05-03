@@ -5,6 +5,7 @@ import {
   formatIsoLocalDate,
   parseLocalDateFromIso,
 } from "@/lib/donghocphi/ngay-cuoi-ky-renewal";
+import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 
 const PAGE = 1000;
 const IN_CHUNK = 200;
@@ -66,6 +67,13 @@ function pickCreatedAtMs(v: unknown): number {
   return Number.isFinite(t) ? t : 0;
 }
 
+function isMissingSoBuoiColumnError(err: { message?: string; code?: string } | null): boolean {
+  if (!err?.message) return false;
+  const m = err.message.toLowerCase();
+  if (err.code === "42703") return true;
+  return m.includes("so_buoi") && (m.includes("does not exist") || m.includes("column") || m.includes("unknown"));
+}
+
 async function fetchSoBuoiByGoiIds(
   supabase: SupabaseClient,
   goiIds: readonly number[]
@@ -73,9 +81,14 @@ async function fetchSoBuoiByGoiIds(
   const map = new Map<number, number>();
   const unique = [...new Set(goiIds.filter((n) => Number.isFinite(n) && n > 0))] as number[];
   if (!unique.length) return map;
+  const goiTable = hpGoiHocPhiTableName();
   for (let i = 0; i < unique.length; i += IN_CHUNK) {
     const chunk = unique.slice(i, i + IN_CHUNK);
-    const { data, error } = await supabase.from("hp_goi_hoc_phi").select("id, so_buoi").in("id", chunk);
+    const { data, error } = await supabase.from(goiTable).select("id, so_buoi").in("id", chunk);
+    if (error && isMissingSoBuoiColumnError(error)) {
+      /* Bảng legacy không có `so_buoi` — bỏ qua chunk; kỳ học vẫn suy từ ngày trong chi tiết. */
+      continue;
+    }
     if (error || !data?.length) continue;
     for (const raw of data as { id?: unknown; so_buoi?: unknown }[]) {
       const id = nId(raw.id);
@@ -90,7 +103,7 @@ async function fetchSoBuoiByGoiIds(
 }
 
 /**
- * Số buổi (ngày lịch) một dòng chi tiết đã TT đóng góp — ưu tiên `hp_goi_hoc_phi.so_buoi`,
+ * Số buổi (ngày lịch) một dòng chi tiết đã TT đóng góp — ưu tiên `so_buoi` trên bảng gói (`hpGoiHocPhiTableName()`),
  * không có thì lấy từ `ngay_dau_ky` → `ngay_cuoi_ky` (khoảng + 1).
  */
 function linePurchasedBuoi(row: {

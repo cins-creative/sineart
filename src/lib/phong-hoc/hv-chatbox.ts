@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { hvChatboxInsert, hvChatboxSelectByLop } from "@/lib/phong-hoc/hv-chatbox-db";
+
 export type HvChatboxUserType = "Student" | "Teacher";
 
 /** Một dòng `hv_chatbox` — `name` là `ql_quan_ly_hoc_vien.id` khi học viên gửi; GV thường để null. */
@@ -61,22 +63,28 @@ function baiSoOrder(baiSo: number | null): number {
   return baiSo;
 }
 
-/** FK lớp — đồng bộ `hv_bai_hoc_vien.lop_hoc`, không dùng cột `class`. */
-const HV_CHAT_LOP_FK = "lop_hoc" as const;
+function mapChatboxRow(raw: Record<string, unknown>): HvChatboxRow {
+  const ut = raw.usertype === "Teacher" ? "Teacher" : "Student";
+  const nameRaw = raw.name;
+  const name =
+    nameRaw != null && nameRaw !== "" && Number.isFinite(Number(nameRaw)) ? Number(nameRaw) : null;
+  return {
+    id: Number(raw.id),
+    created_at: String(raw.created_at ?? ""),
+    content: raw.content != null ? String(raw.content) : null,
+    photo: raw.photo != null ? String(raw.photo) : null,
+    usertype: ut,
+    name,
+  };
+}
 
+/** Cùng fallback `lop_hoc` / `class` và select có/không `photo` như API `/api/phong-hoc/hv-chatbox`. */
 export async function fetchHvChatboxMessages(
   supabase: SupabaseClient,
   lopHocId: number
 ): Promise<HvChatboxRow[]> {
-  const { data, error } = await supabase
-    .from("hv_chatbox")
-    .select("id,created_at,content,photo,usertype,name")
-    .eq(HV_CHAT_LOP_FK, lopHocId)
-    .order("created_at", { ascending: false })
-    .limit(200);
-
-  if (error) throw error;
-  return (data ?? []) as HvChatboxRow[];
+  const { rows } = await hvChatboxSelectByLop(supabase, lopHocId, {});
+  return rows.map(mapChatboxRow);
 }
 
 export async function insertHvChatboxMessage(
@@ -89,13 +97,13 @@ export async function insertHvChatboxMessage(
     photo: string | null;
   }
 ): Promise<HvChatboxRow[]> {
-  const { data, error } = await supabase
-    .from("hv_chatbox")
-    .insert(payload)
-    .select("id,created_at,content,photo,usertype,name")
-    .limit(1);
-  if (error) throw error;
-  return (data ?? []) as HvChatboxRow[];
+  const { message } = await hvChatboxInsert(supabase, payload.lop_hoc, {
+    usertype: payload.usertype,
+    name: payload.name,
+    content: payload.content,
+    photo: payload.photo,
+  });
+  return [mapChatboxRow(message as Record<string, unknown>)];
 }
 
 async function chatApiJson<T>(path: string, init?: RequestInit): Promise<T> {

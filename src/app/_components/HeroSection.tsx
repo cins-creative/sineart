@@ -59,12 +59,12 @@ function cardImageStyle(card: HeroCardImage): CSSProperties | undefined {
 function HeroImageCard({
   className,
   card,
-  eager,
+  priority,
   sizes,
 }: {
   className: string;
   card: HeroCardImage;
-  eager?: boolean;
+  priority?: boolean;
   sizes: string;
 }) {
   return (
@@ -76,8 +76,7 @@ function HeroImageCard({
           fill
           sizes={sizes}
           className="hero-card-img"
-          loading={eager ? "eager" : undefined}
-          unoptimized
+          priority={priority}
         />
       ) : null}
     </div>
@@ -181,7 +180,7 @@ export default function HeroSection({ content = DEFAULT_HOME_CONTENT.hero }: Pro
           <HeroImageCard
             className="hero-card hero-card--main"
             card={content.cards.main}
-            eager
+            priority
             sizes="(max-width: 860px) 82vw, 460px"
           />
           <div className="hero-sticker hero-sticker--1">

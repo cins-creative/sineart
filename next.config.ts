@@ -1,10 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /** Bật nén phản hồi (gzip) — mặc định thường true; ghi rõ theo cấu hình dự án. */
+  compress: true,
   /** Giây — tránh fail build khi nhiều trang SSG + DB chậm (mặc định 60). */
   staticPageGenerationTimeout: 120,
   outputFileTracingRoot: __dirname,
   images: {
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",

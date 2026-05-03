@@ -14,7 +14,8 @@
      qua Google Fonts; fallback system fonts nếu lỗi mạng.
    ============================================================================ */
 
-@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;700;800;900&family=Quicksand:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,700&display=swap");
+/* Be Vietnam Pro + Quicksand: next/font/local trong `app/layout.tsx` (--font-*). Chỉ Fraunces qua Google Fonts. */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,700&display=swap");
 
 /* Smooth anchor scroll (TOC → section). Chỉ apply khi trang đang render
    thư viện để không ảnh hưởng page khác. */

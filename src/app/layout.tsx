@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Be_Vietnam_Pro, Quicksand } from "next/font/google";
+import localFont from "next/font/local";
 import ConditionalCta from "./_components/ConditionalCta";
 import ConditionalHomeAdBanner from "./_components/ConditionalHomeAdBanner";
 import SeoOrganizationJsonLd from "./_components/SeoOrganizationJsonLd";
@@ -7,15 +7,42 @@ import "./globals.css";
 import "./sineart-home.css";
 import "./sineart-home-v2.css";
 
-const quicksand = Quicksand({
-  subsets: ["latin", "vietnamese"],
+/** Quicksand — latin / latin-ext / vietnamese (woff2 từ @fontsource, đặt tại `src/fonts/quicksand`). */
+const quicksand = localFont({
+  src: [
+    { path: "../fonts/quicksand/quicksand-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-latin-ext-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-vietnamese-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-latin-ext-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-vietnamese-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-latin-ext-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-vietnamese-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-latin-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-latin-ext-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../fonts/quicksand/quicksand-vietnamese-700-normal.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-quicksand",
+  display: "swap",
 });
 
-/** Font display — dùng cho heading theo design system mới (Be Vietnam Pro, weight 500–900). */
-const beVietnamPro = Be_Vietnam_Pro({
-  subsets: ["latin", "vietnamese"],
-  weight: ["500", "700", "800", "900"],
+/** Be Vietnam Pro — display/heading (500, 700, 800, 900). */
+const beVietnamPro = localFont({
+  src: [
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-latin-ext-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-vietnamese-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-latin-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-latin-ext-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-vietnamese-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-latin-800-normal.woff2", weight: "800", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-latin-ext-800-normal.woff2", weight: "800", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-vietnamese-800-normal.woff2", weight: "800", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-latin-900-normal.woff2", weight: "900", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-latin-ext-900-normal.woff2", weight: "900", style: "normal" },
+    { path: "../fonts/be-vietnam-pro/be-vietnam-pro-vietnamese-900-normal.woff2", weight: "900", style: "normal" },
+  ],
   variable: "--font-be-vietnam-pro",
   display: "swap",
 });

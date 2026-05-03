@@ -147,10 +147,6 @@ const HocVienSearchSelect = memo(function HocVienSearchSelect({
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  useEffect(() => {
-    if (open) setQ("");
-  }, [open]);
-
   const mergedOpts = useMemo(() => {
     if (value == null) return options;
     if (options.some((o) => o.id === value)) return options;
@@ -191,7 +187,9 @@ const HocVienSearchSelect = memo(function HocVienSearchSelect({
         type="button"
         disabled={disabled}
         onClick={() => {
-          if (!disabled) setOpen((o) => !o);
+          if (disabled) return;
+          if (!open) setQ("");
+          setOpen((o) => !o);
         }}
         className={cn(
           "flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-left text-[12px] outline-none focus:border-[#BC8AF9] disabled:opacity-50",
@@ -337,38 +335,52 @@ type BhvPagedRowProps = {
 };
 
 const BhvPagedRow = memo(
-  function BhvPagedRow(props: BhvPagedRowProps) {
-    const merged = useMemo(
-      () => mergeBhvDisplayRow(props.baseRow, props.draftPatch, props.mergeCtx),
-      [props.baseRow, props.draftPatch, props.mergeCtx],
+  function BhvPagedRow({
+    baseRow,
+    draftPatch,
+    mergeCtx,
+    layout,
+    tableBulk,
+    exercises,
+    hocVienOptions,
+    lopOptions,
+    rowBusy,
+    saveBusy,
+    uploadBusy,
+    dispatchDraft,
+    dispatchRemoveField,
+    onUploadRowStart,
+    onUploadRowEnd,
+    onDeleteRow,
+  }: BhvPagedRowProps) {
+    const merged = useMemo(() => mergeBhvDisplayRow(baseRow, draftPatch, mergeCtx), [baseRow, draftPatch, mergeCtx]);
+    const id = baseRow.id;
+    const onDraftPatch = useCallback((p: UpdateBaiHocVienPayload) => dispatchDraft(id, p), [id, dispatchDraft]);
+    const onRemoveField = useCallback(
+      (f: keyof UpdateBaiHocVienPayload) => dispatchRemoveField(id, f),
+      [id, dispatchRemoveField],
     );
-    const id = props.baseRow.id;
-    const onDraftPatch = useCallback((p: UpdateBaiHocVienPayload) => props.dispatchDraft(id, p), [id, props.dispatchDraft]);
-    const onRemoveField = useCallback((f: keyof UpdateBaiHocVienPayload) => props.dispatchRemoveField(id, f), [
-      id,
-      props.dispatchRemoveField,
-    ]);
-    const onUploadStart = useCallback(() => props.onUploadRowStart(id), [id, props.onUploadRowStart]);
+    const onUploadStart = useCallback(() => onUploadRowStart(id), [id, onUploadRowStart]);
     const onDelete = useCallback(() => {
-      void props.onDeleteRow(id);
-    }, [id, props.onDeleteRow]);
+      void onDeleteRow(id);
+    }, [id, onDeleteRow]);
 
     return (
       <RowEditor
-        layout={props.layout}
-        tableBulk={props.tableBulk}
+        layout={layout}
+        tableBulk={tableBulk}
         row={merged}
-        baselineScore={props.baseRow.score}
-        exercises={props.exercises}
-        hocVienOptions={props.hocVienOptions}
-        lopOptions={props.lopOptions}
-        rowBusy={props.rowBusy}
-        saveBusy={props.saveBusy}
-        uploadBusy={props.uploadBusy}
+        baselineScore={baseRow.score}
+        exercises={exercises}
+        hocVienOptions={hocVienOptions}
+        lopOptions={lopOptions}
+        rowBusy={rowBusy}
+        saveBusy={saveBusy}
+        uploadBusy={uploadBusy}
         onDraftChange={onDraftPatch}
         onDraftRemoveField={onRemoveField}
         onUploadStart={onUploadStart}
-        onUploadEnd={props.onUploadRowEnd}
+        onUploadEnd={onUploadRowEnd}
         onDelete={onDelete}
       />
     );

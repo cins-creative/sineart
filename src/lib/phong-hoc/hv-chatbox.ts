@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { hvChatboxInsert, hvChatboxSelectByLop } from "@/lib/phong-hoc/hv-chatbox-db";
+import {
+  hvChatboxInsert,
+  hvChatboxSelectByLop,
+  type HvChatLopColumn,
+} from "@/lib/phong-hoc/hv-chatbox-db";
 
 export type HvChatboxUserType = "Student" | "Teacher";
 
@@ -63,7 +67,8 @@ function baiSoOrder(baiSo: number | null): number {
   return baiSo;
 }
 
-function mapChatboxRow(raw: Record<string, unknown>): HvChatboxRow {
+/** Map một dòng DB / payload Realtime → `HvChatboxRow`. */
+export function mapChatboxRow(raw: Record<string, unknown>): HvChatboxRow {
   const ut = raw.usertype === "Teacher" ? "Teacher" : "Student";
   const nameRaw = raw.name;
   const name =
@@ -85,6 +90,15 @@ export async function fetchHvChatboxMessages(
 ): Promise<HvChatboxRow[]> {
   const { rows } = await hvChatboxSelectByLop(supabase, lopHocId, {});
   return rows.map(mapChatboxRow);
+}
+
+/** Một lần khi mount: tin nhắn + cột FK lớp thực tế (`lop_hoc` hoặc `class`) cho filter Realtime. */
+export async function fetchHvChatboxMessagesWithLopColumn(
+  supabase: SupabaseClient,
+  lopHocId: number
+): Promise<{ rows: HvChatboxRow[]; lopColumn: HvChatLopColumn }> {
+  const { rows, usedColumn } = await hvChatboxSelectByLop(supabase, lopHocId, {});
+  return { rows: rows.map(mapChatboxRow), lopColumn: usedColumn };
 }
 
 export async function insertHvChatboxMessage(
@@ -126,19 +140,9 @@ async function chatApiJson<T>(path: string, init?: RequestInit): Promise<T> {
   return obj as T;
 }
 
-/** Đọc tin (server — service role, bỏ qua RLS). */
+/** Đọc tin (server — service role, bỏ qua RLS). Dùng khi không có Supabase browser (ít gặp). */
 export async function apiFetchHvChatboxMessages(lopHocId: number): Promise<HvChatboxRow[]> {
   const u = `/api/phong-hoc/hv-chatbox?lopHocId=${encodeURIComponent(String(lopHocId))}`;
-  const j = await chatApiJson<{ messages: HvChatboxRow[] }>(u);
-  return j.messages ?? [];
-}
-
-/** Poll tin mới sau mốc thời gian. */
-export async function apiPollHvChatboxAfter(
-  lopHocId: number,
-  afterIso: string
-): Promise<HvChatboxRow[]> {
-  const u = `/api/phong-hoc/hv-chatbox?lopHocId=${encodeURIComponent(String(lopHocId))}&after=${encodeURIComponent(afterIso)}`;
   const j = await chatApiJson<{ messages: HvChatboxRow[] }>(u);
   return j.messages ?? [];
 }

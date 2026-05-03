@@ -28,12 +28,13 @@ import {
 import {
   apiFetchHvChatboxMessages,
   apiInsertHvChatboxMessage,
-  apiPollHvChatboxAfter,
   chatCacheKey,
   chatSubjectColor,
   fetchChatExerciseIndex,
   fetchChatStudentMapByQlhv,
+  fetchHvChatboxMessagesWithLopColumn,
   formatChatTime,
+  mapChatboxRow,
   parseQlhvKey,
   type ChatExerciseEntry,
   type ChatStudentMapEntry,
@@ -66,6 +67,7 @@ import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { classroomGalleryEmoji, fetchClassroomGalleryForLop } from "@/lib/phong-hoc/classroom-gallery";
 import ClassroomSignInOverlay from "@/app/_components/ClassroomSignInOverlay";
 import StudentAvatarMenu from "@/components/StudentAvatarMenu";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import Link from "next/link";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -95,8 +97,6 @@ const PHC_SIDEBAR_TWEEN = { type: "tween" as const, duration: 0.48, ease: PHC_SI
 
 const HV_CHAT_INITIAL = 30;
 const HV_CHAT_LOAD_MORE = 20;
-/** Giảm tải so với 2s; bỏ qua khi tab ẩn (xem `poll` trong effect chat). */
-const HV_CHAT_POLL_MS = 8000;
 
 /** Vòng tiến độ bài (theo prototype Class_Chatbox). GV có thể bấm để mở gán tiến độ. */
 function ChatMiniRing({
@@ -728,6 +728,10 @@ export default function ClassroomClient({
   const hvLatestCreatedAtRef = useRef<string>("");
   const myQlhvIdRef = useRef<number | null>(null);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
+  /** Realtime `hv_chatbox` — gỡ bằng `supabase.removeChannel` khi unmount / đổi lớp. */
+  const hvChatRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  /** Tránh async fetch/subscribe cũ ghi đè sau khi đổi lớp / unmount. */
+  const hvChatEffectGenerationRef = useRef(0);
 
   const browserSb = useMemo(() => createBrowserSupabaseClient(), []);
 
@@ -1653,6 +1657,10 @@ export default function ClassroomClient({
       setChatStudentByQlhv({});
       hvKnownIdsRef.current = new Set();
       hvLatestCreatedAtRef.current = "";
+      if (browserSb && hvChatRealtimeChannelRef.current) {
+        browserSb.removeChannel(hvChatRealtimeChannelRef.current);
+        hvChatRealtimeChannelRef.current = null;
+      }
       return;
     }
 
@@ -1705,58 +1713,95 @@ export default function ClassroomClient({
       /* ignore */
     }
 
-    void apiFetchHvChatboxMessages(lopHocIdForDb)
-      .then((rows) => {
-        if (cancelled) return;
-        setHvChatErr(null);
-        hvKnownIdsRef.current = new Set(rows.map((r) => r.id));
-        if (rows[0]?.created_at) hvLatestCreatedAtRef.current = rows[0].created_at;
-        setHvChatRows(rows);
-        try {
-          localStorage.setItem(chatCacheKey(lopHocIdForDb), JSON.stringify(rows.slice(0, 50)));
-        } catch {
-          /* ignore */
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setHvChatErr(e instanceof Error ? e.message : "Không tải được chat.");
-          setHvChatRows([]);
-        }
-      });
-
-    const poll = async () => {
+    const applyRowsFromServer = (rows: HvChatboxRow[]) => {
       if (cancelled) return;
-      if (document.visibilityState === "hidden") return;
-      const since = hvLatestCreatedAtRef.current;
-      if (!since) return;
-      let rows: HvChatboxRow[];
+      setHvChatErr(null);
+      hvKnownIdsRef.current = new Set(rows.map((r) => r.id));
+      if (rows[0]?.created_at) hvLatestCreatedAtRef.current = rows[0].created_at;
+      setHvChatRows(rows);
       try {
-        rows = await apiPollHvChatboxAfter(lopHocIdForDb, since);
+        localStorage.setItem(chatCacheKey(lopHocIdForDb), JSON.stringify(rows.slice(0, 50)));
       } catch {
-        return;
+        /* ignore */
       }
-      if (cancelled || !rows.length) return;
-      const fresh = rows.filter((r) => !hvKnownIdsRef.current.has(r.id));
-      if (!fresh.length) return;
-      for (const r of fresh) hvKnownIdsRef.current.add(r.id);
-      const lastCa = fresh[fresh.length - 1]?.created_at;
-      if (lastCa) hvLatestCreatedAtRef.current = lastCa;
-      setHvChatRows((prev) => {
-        const merged = [...fresh.reverse(), ...prev].slice(0, 200);
-        try {
-          localStorage.setItem(chatCacheKey(lopHocIdForDb), JSON.stringify(merged.slice(0, 50)));
-        } catch {
-          /* ignore */
-        }
-        return merged;
-      });
     };
 
-    const timer = window.setInterval(poll, HV_CHAT_POLL_MS);
+    const failLoad = (e: unknown) => {
+      if (!cancelled) {
+        setHvChatErr(e instanceof Error ? e.message : "Không tải được chat.");
+        setHvChatRows([]);
+      }
+    };
+
+    /** Không có Supabase browser: một lần qua API (như cũ), không Realtime. */
+    if (!browserSb) {
+      void apiFetchHvChatboxMessages(lopHocIdForDb).then(applyRowsFromServer).catch(failLoad);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const gen = ++hvChatEffectGenerationRef.current;
+
+    void (async () => {
+      if (cancelled) return;
+      if (hvChatRealtimeChannelRef.current) {
+        browserSb.removeChannel(hvChatRealtimeChannelRef.current);
+        hvChatRealtimeChannelRef.current = null;
+      }
+
+      try {
+        const { rows, lopColumn } = await fetchHvChatboxMessagesWithLopColumn(browserSb, lopHocIdForDb);
+        if (cancelled || gen !== hvChatEffectGenerationRef.current) return;
+        applyRowsFromServer(rows);
+
+        const channel = browserSb
+          .channel(`chatbox-${lopHocIdForDb}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "hv_chatbox",
+              filter: `${lopColumn}=eq.${lopHocIdForDb}`,
+            },
+            (payload) => {
+              const row = mapChatboxRow((payload.new ?? {}) as Record<string, unknown>);
+              if (!Number.isFinite(row.id)) return;
+              setHvChatRows((prev) => {
+                if (hvKnownIdsRef.current.has(row.id)) return prev;
+                hvKnownIdsRef.current.add(row.id);
+                if (row.created_at > hvLatestCreatedAtRef.current) {
+                  hvLatestCreatedAtRef.current = row.created_at;
+                }
+                const merged = [row, ...prev.filter((p) => p.id !== row.id)].slice(0, 200);
+                try {
+                  localStorage.setItem(chatCacheKey(lopHocIdForDb), JSON.stringify(merged.slice(0, 50)));
+                } catch {
+                  /* ignore */
+                }
+                return merged;
+              });
+            }
+          )
+          .subscribe();
+
+        if (cancelled || gen !== hvChatEffectGenerationRef.current) {
+          browserSb.removeChannel(channel);
+          return;
+        }
+        hvChatRealtimeChannelRef.current = channel;
+      } catch (e: unknown) {
+        if (!cancelled && gen === hvChatEffectGenerationRef.current) failLoad(e);
+      }
+    })();
+
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      if (browserSb && hvChatRealtimeChannelRef.current) {
+        browserSb.removeChannel(hvChatRealtimeChannelRef.current);
+        hvChatRealtimeChannelRef.current = null;
+      }
     };
   }, [browserSb, lopHocIdForDb, storedSession]);
 

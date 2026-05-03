@@ -7,58 +7,17 @@ import type { ClassroomSessionRecord, ClassroomStudentSessionData } from "./clas
 const LO_SELECT_TEACHER =
   "id,class_name,class_full_name,avatar,url_class,teacher,mon_hoc,lich_hoc,meeting_room";
 
-/**
- * `ql_lop_hoc.teacher` có thể là bigint, bigint[], hoặc chuỗi JSON/CSV text —
- * `.eq` và `.contains` chỉ phủ 2 dạng đầu. Khi cột là text chứa `"[23,45]"` hay
- * `"23, 45"` thì fallback qua `.ilike` rồi lọc lại bằng `parseTeacherIds`.
- */
-async function fetchLopHocWhereTeacher(
-  supabase: SupabaseClient,
+/** Lọc danh sách lớp đã fetch theo `teacherId` (cột `teacher` đa dạng kiểu). */
+function lopHocRowsForTeacher(
+  rows: Record<string, unknown>[],
   teacherId: number
-): Promise<Record<string, unknown>[]> {
-  const [eqRes, csRes, likeRes] = await Promise.all([
-    supabase.from("ql_lop_hoc").select(LO_SELECT_TEACHER).eq("teacher", teacherId),
-    supabase.from("ql_lop_hoc").select(LO_SELECT_TEACHER).contains("teacher", [teacherId]),
-    supabase.from("ql_lop_hoc").select(LO_SELECT_TEACHER).ilike("teacher", `%${teacherId}%`),
-  ]);
+): Record<string, unknown>[] {
   const byId = new Map<number, Record<string, unknown>>();
-  const pushRows = (
-    rows: Record<string, unknown>[] | null | undefined,
-    { filterByParse }: { filterByParse: boolean }
-  ) => {
-    if (!rows) return;
-    for (const r of rows) {
-      const row = r as Record<string, unknown>;
-      const id = Number(row.id);
-      if (!Number.isFinite(id)) continue;
-      if (filterByParse && !parseTeacherIds(row.teacher).includes(teacherId)) continue;
-      byId.set(id, row);
-    }
-  };
-  pushRows(eqRes.data ?? null, { filterByParse: false });
-  if (!csRes.error) pushRows(csRes.data ?? null, { filterByParse: false });
-  if (!likeRes.error) pushRows(likeRes.data ?? null, { filterByParse: true });
-
-  // Fallback cuối: cột `teacher` có thể là text JSON/CSV nhưng ilike vẫn miss
-  // (ví dụ text `"1,2,3"` mà teacherId=2 thì ilike '%2%' có match — nhưng nếu
-  // PostgREST từ chối ilike trên bigint thì queries ở trên all-miss). Scan
-  // toàn bộ `ql_lop_hoc` rồi lọc bằng parseTeacherIds. Fallback chỉ chạy khi
-  // 2 query đầu đều lỗi hoặc rỗng — tránh kéo hàng ngàn row không cần thiết.
-  if (byId.size === 0 && eqRes.error && csRes.error) {
-    const { data } = await supabase
-      .from("ql_lop_hoc")
-      .select(LO_SELECT_TEACHER);
-    pushRows(data ?? null, { filterByParse: true });
-  }
-  if (typeof console !== "undefined" && byId.size === 0) {
-    console.warn("[fetchLopHocWhereTeacher] teacherId=%d returned empty", teacherId, {
-      eqErr: eqRes.error?.message ?? null,
-      csErr: csRes.error?.message ?? null,
-      likeErr: likeRes.error?.message ?? null,
-      eqCount: eqRes.data?.length ?? 0,
-      csCount: csRes.data?.length ?? 0,
-      likeCount: likeRes.data?.length ?? 0,
-    });
+  for (const r of rows) {
+    if (!parseTeacherIds(r.teacher).includes(teacherId)) continue;
+    const id = Number(r.id);
+    if (!Number.isFinite(id)) continue;
+    byId.set(id, r);
   }
   return [...byId.values()];
 }
@@ -575,6 +534,13 @@ export async function lookupClassroomByEmail(
     let anyClassFound = false;
     const seenLop = new Set<number>();
 
+    const { data: allLopForTeachers, error: lopAllErr } = await supabase
+      .from("ql_lop_hoc")
+      .select(LO_SELECT_TEACHER);
+    const lopCache = !lopAllErr && allLopForTeachers?.length
+      ? (allLopForTeachers as Record<string, unknown>[])
+      : [];
+
     for (const teacherRow of teachers) {
       const t = teacherRow as {
         id: number;
@@ -585,7 +551,7 @@ export async function lookupClassroomByEmail(
       if (!Number.isFinite(Number(t.id))) continue;
       anyTeacherMatched = true;
 
-      const classes = await fetchLopHocWhereTeacher(supabase, Number(t.id));
+      const classes = lopHocRowsForTeacher(lopCache, Number(t.id));
 
       for (const cls of classes) {
         const lopId = Number(cls.id);

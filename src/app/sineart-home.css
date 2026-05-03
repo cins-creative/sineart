@@ -1515,7 +1515,8 @@ button.mi {
   position:relative;
   -webkit-tap-highlight-color:transparent;
 }
-.video-block--embed iframe {
+.video-block--embed iframe,
+.video-block--embed > [role="button"] {
   position:absolute; inset:0;
   width:100%; height:100%;
   border:0;

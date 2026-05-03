@@ -16,6 +16,7 @@ import { parseYouTubeEmbedSrc } from "@/lib/thi-thu/youtube-embed";
 import { computeElapsedExamMs, computePhase } from "@/lib/thi-thu/phase";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
 import type { ThiThuKyThiRow, ThiThuPhase } from "@/types/thi-thu";
+import { YouTubeFacadeFromUrl } from "@/components/YouTubeFacade";
 
 const OPEN_MS = 15 * 60 * 1000;
 const LOGO_SRC =
@@ -406,14 +407,11 @@ export default function ThiThuRoomClient({
                 <>Video sửa bài thi thử</>
               )}
             </h2>
-            <div className="tti-sua-vid-frame">
-              <iframe
+            <div className="tti-sua-vid-frame relative">
+              <YouTubeFacadeFromUrl
+                url={youtubeEmbedSrc}
                 title="Video sửa bài thi thử Sine Art"
-                src={youtubeEmbedSrc}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                loading="lazy"
-                referrerPolicy="strict-origin-when-cross-origin"
+                fillContainer
               />
             </div>
             <Link href="/thi-thu" className="tti-ended-back">

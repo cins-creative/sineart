@@ -2,6 +2,7 @@
 
 import type { BaiTap, MucDoQuanTrong } from "@/types/baiTap";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { YouTubeFacadeFromUrl } from "@/components/YouTubeFacade";
 import { toEmbedUrl } from "@/lib/utils/youtube";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
@@ -258,11 +259,10 @@ export default function BaiTapList({
                             </div>
                           ) : embed ? (
                             <div className={styles.videoWrap}>
-                              <iframe
-                                src={embed}
+                              <YouTubeFacadeFromUrl
+                                url={embed}
                                 title={d.ten_bai_tap}
-                                loading="lazy"
-                                allowFullScreen
+                                fillContainer
                               />
                             </div>
                           ) : null}

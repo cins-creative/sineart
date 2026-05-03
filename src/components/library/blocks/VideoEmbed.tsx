@@ -1,3 +1,6 @@
+"use client";
+
+import { YouTubeFacadeFromUrl } from "@/components/YouTubeFacade";
 import { toEmbedUrl } from "@/lib/utils/youtube";
 
 interface Props {
@@ -20,13 +23,7 @@ export default function VideoEmbed({ url, title = "Video bài giảng", breakOut
 
   return (
     <div className={classes}>
-      <iframe
-        src={embed}
-        title={title}
-        loading="lazy"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      />
+      <YouTubeFacadeFromUrl url={embed} title={title} fillContainer />
     </div>
   );
 }

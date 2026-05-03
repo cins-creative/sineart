@@ -1,3 +1,4 @@
+import { YouTubeFacadeFromUrl } from "@/components/YouTubeFacade";
 import { parseVideoBaiGiangEntries } from "@/lib/utils/youtube";
 
 /**
@@ -19,14 +20,7 @@ export default function HeThongBaiTapLoiSaiList({
         return (
           <li key={`${e.embed}-${i}`} className="htbt-ls-item">
             <div className="htbt-ls-frame">
-              <iframe
-                className="htbt-ls-iframe"
-                src={e.embed}
-                title={title}
-                loading="lazy"
-                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
+              <YouTubeFacadeFromUrl url={e.embed} title={title} fillContainer />
             </div>
             <div className="htbt-ls-cap" title={title}>
               {title}

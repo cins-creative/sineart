@@ -592,7 +592,36 @@ function SectionTitle({ children }: { children: string }) {
   );
 }
 
-function ReadField({ value, multiline }: { value: string; multiline?: boolean }) {
+function ReadField({
+  value,
+  multiline,
+  href,
+}: {
+  value: string;
+  multiline?: boolean;
+  /** Có giá trị + href → hiển thị dạng link (mở tab mới). */
+  href?: string;
+}) {
+  const display = value || "—";
+  const openHref = href?.trim() && value.trim() ? href.trim() : null;
+
+  if (openHref) {
+    return (
+      <a
+        href={openHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn(
+          "block w-full rounded-xl bg-[#F5F7F7] px-3 py-2.5 text-[13px] font-medium text-[#1a1a2e]",
+          "underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#BC8AF9]",
+          multiline && "whitespace-pre-wrap leading-relaxed"
+        )}
+      >
+        {display}
+      </a>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -600,7 +629,7 @@ function ReadField({ value, multiline }: { value: string; multiline?: boolean })
         multiline && "whitespace-pre-wrap leading-relaxed"
       )}
     >
-      {value || "—"}
+      {display}
     </div>
   );
 }
@@ -2149,13 +2178,11 @@ function StaffDetailPanel({
                     placeholder="URL hoặc tên trang"
                   />
                 ) : row.facebook?.trim() ? (
-                  <ReadField
-                    value={
-                      /^https?:\/\//i.test(row.facebook.trim())
-                        ? row.facebook.trim()
-                        : `https://${row.facebook.trim()}`
-                    }
-                  />
+                  (() => {
+                    const raw = row.facebook!.trim();
+                    const u = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+                    return <ReadField value={u} href={u} />;
+                  })()
                 ) : (
                   <ReadField value="" />
                 )}

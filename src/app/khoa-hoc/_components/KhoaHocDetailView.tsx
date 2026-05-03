@@ -24,6 +24,7 @@ import {
   KD_THREE_SUBJECTS,
 } from "../_data/khoa-hoc-detail-static";
 import DongHocPhiEmailGateModal from "./DongHocPhiEmailGateModal";
+import { YouTubeFacadeFromUrl } from "@/components/YouTubeFacade";
 import { toEmbedUrl } from "@/lib/utils/youtube";
 
 const GROUP_CRUMB: Record<KhoaHocDetailData["group"], string> = {
@@ -566,11 +567,10 @@ export default function KhoaHocDetailView({
                 Video giới thiệu <em>«{title}»</em>
               </h2>
               <div className="kd-video-16x9">
-                <iframe
-                  src={introVideoEmbedSrc}
+                <YouTubeFacadeFromUrl
+                  url={introVideoEmbedSrc}
                   title={`Video giới thiệu môn «${title}»`}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
+                  fillContainer
                 />
               </div>
             </section>

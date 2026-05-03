@@ -21,6 +21,7 @@ import { NavBarBoundarySkeleton } from "../_components/NavBarBoundary.skeleton";
 import RelatedNav from "../_components/RelatedNav";
 import { RelatedNavSkeleton } from "../_components/RelatedNav.skeleton";
 import TocScrollSpy from "../_components/TocScrollSpy";
+import { KtnLyThuyetVideo } from "../_components/KtnLyThuyetVideo";
 
 import "../kien-thuc-library.css";
 
@@ -293,19 +294,7 @@ export default async function LyThuyetDetailPage({ params }: Props) {
               {/* BODY — render HTML content từ DB. Static từ top-level fetch. */}
               <div className="body">
                 {current.video ? (
-                  <div
-                    className="bleed break"
-                    style={{ padding: 0, background: "#000", aspectRatio: "16/9" }}
-                  >
-                    <iframe
-                      src={current.video}
-                      title={`Video — ${current.ten}`}
-                      loading="lazy"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      style={{ width: "100%", height: "100%", border: 0 }}
-                    />
-                  </div>
+                  <KtnLyThuyetVideo src={current.video} title={`Video — ${current.ten}`} />
                 ) : null}
 
                 {contentHtml ? (
@@ -322,19 +311,10 @@ export default async function LyThuyetDetailPage({ params }: Props) {
                 )}
 
                 {current.video_tham_khao_khac ? (
-                  <div
-                    className="bleed break"
-                    style={{ padding: 0, background: "#000", aspectRatio: "16/9" }}
-                  >
-                    <iframe
-                      src={current.video_tham_khao_khac}
-                      title={`Video tham khảo — ${current.ten}`}
-                      loading="lazy"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      style={{ width: "100%", height: "100%", border: 0 }}
-                    />
-                  </div>
+                  <KtnLyThuyetVideo
+                    src={current.video_tham_khao_khac}
+                    title={`Video tham khảo — ${current.ten}`}
+                  />
                 ) : null}
               </div>
 

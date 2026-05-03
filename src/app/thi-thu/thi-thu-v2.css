@@ -1020,7 +1020,10 @@
   box-shadow: var(--tti-sh-lg);
   border: 1px solid rgba(45, 32, 32, 0.12);
 }
-.sa-thi-thu .tti-sua-vid-frame iframe {
+.sa-thi-thu .tti-sua-vid-frame iframe,
+.sa-thi-thu .tti-sua-vid-frame > [role="button"] {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;

@@ -3054,7 +3054,8 @@ html:has(.ktn-lib) { scroll-behavior: smooth; }
   box-sizing: border-box !important;
   isolation: isolate;
 }
-.ktn-lib--v5 .body .video-embed > iframe {
+.ktn-lib--v5 .body .video-embed > iframe,
+.ktn-lib--v5 .body .video-embed > [role="button"] {
   position: absolute !important;
   top: 0 !important;
   left: 0 !important;

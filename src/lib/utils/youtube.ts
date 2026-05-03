@@ -10,11 +10,36 @@ export function youtubeLineToEmbed(trimmed: string): string | null {
 
 /** Trích `videoId` (11 ký tự) từ URL YouTube — dùng để build thumbnail `img.youtube.com/vi/{id}/...`. */
 export function youtubeVideoId(url: string): string | null {
-  if (!url) return null;
-  const m = url.match(
-    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/
+  if (!url?.trim()) return null;
+  const u = url.trim();
+  const m = u.match(
+    /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/
   );
-  return m ? m[1] : null;
+  if (m) return m[1];
+  try {
+    const parsed = new URL(u.includes("://") ? u : `https://${u}`);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      const id = parsed.pathname.replace(/^\//, "").split("/")[0];
+      return /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
+    }
+    if (
+      host === "youtube.com" ||
+      host === "m.youtube.com" ||
+      host === "youtube-nocookie.com" ||
+      host.endsWith(".youtube.com")
+    ) {
+      const v = parsed.searchParams.get("v");
+      if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (parts[0] === "embed" && parts[1] && /^[a-zA-Z0-9_-]{11}$/.test(parts[1])) return parts[1];
+      if (parts[0] === "shorts" && parts[1] && /^[a-zA-Z0-9_-]{11}$/.test(parts[1])) return parts[1];
+      if (parts[0] === "live" && parts[1] && /^[a-zA-Z0-9_-]{11}$/.test(parts[1])) return parts[1];
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 /** Chuyển URL YouTube watch/short → embed. Nhiều dòng: thử lần lượt (dòng đầu hợp lệ được dùng làm video chính). */

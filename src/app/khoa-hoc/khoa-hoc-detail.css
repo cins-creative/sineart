@@ -342,7 +342,8 @@
   box-sizing: border-box;
 }
 
-.kd-video-16x9 iframe {
+.kd-video-16x9 iframe,
+.kd-video-16x9 > [role="button"] {
   position: absolute;
   inset: 0;
   width: 100%;

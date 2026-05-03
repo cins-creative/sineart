@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { YouTubeFacadeFromUrl } from "@/components/YouTubeFacade";
 import { parseVideoBaiGiangEntries } from "@/lib/utils/youtube";
 import { cn } from "@/lib/utils";
 
@@ -52,14 +53,7 @@ export default function HeThongBaiTapVideoPanel({ videoBaiGiang, iframeTitle }: 
         </div>
       ) : null}
       <div className="htbt-video-area">
-        <iframe
-          key={embed}
-          className="htbt-video-iframe"
-          src={embed}
-          title={iframeTitle}
-          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-        />
+        <YouTubeFacadeFromUrl key={embed} url={embed} title={iframeTitle} fillContainer />
       </div>
     </>
   );

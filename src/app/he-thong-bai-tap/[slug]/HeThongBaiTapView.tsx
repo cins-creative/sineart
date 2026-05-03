@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Fragment, Suspense } from "react";
+import { Suspense } from "react";
 
 import type { HeThongBaiTapAccess } from "@/lib/data/hoc-vien-bai-tap-access";
 import type { BaiTap } from "@/types/baiTap";
@@ -44,36 +44,51 @@ function LockIconSmall() {
   );
 }
 
+/**
+ * Chèn xuống dòng trước bullet phụ và trước (1) (2)… khi admin nhập cả đoạn trên một dòng.
+ */
+function normalizeMoTaFormatting(raw: string): string {
+  let s = raw.replace(/\r\n/g, "\n");
+  // Bullet thứ 2+ trong cùng một dòng (sau ký tự khác xuống dòng)
+  s = s.replace(/([^\n])\s+([•\u2022])\s+/g, "$1\n$2 ");
+  // Mục con (1)…(99) — tối đa 2 chữ số để không tách nhầm (2024)
+  s = s.replace(/([^\n])\s+(\([1-9]\d{0,1}\))\s+/g, "$1\n$2 ");
+  return s;
+}
+
 /** Làm nổi «Mô tả», «Mục đích» đầu dòng (thường có dấu • và «:» sau đó). */
 function renderMoTaHighlighted(text: string) {
-  const lines = text.split(/\r?\n/);
+  const normalized = normalizeMoTaFormatting(text);
+  const lines = normalized.split(/\n/);
   /** Nhóm 1: indent + bullet; 2: từ khóa; 3: «:» và khoảng trắng; 4: phần còn lại */
   const labelRe =
     /^(\s*(?:[•\-\*\u2022]\s+)?)(Mô tả|Mục đích)(\s*[:：]\s*)?(.*)$/u;
 
   return lines.map((line, lineIdx) => {
     const m = line.match(labelRe);
-    const tailNl = lineIdx < lines.length - 1 ? "\n" : null;
+    const empty = !line.trim();
 
-    if (!m) {
-      return (
-        <Fragment key={lineIdx}>
-          {line}
-          {tailNl}
-        </Fragment>
+    const inner =
+      empty ? null : !m ? (
+        line
+      ) : (
+        <>
+          {m[1]}
+          <span className="htbt-r-mo-ta-kw">
+            {m[2]}
+            {m[3] ?? ""}
+          </span>
+          {m[4]}
+        </>
       );
-    }
 
     return (
-      <Fragment key={lineIdx}>
-        {m[1]}
-        <span className="htbt-r-mo-ta-kw">
-          {m[2]}
-          {m[3] ?? ""}
-        </span>
-        {m[4]}
-        {tailNl}
-      </Fragment>
+      <div
+        key={lineIdx}
+        className={empty ? "htbt-r-mo-line htbt-r-mo-line--empty" : "htbt-r-mo-line"}
+      >
+        {inner}
+      </div>
     );
   });
 }

@@ -350,7 +350,10 @@ export async function fetchAdminQuanLyNhanSuBundle(supabase: SupabaseClient): Pr
     }
   }
 
-  /** `ql_lop_hoc.teacher` có thể là một id hoặc mảng id — `.in("teacher", …)` chỉ khớp scalar. */
+  /**
+   * Một query đọc `ql_lop_hoc` (cột nhẹ), gán lớp cho GV bằng `parseTeacherIds(teacher)` —
+   * thay cho N×(in + contains + ilike) trước đây.
+   */
   const lopGiangByTeacherId: Record<number, AdminLopGiangDay[]> = {};
   if (staffIds.length > 0) {
     const staffSet = new Set(staffIds);
@@ -381,35 +384,12 @@ export async function fetchAdminQuanLyNhanSuBundle(supabase: SupabaseClient): Pr
       }
     };
 
-    const lopScalar = await supabase.from("ql_lop_hoc").select(selectCols).in("teacher", staffIds);
-    if (!lopScalar.error && lopScalar.data) {
-      for (const raw of lopScalar.data as unknown as Record<string, unknown>[]) {
+    const { data: allLops, error: lopAllErr } = await supabase.from("ql_lop_hoc").select(selectCols);
+    if (!lopAllErr && allLops) {
+      for (const raw of allLops as unknown as Record<string, unknown>[]) {
         pushClassForTeachers(raw);
       }
     }
-
-    await Promise.all(
-      staffIds.map(async (sid) => {
-        const { data, error } = await supabase.from("ql_lop_hoc").select(selectCols).contains("teacher", [sid]);
-        if (error || !data) return;
-        for (const raw of data as unknown as Record<string, unknown>[]) {
-          pushClassForTeachers(raw);
-        }
-      })
-    );
-
-    await Promise.all(
-      staffIds.map(async (sid) => {
-        const { data, error } = await supabase
-          .from("ql_lop_hoc")
-          .select(selectCols)
-          .ilike("teacher", `%${sid}%`);
-        if (error || !data) return;
-        for (const raw of data as unknown as Record<string, unknown>[]) {
-          pushClassForTeachers(raw);
-        }
-      })
-    );
 
     for (const tid of Object.keys(lopGiangByTeacherId)) {
       const k = Number(tid);

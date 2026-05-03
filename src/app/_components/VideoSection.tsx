@@ -7,6 +7,8 @@ import {
   type VideoContent,
 } from "@/lib/admin/home-content-schema";
 
+import { YouTubeFacade } from "@/components/YouTubeFacade";
+
 /** Tạm chỉ public một video (Lớp Online). Khi có brief video Offline → đặt false. */
 const VIDEO_SECTION_ONLINE_ONLY = true;
 
@@ -60,12 +62,9 @@ export default function VideoSection({ content = DEFAULT_HOME_CONTENT.video }: P
           id={`vp-${t.id}`}
         >
           <div className="video-block video-block--embed">
-            <iframe
-              src={`https://www.youtube.com/embed/${t.youtubeId}`}
-              title={t.label}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
+            {active === t.id && t.youtubeId ? (
+              <YouTubeFacade videoId={t.youtubeId} title={t.label} fillContainer />
+            ) : null}
           </div>
           <p className="video-caption">{t.desc}</p>
         </div>

@@ -306,7 +306,8 @@
   background: var(--btl-surface);
 }
 
-.videoWrap iframe {
+.videoWrap iframe,
+.videoWrap > [role="button"] {
   position: absolute;
   top: 0;
   left: 0;

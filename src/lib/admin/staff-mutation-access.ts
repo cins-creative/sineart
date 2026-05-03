@@ -8,6 +8,9 @@
 export const ADMIN_DELETE_FORBIDDEN_MSG =
   "Tài khoản không có quyền xóa dữ liệu. Chỉ quản lý hoặc admin được xóa.";
 
+/** Xóa bản ghi `hr_nhan_su` — chỉ `admin` (không gồm quản lý). */
+export const NHAN_SU_DELETE_FORBIDDEN_MSG = "Chỉ tài khoản admin mới được xóa nhân sự.";
+
 /**
  * Chuẩn hóa để so khớp giá trị lưu DB (vd. `quan_ly`, `nhan_vien`, `admin`).
  * Gộp khoảng trắng → `_` để `nhan vien` / `quan ly` vẫn khớp.
@@ -23,6 +26,11 @@ export function normalizeStaffVaiTro(raw: string | null | undefined): string {
 export function adminStaffCanDeleteRecords(vaiTro: string | null | undefined): boolean {
   const v = normalizeStaffVaiTro(vaiTro);
   return v === "admin" || v === "quan_ly";
+}
+
+/** Xóa hồ sơ nhân sự trên dashboard Quản lý nhân sự — chỉ admin. */
+export function adminStaffCanDeleteNhanSuRecord(vaiTro: string | null | undefined): boolean {
+  return normalizeStaffVaiTro(vaiTro) === "admin";
 }
 
 /** Sửa phiếu Thu chi khác (`tc_thu_chi_khac`) — chỉ `quan_ly`, `admin`. */

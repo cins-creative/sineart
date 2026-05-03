@@ -46,6 +46,7 @@ import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import {
   createNhanSu,
   deleteHrBangTinhLuongFull,
+  deleteHrNhanSuAsAdmin,
   syncHrNhanSuPhong,
   updateNhanSuAvatar,
   updateNhanSuGiaoVienMeta,
@@ -1561,7 +1562,7 @@ function StaffDetailPanel({
   onStaffUpdated: (patch: Partial<AdminNhanSuRow>) => void;
 }) {
   const router = useRouter();
-  const { canDelete: staffMayDeleteRecords } = useAdminDashboardAbilities();
+  const { canDelete: staffMayDeleteRecords, canDeleteNhanSu } = useAdminDashboardAbilities();
   const infoTabRef = useRef<StaffDetailInfoTabHandle>(null);
   const [taoLuongOpen, setTaoLuongOpen] = useState(false);
   const [taoLuongKey, setTaoLuongKey] = useState(0);
@@ -1584,6 +1585,8 @@ function StaffDetailPanel({
   const payslipCardRef = useRef<HTMLDivElement>(null);
   const [payrollCopyBusy, setPayrollCopyBusy] = useState(false);
   const [payrollCopyNotice, setPayrollCopyNotice] = useState<string | null>(null);
+  const [nhanSuDeleteConfirmOpen, setNhanSuDeleteConfirmOpen] = useState(false);
+  const [nhanSuDeleteBusy, setNhanSuDeleteBusy] = useState(false);
 
   const [gvPortfolioUrls, setGvPortfolioUrls] = useState<string[]>(() => [...row.portfolio]);
   const [gvBio, setGvBio] = useState(() => row.bio ?? "");
@@ -1634,6 +1637,7 @@ function StaffDetailPanel({
     setPanelSaveErr(null);
     setPayrollSlipBangId(null);
     setPayrollDeleteTarget(null);
+    setNhanSuDeleteConfirmOpen(false);
     setTab("info");
   }, [row.id]);
 
@@ -1708,6 +1712,23 @@ function StaffDetailPanel({
       setPayrollDeletingId(null);
     }
   }, [canEdit, payrollDeleteTarget, router, staffMayDeleteRecords]);
+
+  const confirmDeleteNhanSu = useCallback(async () => {
+    if (!canDeleteNhanSu || nhanSuDeleteBusy) return;
+    setNhanSuDeleteBusy(true);
+    try {
+      const r = await deleteHrNhanSuAsAdmin(row.id);
+      if (!r.ok) {
+        window.alert(r.error);
+        return;
+      }
+      setNhanSuDeleteConfirmOpen(false);
+      onClose();
+      void router.refresh();
+    } finally {
+      setNhanSuDeleteBusy(false);
+    }
+  }, [canDeleteNhanSu, nhanSuDeleteBusy, onClose, router, row.id]);
 
   const copyPayrollPayslipImage = useCallback(async () => {
     const el = payslipCardRef.current;
@@ -2461,9 +2482,17 @@ function StaffDetailPanel({
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
-              disabled
-              title="Chưa hỗ trợ xóa từ đây"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50/80 px-3 py-2 text-[12px] font-bold text-red-600 opacity-50"
+              disabled={!canDeleteNhanSu}
+              title={
+                canDeleteNhanSu
+                  ? "Xóa vĩnh viễn nhân sự (chỉ admin)"
+                  : "Chỉ tài khoản admin mới được xóa nhân sự"
+              }
+              onClick={() => canDeleteNhanSu && setNhanSuDeleteConfirmOpen(true)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50/80 px-3 py-2 text-[12px] font-bold text-red-600",
+                canDeleteNhanSu ? "transition hover:bg-red-100" : "cursor-not-allowed opacity-50"
+              )}
             >
               <Trash2 size={15} />
               Xóa
@@ -2558,6 +2587,70 @@ function StaffDetailPanel({
                 >
                   <Trash2 size={14} aria-hidden />
                   {payrollDeletingId != null ? "Đang xóa…" : "Xóa bảng lương"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+      <AnimatePresence>
+        {canDeleteNhanSu && nhanSuDeleteConfirmOpen ? (
+          <motion.div
+            key="nhan-su-delete-confirm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
+            onClick={() => {
+              if (!nhanSuDeleteBusy) setNhanSuDeleteConfirmOpen(false);
+            }}
+            role="presentation"
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0, y: 8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.96, opacity: 0, y: 8 }}
+              transition={{ type: "spring", damping: 26, stiffness: 340 }}
+              className="w-full max-w-[420px] rounded-2xl border border-red-200 bg-white p-4 shadow-[0_24px_64px_rgba(0,0,0,0.2)]"
+              onClick={(e) => e.stopPropagation()}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="nhan-su-delete-title"
+              aria-describedby="nhan-su-delete-desc"
+            >
+              <div className="flex gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700">
+                  <AlertTriangle size={22} aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 id="nhan-su-delete-title" className="m-0 text-[15px] font-extrabold text-[#1a1a2e]">
+                    Xóa nhân sự?
+                  </h3>
+                  <p id="nhan-su-delete-desc" className="mt-2 m-0 text-[12px] font-medium leading-relaxed text-[#555]">
+                    Xóa vĩnh viễn{" "}
+                    <strong className="font-semibold text-[#323232]">{row.full_name?.trim() || `#${row.id}`}</strong> —
+                    gỡ khỏi lớp học (giáo viên), xóa phòng gán, bảng lương và lịch điểm danh liên quan.{" "}
+                    <strong className="font-semibold text-[#C0244E]">Không thể hoàn tác.</strong>
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-black/[0.06] pt-3">
+                <button
+                  type="button"
+                  disabled={nhanSuDeleteBusy}
+                  onClick={() => setNhanSuDeleteConfirmOpen(false)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#EAEAEA] bg-[#fafafa] px-3 py-2 text-[12px] font-bold text-[#555] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  disabled={nhanSuDeleteBusy}
+                  onClick={() => void confirmDeleteNhanSu()}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-600 px-3 py-2 text-[12px] font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Trash2 size={14} aria-hidden />
+                  {nhanSuDeleteBusy ? "Đang xóa…" : "Xóa nhân sự"}
                 </button>
               </div>
             </motion.div>

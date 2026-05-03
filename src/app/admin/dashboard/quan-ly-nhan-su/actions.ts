@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
+import { assertStaffMayDeleteNhanSuRecord, assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import type { QuanLyNhanSuViewBundle } from "@/lib/admin/quan-ly-nhan-su-local-cache";
 import {
@@ -12,8 +12,10 @@ import {
   type AdminNhanSuRow,
 } from "@/lib/data/admin-quan-ly-nhan-su";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 
 const ADMIN_PATH = "/admin/dashboard/quan-ly-nhan-su";
+const LOP_HOC_ADMIN_PATH = "/admin/dashboard/lop-hoc";
 
 const VAI_TRO_ALLOWED = new Set(["admin", "quan_ly", "nhan_vien", "tu_van"]);
 
@@ -567,6 +569,89 @@ export async function deleteHrBangTinhLuongFull(bang_tinh_luong_id: number): Pro
   }
 
   revalidatePath(ADMIN_PATH);
+  return { ok: true };
+}
+
+export type DeleteHrNhanSuResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Xóa nhân sự `hr_nhan_su` — chỉ khi người gọi có `vai_tro` admin.
+ * Gỡ khỏi `ql_lop_hoc.teacher`, xóa bảng lương + lịch điểm danh, `hr_nhan_su_phong`, rồi xóa dòng nhân sự.
+ */
+export async function deleteHrNhanSuAsAdmin(nhan_su_id: number): Promise<DeleteHrNhanSuResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) {
+    return { ok: false, error: "Phiên đăng nhập không hợp lệ. Đăng nhập lại." };
+  }
+
+  const sid = Number(nhan_su_id);
+  if (!Number.isFinite(sid) || sid <= 0) {
+    return { ok: false, error: "ID nhân sự không hợp lệ." };
+  }
+
+  if (sid === session.staffId) {
+    return { ok: false, error: "Không thể xóa chính tài khoản đang đăng nhập." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) {
+    return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
+  }
+
+  const perm = await assertStaffMayDeleteNhanSuRecord(supabase, session.staffId);
+  if (!perm.ok) return { ok: false, error: perm.error };
+
+  const { data: targetRow } = await supabase.from("hr_nhan_su").select("id").eq("id", sid).maybeSingle();
+  if (!targetRow) {
+    return { ok: false, error: "Không tìm thấy nhân sự." };
+  }
+
+  const { data: lopRows, error: lopErr } = await supabase.from("ql_lop_hoc").select("id, teacher");
+  if (lopErr) {
+    return { ok: false, error: lopErr.message || "Không đọc được lớp học." };
+  }
+
+  for (const raw of lopRows ?? []) {
+    const lid = Number((raw as { id: unknown }).id);
+    if (!Number.isFinite(lid) || lid <= 0) continue;
+    const ids = parseTeacherIds((raw as { teacher?: unknown }).teacher);
+    if (!ids.includes(sid)) continue;
+    const next = ids.filter((x) => x !== sid);
+    const teacherPayload = next.length > 0 ? next : null;
+    const { error: upErr } = await supabase.from("ql_lop_hoc").update({ teacher: teacherPayload }).eq("id", lid);
+    if (upErr) {
+      return { ok: false, error: upErr.message || "Không gỡ được giáo viên khỏi lớp học." };
+    }
+  }
+
+  const { data: bangRows } = await supabase.from("hr_bang_tinh_luong").select("id").eq("nhan_vien", sid);
+  const bangIds = (bangRows ?? [])
+    .map((r) => Number((r as { id: unknown }).id))
+    .filter((id) => Number.isFinite(id) && id > 0);
+
+  for (const bid of bangIds) {
+    const { error: ddErr } = await supabase.from("hr_lich_diem_danh").delete().eq("bang_tinh_luong", bid);
+    if (ddErr) {
+      return { ok: false, error: ddErr.message || "Không xóa được lịch điểm danh." };
+    }
+    const { error: blErr } = await supabase.from("hr_bang_tinh_luong").delete().eq("id", bid);
+    if (blErr) {
+      return { ok: false, error: blErr.message || "Không xóa được bảng lương." };
+    }
+  }
+
+  const { error: phErr } = await supabase.from("hr_nhan_su_phong").delete().eq("nhan_su_id", sid);
+  if (phErr) {
+    return { ok: false, error: phErr.message || "Không xóa được phòng gán nhân sự." };
+  }
+
+  const { error: delErr } = await supabase.from("hr_nhan_su").delete().eq("id", sid);
+  if (delErr) {
+    return { ok: false, error: delErr.message || "Không xóa được nhân sự (có thể còn dữ liệu tham chiếu)." };
+  }
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(LOP_HOC_ADMIN_PATH);
   return { ok: true };
 }
 

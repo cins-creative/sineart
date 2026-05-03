@@ -2,7 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
 
-import { ADMIN_DELETE_FORBIDDEN_MSG, adminStaffCanDeleteRecords } from "@/lib/admin/staff-mutation-access";
+import {
+  ADMIN_DELETE_FORBIDDEN_MSG,
+  NHAN_SU_DELETE_FORBIDDEN_MSG,
+  adminStaffCanDeleteNhanSuRecord,
+  adminStaffCanDeleteRecords,
+} from "@/lib/admin/staff-mutation-access";
 
 /**
  * Kiểm tra `hr_nhan_su.vai_tro` có được xóa bản ghi (qua action delete) hay không.
@@ -15,6 +20,18 @@ export async function assertStaffMayDeleteRecords(
   const profile = await fetchAdminStaffShellProfile(supabase, staffId);
   if (!adminStaffCanDeleteRecords(profile.vai_tro)) {
     return { ok: false, error: ADMIN_DELETE_FORBIDDEN_MSG };
+  }
+  return { ok: true };
+}
+
+/** Chỉ `vai_tro === admin` mới được xóa `hr_nhan_su` qua action. */
+export async function assertStaffMayDeleteNhanSuRecord(
+  supabase: SupabaseClient,
+  staffId: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const profile = await fetchAdminStaffShellProfile(supabase, staffId);
+  if (!adminStaffCanDeleteNhanSuRecord(profile.vai_tro)) {
+    return { ok: false, error: NHAN_SU_DELETE_FORBIDDEN_MSG };
   }
   return { ok: true };
 }

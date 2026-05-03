@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import {
+  adminStaffCanDeleteNhanSuRecord,
   adminStaffCanDeleteRecords,
   adminStaffCanEditThiThuKy,
   adminStaffCanEditThuChiKhacPhieu,
@@ -13,6 +14,8 @@ import {
 export type AdminDashboardAbilities = {
   /** Theo `hr_nhan_su.vai_tro`: chỉ `quan_ly` và `admin`. */
   canDelete: boolean;
+  /** Xóa nhân sự (`hr_nhan_su`) — chỉ `admin`. */
+  canDeleteNhanSu: boolean;
   /** Tạo / sửa kỳ thi thử — `nhan_vien`, `quan_ly`, `admin`. */
   canEditThiThuKy: boolean;
   /** Sửa phiếu Thu chi khác — chỉ `quan_ly` và `admin`. */
@@ -26,6 +29,7 @@ export type AdminDashboardAbilities = {
 
 const AdminDashboardAbilitiesContext = createContext<AdminDashboardAbilities>({
   canDelete: false,
+  canDeleteNhanSu: false,
   canEditThiThuKy: false,
   canEditThuChiKhacPhieu: false,
   canViewBctcDetail: false,
@@ -43,6 +47,7 @@ export function AdminDashboardAbilitiesProvider({
   const value = useMemo<AdminDashboardAbilities>(
     () => ({
       canDelete: adminStaffCanDeleteRecords(staffRole),
+      canDeleteNhanSu: adminStaffCanDeleteNhanSuRecord(staffRole),
       canEditThiThuKy: adminStaffCanEditThiThuKy(staffRole),
       canEditThuChiKhacPhieu: adminStaffCanEditThuChiKhacPhieu(staffRole),
       canViewBctcDetail: adminStaffCanViewBctcDetailCharts(staffRole),

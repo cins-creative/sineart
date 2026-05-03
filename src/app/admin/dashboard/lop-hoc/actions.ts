@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
+import { parseLevelHinhHoaFromForm } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type LopHocFormState =
@@ -72,6 +73,8 @@ type LopPayload = {
   device: string | null;
   special: boolean;
   tinh_trang: boolean;
+  /** `ql_lop_hoc.level_hinh_hoa` — chỉ dùng khi môn Hình họa. */
+  level_hinh_hoa: string | null;
 };
 
 /** Gửi mảng GV lên DB — trả về mảng (bigint[]) hoặc null nếu rỗng. */
@@ -86,6 +89,10 @@ function readLopPayload(fd: FormData): { ok: true; data: LopPayload } | { ok: fa
     return { ok: false, error: "Nhập tên lớp (rút gọn hoặc đầy đủ)." };
   }
 
+  const level_hinh_hoa = parseLevelHinhHoaFromForm(
+    String(fd.get("level_hinh_hoa") ?? "")
+  );
+
   return {
     ok: true,
     data: {
@@ -99,6 +106,7 @@ function readLopPayload(fd: FormData): { ok: true; data: LopPayload } | { ok: fa
       device: optionalText(fd, "device"),
       special: String(fd.get("special") ?? "") === "1",
       tinh_trang: String(fd.get("tinh_trang") ?? "") !== "0" && String(fd.get("tinh_trang") ?? "") !== "",
+      level_hinh_hoa,
     },
   };
 }

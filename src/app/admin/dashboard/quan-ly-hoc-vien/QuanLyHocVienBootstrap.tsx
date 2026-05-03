@@ -21,6 +21,9 @@ type Props = {
   dhCatalog: DhpDhCatalog | null;
   adminStaffId: number;
   dhpShowExtraVndDiscount: boolean;
+  /** “Cấp tốc” — mở toàn bộ bài hệ thống bài tập cho học viên. */
+  initialHtbtCapToc: boolean;
+  canEditTrangThaiTuVan: boolean;
 };
 
 function lopOptionsFromLopById(lopById: Record<string, AdminQlhvLopBrief>) {
@@ -39,6 +42,8 @@ export default function QuanLyHocVienBootstrap({
   dhCatalog,
   adminStaffId,
   dhpShowExtraVndDiscount,
+  initialHtbtCapToc,
+  canEditTrangThaiTuVan,
 }: Props) {
   const [bundle, setBundle] = useState<QuanLyHocVienViewBundle | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -123,6 +128,8 @@ export default function QuanLyHocVienBootstrap({
         dhCatalog={dhCatalog}
         adminStaffId={adminStaffId}
         dhpShowExtraVndDiscount={dhpShowExtraVndDiscount}
+        initialHtbtCapToc={initialHtbtCapToc}
+        canEditTrangThaiTuVan={canEditTrangThaiTuVan}
       />
     </div>
   );

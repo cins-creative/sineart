@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { resolveExamDurationPhut } from "@/lib/thi-thu/debug-exam";
-import { computeExamEndMs } from "@/lib/thi-thu/phase";
+import { computeExamEndMs, SUBMIT_GRACE_MS } from "@/lib/thi-thu/phase";
 import { isMonThiKey } from "@/lib/thi-thu-config";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -72,7 +72,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   const endMs = computeExamEndMs(T, examPhut);
   const now = Date.now();
 
-  if (now > endMs + 60_000) {
+  if (now > endMs + SUBMIT_GRACE_MS) {
     return NextResponse.json({ ok: false, error: "Đã hết thời gian nộp bài cho kỳ thi này." }, {
       status: 400,
     });

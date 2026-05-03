@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { countDangHocByLopIds } from "@/lib/data/class-seat-dang-hoc";
+import { isTenMonHinhHoa } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 
 export type EnrichedPaymentClass = {
@@ -11,27 +13,52 @@ export type EnrichedPaymentClass = {
   avatar: string | null;
   /** `ql_lop_hoc.special` — nhận «cấp tốc» giống gói học phí / `HocPhiBlock`. */
   special: string | null;
+  /** `ql_lop_hoc.level_hinh_hoa` — chỉ khi tên môn là Hình họa. */
+  levelHinhHoa: string | null;
   filled: number;
   total: number;
   isFull: boolean;
 };
 
 /**
- * Lớp cho trang đóng học phí: ghế (si_so môn), sĩ số thực (ql_quan_ly_hoc_vien),
+ * Lớp cho trang đóng học phí: ghế (si_so môn), sĩ số **Đang học** (cùng quy tắc QLHV),
  * tên GV (hr_nhan_su), ảnh lớp (ql_lop_hoc.avatar).
  */
 export async function fetchEnrichedPaymentClasses(
   supabase: SupabaseClient
 ): Promise<EnrichedPaymentClass[]> {
-  const { data: lopRows, error: lopErr } = await supabase
+  const selFull =
+    "id, class_name, class_full_name, mon_hoc, lich_hoc, teacher, avatar, special, level_hinh_hoa";
+  const selMin =
+    "id, class_name, class_full_name, mon_hoc, lich_hoc, teacher, avatar, special";
+
+  let lopRows: Record<string, unknown>[] | null = null;
+  const first = await supabase
     .from("ql_lop_hoc")
-    .select("id, class_name, class_full_name, mon_hoc, lich_hoc, teacher, avatar, special")
+    .select(selFull)
     .not("mon_hoc", "is", null)
     .order("id", { ascending: true });
 
-  if (lopErr || !lopRows?.length) return [];
+  if (first.error) {
+    const msg = first.error.message.toLowerCase();
+    if (msg.includes("column") || msg.includes("schema")) {
+      const retry = await supabase
+        .from("ql_lop_hoc")
+        .select(selMin)
+        .not("mon_hoc", "is", null)
+        .order("id", { ascending: true });
+      if (retry.error || !retry.data?.length) return [];
+      lopRows = retry.data as Record<string, unknown>[];
+    } else {
+      return [];
+    }
+  } else {
+    lopRows = (first.data ?? []) as Record<string, unknown>[];
+  }
 
-  const lopList = lopRows as Record<string, unknown>[];
+  if (!lopRows?.length) return [];
+
+  const lopList = lopRows;
   const lopIds = lopList.map((r) => Number(r.id)).filter((id) => Number.isFinite(id) && id > 0);
   const monIds = [
     ...new Set(
@@ -41,32 +68,25 @@ export async function fetchEnrichedPaymentClasses(
   const teacherIds = [...new Set(lopList.flatMap((r) => parseTeacherIds(r.teacher)))];
   if (!lopIds.length) return [];
 
-  const [{ data: mons }, { data: enrollRows }, { data: teachers }] = await Promise.all([
+  const [{ data: mons }, { data: teachers }, filledByLop] = await Promise.all([
     monIds.length
-      ? supabase.from("ql_mon_hoc").select("id, si_so").in("id", monIds)
+      ? supabase.from("ql_mon_hoc").select("id, si_so, ten_mon_hoc").in("id", monIds)
       : Promise.resolve({ data: [] as Record<string, unknown>[] }),
-    supabase
-      .from("ql_quan_ly_hoc_vien")
-      .select("lop_hoc")
-      .in("lop_hoc", lopIds),
     teacherIds.length
       ? supabase.from("hr_nhan_su").select("id, full_name").in("id", teacherIds)
       : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    countDangHocByLopIds(supabase, lopIds),
   ]);
 
   const monSeat = new Map<number, number>();
+  const monTenById = new Map<number, string | null>();
   for (const m of mons ?? []) {
     const id = Number((m as Record<string, unknown>).id);
     if (!Number.isFinite(id)) continue;
     const si = Number((m as Record<string, unknown>).si_so ?? 0);
     monSeat.set(id, Number.isFinite(si) && si > 0 ? si : 20);
-  }
-
-  const filledByLop = new Map<number, number>();
-  for (const row of enrollRows ?? []) {
-    const lid = Number((row as Record<string, unknown>).lop_hoc);
-    if (!Number.isFinite(lid)) continue;
-    filledByLop.set(lid, (filledByLop.get(lid) ?? 0) + 1);
+    const tn = (m as Record<string, unknown>).ten_mon_hoc;
+    monTenById.set(id, tn != null ? String(tn).trim() || null : null);
   }
 
   const teacherMap = new Map<number, string>();
@@ -100,6 +120,11 @@ export async function fetchEnrichedPaymentClasses(
       `Lớp ${id}`;
     const lichHoc = String(r.lich_hoc ?? "").trim() || "Liên hệ tư vấn lịch học";
 
+    const tenMon = monTenById.get(monHocId) ?? null;
+    const levelRaw = String(r.level_hinh_hoa ?? "").trim();
+    const levelHinhHoa =
+      isTenMonHinhHoa(tenMon) && levelRaw.length > 0 ? levelRaw : null;
+
     return {
       id,
       monHocId,
@@ -108,6 +133,7 @@ export async function fetchEnrichedPaymentClasses(
       gvNames,
       avatar,
       special,
+      levelHinhHoa,
       filled,
       total: totalSeat,
       isFull,

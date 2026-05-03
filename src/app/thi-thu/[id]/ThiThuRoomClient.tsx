@@ -13,7 +13,7 @@ import { getDebugExamDurationPhut, resolveExamDurationPhut } from "@/lib/thi-thu
 import { parseDeThiJson } from "@/lib/thi-thu/de-thi-json";
 import { formatThoiGianSuaBaiLabel, parseThoiGianSuaBaiMs } from "@/lib/thi-thu/replay-time";
 import { parseYouTubeEmbedSrc } from "@/lib/thi-thu/youtube-embed";
-import { computeElapsedExamMs, computePhase } from "@/lib/thi-thu/phase";
+import { computeElapsedExamMs, computePhase, SUBMIT_GRACE_MS } from "@/lib/thi-thu/phase";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
 import type { ThiThuKyThiRow, ThiThuPhase } from "@/types/thi-thu";
 import { YouTubeFacadeFromUrl } from "@/components/YouTubeFacade";
@@ -28,6 +28,7 @@ const PREVIEW_PHASES: ThiThuPhase[] = [
   "exam_1",
   "break",
   "exam_2",
+  "submit_grace",
   "ended",
 ];
 
@@ -115,6 +116,8 @@ export default function ThiThuRoomClient({
   const debugPhut = getDebugExamDurationPhut(ky);
   const durMs = examPhut * 60 * 1000;
   const endMs = T + durMs;
+  const graceEndMs = endMs + SUBMIT_GRACE_MS;
+  const remainingGraceMs = Math.max(0, graceEndMs - now);
 
   const phase: ThiThuPhase =
     forcedPhase ??
@@ -177,7 +180,7 @@ export default function ThiThuRoomClient({
    * nhưng đứng trước giờ kết thúc trong timeline gây nhảy sớm sang video.
    */
   const session4VideoStartMs =
-    suaBaiMs != null && Number.isFinite(suaBaiMs) ? Math.max(endMs, suaBaiMs) : null;
+    suaBaiMs != null && Number.isFinite(suaBaiMs) ? Math.max(graceEndMs, suaBaiMs) : null;
 
   const isGradingVideoSession =
     youtubeEmbedSrc != null &&
@@ -225,6 +228,10 @@ export default function ThiThuRoomClient({
   const yearLabel = new Date(T).getFullYear();
 
   const endClock = new Date(endMs).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  const graceEndClock = new Date(graceEndMs).toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   const tPhase = reduceMotion ? { duration: 0.15 } : { duration: 0.4, ease: TI_EASE_OUT };
   const tExam = reduceMotion ? { duration: 0.15 } : { duration: 0.55, ease: TI_EASE_OUT };
@@ -389,6 +396,50 @@ export default function ThiThuRoomClient({
               ← Danh sách kỳ thi
             </Link>
           </motion.section>
+        ) : phase === "submit_grace" ? (
+          <motion.div
+            key="submit-grace"
+            className="tti-ex-wrap"
+            initial={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: reduceMotion ? 0 : -20 }}
+            transition={tExam}
+          >
+            <div className="tti-ex-body">
+              <div className="tti-ex-hd">
+                <span className="tti-ex-badge">THI THỬ SINE ART {yearLabel}</span>
+                <p className="tti-ex-mon">Lớp {cfg.label} online</p>
+                <p className="tti-ex-timer-lbl">Đã hết giờ làm bài — gia hạn nộp bài còn lại</p>
+                <div className="tti-ex-timer">{fmtMMSS(remainingGraceMs)}</div>
+              </div>
+
+              <div className="tti-pb">
+                <div className="tti-pb-row tti-pb-row--end-only">
+                  <div className="tti-pb-e">
+                    <small>Hết gia hạn nộp</small>
+                    <span>{graceEndClock}</span>
+                  </div>
+                </div>
+                <ThiThuExamProgressBar
+                  cfg={cfg}
+                  durationPhut={examPhut}
+                  progress={1}
+                  breakMarkerPct={breakMarkerPct}
+                  breakRangeLabel={breakRangeLabel}
+                  showBreakAbove={false}
+                  onTerminalClick={() => setSubmitOpen(true)}
+                />
+              </div>
+
+              <div className="tti-de-sec">
+                <div className="tti-de-sec-ttl">
+                  <div className="tti-de-ttl-bar" />
+                  Đề thi
+                </div>
+                <ThiThuExamDeAccordion items={deThiItems} />
+              </div>
+            </div>
+          </motion.div>
         ) : isGradingVideoSession ? (
           <motion.section
             key="sua-bai-session"

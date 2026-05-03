@@ -4,8 +4,15 @@ import type { ThiThuPhase } from "@/types/thi-thu";
 
 const OPEN_ROOM_MS = 15 * 60 * 1000;
 
+/** Sau khi hết giờ làm bài — vẫn cho nộp bài trong cửa sổ này (đồng bộ API + UI). */
+export const SUBMIT_GRACE_MS = 15 * 60 * 1000;
+
 export function computeExamEndMs(thoiGianBatDauMs: number, thoiLuongPhut: number): number {
   return thoiGianBatDauMs + thoiLuongPhut * 60 * 1000;
+}
+
+export function computeSubmitGraceEndMs(thoiGianBatDauMs: number, thoiLuongPhut: number): number {
+  return computeExamEndMs(thoiGianBatDauMs, thoiLuongPhut) + SUBMIT_GRACE_MS;
 }
 
 type PhaseInput = {
@@ -25,9 +32,11 @@ export function computePhase(input: PhaseInput): ThiThuPhase {
   const phut = debugPhut ?? cfg.thoi_luong_phut;
   const durMs = phut * 60 * 1000;
   const endMs = input.T + durMs;
+  const graceEndMs = endMs + SUBMIT_GRACE_MS;
   const { now } = input;
 
-  if (now >= endMs) return "ended";
+  if (now >= graceEndMs) return "ended";
+  if (now >= endMs) return "submit_grace";
 
   const skipBreak = debugPhut != null;
 
@@ -70,7 +79,12 @@ export function computeElapsedExamMs(
 }
 
 /** Trạng thái hiển thị card danh sách `/thi-thu`. */
-export type ListCardStatus = "sap_dien_ra" | "dang_mo_phong" | "dang_thi" | "da_ket_thuc";
+export type ListCardStatus =
+  | "sap_dien_ra"
+  | "dang_mo_phong"
+  | "dang_thi"
+  | "gia_han_nop_bai"
+  | "da_ket_thuc";
 
 export function computeListCardStatus(
   T: number,
@@ -79,7 +93,9 @@ export function computeListCardStatus(
 ): ListCardStatus {
   const durMs = thoiLuongPhut * 60 * 1000;
   const endMs = T + durMs;
-  if (now >= endMs) return "da_ket_thuc";
+  const graceEndMs = endMs + SUBMIT_GRACE_MS;
+  if (now >= graceEndMs) return "da_ket_thuc";
+  if (now >= endMs) return "gia_han_nop_bai";
   if (now < T - OPEN_ROOM_MS) return "sap_dien_ra";
   if (now < T) return "dang_mo_phong";
   return "dang_thi";
@@ -93,6 +109,8 @@ export function listCardStatusLabel(s: ListCardStatus): string {
       return "Đang mở phòng";
     case "dang_thi":
       return "Đang thi";
+    case "gia_han_nop_bai":
+      return "Gia hạn nộp bài";
     case "da_ket_thuc":
       return "Đã kết thúc";
     default:

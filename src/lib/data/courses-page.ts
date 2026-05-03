@@ -1,6 +1,8 @@
 import { cache } from "react";
 
+import { countDangHocByLopIds } from "@/lib/data/class-seat-dang-hoc";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
+import { isTenMonHinhHoa } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import { isHocPhiCapTocSpecial } from "@/lib/hocPhiDedupe";
 import { createStaticClient } from "@/lib/supabase/static";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
@@ -15,6 +17,8 @@ import type {
   HocPhiGoiRow,
   KhoaHocCourseCard,
   KhoaHocDetailData,
+  KhoaHocReviewListItem,
+  KhoaHocReviewStarBuckets,
   KhoaHocReviewStats,
   KhoaHocTeacher,
   OngoingClassCard,
@@ -326,6 +330,42 @@ function normalizeKetQuaDatDuoc(
   return items.length ? items : null;
 }
 
+const EMPTY_STAR_BUCKETS: KhoaHocReviewStarBuckets = {
+  1: 0,
+  2: 0,
+  3: 0,
+  4: 0,
+  5: 0,
+};
+
+function bucketSoSao(raw: unknown): 1 | 2 | 3 | 4 | 5 | null {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const b = Math.round(Math.min(5, Math.max(1, n)));
+  return b as 1 | 2 | 3 | 4 | 5;
+}
+
+function aggregateDanhGiaRows(rows: { so_sao: number | null }[]): KhoaHocReviewStats {
+  const byStar: KhoaHocReviewStarBuckets = { ...EMPTY_STAR_BUCKETS };
+  const nums: number[] = [];
+  for (const r of rows) {
+    const raw = Number(r.so_sao);
+    if (!Number.isFinite(raw) || raw <= 0) continue;
+    const bucket = bucketSoSao(raw);
+    if (bucket != null) byStar[bucket] += 1;
+    nums.push(raw);
+  }
+  if (!nums.length) {
+    return { avg: 0, count: 0, byStar: { ...EMPTY_STAR_BUCKETS } };
+  }
+  const sum = nums.reduce((acc, n) => acc + n, 0);
+  return {
+    avg: sum / nums.length,
+    count: nums.length,
+    byStar,
+  };
+}
+
 /**
  * Tổng hợp đánh giá từ `ql_danh_gia` cho sidebar `/khoa-hoc/[slug]`.
  * Nếu có ≥1 đánh giá gắn trực tiếp với `monId` → ưu tiên số liệu theo môn.
@@ -335,19 +375,7 @@ async function getKhoaHocReviewStatsUncached(
   monId: number | null,
 ): Promise<KhoaHocReviewStats> {
   const supabase = createStaticClient();
-  if (!supabase) return { avg: 0, count: 0 };
-
-  const aggregate = (rows: { so_sao: number | null }[]): KhoaHocReviewStats => {
-    const nums = rows
-      .map((r) => Number(r.so_sao))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    if (!nums.length) return { avg: 0, count: 0 };
-    const sum = nums.reduce((acc, n) => acc + n, 0);
-    return {
-      avg: sum / nums.length,
-      count: nums.length,
-    };
-  };
+  if (!supabase) return { avg: 0, count: 0, byStar: { ...EMPTY_STAR_BUCKETS } };
 
   if (monId != null && Number.isFinite(monId)) {
     const { data, error } = await supabase
@@ -356,7 +384,7 @@ async function getKhoaHocReviewStatsUncached(
       .eq("hien_thi", true)
       .eq("khoa_hoc", monId);
     if (!error && data && data.length > 0) {
-      const res = aggregate(data as { so_sao: number | null }[]);
+      const res = aggregateDanhGiaRows(data as { so_sao: number | null }[]);
       if (res.count > 0) return res;
     }
   }
@@ -365,11 +393,72 @@ async function getKhoaHocReviewStatsUncached(
     .from("ql_danh_gia")
     .select("so_sao")
     .eq("hien_thi", true);
-  if (error || !data) return { avg: 0, count: 0 };
-  return aggregate(data as { so_sao: number | null }[]);
+  if (error || !data) return { avg: 0, count: 0, byStar: { ...EMPTY_STAR_BUCKETS } };
+  return aggregateDanhGiaRows(data as { so_sao: number | null }[]);
 }
 
 export const getKhoaHocReviewStats = cache(getKhoaHocReviewStatsUncached);
+
+function mapDanhGiaRowToListItem(raw: Record<string, unknown>): KhoaHocReviewListItem | null {
+  const id = Number(raw.id);
+  if (!Number.isFinite(id)) return null;
+  const star = bucketSoSao(raw.so_sao);
+  return {
+    id,
+    tenNguoi: String(raw.ten_nguoi ?? "").trim() || "Học viên",
+    avatarUrl:
+      raw.avatar_url != null && String(raw.avatar_url).trim()
+        ? String(raw.avatar_url).trim()
+        : null,
+    noiDung: String(raw.noi_dung ?? "").trim() || "—",
+    soSao: star ?? 5,
+    nguon: raw.nguon != null ? String(raw.nguon).trim() || null : null,
+    thoiGianHoc:
+      raw.thoi_gian_hoc != null ? String(raw.thoi_gian_hoc).trim() || null : null,
+  };
+}
+
+/**
+ * Đánh giá hiển thị trên trang khóa — cùng logic cohort với `getKhoaHocReviewStats`
+ * (ưu tiên `khoa_hoc = monId`, không có thì toàn site).
+ */
+async function getKhoaHocReviewListUncached(
+  monId: number | null,
+): Promise<KhoaHocReviewListItem[]> {
+  const supabase = createStaticClient();
+  if (!supabase) return [];
+
+  const sel =
+    "id, ten_nguoi, avatar_url, noi_dung, so_sao, nguon, thoi_gian_hoc, created_at";
+
+  if (monId != null && Number.isFinite(monId)) {
+    const { data, error } = await supabase
+      .from("ql_danh_gia")
+      .select(sel)
+      .eq("hien_thi", true)
+      .eq("khoa_hoc", monId)
+      .order("created_at", { ascending: false })
+      .limit(24);
+    if (!error && data && data.length > 0) {
+      return (data as Record<string, unknown>[])
+        .map(mapDanhGiaRowToListItem)
+        .filter((x): x is KhoaHocReviewListItem => x != null);
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("ql_danh_gia")
+    .select(sel)
+    .eq("hien_thi", true)
+    .order("created_at", { ascending: false })
+    .limit(24);
+  if (error || !data?.length) return [];
+  return (data as Record<string, unknown>[])
+    .map(mapDanhGiaRowToListItem)
+    .filter((x): x is KhoaHocReviewListItem => x != null);
+}
+
+export const getKhoaHocReviewList = cache(getKhoaHocReviewListUncached);
 
 async function fetchTeachersForMon(
   supabase: SupabaseClient,
@@ -774,14 +863,37 @@ export async function getOngoingClassesForMon(
   const supabase = createStaticClient();
   if (!supabase) return [];
 
-  const { data: lopRows, error: lopErr } = await supabase
+  const selLopFull =
+    "id, class_name, class_full_name, teacher, chi_nhanh_id, lich_hoc, special, level_hinh_hoa";
+  const selLopMin = "id, class_name, class_full_name, teacher, chi_nhanh_id, lich_hoc, special";
+
+  let lopList: Record<string, unknown>[] = [];
+  const lopFirst = await supabase
     .from("ql_lop_hoc")
-    .select("id, class_name, class_full_name, teacher, chi_nhanh_id, lich_hoc, special")
+    .select(selLopFull)
     .eq("mon_hoc", monId)
     .order("id", { ascending: true });
-  if (lopErr || !lopRows?.length) return [];
 
-  const lopList = lopRows as Record<string, unknown>[];
+  if (lopFirst.error) {
+    const msg = lopFirst.error.message.toLowerCase();
+    if (msg.includes("column") || msg.includes("schema")) {
+      const retry = await supabase
+        .from("ql_lop_hoc")
+        .select(selLopMin)
+        .eq("mon_hoc", monId)
+        .order("id", { ascending: true });
+      if (retry.error || !retry.data?.length) return [];
+      lopList = retry.data as Record<string, unknown>[];
+    } else {
+      return [];
+    }
+  } else if (!lopFirst.data?.length) {
+    return [];
+  } else {
+    lopList = lopFirst.data as Record<string, unknown>[];
+  }
+
+  if (!lopList.length) return [];
   const lopIds = lopList
     .map((r) => Number(r.id))
     .filter((id) => Number.isFinite(id) && id > 0);
@@ -798,13 +910,10 @@ export async function getOngoingClassesForMon(
     ),
   ];
 
-  const [{ data: mon }, { data: enrollRows }, { data: teachers }, { data: branches }] =
+  const [{ data: mon }, filledByLop, { data: teachers }, { data: branches }] =
     await Promise.all([
-      supabase.from("ql_mon_hoc").select("id, si_so").eq("id", monId).maybeSingle(),
-      supabase
-        .from("ql_quan_ly_hoc_vien")
-        .select("lop_hoc")
-        .in("lop_hoc", lopIds),
+      supabase.from("ql_mon_hoc").select("id, si_so, ten_mon_hoc").eq("id", monId).maybeSingle(),
+      countDangHocByLopIds(supabase, lopIds),
       teacherIds.length
         ? supabase
             .from("hr_nhan_su")
@@ -818,13 +927,8 @@ export async function getOngoingClassesForMon(
 
   const totalFromMon = Number((mon as Record<string, unknown> | null)?.si_so ?? 0);
   const totalSeat = Number.isFinite(totalFromMon) && totalFromMon > 0 ? totalFromMon : 20;
-
-  const filledByLop = new Map<number, number>();
-  for (const row of enrollRows as Record<string, unknown>[]) {
-    const lopId = Number(row.lop_hoc);
-    if (!Number.isFinite(lopId)) continue;
-    filledByLop.set(lopId, (filledByLop.get(lopId) ?? 0) + 1);
-  }
+  const courseTenMon = String((mon as Record<string, unknown> | null)?.ten_mon_hoc ?? "").trim() || null;
+  const showLevelHinhHoa = isTenMonHinhHoa(courseTenMon);
 
   const teacherMap = new Map<number, string>();
   const teacherPortfolioMap = new Map<number, string[]>();
@@ -872,6 +976,10 @@ export async function getOngoingClassesForMon(
     const branchId = Number(r.chi_nhanh_id);
     const branchLabel = Number.isFinite(branchId) ? branchMap.get(branchId) : undefined;
 
+    const lvRaw = String(r.level_hinh_hoa ?? "").trim();
+    const levelHinhHoa =
+      showLevelHinhHoa && lvRaw.length > 0 ? lvRaw : undefined;
+
     return {
       id: `lop-${id}`,
       title,
@@ -886,6 +994,7 @@ export async function getOngoingClassesForMon(
       gio: deriveClassTime(hinhThucTag, lich),
       filled,
       total: totalSeat,
+      levelHinhHoa,
     };
   });
 }

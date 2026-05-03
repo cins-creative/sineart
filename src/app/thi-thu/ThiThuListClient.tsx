@@ -9,6 +9,7 @@ import {
   computeExamEndMs,
   computeListCardStatus,
   listCardStatusLabel,
+  SUBMIT_GRACE_MS,
 } from "@/lib/thi-thu/phase";
 import type { ListCardStatus } from "@/lib/thi-thu/phase";
 import { computeKyListSortKey, formatThoiGianSuaBaiLabel } from "@/lib/thi-thu/replay-time";
@@ -16,6 +17,14 @@ import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
 import type { ThiThuKyThiRow } from "@/types/thi-thu";
 
 const OPEN_ROOM_MS = 15 * 60 * 1000;
+
+function fmtGraceMMSS(ms: number): string {
+  if (ms <= 0) return "00:00";
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
 
 function fmtDayHour(iso: string): string {
   const d = new Date(iso);
@@ -50,7 +59,7 @@ function statusBarStyle(mon: MonThiKey): CSSProperties {
 function dotCls(st: ListCardStatus): string {
   if (st === "sap_dien_ra") return "tti-dot-y";
   if (st === "dang_mo_phong") return "tti-dot-g";
-  if (st === "dang_thi") return "tti-dot-r";
+  if (st === "dang_thi" || st === "gia_han_nop_bai") return "tti-dot-r";
   return "tti-dot-n";
 }
 
@@ -108,10 +117,12 @@ export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
 
   return (
     <div className="tti-grid3">
-      {cards.map(({ row, mon, cfg, st, roomOpen }) => {
+      {cards.map(({ row, mon, cfg, st, roomOpen, endMs }) => {
         const canEnter = roomOpen && st !== "da_ket_thuc";
+        const graceLeftMs =
+          st === "gia_han_nop_bai" ? Math.max(0, endMs + SUBMIT_GRACE_MS - now) : 0;
         const suaLabel =
-          st === "da_ket_thuc"
+          st === "da_ket_thuc" || st === "gia_han_nop_bai"
             ? formatThoiGianSuaBaiLabel(row.thoi_gian_bat_dau, row.thoi_gian_sua_bai)
             : null;
         const yt = row.video_sua_bai?.trim() ?? "";
@@ -144,6 +155,11 @@ export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
               {suaLabel ? (
                 <p className="tti-ttc-sua">
                   <span className="tti-ttc-sua-k">Lịch sửa bài:</span> {suaLabel}
+                </p>
+              ) : null}
+              {st === "gia_han_nop_bai" && graceLeftMs > 0 ? (
+                <p className="tti-ttc-meta font-semibold text-[#b91c5c]" style={{ marginTop: "0.35rem" }}>
+                  Gia hạn nộp bài: <span className="tabular-nums">{fmtGraceMMSS(graceLeftMs)}</span>
                 </p>
               ) : null}
               {canEnter ? (

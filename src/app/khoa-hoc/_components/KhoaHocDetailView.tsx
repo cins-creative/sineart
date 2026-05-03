@@ -4,6 +4,7 @@ import BaiTapList from "@/components/course/BaiTapList";
 import type {
   HocPhiBlockData,
   KhoaHocDetailData,
+  KhoaHocReviewListItem,
   KhoaHocReviewStats,
   LearnOutcome,
   OngoingClassCard,
@@ -22,7 +23,6 @@ import {
   KD_DANH_CHO_AI,
   KD_DEFAULT_LEARN_BY_GROUP,
   KD_FAQ,
-  KD_REVIEWS,
   KD_THREE_SUBJECTS,
 } from "../_data/khoa-hoc-detail-static";
 import DongHocPhiEmailGateModal from "./DongHocPhiEmailGateModal";
@@ -82,7 +82,64 @@ const KD_OC_BADGE: Record<
   },
 };
 
-const DEFAULT_REVIEW_STATS: KhoaHocReviewStats = { avg: 0, count: 0 };
+const EMPTY_BY_STAR = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+const DEFAULT_REVIEW_STATS: KhoaHocReviewStats = {
+  avg: 0,
+  count: 0,
+  byStar: { ...EMPTY_BY_STAR },
+};
+
+function reviewInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+  }
+  const s = name.trim();
+  return (s.length >= 2 ? s.slice(0, 2) : s.padEnd(2, "?")).toUpperCase();
+}
+
+function starRow(soSao: number): string {
+  const n = Math.min(5, Math.max(1, Math.round(soSao)));
+  return `${"★".repeat(n)}${"☆".repeat(5 - n)}`;
+}
+
+function KdReviewCard({ r }: { r: KhoaHocReviewListItem }) {
+  const [imgErr, setImgErr] = useState(false);
+  const thumb =
+    r.avatarUrl && !imgErr ? cfImageForThumbnail(r.avatarUrl) || r.avatarUrl : null;
+
+  return (
+    <article className="kd-review">
+      <div className="kd-rv-top">
+        {thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <div className="kd-rv-av kd-rv-av--img">
+            <img
+              src={thumb}
+              alt=""
+              className="h-full w-full rounded-full object-cover"
+              onError={() => setImgErr(true)}
+            />
+          </div>
+        ) : (
+          <div className="kd-rv-av">{reviewInitials(r.tenNguoi)}</div>
+        )}
+        <div>
+          <div className="kd-rv-name">{r.tenNguoi}</div>
+          <div className="kd-rv-stars" aria-label={`${r.soSao} trên 5 sao`}>
+            {starRow(r.soSao)}
+          </div>
+        </div>
+      </div>
+      <p className="kd-rv-text">{r.noiDung}</p>
+      {r.thoiGianHoc || r.nguon ? (
+        <p className="kd-rv-meta">
+          {[r.thoiGianHoc, r.nguon].filter(Boolean).join(" · ")}
+        </p>
+      ) : null}
+    </article>
+  );
+}
 
 function IconClock({ className }: { className?: string }) {
   return (
@@ -137,6 +194,7 @@ export default function KhoaHocDetailView({
   baiTapGroups = [],
   ongoingClasses = [],
   reviewStats = DEFAULT_REVIEW_STATS,
+  reviewList = [],
 }: {
   detail: KhoaHocDetailData | null;
   fallbackTitle?: string;
@@ -149,6 +207,8 @@ export default function KhoaHocDetailView({
   baiTapGroups?: BaiTapGroup[];
   ongoingClasses?: OngoingClassCard[];
   reviewStats?: KhoaHocReviewStats;
+  /** Đánh giá hiển thị — `ql_danh_gia` (cùng cohort với `reviewStats`). */
+  reviewList?: KhoaHocReviewListItem[];
 }) {
   const d = detail;
   const title = d?.tenMonHoc ?? fallbackTitle ?? "Khóa học";
@@ -289,6 +349,11 @@ export default function KhoaHocDetailView({
     const avg = reviewStats.avg.toFixed(1);
     return `${avg} · ${reviewStats.count} đánh giá`;
   }, [reviewStats]);
+
+  const reviewSummaryStars = useMemo(() => {
+    if (reviewStats.count <= 0) return "";
+    return starRow(Math.round(reviewStats.avg));
+  }, [reviewStats.avg, reviewStats.count]);
 
   const gradStyle =
     d?.gradientStart && d?.gradientEnd
@@ -629,6 +694,9 @@ export default function KhoaHocDetailView({
                       <div className="kd-sch-name" title={c.title}>
                         {c.title}
                       </div>
+                      {c.levelHinhHoa ? (
+                        <div className="kd-sch-level-hinh-hoa">{c.levelHinhHoa}</div>
+                      ) : null}
                       <div className="kd-sch-day">{c.lich}</div>
                       <div className="kd-sch-meta">GV: {c.gvNames}</div>
                       <div className="kd-oc-seats">
@@ -658,45 +726,54 @@ export default function KhoaHocDetailView({
             )}
           </section>
 
-          {/* ── 09 REVIEWS ── */}
+          {/* ── 09 REVIEWS — ql_danh_gia (hien_thi = true) ── */}
           <section className="kd-block" id="reviews">
             <div className="kd-sec-label">Đánh giá từ học viên</div>
             <h2 className="kd-sec-title">
-              Học viên nói gì — <em>không lọc</em>
+              Học viên nói gì — <em>theo hệ thống</em>
             </h2>
-            <p className="kd-sec-sub">Tất cả được đồng bộ trực tiếp từ Google Reviews.</p>
+            <p className="kd-sec-sub">
+              Đánh giá học viên lưu trong hệ thống Sine Art. Ưu tiên những đánh giá gắn với khóa học này; nếu chưa có đủ dữ liệu,
+              phần thống kê và danh sách bên dưới dùng thêm đánh giá từ các khóa khác để tham khảo.
+            </p>
 
-            <div className="kd-rating-bar">
-              <div>
-                <div className="kd-rating-num">4.8</div>
-                <div className="kd-stars" aria-hidden>★★★★★</div>
-                <div className="kd-rating-count">Dựa trên đánh giá nội bộ</div>
-              </div>
-              <div className="kd-bars">
-                {[5, 4, 3, 2, 1].map((n) => (
-                  <div key={n} className="kd-bar-row">
-                    <span>{n}★</span>
-                    <div className="kd-bar-track">
-                      <div className="kd-bar-fill" style={{ width: `${n === 5 ? 78 : n === 4 ? 14 : 8}%` }} />
+            {reviewStats.count <= 0 ? (
+              <p className="m-0 rounded-xl border border-dashed border-black/[0.08] bg-black/[0.02] px-4 py-6 text-center text-[14px] text-[var(--kd-ink2)]">
+                Chưa có đánh giá để hiển thị cho khóa này.
+              </p>
+            ) : (
+              <>
+                <div className="kd-rating-bar">
+                  <div>
+                    <div className="kd-rating-num">{reviewStats.avg.toFixed(1)}</div>
+                    <div className="kd-stars" aria-hidden>
+                      {reviewSummaryStars}
                     </div>
+                    <div className="kd-rating-count">{reviewStats.count} đánh giá</div>
                   </div>
-                ))}
-              </div>
-            </div>
-            <div className="kd-review-grid">
-              {KD_REVIEWS.map((r) => (
-                <article key={r.name} className="kd-review">
-                  <div className="kd-rv-top">
-                    <div className="kd-rv-av">{r.initials}</div>
-                    <div>
-                      <div className="kd-rv-name">{r.name}</div>
-                      <div className="kd-rv-stars" aria-hidden>★★★★★</div>
-                    </div>
+                  <div className="kd-bars">
+                    {[5, 4, 3, 2, 1].map((n) => {
+                      const c = reviewStats.byStar[n as keyof typeof reviewStats.byStar] ?? 0;
+                      const pct =
+                        reviewStats.count > 0 ? Math.min(100, Math.round((100 * c) / reviewStats.count)) : 0;
+                      return (
+                        <div key={n} className="kd-bar-row">
+                          <span>{n}★</span>
+                          <div className="kd-bar-track">
+                            <div className="kd-bar-fill" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p className="kd-rv-text">{r.text}</p>
-                </article>
-              ))}
-            </div>
+                </div>
+                <div className="kd-review-grid">
+                  {reviewList.map((r) => (
+                    <KdReviewCard key={r.id} r={r} />
+                  ))}
+                </div>
+              </>
+            )}
           </section>
 
           {/* ── 10 FAQ ── */}

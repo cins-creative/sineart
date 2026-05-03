@@ -2,25 +2,16 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import CtaBandSection from "./_components/CtaBandSection";
 import LuuBaiHocVienFab from "./_components/LuuBaiHocVienFab";
-import HeroSection from "./_components/HeroSection";
-import VideoSection from "./_components/VideoSection";
-import WhySection from "./_components/WhySection";
-import {
-  DEFAULT_HOME_CONTENT,
-  type WhyContent,
-} from "@/lib/admin/home-content-schema";
-import { getHomeStatStripData } from "@/lib/data/home";
-import { getHomeContent } from "@/lib/data/home-content";
 import { HomeCareerSection } from "./_components/home/HomeCareerSection";
 import { HomeCareerSectionSkeleton } from "./_components/home/HomeCareerSection.skeleton";
 import { HomeGallerySection } from "./_components/home/HomeGallerySection";
 import { HomeGallerySectionSkeleton } from "./_components/home/HomeGallerySection.skeleton";
+import { HomeLeadLoadingFallback } from "./_components/home/HomeLeadLoadingFallback";
+import { HomeLeadSections } from "./_components/home/HomeLeadSections";
 import { HomeNavSection } from "./_components/home/HomeNavSection";
 import { HomeNavSectionSkeleton } from "./_components/home/HomeNavSection.skeleton";
 import { HomeReviewsSection } from "./_components/home/HomeReviewsSection";
 import { HomeReviewsSectionSkeleton } from "./_components/home/HomeReviewsSection.skeleton";
-import { HomeStatStripSection } from "./_components/home/HomeStatStripSection";
-import { HomeStatStripSectionSkeleton } from "./_components/home/HomeStatStripSection.skeleton";
 import { HomeTeachersSection } from "./_components/home/HomeTeachersSection";
 import { HomeTeachersSectionSkeleton } from "./_components/home/HomeTeachersSection.skeleton";
 import "./sineart-home.css";
@@ -36,53 +27,23 @@ export const metadata: Metadata = {
   openGraph: { url: "https://sineart.vn/" },
 };
 
-export default async function Home() {
-  const [homeContent, statStrip] = await Promise.all([
-    getHomeContent(),
-    getHomeStatStripData(),
-  ]);
-
-  /** Eyebrow + số học viên khớp nội dung chuẩn (không lấy từ CMS). */
-  const heroContent = {
-    ...homeContent.hero,
-    eyebrow: DEFAULT_HOME_CONTENT.hero.eyebrow,
-    studentsTrust: `${statStrip.students} học viên`,
-  };
-
-  /** `mkt_home_content` thường ghi đè bản trong code; đồng bộ copy section “Tại sao”. */
-  const dw = DEFAULT_HOME_CONTENT.why;
-  const whyContent: WhyContent = {
-    ...homeContent.why,
-    leadBody: dw.leadBody,
-    pillars: [
-      { ...homeContent.why.pillars[0], text: dw.pillars[0].text },
-      { ...homeContent.why.pillars[1], text: dw.pillars[1].text },
-      { ...homeContent.why.pillars[2], text: dw.pillars[2].text },
-    ],
-  };
-
+export default function Home() {
   return (
     <div className="sa-root">
       <Suspense fallback={<HomeNavSectionSkeleton />}>
         <HomeNavSection />
       </Suspense>
 
-      <HeroSection content={heroContent} />
-
-      <Suspense fallback={<HomeStatStripSectionSkeleton />}>
-        <HomeStatStripSection />
+      <Suspense fallback={<HomeLeadLoadingFallback />}>
+        <HomeLeadSections>
+          <Suspense fallback={<HomeReviewsSectionSkeleton />}>
+            <HomeReviewsSection />
+          </Suspense>
+          <Suspense fallback={<HomeGallerySectionSkeleton />}>
+            <HomeGallerySection />
+          </Suspense>
+        </HomeLeadSections>
       </Suspense>
-
-      <div className="page-inner">
-        <WhySection content={whyContent} />
-        <VideoSection content={homeContent.video} />
-        <Suspense fallback={<HomeReviewsSectionSkeleton />}>
-          <HomeReviewsSection />
-        </Suspense>
-        <Suspense fallback={<HomeGallerySectionSkeleton />}>
-          <HomeGallerySection />
-        </Suspense>
-      </div>
 
       <Suspense fallback={<HomeCareerSectionSkeleton />}>
         <HomeCareerSection />

@@ -1,3 +1,4 @@
+import { getHtbtCapTocCached } from "@/lib/data/htbt-cap-toc";
 import { createClient } from "@/lib/supabase/server";
 import { getGvHrIdFromSyncedCookie } from "@/lib/phong-hoc/gv-session-cookie";
 import { getHvIdFromSyncedCookie } from "@/lib/phong-hoc/hv-session-cookie";
@@ -88,6 +89,13 @@ export async function getHeThongBaiTapAccess(
       ? Number((qlhv as { id: unknown }).id)
       : NaN;
   if (!Number.isFinite(hvId)) return { viewer: "non_hv", maxAccessibleIndex: -1 };
+
+  /** “Cấp tốc”: mở toàn bộ bài giảng cho mọi học viên (cấu hình admin). */
+  const capToc = await getHtbtCapTocCached();
+  if (capToc) {
+    const last = sortedAscByBaiSo.length - 1;
+    return { viewer: "hv", maxAccessibleIndex: last >= 0 ? last : -1 };
+  }
 
   const { data: lops } = await supabase.from("ql_lop_hoc").select("id").eq("mon_hoc", monHocId);
   const lopIds = (lops ?? [])

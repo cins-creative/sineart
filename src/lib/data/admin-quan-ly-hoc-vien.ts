@@ -5,6 +5,9 @@ import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 const PAGE = 1000;
 const IN_CHUNK = 200;
 
+/** Trạng thái nghiệp vụ do Ban Vận Hành chỉnh — không phụ thuộc kỳ học phí. */
+export type QlhvTrangThaiTuVan = "dang_hoc" | "nghi";
+
 export type AdminQlhvStudent = {
   id: number;
   full_name: string;
@@ -21,6 +24,8 @@ export type AdminQlhvStudent = {
   nam_thi: number | null;
   /** `ql_thong_tin_hoc_vien.created_at` — dùng làm «ngày bắt đầu» hiển thị theo tài khoản. */
   created_at: string | null;
+  /** `ql_thong_tin_hoc_vien.trang_thai_tu_van` — Đang học / Nghỉ (tư vấn). */
+  trang_thai_tu_van: QlhvTrangThaiTuVan;
 };
 
 /** Một dòng nguyện vọng / trường–ngành (`ql_hv_truong_nganh`). */
@@ -63,6 +68,10 @@ export type AdminQlhvBaiTapBrief = {
   thumbnail: string | null;
 };
 
+export function normalizeQlhvTrangThaiTuVan(v: unknown): QlhvTrangThaiTuVan {
+  return v === "nghi" ? "nghi" : "dang_hoc";
+}
+
 function nId(v: unknown): number | null {
   if (typeof v === "bigint") {
     const n = Number(v);
@@ -104,7 +113,7 @@ export async function fetchAdminQuanLyHocVienBundle(supabase: SupabaseClient): P
   error: string | null;
 }> {
   const studentSelectFull =
-    "id, full_name, email, sdt, is_hoc_vien_mau, facebook, sex, loai_khoa_hoc, ngay_bat_dau, ngay_ket_thuc, nam_thi, created_at";
+    "id, full_name, email, sdt, is_hoc_vien_mau, facebook, sex, loai_khoa_hoc, ngay_bat_dau, ngay_ket_thuc, nam_thi, created_at, trang_thai_tu_van";
   const studentSelectWithAvatar = `${studentSelectFull}, avatar`;
   let studentSelect = studentSelectWithAvatar;
   const studentRows: Record<string, unknown>[] = [];
@@ -128,7 +137,7 @@ export async function fetchAdminQuanLyHocVienBundle(supabase: SupabaseClient): P
           continue;
         }
         if (studentSelect === studentSelectFull) {
-          studentSelect = "id, full_name, email, sdt, is_hoc_vien_mau, created_at";
+          studentSelect = "id, full_name, email, sdt, is_hoc_vien_mau, created_at, trang_thai_tu_van";
           studentFrom = 0;
           studentRows.length = 0;
           continue;
@@ -304,6 +313,7 @@ export async function fetchAdminQuanLyHocVienBundle(supabase: SupabaseClient): P
             : null,
         nam_thi: namRaw != null && Number.isFinite(namNum) ? Math.trunc(namNum) : null,
         created_at: r.created_at != null ? String(r.created_at) : null,
+        trang_thai_tu_van: normalizeQlhvTrangThaiTuVan(r.trang_thai_tu_van),
       };
     })
     .filter((s) => s.id > 0);

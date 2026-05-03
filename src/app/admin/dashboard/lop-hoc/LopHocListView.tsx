@@ -10,6 +10,7 @@ import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/Ad
 import type { LopHocFormState } from "@/app/admin/dashboard/lop-hoc/actions";
 import { createLopHoc, deleteLopHoc, duplicateLopHoc, toggleLopSpecial, updateLopHoc, updateTeacherPortfolio } from "@/app/admin/dashboard/lop-hoc/actions";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
+import { LEVEL_HINH_HOA_VALUES, isTenMonHinhHoa } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import { cn } from "@/lib/utils";
 
 const DS = {
@@ -42,6 +43,8 @@ export type AdminLopRow = {
   special: boolean;
   /** Lớp đang hoạt động — theo cột `tinh_trang`. */
   tinh_trang: boolean;
+  /** Chỉ dùng khi môn Hình họa — `ql_lop_hoc.level_hinh_hoa`. */
+  level_hinh_hoa: string | null;
 };
 
 type MonOpt = { id: number; ten_mon_hoc: string | null };
@@ -859,6 +862,8 @@ type DetailForm = {
   avatar: string;
   special: boolean;
   tinh_trang: boolean;
+  /** Form string — rỗng hoặc một trong `LEVEL_HINH_HOA_VALUES`. */
+  level_hinh_hoa: string;
 };
 
 function rowToForm(r: AdminLopRow): DetailForm {
@@ -873,6 +878,7 @@ function rowToForm(r: AdminLopRow): DetailForm {
     avatar: r.avatar ?? "",
     special: r.special,
     tinh_trang: r.tinh_trang,
+    level_hinh_hoa: r.level_hinh_hoa ?? "",
   };
 }
 
@@ -910,7 +916,16 @@ function LopDetailPanel({
     setConfirmDel(false);
   }, [item]);
 
+  useEffect(() => {
+    const ten = monList.find((m) => String(m.id) === form.mon_hoc)?.ten_mon_hoc ?? null;
+    if (!isTenMonHinhHoa(ten)) {
+      setForm((f) => (f.level_hinh_hoa ? { ...f, level_hinh_hoa: "" } : f));
+    }
+  }, [form.mon_hoc, monList]);
+
   const tenMon = monList.find((m) => m.id === item.mon_hoc)?.ten_mon_hoc ?? null;
+  const tenMonForm = monList.find((m) => String(m.id) === form.mon_hoc)?.ten_mon_hoc ?? null;
+  const showLevelHinhHoaField = isTenMonHinhHoa(tenMonForm);
   const gvList = item.teacher
     .map((id) => nhanSuList.find((n) => n.id === id))
     .filter(Boolean) as NsOpt[];
@@ -934,6 +949,7 @@ function LopDetailPanel({
     fd.set("avatar", form.avatar);
     fd.set("special", form.special ? "1" : "");
     fd.set("tinh_trang", form.tinh_trang ? "1" : "");
+    fd.set("level_hinh_hoa", showLevelHinhHoaField ? form.level_hinh_hoa : "");
     startTransition(async () => {
       const r = await updateLopHoc(null, fd);
       if (r.ok) {
@@ -1111,6 +1127,23 @@ function LopDetailPanel({
                   ))}
                 </select>
               </div>
+              {showLevelHinhHoaField ? (
+                <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Loại Hình họa</div>
+                  <select
+                    className={inpClass()}
+                    value={form.level_hinh_hoa}
+                    onChange={(e) => setK("level_hinh_hoa", e.target.value)}
+                  >
+                    <option value="">— Chọn —</option>
+                    {LEVEL_HINH_HOA_VALUES.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div>
                 <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Chi nhánh</div>
                 <select className={inpClass()} value={form.chi_nhanh_id} onChange={(e) => setK("chi_nhanh_id", e.target.value)}>
@@ -1202,6 +1235,12 @@ function LopDetailPanel({
                   {tenMon ?? "—"}
                 </dd>
               </div>
+              {isTenMonHinhHoa(tenMon) ? (
+                <div className="flex justify-between gap-2 border-b border-[#f0f0f0] py-1">
+                  <dt className="text-[10px] font-bold uppercase text-[#AAA]">Loại Hình họa</dt>
+                  <dd className="m-0 text-right font-semibold text-gray-800">{item.level_hinh_hoa ?? "—"}</dd>
+                </div>
+              ) : null}
               <div className="flex items-start justify-between gap-2 border-b border-[#f0f0f0] py-1">
                 <dt className="shrink-0 text-[10px] font-bold uppercase text-[#AAA]">Giáo viên</dt>
                 <dd className="m-0 flex flex-col items-end gap-1">
@@ -1345,6 +1384,19 @@ function CreateLopModal({
   const [createTeachers, setCreateTeachers] = useState<string[]>([]);
   const [createSpecial, setCreateSpecial] = useState(false);
   const [createTinhTrang, setCreateTinhTrang] = useState(true);
+  const [createMonHoc, setCreateMonHoc] = useState("");
+  const [createLevelHinhHoa, setCreateLevelHinhHoa] = useState("");
+
+  const createShowLevelHinhHoa = useMemo(
+    () => isTenMonHinhHoa(monList.find((m) => String(m.id) === createMonHoc)?.ten_mon_hoc ?? null),
+    [createMonHoc, monList],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setCreateMonHoc("");
+    setCreateLevelHinhHoa("");
+  }, [open]);
 
   useEffect(() => {
     if (state?.ok) {
@@ -1392,7 +1444,15 @@ function CreateLopModal({
             </div>
             <div>
               <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Môn học</div>
-              <select name="mon_hoc" className={inpClass()} defaultValue="">
+              <select
+                name="mon_hoc"
+                className={inpClass()}
+                value={createMonHoc}
+                onChange={(e) => {
+                  setCreateMonHoc(e.target.value);
+                  setCreateLevelHinhHoa("");
+                }}
+              >
                 <option value="">— Chọn môn học —</option>
                 {monList.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -1401,6 +1461,24 @@ function CreateLopModal({
                 ))}
               </select>
             </div>
+            {createShowLevelHinhHoa ? (
+              <div>
+                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Loại Hình họa</div>
+                <select
+                  name="level_hinh_hoa"
+                  className={inpClass()}
+                  value={createLevelHinhHoa}
+                  onChange={(e) => setCreateLevelHinhHoa(e.target.value)}
+                >
+                  <option value="">— Chọn —</option>
+                  {LEVEL_HINH_HOA_VALUES.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div>
               <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Chi nhánh</div>
               <select name="chi_nhanh_id" className={inpClass()} defaultValue={defaultChiNhanhId != null ? String(defaultChiNhanhId) : ""}>

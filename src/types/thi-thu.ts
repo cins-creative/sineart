@@ -41,4 +41,11 @@ export type ThiThuBaiNopRow = {
   thoi_gian_nop: string;
 };
 
-export type ThiThuPhase = "waiting" | "countdown" | "exam_1" | "break" | "exam_2" | "ended";
+export type ThiThuPhase =
+  | "waiting"
+  | "countdown"
+  | "exam_1"
+  | "break"
+  | "exam_2"
+  | "submit_grace"
+  | "ended";

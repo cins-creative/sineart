@@ -12,6 +12,21 @@ export function hasHpTuitionKy(k: AdminQlhvEnrollment): boolean {
   return ISO_YMD.test(dau) && ISO_YMD.test(cuoi);
 }
 
+/**
+ * Chỉ dựa vào kỳ học phí đã giải (`ngay_*`) — dùng khi chỉ có hai ngày, không có full `AdminQlhvEnrollment`.
+ * Trùng logic `deriveEnrollmentStatus` (không đọc cột `status` text trên ghi danh).
+ */
+export function isEnrollmentDangHocByKy(
+  ngay_dau_ky: string | null | undefined,
+  ngay_cuoi_ky: string | null | undefined,
+): boolean {
+  const partial = {
+    ngay_dau_ky: ngay_dau_ky ?? null,
+    ngay_cuoi_ky: ngay_cuoi_ky ?? null,
+  } as Pick<AdminQlhvEnrollment, "ngay_dau_ky" | "ngay_cuoi_ky">;
+  return deriveEnrollmentStatus(partial as AdminQlhvEnrollment) === "Đang học";
+}
+
 /** Tình trạng khoá từ kỳ HP (`hp_thu_hp_chi_tiet`); chưa có kỳ → «Chưa học». */
 export function deriveEnrollmentStatus(k: AdminQlhvEnrollment): "Chưa học" | "Đang học" | "Nghỉ" {
   if (!hasHpTuitionKy(k)) return "Chưa học";

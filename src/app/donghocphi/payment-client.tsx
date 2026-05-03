@@ -30,6 +30,7 @@ import {
   qlEnrollmentKyByLopFromHpMap,
 } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 import { isHocPhiCapTocSpecial } from "@/lib/hocPhiDedupe";
+import { levelHinhHoaThumbSrc } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import {
   type DhpStoredClassPickV1,
@@ -70,6 +71,8 @@ export type PaymentClassItem = {
   avatar: string | null;
   /** `ql_lop_hoc.special` — nhận cấp tốc cùng quy tắc `isHocPhiCapTocSpecial` / `HocPhiBlock`. */
   special: string | null;
+  /** `ql_lop_hoc.level_hinh_hoa` — chỉ khi môn là Hình họa. */
+  levelHinhHoa: string | null;
   filled: number;
   total: number;
   isFull: boolean;
@@ -86,7 +89,7 @@ export type PaymentFeeItem = {
   discount: number;
   giaThucDong: number;
   soMon: number;
-  /** `hp_goi_hoc_phi_new.so_buoi` — buổi cộng thêm khi chọn gói. */
+  /** `hp_goi_hoc_phi_new.so_buoi` — số ngày lịch cộng thêm khi chọn gói (UI gọi là «ngày»). */
   soBuoi: number | null;
   /** `hp_combo_mon.id` khi gói thuộc combo — dùng với `hp_combo_mon.gia_giam`. */
   comboId: number | null;
@@ -291,18 +294,18 @@ function computeRenewalBlock(
 
   let newEndDate: Date | null = null;
   let extendFootnote =
-    "Ngày hết hạn khóa học sau thanh toán = hôm nay + số buổi gói (ngày lịch, cùng quy ước với đơn).";
+    "Ngày hết hạn khóa học sau thanh toán = hôm nay + số ngày gói (ngày lịch, cùng quy ước với đơn).";
   if (themBuoi > 0) {
     if (cuoi && cuoi >= today0) {
       newEndDate = addCalendarDays(cuoi, themBuoi);
       extendFootnote =
-        "Ngày hết hạn khóa học = ngày hết hạn hiện tại + số buổi gói (ngày lịch). Đơn có thể neo theo ngày thanh toán — xem hồ sơ sau khi đồng bộ.";
+        "Ngày hết hạn khóa học = ngày hết hạn hiện tại + số ngày gói (ngày lịch). Đơn có thể neo theo ngày thanh toán — xem hồ sơ sau khi đồng bộ.";
     } else {
       newEndDate = addCalendarDays(today0, themBuoi);
       extendFootnote =
         cuoi != null && cuoi < today0
-          ? "Ngày cuối kỳ cũ đã qua — gia hạn tính từ hôm nay + số buổi gói (ngày lịch)."
-          : "Ngày hết hạn khóa học = hôm nay + số buổi gói (ngày lịch).";
+          ? "Ngày cuối kỳ cũ đã qua — gia hạn tính từ hôm nay + số ngày gói (ngày lịch)."
+          : "Ngày hết hạn khóa học = hôm nay + số ngày gói (ngày lịch).";
     }
   }
 
@@ -376,7 +379,7 @@ function initialActiveMonIdForEnrollment(
   return preselectedMonId ?? guessedMon ?? monHoc[0]?.id ?? null;
 }
 
-/** Dự kiến buổi / ngày sau gia hạn — cùng logic «Ngày hết hạn khóa học» ở bước 3. */
+/** Dự kiến số ngày sau gia hạn — cùng logic «Ngày hết hạn khóa học» ở bước 3. */
 function renewalPreviewAfterPay(
   cls: PaymentClassItem,
   monPayLabel: string,
@@ -412,14 +415,14 @@ function renewalPreviewAfterPay(
       : 0;
   const today0 = startOfTodayLocal();
   const block = computeRenewalBlock(ky, themBuoi, today0);
-  const sessionsCell = `${block.tongBuoi} buổi`;
+  const sessionsCell = `${block.tongBuoi} ngày`;
   if (themBuoi <= 0) {
     return {
       courseLabel,
       sessionsCell,
       expiryCell: "—",
       rowNote:
-        "Gói không cộng buổi theo lịch (so_buoi = 0) — không ước lượng ngày mới từ số buổi.",
+        "Gói không cộng ngày theo lịch (so_buoi = 0) — không ước lượng ngày hết hạn mới từ số ngày trong gói.",
     };
   }
   return {
@@ -2117,6 +2120,9 @@ export default function DongHocPhiClient({
                   ? cfImageForThumbnail(cls.avatar) || cls.avatar
                   : null;
                 const badge = classSeatBadge(cls);
+                const levelHinhThumb = cls.levelHinhHoa
+                  ? levelHinhHoaThumbSrc(cls.levelHinhHoa)
+                  : null;
                 return (
                   <div
                     key={cls.id}
@@ -2171,6 +2177,23 @@ export default function DongHocPhiClient({
                             </span>
                           ) : null}
                         </div>
+                        {cls.levelHinhHoa ? (
+                          <div
+                            className="dhp-oc-level-hinh-hoa"
+                            title={cls.levelHinhHoa}
+                          >
+                            {levelHinhThumb ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={levelHinhThumb}
+                                alt=""
+                                className="dhp-oc-level-hinh-hoa-thumb"
+                                loading="lazy"
+                              />
+                            ) : null}
+                            <span className="dhp-oc-level-hinh-hoa-text">{cls.levelHinhHoa}</span>
+                          </div>
+                        ) : null}
                         <p className="dhp-oc-lich">{cls.lichHoc}</p>
                       </div>
                     </div>
@@ -2291,7 +2314,7 @@ export default function DongHocPhiClient({
                                   }));
                                 }}
                               >
-                                <div className="dhp-gt dhp-gt--skip-full">Không gia hạn luôn</div>
+                                <div className="dhp-gt dhp-gt--skip-full">Không gia hạn</div>
                                 <div className="dhp-gp dhp-gp--muted">0 ₫</div>
                               </button>
                             </div>
@@ -2320,17 +2343,17 @@ export default function DongHocPhiClient({
                               </div>
                               <div className="dhp-date-row">
                                 <span className="dhp-date-k">Gia hạn thêm</span>
-                                <span className="dhp-pill-buoi">+{themBuoi} buổi</span>
+                                <span className="dhp-pill-buoi">+{themBuoi} ngày</span>
                               </div>
                               <div className="dhp-date-divider" aria-hidden />
                               <div className="dhp-date-total">
                                 <div className="dhp-date-row dhp-date-row--total">
                                   <span className="dhp-date-k dhp-date-k--total">
-                                    Tổng buổi sau gia hạn
+                                    Tổng ngày sau gia hạn
                                   </span>
                                   <div className="dhp-date-total-val">
                                     <span className="dhp-tn">{tongBuoi}</span>
-                                    <span className="dhp-tn-unit">buổi</span>
+                                    <span className="dhp-tn-unit">ngày</span>
                                     <span className="dhp-tn-hint">
                                       (đã thanh toán: {buoiConLaiRow}
                                       {themBuoi > 0 ? ` + gói đang chọn: ${themBuoi}` : ""})
@@ -2349,7 +2372,7 @@ export default function DongHocPhiClient({
                               {!hasSoBuoiOnRow ? (
                                 <p className="dhp-date-note">
                                   Gói chưa có <code className="dhp-code">so_buoi</code> trên hệ
-                                  thống — đang tính 0 buổi cộng thêm.
+                                  thống — đang tính 0 ngày cộng thêm.
                                 </p>
                               ) : null}
                               <p className="dhp-date-note">{extendFootnote}</p>
@@ -2444,9 +2467,9 @@ export default function DongHocPhiClient({
                                 </span>
                               </div>
                               <div className="dhp-sr">
-                                <span className="dhp-sk dhp-sk--muted">Buổi sau gia hạn</span>
+                                <span className="dhp-sk dhp-sk--muted">Ngày sau gia hạn</span>
                                 <span className="dhp-sv dhp-sv--sessions">
-                                  {fee ? `${sumBlock.tongBuoi} buổi` : "—"}
+                                  {fee ? `${sumBlock.tongBuoi} ngày` : "—"}
                                 </span>
                               </div>
                               <div className="dhp-sdiv" />
@@ -2625,14 +2648,6 @@ export default function DongHocPhiClient({
                       khoản — QR chỉ đúng khi đã có mã đơn trên hệ thống.
                     </p>
                   )}
-                  {qrPayment.isTestMicro && serverOrder && invoiceForQr > 0 && !paymentComplete ? (
-                    <p className="dhp-qr-test-banner" role="status">
-                      <strong>Test CK:</strong> VietQR chỉ{" "}
-                      {formatVnd(qrPayment.qrAmountDong)} (2.000–2.300 ₫). Tổng đơn
-                      thật {formatVnd(invoiceForQr)} — coi như giảm{" "}
-                      {formatVnd(qrPayment.impliedTestDiscountDong)} khi quét thử.
-                    </p>
-                  ) : null}
                   <div
                     className={
                       paymentComplete
@@ -2819,15 +2834,15 @@ export default function DongHocPhiClient({
 
                     <h3 className="dhp-pay-modal-renew-title">Gia hạn khóa học (dự kiến)</h3>
                     <p className="dhp-pay-modal-renew-lead">
-                      Buổi và ngày hết hạn mới được ước tính theo gói đã chọn; hồ sơ học viên sẽ được
-                      cập nhật sau khi đồng bộ.
+                      Số ngày trong kỳ và ngày hết hạn mới được ước tính theo gói đã chọn; hồ sơ học
+                      viên sẽ được cập nhật sau khi đồng bộ.
                     </p>
                     <div className="dhp-pay-confirm-table-wrap dhp-pay-modal-table-wrap">
                       <table className="dhp-pay-confirm-table dhp-pay-modal-table dhp-pay-modal-renew-table">
                         <thead>
                           <tr>
                             <th scope="col">Khóa học</th>
-                            <th scope="col">Buổi sau gia hạn</th>
+                            <th scope="col">Ngày sau gia hạn</th>
                             <th scope="col">Ngày hết hạn mới (dự kiến)</th>
                           </tr>
                         </thead>

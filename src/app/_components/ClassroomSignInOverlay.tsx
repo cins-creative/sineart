@@ -212,6 +212,15 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
     };
   }, [open, initialEmail, lookupWithEmail]);
 
+  /** Làm nóng `/phong-hoc/[slug]` ngay khi có danh sách — click sau phản hồi nhanh hơn (ít chờ RSC). */
+  useEffect(() => {
+    if (!open || records.length === 0) return;
+    for (const item of records) {
+      const slug = phongHocSlugFromClassName(item.data.class_name);
+      if (slug) router.prefetch(`/phong-hoc/${encodeURIComponent(slug)}`);
+    }
+  }, [open, records, router]);
+
   const enterClass = (item: ClassroomSessionRecord) => {
     const slug = phongHocSlugFromClassName(item.data.class_name);
     if (!slug) {
@@ -219,18 +228,20 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
       return;
     }
     saveClassroomSession(item);
-    onClose();
     const target = `/phong-hoc/${encodeURIComponent(slug)}`;
     if (typeof window !== "undefined") {
       const m = window.location.pathname.match(/^\/phong-hoc\/([^/]+)\/?$/);
       const here = m?.[1] != null ? normalizePhongHocPathSlug(m[1]) : null;
       const there = normalizePhongHocPathSlug(slug);
       if (here === there) {
+        onClose();
         setTimeout(resetFormState, 320);
         return;
       }
     }
+    /** Điều hướng trước khi đóng overlay để Next bắt đầu fetch ngay — không chờ animation đóng modal. */
     router.push(target);
+    onClose();
     setTimeout(resetFormState, 320);
   };
 

@@ -1,9 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
+import { adminStaffCanEditTrangThaiTuVan } from "@/lib/admin/staff-mutation-access";
 import { staffBelongsToTuVanPhong } from "@/lib/admin/dashboard-nav-visibility";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import {
@@ -18,10 +19,11 @@ import {
   fetchAdminStaffShellPhongTenPhongs,
   fetchAdminStaffShellProfile,
 } from "@/lib/data/admin-shell-user";
-import { fetchAdminQuanLyHocVienBundle } from "@/lib/data/admin-quan-ly-hoc-vien";
+import { fetchAdminQuanLyHocVienBundle, type QlhvTrangThaiTuVan } from "@/lib/data/admin-quan-ly-hoc-vien";
 import { insertQlQuanLyHocVienEnrollment } from "@/lib/supabase/insert-ql-quan-ly-hoc-vien";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import type { QuanLyHocVienViewBundle } from "@/lib/admin/quan-ly-hoc-vien-local-cache";
+import { MKT_HOME_CONTENT_TAG } from "@/lib/data/mkt-home-cached";
 
 export type QlhvActionState = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -1103,4 +1105,75 @@ export async function fetchQuanLyHocVienBundleAction(): Promise<
   };
 
   return { ok: true, bundle };
+}
+
+export async function updateTrangThaiTuVanAction(
+  hocVienId: number,
+  trangThai: QlhvTrangThaiTuVan
+): Promise<QlhvActionState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(hocVienId) || hocVienId <= 0) {
+    return { ok: false, error: "Học viên không hợp lệ." };
+  }
+  if (trangThai !== "dang_hoc" && trangThai !== "nghi") {
+    return { ok: false, error: "Trạng thái không hợp lệ." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const [profile, phongTenPhongs] = await Promise.all([
+    fetchAdminStaffShellProfile(supabase, session.staffId),
+    fetchAdminStaffShellPhongTenPhongs(supabase, session.staffId),
+  ]);
+
+  if (!adminStaffCanEditTrangThaiTuVan({ vai_tro: profile.vai_tro, phongTenPhongs })) {
+    return { ok: false, error: "Tài khoản không có quyền cập nhật trạng thái học viên." };
+  }
+
+  const { error } = await supabase
+    .from("ql_thong_tin_hoc_vien")
+    .update({ trang_thai_tu_van: trangThai })
+    .eq("id", hocVienId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(REV, "page");
+  return { ok: true, message: "Đã cập nhật trạng thái." };
+}
+
+/**
+ * Bật/tắt “Cấp tốc” — khi bật, học viên xem được mọi bài trong hệ thống bài tập (bỏ khóa tiến độ).
+ * Cột `mkt_home_content.htbt_cap_toc` (singleton `id = 1`). Cần chạy trên Supabase trước khi dùng:
+ *
+ *   alter table mkt_home_content
+ *   add column if not exists htbt_cap_toc boolean not null default false;
+ */
+export async function setHtbtCapTocAction(enabled: boolean): Promise<QlhvActionState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { error } = await supabase
+    .from("mkt_home_content")
+    .update({ htbt_cap_toc: enabled })
+    .eq("id", 1);
+
+  if (error) {
+    return {
+      ok: false,
+      error:
+        error.message ||
+        "Không cập nhật được. Đã thêm cột `htbt_cap_toc` trên bảng `mkt_home_content` chưa?",
+    };
+  }
+
+  revalidateTag(MKT_HOME_CONTENT_TAG, "max");
+  revalidatePath("/he-thong-bai-tap", "layout");
+  revalidatePath(REV, "page");
+
+  return { ok: true, message: enabled ? "Đã bật Cấp tốc." : "Đã tắt Cấp tốc." };
 }

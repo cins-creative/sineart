@@ -10,6 +10,7 @@ import {
   getHocPhiBlockData,
   getKhoaHocDetailBySlug,
   getKhoaHocPageData,
+  getKhoaHocReviewList,
   getKhoaHocReviewStats,
   getOngoingClassesForMon,
   resolveMonIdForKhoaSlug,
@@ -69,6 +70,7 @@ export async function KhoaHocSlugDetailSection({ slug }: Props) {
     baiTapGroups,
     ongoingClasses,
     reviewStats,
+    reviewList,
   ] = await Promise.all([
     monIdForFee != null ? getHocPhiBlockData(monIdForFee) : Promise.resolve(null),
     getStudentGalleryForKhoaHocPage(detail, galleryCourseTitle),
@@ -85,6 +87,7 @@ export async function KhoaHocSlugDetailSection({ slug }: Props) {
       ? getOngoingClassesForMon(monIdForFee, detail?.hinhThucTag ?? "Tại lớp")
       : Promise.resolve([]),
     getKhoaHocReviewStats(monIdForFee ?? null),
+    getKhoaHocReviewList(monIdForFee ?? null),
   ]);
 
   /** Nếu môn hiện tại đã có bài tập trực tiếp → ưu tiên (giữ flow cũ); chỉ dùng groups
@@ -106,6 +109,7 @@ export async function KhoaHocSlugDetailSection({ slug }: Props) {
         baiTapGroups={effectiveGroups}
         ongoingClasses={ongoingClasses}
         reviewStats={reviewStats}
+        reviewList={reviewList}
       />
     </div>
   );

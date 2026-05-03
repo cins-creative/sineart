@@ -1,3 +1,5 @@
+import { staffBelongsToVanHanhPhong } from "@/lib/admin/dashboard-nav-visibility";
+
 /**
  * Quyền thao tác dữ liệu dashboard theo `hr_nhan_su.vai_tro`.
  * - `nhan_vien`: thêm / sửa (không xóa bản ghi qua các action delete của admin).
@@ -66,4 +68,13 @@ export const THI_THU_KY_EDIT_FORBIDDEN_MSG =
 export function adminStaffCanAccessAgentPage(vaiTro: string | null | undefined): boolean {
   const v = normalizeStaffVaiTro(vaiTro);
   return v === "admin" || v === "quan_ly" || v === "tu_van";
+}
+
+/** Chỉnh `ql_thong_tin_hoc_vien.trang_thai_tu_van` — admin hoặc nhân sự Ban Vận Hành (theo phòng). */
+export function adminStaffCanEditTrangThaiTuVan(staff: {
+  vai_tro?: string | null;
+  phongTenPhongs: readonly string[];
+}): boolean {
+  if (normalizeStaffVaiTro(staff.vai_tro) === "admin") return true;
+  return staffBelongsToVanHanhPhong(staff.phongTenPhongs);
 }

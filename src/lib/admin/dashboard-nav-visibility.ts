@@ -31,6 +31,7 @@ function tonelessVi(s: string): string {
 type PhongRule =
   | "graphic_design"
   | "tu_van"
+  | "van_hanh"
   | "ke_toan"
   | "nhan_su_phong"
   | "marketing_phong"
@@ -46,11 +47,20 @@ export function staffBelongsToTuVanPhong(phongTenPhongs: readonly string[]): boo
   return false;
 }
 
+/** Ban «Vận Hành» — chỉnh `ql_thong_tin_hoc_vien.trang_thai_tu_van` (theo `hr_phong.ten_phong`). */
+export function staffBelongsToVanHanhPhong(phongTenPhongs: readonly string[]): boolean {
+  for (const t of phongTenPhongs) {
+    if (classifyPhongTen(String(t)) === "van_hanh") return true;
+  }
+  return false;
+}
+
 function classifyPhongTen(tenPhongRaw: string): PhongRule {
   const p = tonelessVi(tenPhongRaw);
   if (!p) return "unknown";
   if (p.includes("graphic")) return "graphic_design";
   if (p.includes("dao tao") || p.includes("daotao")) return "dao_tao_phong";
+  if (p.includes("van hanh") || p.includes("vanhanh")) return "van_hanh";
   if (p.includes("tu van") || p.includes("tuvan")) return "tu_van";
   if (p.includes("ke toan") || p.includes("ke-toan") || p.includes("ketoan")) return "ke_toan";
   if (p.includes("nhan su") || p.includes("nhan-su")) return "nhan_su_phong";
@@ -64,6 +74,7 @@ function hrefsForPhongRule(rule: PhongRule): Set<string> {
   const s = new Set<string>();
   switch (rule) {
     case "tu_van":
+    case "van_hanh":
       HREFS_DIEU_HANH_ALL.forEach((h) => s.add(h));
       break;
     case "marketing_phong":

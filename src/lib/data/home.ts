@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { cache } from "react";
 
 import { createStaticClient } from "@/lib/supabase/static";
@@ -375,7 +376,12 @@ async function getHomeStatStripFieldsUncached(): Promise<HomePagePayload["stats"
   }
 }
 
-export const getHomeStatStripData = cache(getHomeStatStripFieldsUncached);
+/** Cache Data Cache (ISR) — giảm độ trễ cold path so với chỉ `cache()` theo request. */
+export const getHomeStatStripData = unstable_cache(
+  getHomeStatStripFieldsUncached,
+  ["home-stat-strip"],
+  { revalidate: 300 },
+);
 
 /** Reviews — cùng select / filter như `getHomePageDataUncached`. */
 async function getHomeReviewsUncached(): Promise<HomeReview[]> {

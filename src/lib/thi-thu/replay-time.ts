@@ -1,4 +1,4 @@
-import { computeExamEndMs } from "@/lib/thi-thu/phase";
+import { computeExamEndMs, SUBMIT_GRACE_MS } from "@/lib/thi-thu/phase";
 
 /**
  * Chuyển mốc thời gian ISO (UTC) → chuỗi `HH:mm:ss` theo **Asia/Ho_Chi_Minh**
@@ -101,11 +101,13 @@ export function computeKyListSortKey(input: {
 }): number {
   const T = new Date(input.thoiGianBatDauIso).getTime();
   const endMs = computeExamEndMs(T, input.thoiLuongPhut);
+  const graceEndMs = endMs + SUBMIT_GRACE_MS;
   const suaMs = parseThoiGianSuaBaiMs(input.thoiGianBatDauIso, input.thoiGianSuaBaiRaw);
   const { now } = input;
 
   if (now < T) return T;
   if (now < endMs) return T;
+  if (now < graceEndMs) return graceEndMs;
   if (suaMs != null && now < suaMs) return suaMs;
   return 1e15 - endMs;
 }

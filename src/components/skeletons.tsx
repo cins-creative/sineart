@@ -88,21 +88,28 @@ export function KhoaHocPageSkeleton({ className }: { className?: string }) {
 }
 
 
-/** Skeleton trang chủ (`/`) — Suspense + `app/loading.tsx`; ink + peach shimmer */
-export function HomePageSkeleton({ className }: { className?: string }) {
+/** Placeholder gọn khi chuyển trang — tránh hiển thị skeleton trang chủ trên route khác. */
+export function GenericRouteLoading({ className }: { className?: string }) {
   return (
     <div
-      className={cn("pb-6", className)}
+      className={cn("min-h-[min(70vh,560px)] px-4 py-12", className)}
       aria-busy="true"
-      aria-label="Đang tải trang chủ"
+      aria-label="Đang tải trang"
     >
-      <div className="flex h-14 items-center border-b border-black/[0.06] px-3 sm:px-4">
-        <Skeleton className="h-8 w-28 rounded-xl" />
-        <div className="ml-auto flex gap-2">
-          <Skeleton className="size-9 rounded-full" />
-        </div>
+      <div className="mx-auto max-w-xl space-y-5">
+        <div className="skeleton-base h-9 w-40" />
+        <div className="skeleton-base h-4 w-full" />
+        <div className="skeleton-base h-4 w-[85%] max-w-md" />
+        <div className="skeleton-base mt-6 aspect-[16/10] w-full rounded-2xl" />
       </div>
+    </div>
+  );
+}
 
+/** Hero + stat + khối Why/Video — fallback cho `<HomeLeadSections />` (stream sớm). */
+export function HomeLeadSectionsSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn("pb-6", className)} aria-busy="true" aria-label="Đang tải nội dung trang chủ">
       <section className="hero relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 bg-[#1a1414]" aria-hidden />
         <div
@@ -115,7 +122,7 @@ export function HomePageSkeleton({ className }: { className?: string }) {
           <div className="mb-2 h-3.5 w-full max-w-[34ch] animate-pulse rounded-[12px] bg-white/22" />
           <div className="mb-2 h-3.5 w-full max-w-[32ch] animate-pulse rounded-[12px] bg-white/18" />
           <div className="mt-5 flex gap-2">
-            <div className="h-11 flex-1 max-w-[200px] animate-pulse rounded-full bg-white/25" />
+            <div className="h-11 max-w-[200px] flex-1 animate-pulse rounded-full bg-white/25" />
             <div className="h-11 w-[8.5rem] animate-pulse rounded-full bg-white/15" />
           </div>
         </div>
@@ -142,6 +149,36 @@ export function HomePageSkeleton({ className }: { className?: string }) {
           <Skeleton className="h-48 w-full rounded-[20px]" />
         </div>
 
+        <div className="px-3 pt-2">
+          <div className="mb-3 flex items-center gap-2">
+            <Skeleton className="h-3 w-24 rounded-[12px]" />
+            <div className="h-px flex-1 bg-[rgba(45,32,32,0.08)]" />
+          </div>
+          <Skeleton className="aspect-video w-full max-w-3xl rounded-[20px]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Skeleton trang chủ (`/`) — Suspense + `app/loading.tsx`; ink + peach shimmer */
+export function HomePageSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn("pb-6", className)}
+      aria-busy="true"
+      aria-label="Đang tải trang chủ"
+    >
+      <div className="flex h-14 items-center border-b border-black/[0.06] px-3 sm:px-4">
+        <Skeleton className="h-8 w-28 rounded-xl" />
+        <div className="ml-auto flex gap-2">
+          <Skeleton className="size-9 rounded-full" />
+        </div>
+      </div>
+
+      <HomeLeadSectionsSkeleton />
+
+      <div className="page-inner">
         <div className="px-3">
           <div className="mb-3 flex items-center gap-2">
             <Skeleton className="h-3 w-24 rounded-[12px]" />

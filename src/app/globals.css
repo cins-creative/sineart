@@ -155,6 +155,21 @@ table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
   }
 }
 
+/* Thanh loading route — gradient brand (LoadingProgressBar) */
+@keyframes sa-route-load-bar {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.sa-route-load-bar-inner {
+  animation: sa-route-load-bar 1.15s ease-in-out infinite;
+  will-change: transform;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    Home Ad Banner — floating image ad ở góc trái trên homepage/subpages public.
    Image URL đến từ mkt_home_content.ads (admin dashboard). Size thiết kế: 360×176px.

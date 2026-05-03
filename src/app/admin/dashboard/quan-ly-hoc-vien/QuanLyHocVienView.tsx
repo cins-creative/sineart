@@ -14,6 +14,7 @@ import {
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  AlertTriangle,
   BookOpen,
   Check,
   ChevronDown,
@@ -39,6 +40,7 @@ import type {
   AdminQlhvEnrollment,
   AdminQlhvStudent,
   AdminQlhvTruongNganhItem,
+  QlhvTrangThaiTuVan,
 } from "@/lib/data/admin-quan-ly-hoc-vien";
 import { computeOverallStatus, deriveEnrollmentStatus } from "@/lib/data/admin-qlhv-tinh-trang";
 import {
@@ -53,11 +55,19 @@ import {
   updateHpChiTietKyForEnrollment,
   updateHocVienProfile,
   updateQlHvTruongNganhRow,
+  setHtbtCapTocAction,
+  updateTrangThaiTuVanAction,
 } from "@/app/admin/dashboard/quan-ly-hoc-vien/actions";
 import type { DhpDhCatalog } from "@/lib/donghocphi/dh-catalog";
 import { normalizeHocVienEmail } from "@/lib/donghocphi/profile-step1";
 import StudentAvatarCircle from "@/components/StudentAvatarCircle";
 import { calendarDaysRemainingInclusive, cn } from "@/lib/utils";
+
+/** Sắp xếp cột «Trạng thái» (tư vấn): Đang học trước, Nghỉ sau. */
+const TT_TV_ORDER: Record<QlhvTrangThaiTuVan, number> = {
+  dang_hoc: 0,
+  nghi: 1,
+};
 
 const TT_ORDER: Record<string, number> = {
   "Đang học": 0,
@@ -73,8 +83,8 @@ const TT_COLOR: Record<string, { bg: string; text: string }> = {
 
 type LopOpt = { id: number; name: string; mon_hoc: number | null; special: boolean };
 
-/** Lọc danh sách theo `computeOverallStatus` (gộp mọi khoá của HV). */
-type QuanLyHvStatusFilter = "all" | "Đang học" | "Chưa học" | "Nghỉ";
+/** Lọc theo `ql_thong_tin_hoc_vien.trang_thai_tu_van` (tư vấn). */
+type QuanLyHvTuVanFilter = "all" | QlhvTrangThaiTuVan;
 
 /** Lọc theo số khoá đang còn hạn (`deriveEnrollmentStatus === "Đang học"`). */
 type QuanLyHvDangKhoaBucket = null | "1" | "2" | "3+";
@@ -94,6 +104,10 @@ type Props = {
   adminStaffId: number;
   /** Phòng Tư vấn hoặc admin — hiện ô «Giảm giá thêm» (VNĐ) trong modal thu học phí. */
   dhpShowExtraVndDiscount: boolean;
+  /** “Cấp tốc” — học viên xem toàn bộ bài hệ thống bài tập (bỏ khóa tiến độ). */
+  initialHtbtCapToc: boolean;
+  /** Ban Vận Hành / admin — chỉnh `trang_thai_tu_van`. */
+  canEditTrangThaiTuVan: boolean;
 };
 
 type SortDir = "asc" | "desc" | null;
@@ -214,6 +228,49 @@ function TinhTrangBadge({ value }: { value: string }) {
       style={{ background: cfg.bg, color: cfg.text }}
     >
       {value || "—"}
+    </span>
+  );
+}
+
+const TT_TV_COLOR: Record<QlhvTrangThaiTuVan, { bg: string; text: string }> = {
+  dang_hoc: { bg: "#dcfce7", text: "#16a34a" },
+  nghi: { bg: "#e5e7eb", text: "#4b5563" },
+};
+
+function TuVanTrangThaiBadge({ value }: { value: QlhvTrangThaiTuVan }) {
+  const cfg = TT_TV_COLOR[value] ?? TT_TV_COLOR.dang_hoc;
+  const label = value === "nghi" ? "Nghỉ" : "Đang học";
+  return (
+    <span
+      className="inline-block max-w-full truncate whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold"
+      style={{ background: cfg.bg, color: cfg.text }}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** Dòng badge «Học phí» — vẫn dựa trên kỳ TT + ngày (`computeOverallStatus`). */
+function hocPhiTinhTrangLine(enrollments: AdminQlhvEnrollment[]): string {
+  const o = computeOverallStatus(enrollments);
+  const total = totalDaysLeftAllKhoa(enrollments);
+  if (o === "Đang học") return `Còn hạn ${total} ngày`;
+  if (o === "Chưa học") return "Chưa đủ kỳ học phí";
+  if (o === "Nghỉ") {
+    if (total < 0) return `Hết hạn ${Math.abs(total)} ngày`;
+    return "Hết hạn";
+  }
+  return "—";
+}
+
+function HocPhiTinhTrangBadge({ enrollments }: { enrollments: AdminQlhvEnrollment[] }) {
+  const line = hocPhiTinhTrangLine(enrollments);
+  return (
+    <span
+      className="inline-block max-w-full truncate whitespace-nowrap rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-800"
+      title={`Học phí: ${line}`}
+    >
+      Học phí: {line}
     </span>
   );
 }
@@ -1550,6 +1607,15 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
         )}
       </div>
 
+      <div className="rounded-xl border border-slate-100 bg-slate-50/90 px-3 py-2.5">
+        <p className="m-0 text-[9px] font-extrabold uppercase tracking-widest text-slate-500">
+          Học phí (theo kỳ đã thanh toán)
+        </p>
+        <div className="mt-1.5">
+          <HocPhiTinhTrangBadge enrollments={enrollments} />
+        </div>
+      </div>
+
       <div data-supabase-table="ql_quan_ly_hoc_vien">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -1672,6 +1738,8 @@ export default function QuanLyHocVienView({
   dhCatalog,
   adminStaffId,
   dhpShowExtraVndDiscount,
+  initialHtbtCapToc,
+  canEditTrangThaiTuVan,
 }: Props) {
   const router = useRouter();
   const { canDelete: staffMayDeleteHocVien } = useAdminDashboardAbilities();
@@ -1679,7 +1747,7 @@ export default function QuanLyHocVienView({
   const [w, setW] = useState(1200);
   const [query, setQuery] = useState("");
   const [filterClass, setFilterClass] = useState("");
-  const [filterStatus, setFilterStatus] = useState<QuanLyHvStatusFilter>("all");
+  const [filterTuVan, setFilterTuVan] = useState<QuanLyHvTuVanFilter>("all");
   const [filterMau, setFilterMau] = useState(false);
   const [filterDangKhoaBucket, setFilterDangKhoaBucket] = useState<QuanLyHvDangKhoaBucket>(null);
   const [sortTT, setSortTT] = useState<SortDir>("asc");
@@ -1694,6 +1762,14 @@ export default function QuanLyHocVienView({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [hvPage, setHvPage] = useState(1);
   const [dhpOpen, setDhpOpen] = useState(false);
+  const [htbtCapToc, setHtbtCapToc] = useState(initialHtbtCapToc);
+  const [capTocBusy, setCapTocBusy] = useState(false);
+  const [tvBusy, setTvBusy] = useState(false);
+  const [tvToast, setTvToast] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  useEffect(() => {
+    setHtbtCapToc(initialHtbtCapToc);
+  }, [initialHtbtCapToc]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -1760,8 +1836,8 @@ export default function QuanLyHocVienView({
   const filtered = useMemo(() => {
     let list = students;
     if (filterMau) list = list.filter((hv) => hv.is_hoc_vien_mau);
-    if (filterStatus !== "all") {
-      list = list.filter((hv) => computeOverallStatus(byHv.get(hv.id) ?? []) === filterStatus);
+    if (filterTuVan !== "all") {
+      list = list.filter((hv) => hv.trang_thai_tu_van === filterTuVan);
     }
     if (filterDangKhoaBucket) {
       list = list.filter((hv) => {
@@ -1784,8 +1860,8 @@ export default function QuanLyHocVienView({
     }
     list = [...list].sort((a, b) => {
       if (sortTT !== null) {
-        const oa = TT_ORDER[computeOverallStatus(byHv.get(a.id) ?? [])] ?? 99;
-        const ob = TT_ORDER[computeOverallStatus(byHv.get(b.id) ?? [])] ?? 99;
+        const oa = TT_TV_ORDER[a.trang_thai_tu_van] ?? 99;
+        const ob = TT_TV_ORDER[b.trang_thai_tu_van] ?? 99;
         if (oa !== ob) return sortTT === "asc" ? oa - ob : ob - oa;
       }
       if (sortDays !== null) {
@@ -1796,7 +1872,7 @@ export default function QuanLyHocVienView({
       return 0;
     });
     return list;
-  }, [students, filterMau, filterStatus, filterDangKhoaBucket, filterClass, query, sortTT, sortDays, byHv]);
+  }, [students, filterMau, filterTuVan, filterDangKhoaBucket, filterClass, query, sortTT, sortDays, byHv]);
 
   const activeLopEnrollmentCount = useMemo(() => {
     let n = 0;
@@ -1823,7 +1899,7 @@ export default function QuanLyHocVienView({
 
   useEffect(() => {
     setHvPage(1);
-  }, [query, filterClass, filterMau, filterStatus, filterDangKhoaBucket, sortTT, sortDays]);
+  }, [query, filterClass, filterMau, filterTuVan, filterDangKhoaBucket, sortTT, sortDays]);
 
   const hvTotalPages = useMemo(
     () => Math.max(1, Math.ceil(filtered.length / HV_PAGE_SIZE)),
@@ -1839,14 +1915,15 @@ export default function QuanLyHocVienView({
     return filtered.slice(start, start + HV_PAGE_SIZE);
   }, [filtered, hvPage]);
 
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { "Đang học": 0, "Chưa học": 0, Nghỉ: 0 };
+  const countsTuVan = useMemo(() => {
+    let dang_hoc = 0;
+    let nghi = 0;
     for (const hv of students) {
-      const tt = computeOverallStatus(byHv.get(hv.id) ?? []);
-      if (tt in c) c[tt]++;
+      if (hv.trang_thai_tu_van === "nghi") nghi++;
+      else dang_hoc++;
     }
-    return c;
-  }, [students, byHv]);
+    return { dang_hoc, nghi };
+  }, [students]);
 
   const mauCount = useMemo(() => students.filter((h) => h.is_hoc_vien_mau).length, [students]);
 
@@ -1855,16 +1932,15 @@ export default function QuanLyHocVienView({
     if (filterDangKhoaBucket === "2") return "bucket_2";
     if (filterDangKhoaBucket === "3+") return "bucket_3p";
     if (filterMau) return "mau";
-    if (filterStatus === "Đang học") return "status_dang";
-    if (filterStatus === "Chưa học") return "status_chua";
-    if (filterStatus === "Nghỉ") return "status_nghi";
+    if (filterTuVan === "dang_hoc") return "tv_dang";
+    if (filterTuVan === "nghi") return "tv_nghi";
     return "all";
-  }, [filterDangKhoaBucket, filterMau, filterStatus]);
+  }, [filterDangKhoaBucket, filterMau, filterTuVan]);
 
   const onBulkFilterSelect = useCallback((v: string) => {
     setFilterMau(false);
     setFilterDangKhoaBucket(null);
-    setFilterStatus("all");
+    setFilterTuVan("all");
     if (v === "all") return;
     if (v === "mau") {
       setFilterMau(true);
@@ -1882,9 +1958,8 @@ export default function QuanLyHocVienView({
       setFilterDangKhoaBucket("3+");
       return;
     }
-    if (v === "status_dang") setFilterStatus("Đang học");
-    else if (v === "status_chua") setFilterStatus("Chưa học");
-    else if (v === "status_nghi") setFilterStatus("Nghỉ");
+    if (v === "tv_dang") setFilterTuVan("dang_hoc");
+    else if (v === "tv_nghi") setFilterTuVan("nghi");
   }, []);
 
   const extractRow = useCallback(
@@ -1898,7 +1973,6 @@ export default function QuanLyHocVienView({
       const tdId = activeKh?.tien_do_hoc;
       const curBai = tdId ? baiTapById[String(tdId)] ?? null : null;
       return {
-        tinhTrang: computeOverallStatus(khs),
         lopName: activeKh ? lopDisplayName(activeKh.lop) : "",
         khs,
         curBaiTap: curBai,
@@ -1938,6 +2012,52 @@ export default function QuanLyHocVienView({
     }
   }
 
+  async function onToggleHtbtCapToc() {
+    if (capTocBusy) return;
+    const next = !htbtCapToc;
+    const prev = htbtCapToc;
+    setHtbtCapToc(next);
+    setCapTocBusy(true);
+    try {
+      const r = await setHtbtCapTocAction(next);
+      if (!r.ok) {
+        setHtbtCapToc(prev);
+        window.alert(r.error);
+      } else {
+        router.refresh();
+      }
+    } finally {
+      setCapTocBusy(false);
+    }
+  }
+
+  async function onSelectTrangThaiTuVan(next: QlhvTrangThaiTuVan) {
+    if (!selected || !canEditTrangThaiTuVan || tvBusy) return;
+    if (next === selected.trang_thai_tu_van) return;
+    const hvId = selected.id;
+    const prevTv = selected.trang_thai_tu_van;
+    setTvBusy(true);
+    setSelected((s) => (s && s.id === hvId ? { ...s, trang_thai_tu_van: next } : s));
+    try {
+      const r = await updateTrangThaiTuVanAction(hvId, next);
+      if (!r.ok) {
+        setSelected((s) => (s && s.id === hvId ? { ...s, trang_thai_tu_van: prevTv } : s));
+        setTvToast({ ok: false, msg: r.error });
+        return;
+      }
+      setTvToast({ ok: true, msg: r.message ?? "Đã cập nhật trạng thái." });
+      router.refresh();
+    } finally {
+      setTvBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!tvToast) return;
+    const t = window.setTimeout(() => setTvToast(null), 3200);
+    return () => window.clearTimeout(t);
+  }, [tvToast]);
+
   const enrollmentListNode =
     selected != null ? (
       (byHv.get(selected.id) ?? []).length === 0 ? (
@@ -1975,14 +2095,43 @@ export default function QuanLyHocVienView({
               </div>
               <h1 className="m-0 text-[16px] font-bold tracking-tight text-[#323232]">Quản lý học viên</h1>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowCreateStudent(true)}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-3 py-1.5 text-[11px] font-bold text-white shadow-sm hover:opacity-95"
-            >
-              <Plus size={14} strokeWidth={2.5} />
-              Thêm học viên
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div
+                className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1 shadow-sm"
+                title="Bật: mọi học viên xem được mọi bài / video bài giảng trong hệ thống bài tập. Tắt: khóa theo tiến độ bài tập như hiện tại."
+              >
+                <span className="whitespace-nowrap text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
+                  Cấp tốc
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={htbtCapToc}
+                  disabled={capTocBusy}
+                  onClick={() => void onToggleHtbtCapToc()}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-transparent p-0.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#BC8AF9]",
+                    htbtCapToc ? "bg-gradient-to-r from-[#f8a668] to-[#ee5b9f]" : "bg-slate-200",
+                    capTocBusy && "cursor-wait opacity-70"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "pointer-events-none size-5 shrink-0 rounded-full bg-white shadow transition-[margin] duration-200 ease-out",
+                      htbtCapToc ? "ml-auto" : "ml-0"
+                    )}
+                  />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateStudent(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#f8a668] to-[#ee5b9f] px-3 py-1.5 text-[11px] font-bold text-white shadow-sm hover:opacity-95"
+              >
+                <Plus size={14} strokeWidth={2.5} />
+                Thêm học viên
+              </button>
+            </div>
           </div>
           <p className="m-0 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
             Lọc nhanh — dropdown (sĩ số lớp = số HV có ghi danh ít nhất một khoá tên lớp đó)
@@ -1995,9 +2144,8 @@ export default function QuanLyHocVienView({
               onChange={(e) => onBulkFilterSelect(e.target.value)}
             >
               <option value="all">{`Tất cả học viên (${students.length})`}</option>
-              <option value="status_dang">{`Đang học — tổng (${counts["Đang học"]})`}</option>
-              <option value="status_chua">{`Chưa học (${counts["Chưa học"]})`}</option>
-              <option value="status_nghi">{`Nghỉ (${counts["Nghỉ"]})`}</option>
+              <option value="tv_dang">{`Đang học — tư vấn (${countsTuVan.dang_hoc})`}</option>
+              <option value="tv_nghi">{`Nghỉ — tư vấn (${countsTuVan.nghi})`}</option>
               <option value="bucket_1">{`Một lớp còn hạn (${hvDangHocLopBuckets.oneLop})`}</option>
               <option value="bucket_2">{`Hai lớp còn hạn (${hvDangHocLopBuckets.twoLop})`}</option>
               <option value="bucket_3p">{`Ba lớp trở lên (${hvDangHocLopBuckets.threePlusLop})`}</option>
@@ -2060,7 +2208,7 @@ export default function QuanLyHocVienView({
                 <div className="w-[160px] shrink-0">Họ tên</div>
                 <div className="w-[100px] shrink-0">
                   <SortableHeader
-                    label="Tình trạng"
+                    label="TT tư vấn"
                     active={sortTT !== null}
                     dir={sortTT}
                     onClick={() => setSortTT((p) => (p === "asc" ? "desc" : p === "desc" ? null : "asc"))}
@@ -2089,14 +2237,14 @@ export default function QuanLyHocVienView({
                     ? "Chưa có học viên mẫu nào"
                     : query.trim()
                       ? "Không tìm thấy kết quả"
-                      : filterStatus !== "all" || filterClass.trim() || filterDangKhoaBucket
+                      : filterTuVan !== "all" || filterClass.trim() || filterDangKhoaBucket
                         ? "Không có học viên khớp bộ lọc"
                         : "Không tìm thấy kết quả"}
                 </div>
               ) : isMobile ? (
                 <div className="p-3">
                   {pagedFiltered.map((hv) => {
-                    const { tinhTrang, lopName, khs, ghiChu } = extractRow(hv);
+                    const { lopName, khs, ghiChu } = extractRow(hv);
                     return (
                       <button
                         key={hv.id}
@@ -2121,7 +2269,7 @@ export default function QuanLyHocVienView({
                             </div>
                             <span className="text-[11px] text-slate-500">{lopName || "—"}</span>
                           </div>
-                          <TinhTrangBadge value={tinhTrang} />
+                          <TuVanTrangThaiBadge value={hv.trang_thai_tu_van} />
                         </div>
                         {ghiChu ? <p className="mb-2 text-[11px] font-semibold text-amber-700">📝 {ghiChu}</p> : null}
                         {khs.length > 0 ? (
@@ -2148,7 +2296,7 @@ export default function QuanLyHocVienView({
                 </div>
               ) : (
                 pagedFiltered.map((hv, i) => {
-                  const { tinhTrang, khs, curBaiTap, ghiChu } = extractRow(hv);
+                  const { khs, curBaiTap, ghiChu } = extractRow(hv);
                   const rowNum = (hvPage - 1) * HV_PAGE_SIZE + i + 1;
                   return (
                     <div
@@ -2186,7 +2334,7 @@ export default function QuanLyHocVienView({
                         </div>
                       </div>
                       <div className="w-[100px] shrink-0">
-                        <TinhTrangBadge value={tinhTrang} />
+                        <TuVanTrangThaiBadge value={hv.trang_thai_tu_van} />
                       </div>
                       <div className="w-[130px] shrink-0 truncate text-[11px] text-slate-500">{hv.email || "—"}</div>
                       <div className="flex w-[180px] shrink-0 flex-col gap-1 overflow-hidden">
@@ -2303,7 +2451,9 @@ export default function QuanLyHocVienView({
                   <h2 className="m-0 break-words text-[15px] font-extrabold leading-snug text-[#1a1a2e]">{selected.full_name}</h2>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {selected.is_hoc_vien_mau ? <HocVienMauBadge /> : null}
-                    <TinhTrangBadge value={computeOverallStatus(byHv.get(selected.id) ?? [])} />
+                    <span className="text-[10px] font-semibold text-slate-500">Trạng thái tư vấn:</span>
+                    <TuVanTrangThaiBadge value={selected.trang_thai_tu_van} />
+                    <HocPhiTinhTrangBadge enrollments={byHv.get(selected.id) ?? []} />
                   </div>
                 </div>
               </div>
@@ -2336,6 +2486,20 @@ export default function QuanLyHocVienView({
                   <CreditCard size={12} />
                   Đóng học phí
                 </button>
+                {canEditTrangThaiTuVan ? (
+                  <label className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-slate-600">
+                    <span className="sr-only">Trạng thái tư vấn</span>
+                    <select
+                      value={selected.trang_thai_tu_van}
+                      disabled={tvBusy}
+                      onChange={(e) => void onSelectTrangThaiTuVan(e.target.value as QlhvTrangThaiTuVan)}
+                      className="max-w-[11rem] rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-[11px] font-semibold text-[#1a1a2e] outline-none focus:border-[#BC8AF9]"
+                    >
+                      <option value="dang_hoc">Đang học</option>
+                      <option value="nghi">Nghỉ</option>
+                    </select>
+                  </label>
+                ) : null}
                 {!profileEditing ? (
                   <button
                     type="button"
@@ -2413,7 +2577,22 @@ export default function QuanLyHocVienView({
                   <h2 className="m-0 min-w-0 break-words text-[15px] font-extrabold leading-snug text-slate-900">{selected.full_name}</h2>
                   {selected.is_hoc_vien_mau ? <HocVienMauBadge /> : null}
                 </div>
-                <TinhTrangBadge value={computeOverallStatus(byHv.get(selected.id) ?? [])} />
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-slate-500">Trạng thái tư vấn:</span>
+                  <TuVanTrangThaiBadge value={selected.trang_thai_tu_van} />
+                  <HocPhiTinhTrangBadge enrollments={byHv.get(selected.id) ?? []} />
+                </div>
+                {canEditTrangThaiTuVan ? (
+                  <select
+                    value={selected.trang_thai_tu_van}
+                    disabled={tvBusy}
+                    onChange={(e) => void onSelectTrangThaiTuVan(e.target.value as QlhvTrangThaiTuVan)}
+                    className="mt-2 w-full max-w-[280px] rounded-lg border border-[#EAEAEA] bg-white px-2 py-2 text-[12px] font-semibold"
+                  >
+                    <option value="dang_hoc">Trạng thái tư vấn: Đang học</option>
+                    <option value="nghi">Trạng thái tư vấn: Nghỉ</option>
+                  </select>
+                ) : null}
                 {staffMayDeleteHocVien ? (
                   <button
                     type="button"
@@ -2532,6 +2711,19 @@ export default function QuanLyHocVienView({
           defaultNguoiTaoId={adminStaffId}
           showExtraVndDiscount={dhpShowExtraVndDiscount}
         />
+      ) : null}
+
+      {tvToast ? (
+        <div
+          className={cn(
+            "fixed bottom-5 right-5 z-[220] flex max-w-[min(100vw-2rem,360px)] items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold shadow-lg",
+            tvToast.ok ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-200 bg-red-50 text-red-900"
+          )}
+          role="status"
+        >
+          {tvToast.ok ? <Check size={16} className="shrink-0" aria-hidden /> : <AlertTriangle size={16} className="shrink-0" aria-hidden />}
+          <span>{tvToast.msg}</span>
+        </div>
       ) : null}
     </div>
   );

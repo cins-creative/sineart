@@ -46,62 +46,14 @@ export function pseudoDonIdFromSeed(seed: string): number {
   return h;
 }
 
-const TEST_QR_MIN_DONG = 2000;
-const TEST_QR_MAX_DONG = 2300;
-const TEST_QR_SPAN = TEST_QR_MAX_DONG - TEST_QR_MIN_DONG + 1;
-
-/**
- * VietQR «micro test» (2.000–2.300 ₫ theo mã SA…) — **chỉ bật khi khai báo env**.
- *
- * - Mặc định **tắt** (dev & production): QR luôn dùng đúng `invoiceTotalDong`.
- * - Bật cố ý để thử CK nhỏ: `NEXT_PUBLIC_DHP_TEST_MICRO_QR=1`.
- * - SePay khớp **mã trong nội dung CK** (`SA……`), không so `transfer_amount` với tổng đơn.
- */
-export function isDhpTestMicroQrEnabled(): boolean {
-  const v = process.env.NEXT_PUBLIC_DHP_TEST_MICRO_QR?.trim().toLowerCase();
-  return v === "1" || v === "true";
-}
-
-/** Số tiền CK trên QR khi test: 2000–2300 ₫, cố định theo mã SA… */
-export function testMicroQrAmountDongFromSeed(seed: string): number {
-  const h = pseudoDonIdFromSeed(seed);
-  return TEST_QR_MIN_DONG + (h % TEST_QR_SPAN);
-}
-
 export type QrPaymentResolution = {
-  /** Số ghi trên VietQR / app CK */
   qrAmountDong: number;
-  isTestMicro: boolean;
-  /** invoice − qr (chỉ mang tính hiển thị khi test) */
-  impliedTestDiscountDong: number;
 };
 
-/**
- * `invoiceTotalDong` = tổng đơn thật. Khi test micro: QR chỉ 2000–2300 ₫.
- */
+/** Số tiền trên QR = tổng đơn (làm tròn). */
 export function resolveQrPaymentAmounts(
-  transferCode: string,
+  _transferCode: string,
   invoiceTotalDong: number
 ): QrPaymentResolution {
-  const inv = Math.max(0, Math.round(invoiceTotalDong));
-  if (!isDhpTestMicroQrEnabled()) {
-    return {
-      qrAmountDong: inv,
-      isTestMicro: false,
-      impliedTestDiscountDong: 0,
-    };
-  }
-  if (inv <= 0) {
-    return {
-      qrAmountDong: 0,
-      isTestMicro: true,
-      impliedTestDiscountDong: 0,
-    };
-  }
-  const micro = testMicroQrAmountDongFromSeed(transferCode);
-  return {
-    qrAmountDong: micro,
-    isTestMicro: true,
-    impliedTestDiscountDong: Math.max(0, inv - micro),
-  };
+  return { qrAmountDong: Math.max(0, Math.round(invoiceTotalDong)) };
 }

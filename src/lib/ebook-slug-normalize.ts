@@ -30,5 +30,7 @@ export function normalizeEbookSlugSegment(raw: string): string {
   return s
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
     .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-")
+    /** Apostrophe kiểu typography / Unicode ↔ ASCII — slug trong DB vs URL bookmark hay lệch khiến ebook không tìm thấy. */
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035\u00B4]/g, "'")
     .trim();
 }

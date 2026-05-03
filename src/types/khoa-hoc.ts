@@ -66,6 +66,8 @@ export type OngoingClassStatus = "open" | "almost" | "full";
 export type OngoingClassCard = {
   id: string;
   title: string;
+  /** `ql_lop_hoc.level_hinh_hoa` — chỉ khi khóa là môn Hình họa */
+  levelHinhHoa?: string | null;
   /** Lớp cấp tốc — suy từ `ql_lop_hoc.special` */
   isCapToc: boolean;
   gvNames: string;
@@ -159,10 +161,32 @@ export type KhoaHocDetailData = {
   ketQuaDatDuoc: LearnOutcome[] | null;
 };
 
+/** Phân bố số sao (1–5) — cùng tập dòng dùng cho `avg` / `count` */
+export type KhoaHocReviewStarBuckets = {
+  1: number;
+  2: number;
+  3: number;
+  4: number;
+  5: number;
+};
+
 /** Tổng hợp đánh giá cho sidebar — từ `ql_danh_gia` */
 export type KhoaHocReviewStats = {
   /** Trung bình `so_sao`, 0 nếu chưa có đánh giá */
   avg: number;
   /** Tổng số đánh giá đang hiện thị (`hien_thi = true`) */
   count: number;
+  /** Số lượng theo từng mức sao */
+  byStar: KhoaHocReviewStarBuckets;
+};
+
+/** Một dòng `ql_danh_gia` cho section đánh giá trang khóa học */
+export type KhoaHocReviewListItem = {
+  id: number;
+  tenNguoi: string;
+  avatarUrl: string | null;
+  noiDung: string;
+  soSao: number;
+  nguon: string | null;
+  thoiGianHoc: string | null;
 };

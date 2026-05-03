@@ -15,7 +15,7 @@ export default async function LopHocPageData() {
   }
 
   const lopSelectFull =
-    "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, url_google_meet, device, special, tinh_trang";
+    "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, url_google_meet, device, special, tinh_trang, level_hinh_hoa";
   const lopSelectMin =
     "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, device, special, tinh_trang";
 
@@ -146,6 +146,10 @@ export default async function LopHocPageData() {
       device: raw.device != null ? String(raw.device).trim() || null : null,
       special: raw.special != null && String(raw.special).trim() !== "",
       tinh_trang: raw.tinh_trang !== false, // default true nếu null/undefined
+      level_hinh_hoa:
+        raw.level_hinh_hoa != null && String(raw.level_hinh_hoa).trim() !== ""
+          ? String(raw.level_hinh_hoa).trim()
+          : null,
     };
   });
 

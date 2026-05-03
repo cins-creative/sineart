@@ -2360,7 +2360,14 @@ function StaffDetailPanel({
                                 hệ thống cũ.
                               </div>
                             ) : (
-                              <PayrollPayslipCard ref={payslipCardRef} nv={row} bl={bl} />
+                              <PayrollPayslipCard
+                                key={`payslip-${row.id}-${bl.id}`}
+                                ref={payslipCardRef}
+                                nv={row}
+                                bl={bl}
+                                editable={canEdit && hasLich}
+                                onSaved={() => void router.refresh()}
+                              />
                             )}
                           </>
                         );

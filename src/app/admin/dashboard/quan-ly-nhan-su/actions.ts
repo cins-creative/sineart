@@ -570,6 +570,131 @@ export async function deleteHrBangTinhLuongFull(bang_tinh_luong_id: number): Pro
   return { ok: true };
 }
 
+export type UpdateHrPayrollPayslipFieldsResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Cập nhật phiếu lương: `hr_nhan_su` (lương / trợ cấp / BHXH / nghỉ tối đa),
+ * `hr_bang_tinh_luong` (tạm ứng / thưởng), `hr_lich_diem_danh` (buổi điểm danh — dòng đầu theo `bang_tinh_luong`).
+ */
+export async function updateHrPayrollPayslipFields(payload: {
+  nhan_vien_id: number;
+  bang_tinh_luong_id: number;
+  nhan_su: {
+    luong_co_ban: number | null;
+    tro_cap: number | null;
+    so_buoi_nghi_toi_da: number | null;
+    /** Chỉ gửi khi phiếu có khối BHXH (Fulltime có trích). */
+    bhxh?: number | null;
+  };
+  bang_tinh_luong: {
+    tam_ung: number | null;
+    thuong: number | null;
+  };
+  lich_diem_danh: {
+    tong_buoi_lam_viec_trong_thang: number | null;
+    so_buoi_lam_viec: number | null;
+    so_buoi_nghi_trong_thang: number | null;
+  };
+}): Promise<UpdateHrPayrollPayslipFieldsResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) {
+    return { ok: false, error: "Phiên đăng nhập không hợp lệ. Đăng nhập lại." };
+  }
+
+  const nvId = Number(payload.nhan_vien_id);
+  const bangId = Number(payload.bang_tinh_luong_id);
+  if (!Number.isFinite(nvId) || nvId <= 0 || !Number.isFinite(bangId) || bangId <= 0) {
+    return { ok: false, error: "Tham số nhân viên / bảng lương không hợp lệ." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) {
+    return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
+  }
+
+  const { data: bangRow, error: bangReadErr } = await supabase
+    .from("hr_bang_tinh_luong")
+    .select("id, nhan_vien")
+    .eq("id", bangId)
+    .maybeSingle();
+
+  if (bangReadErr) {
+    return { ok: false, error: bangReadErr.message || "Không đọc được bảng lương." };
+  }
+  const bangNv =
+    bangRow != null && typeof bangRow === "object" && "nhan_vien" in bangRow
+      ? Number((bangRow as { nhan_vien: unknown }).nhan_vien)
+      : NaN;
+  if (!Number.isFinite(bangNv) || bangNv !== nvId) {
+    return { ok: false, error: "Bảng lương không khớp nhân viên." };
+  }
+
+  const ns = payload.nhan_su;
+  const nhanPatch: Record<string, unknown> = {
+    luong_co_ban: ns.luong_co_ban,
+    tro_cap: ns.tro_cap,
+    so_buoi_nghi_toi_da: ns.so_buoi_nghi_toi_da,
+  };
+  if ("bhxh" in ns && ns.bhxh !== undefined) {
+    nhanPatch.BHXH = ns.bhxh;
+  }
+
+  let nhanErr = (await supabase.from("hr_nhan_su").update(nhanPatch).eq("id", nvId)).error;
+  if (nhanErr && "BHXH" in nhanPatch) {
+    const { BHXH: _omit, ...rest } = nhanPatch;
+    nhanErr = (await supabase.from("hr_nhan_su").update(rest).eq("id", nvId)).error;
+  }
+  if (nhanErr) {
+    return { ok: false, error: nhanErr.message || "Không cập nhật được hồ sơ nhân viên." };
+  }
+
+  const bl = payload.bang_tinh_luong;
+  const { error: bangUpErr } = await supabase
+    .from("hr_bang_tinh_luong")
+    .update({
+      tam_ung: bl.tam_ung,
+      thuong: bl.thuong,
+    })
+    .eq("id", bangId);
+  if (bangUpErr) {
+    return { ok: false, error: bangUpErr.message || "Không cập nhật được bảng lương." };
+  }
+
+  const ld = payload.lich_diem_danh;
+  const { data: lichRows, error: lichReadErr } = await supabase
+    .from("hr_lich_diem_danh")
+    .select("id")
+    .eq("bang_tinh_luong", bangId)
+    .order("id", { ascending: true })
+    .limit(1);
+
+  if (lichReadErr) {
+    return { ok: false, error: lichReadErr.message || "Không đọc được lịch điểm danh." };
+  }
+  const lichIdRaw = lichRows?.[0] != null && typeof lichRows[0] === "object" && "id" in lichRows[0]
+    ? Number((lichRows[0] as { id: unknown }).id)
+    : NaN;
+  if (!Number.isFinite(lichIdRaw) || lichIdRaw <= 0) {
+    return { ok: false, error: "Chưa có lịch điểm danh cho bảng lương này." };
+  }
+
+  const { error: lichErr } = await supabase
+    .from("hr_lich_diem_danh")
+    .update({
+      tong_buoi_lam_viec_trong_thang: ld.tong_buoi_lam_viec_trong_thang,
+      so_buoi_lam_viec: ld.so_buoi_lam_viec,
+      so_buoi_nghi_trong_thang: ld.so_buoi_nghi_trong_thang,
+    })
+    .eq("id", lichIdRaw);
+
+  if (lichErr) {
+    return { ok: false, error: lichErr.message || "Không cập nhật được lịch điểm danh." };
+  }
+
+  revalidatePath(ADMIN_PATH);
+  return { ok: true };
+}
+
 export async function fetchQuanLyNhanSuBundleAction(): Promise<
   | { ok: true; bundle: QuanLyNhanSuViewBundle }
   | { ok: false; error: string }

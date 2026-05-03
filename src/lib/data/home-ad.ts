@@ -7,30 +7,24 @@ import {
   type AdVisibleWhere,
   type HomeAdConfig,
 } from "@/lib/admin/home-content-schema";
-import { createStaticClient } from "@/lib/supabase/static";
+
+import { getMktHomeContentRow } from "@/lib/data/mkt-home-cached";
 
 /**
  * Lấy cấu hình quảng cáo trang chủ (`mkt_home_content.ads` + `visible_where`).
  * Dùng cho public site (anon SELECT).
  *
+ * - Cùng cache Data Cache với `getHomeContent` (`getMktHomeContentRow`).
  * - `React.cache` de-dupes trong cùng 1 request tree.
  * - Không throw — trả DEFAULT_HOME_AD nếu lỗi / thiếu env / chưa có row.
  */
 export const getHomeAdConfig = cache(async (): Promise<HomeAdConfig> => {
-  const supabase = createStaticClient();
-  if (!supabase) return DEFAULT_HOME_AD;
-
-  const { data, error } = await supabase
-    .from("mkt_home_content")
-    .select("ads, visible_where")
-    .eq("id", 1)
-    .maybeSingle();
-
-  if (error || !data) return DEFAULT_HOME_AD;
+  const row = await getMktHomeContentRow();
+  if (!row) return DEFAULT_HOME_AD;
 
   return normalizeAdConfig({
-    ads: (data as Record<string, unknown>).ads,
-    visible_where: (data as Record<string, unknown>).visible_where,
+    ads: row.ads,
+    visible_where: row.visible_where,
   });
 });
 

@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
@@ -6,6 +6,7 @@ import {
   mergeHomeContent,
   normalizeAdConfig,
 } from "@/lib/admin/home-content-schema";
+import { MKT_HOME_CONTENT_TAG } from "@/lib/data/mkt-home-cached";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
   revalidatePath("/", "page");
   revalidatePath("/", "layout");
   revalidatePath("/admin/dashboard/quan-ly-trang-chu", "page");
+  revalidateTag(MKT_HOME_CONTENT_TAG, "max");
 
   return NextResponse.json({
     ok: true,

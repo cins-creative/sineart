@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { PhongHocClassroomWithAd } from "./_components/PhongHocClassroomWithAd";
-import { PhongHocClassroomSkeleton } from "./_components/PhongHocClassroomSkeleton";
+import { PhongHocSlugClassroomSection } from "./_components/PhongHocSlugClassroomSection";
+import { PhongHocSlugClassroomSectionSkeleton } from "./_components/PhongHocSlugClassroomSection.skeleton";
 
 export async function generateMetadata({
   params,
@@ -15,16 +15,18 @@ export async function generateMetadata({
   };
 }
 
-export default async function PhongHocSlugPage({
+/**
+ * Streaming: default export không `await` data — shell nhận `params` Promise, khối fetch nằm trong
+ * `PhongHocSlugClassroomSection` + Suspense (skeleton route trong `loading.tsx`).
+ */
+export default function PhongHocSlugPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { slug } = await params;
-
   return (
-    <Suspense fallback={<PhongHocClassroomSkeleton />}>
-      <PhongHocClassroomWithAd classSlug={slug} />
+    <Suspense fallback={<PhongHocSlugClassroomSectionSkeleton />}>
+      <PhongHocSlugClassroomSection params={params} />
     </Suspense>
   );
 }

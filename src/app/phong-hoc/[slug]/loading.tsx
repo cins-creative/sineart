@@ -1,5 +1,5 @@
-import { PhongHocClassroomSkeleton } from "./_components/PhongHocClassroomSkeleton";
+import { PhongHocSlugClassroomSectionSkeleton } from "./_components/PhongHocSlugClassroomSection.skeleton";
 
 export default function PhongHocSlugLoading() {
-  return <PhongHocClassroomSkeleton />;
+  return <PhongHocSlugClassroomSectionSkeleton />;
 }

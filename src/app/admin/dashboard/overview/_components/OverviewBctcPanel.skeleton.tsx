@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
 export function OverviewBctcPanelSkeleton({ className }: { className?: string }) {
   return (
     <div className={cn("space-y-4", className)} aria-busy="true" aria-label="Đang tải BCTC tổng quan">
-      <div className="overflow-hidden rounded-[14px] border border-[#EDE8E9] bg-white shadow-[0_1px_8px_rgba(45,32,32,0.06)]">
-        <div className="border-b border-[#EDE8E9] bg-[#fafafa] px-4 py-2.5">
+      <div className="overflow-hidden rounded-2xl border border-[#EDE8E9] bg-white shadow-[0_1px_8px_rgba(45,32,32,0.06)]">
+        <div className="border-b border-[#EDE8E9] bg-[#fef5f3] px-4 py-2.5">
           <Skeleton className="h-4 w-48 rounded-lg" />
           <Skeleton className="mt-2 h-3 w-full max-w-md rounded-lg" />
         </div>
@@ -16,7 +16,7 @@ export function OverviewBctcPanelSkeleton({ className }: { className?: string })
           ))}
         </div>
       </div>
-      <div className="rounded-[14px] border border-[#EDE8E9] bg-white p-4 shadow-[0_1px_8px_rgba(45,32,32,0.06)]">
+      <div className="rounded-2xl border border-[#EDE8E9] bg-white p-4 shadow-[0_1px_8px_rgba(45,32,32,0.06)]">
         <Skeleton className="mb-3 h-3 w-40 rounded-lg" />
         <Skeleton className="h-[180px] w-full rounded-xl" />
       </div>

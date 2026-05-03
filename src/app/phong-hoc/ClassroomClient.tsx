@@ -1096,6 +1096,7 @@ export default function ClassroomClient({
           currentEx: null,
           latest: {},
           truongNganhPairs: null,
+          conNgayHoc: true,
         };
         setChatProgressPicker({
           phase: "ready",
@@ -2299,7 +2300,7 @@ export default function ClassroomClient({
                         </div>
                         <div className="ss-divider" />
                         <div className="ss-stat-box" style={{ marginBottom: 10 }}>
-                          <span className="ss-stat-lbl">Học viên trong lớp</span>
+                          <span className="ss-stat-lbl">Học viên đang học (còn ngày)</span>
                           <span className="ss-stat-val">
                             {storedSession?.userType === "Teacher"
                               ? classmatesReal !== undefined

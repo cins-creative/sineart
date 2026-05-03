@@ -46,6 +46,28 @@ const SELECT_COLS =
   "id, slug, title, so_trang, featured, categories, thumbnail, image_demo, img_src_link, html_embed, content, noi_dung_sach, created_at, updated_at";
 
 /**
+ * Slug URL vs DB: ký tự trộn (en dash, fullwidth hyphen), khoảng trắng đầu/cuối,
+ * ký tự ẩn (ZWSP). Chuẩn hoá trước khi `.eq("slug", …)` hoặc so khớp với list đã tải.
+ */
+function normalizeEbookSlugForLookup(slug: string): string {
+  let s = (slug ?? "").trim();
+  if (!s) return s;
+  try {
+    s = s.normalize("NFC");
+  } catch {
+    /* ignore */
+  }
+  return s
+    .replace(/[\u200B-\u200D\uFEFF]/g, "") // ZWSP / ZWNJ / ZWJ / BOM
+    .replace(/\u2013/g, "-") // en dash –
+    .replace(/\u2014/g, "-") // em dash —
+    .replace(/\u2212/g, "-") // minus −
+    .replace(/\uFE63/g, "-") // small hyphen-minus
+    .replace(/\uFF0D/g, "-") // fullwidth hyphen-minus
+    .trim();
+}
+
+/**
  * Parse URL array — hỗ trợ cả 3 dạng lưu trong DB (giống pattern ở
  * `tra-cuu.ts#parseAlbum`):
  *   1. Postgres `text[]`  → JS array trực tiếp
@@ -144,17 +166,28 @@ async function fetchEbookBySlugUncached(
 ): Promise<EbookItem | null> {
   const supabase = createStaticClient();
   if (!supabase) return null;
+  const key = normalizeEbookSlugForLookup(slug);
+  if (!key) return null;
+
   const { data, error } = await supabase
     .from("mkt_ebooks")
     .select(SELECT_COLS)
-    .eq("slug", slug)
+    .eq("slug", key)
+    .limit(1)
     .maybeSingle();
+
   if (error) {
     console.error("[ebook] fetchEbookBySlug error", error);
     return null;
   }
-  if (!data) return null;
-  return mapRow(data as Record<string, unknown>);
+  if (data) return mapRow(data as Record<string, unknown>);
+
+  /** Fallback: slug trong DB có thể chứa dash Unicode / ký tự ẩn — so khớp sau normalize. */
+  const all = await fetchAllEbooks();
+  const hit =
+    all.find((e) => normalizeEbookSlugForLookup(e.slug) === key) ??
+    all.find((e) => normalizeEbookSlugForLookup(e.slug).toLowerCase() === key.toLowerCase());
+  return hit ?? null;
 }
 
 export const fetchEbookBySlug = cache(fetchEbookBySlugUncached);

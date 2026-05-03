@@ -1,3 +1,5 @@
+import { fetchKyByKhoaHocVienIds, type HpResolvedKy } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
+import { qlhvConNgayHocFromKyMap } from "@/lib/phong-hoc/enrollment-con-ngay-hoc";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ExerciseItem = {
@@ -22,6 +24,8 @@ export type StudentManageRow = {
   latest: Record<string, ExerciseItem>;
   /** `null` = đang tải từ `ql_hv_truong_nganh`; `[]` = chưa khai báo. */
   truongNganhPairs: { truong: string; nganh: string }[] | null;
+  /** Theo kỳ HP đã TT (còn ≥1 ngày lịch) — khớp sidebar phòng học. */
+  conNgayHoc: boolean;
 };
 
 export function buildExerciseModel(rows: unknown[]): {
@@ -78,7 +82,8 @@ function buildStudentRows(
   profileByHv: Map<number, { full_name: string; email: string; nam_thi: string | null }>,
   exMap: Record<number, ExerciseItem>,
   className: string,
-  statusFallback: string
+  statusFallback: string,
+  kyMap: Map<number, HpResolvedKy>
 ): StudentManageRow[] {
   const out: StudentManageRow[] = [];
   for (const r of enrollments) {
@@ -111,6 +116,7 @@ function buildStudentRows(
       currentEx: tienDoObj,
       latest,
       truongNganhPairs: null,
+      conNgayHoc: qlhvConNgayHocFromKyMap(kyMap, eid),
     });
   }
   out.sort((a, b) => a.name.localeCompare(b.name, "vi"));
@@ -217,10 +223,15 @@ export async function fetchStudentsForClassManage(
     });
   }
 
+  const qlhvIds = rows
+    .map((r) => Number(r.id))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const kyMap = await fetchKyByKhoaHocVienIds(supabase, qlhvIds);
+
   const exRows = await fetchExercisesForManage(supabase);
   const { exMap } = buildExerciseModel(exRows);
 
-  return buildStudentRows(rows, profileByHv, exMap, classDisplayName, "Đang học");
+  return buildStudentRows(rows, profileByHv, exMap, classDisplayName, "Đang học", kyMap);
 }
 
 export async function fetchStudentUniMajor(

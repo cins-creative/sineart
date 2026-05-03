@@ -11,7 +11,7 @@ export function OverviewMarketingPanelSkeleton({ className }: { className?: stri
     >
       <div className="flex flex-wrap gap-2 md:gap-3">
         {Array.from({ length: 4 }, (_, i) => (
-          <Skeleton key={i} className="h-[88px] min-w-[120px] flex-1 rounded-[14px]" />
+          <Skeleton key={i} className="h-[88px] min-w-[120px] flex-1 rounded-2xl" />
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.06] pb-3">
@@ -21,10 +21,10 @@ export function OverviewMarketingPanelSkeleton({ className }: { className?: stri
       </div>
       <Skeleton className="flex h-[42px] w-full max-w-md rounded-xl" />
       <div className="grid gap-4 lg:grid-cols-2">
-        <Skeleton className="h-[240px] w-full rounded-[14px]" />
-        <Skeleton className="h-[240px] w-full rounded-[14px]" />
+        <Skeleton className="h-[240px] w-full rounded-2xl" />
+        <Skeleton className="h-[240px] w-full rounded-2xl" />
       </div>
-      <Skeleton className="h-[280px] w-full rounded-[14px]" />
+      <Skeleton className="h-[280px] w-full rounded-2xl" />
     </div>
   );
 }

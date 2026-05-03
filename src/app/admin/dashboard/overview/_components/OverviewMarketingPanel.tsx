@@ -15,10 +15,10 @@ export async function OverviewMarketingPanel() {
     );
   }
 
-  const [res, hvBundle] = await Promise.all([
-    fetchMkDataAnalysisRows(supabase),
-    fetchAdminQuanLyHocVienBundle(supabase),
-  ]);
+  const mkPromise = fetchMkDataAnalysisRows(supabase);
+  const hvPromise = fetchAdminQuanLyHocVienBundle(supabase);
+  const res = await mkPromise;
+  const hvBundle = await hvPromise;
 
   if (!res.ok) {
     return (

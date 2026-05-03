@@ -1,4 +1,6 @@
 import { isWrongLopFkColumnError } from "@/app/api/phong-hoc/hv-chatbox/lop-column";
+import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
+import { qlhvConNgayHocFromKyMap } from "@/lib/phong-hoc/enrollment-con-ngay-hoc";
 import { vnCalendarDateString } from "@/lib/phong-hoc/diem-danh";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -100,7 +102,17 @@ export async function fetchClassmatesForLop(
   }
   const uniqueRows = [...byHv.values()];
 
-  const hvIds = uniqueRows.map((r) => Number(r.hoc_vien_id)).filter(Number.isFinite);
+  const qlhvIds = uniqueRows
+    .map((r) => Number((r as QlhvRow).id))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const kyMap = await fetchKyByKhoaHocVienIds(supabase, qlhvIds);
+  const rosterRows = uniqueRows.filter((r) => {
+    const eid = Number((r as QlhvRow).id);
+    return Number.isFinite(eid) && eid > 0 && qlhvConNgayHocFromKyMap(kyMap, eid);
+  });
+  if (!rosterRows.length) return [];
+
+  const hvIds = rosterRows.map((r) => Number(r.hoc_vien_id)).filter(Number.isFinite);
   if (!hvIds.length) return [];
 
   const { data: profiles } = await supabase
@@ -118,7 +130,7 @@ export async function fetchClassmatesForLop(
 
   const taskIds = [
     ...new Set(
-      uniqueRows
+      rosterRows
         .map((r) => r.tien_do_hoc)
         .filter((x) => x != null && x !== "")
         .map((x) => Number(x))
@@ -208,7 +220,7 @@ export async function fetchClassmatesForLop(
   }
 
   const out: ClassmateListRow[] = [];
-  for (const r of uniqueRows) {
+  for (const r of rosterRows) {
     const enrollmentId = Number((r as QlhvRow).id);
     const hvId = Number(r.hoc_vien_id);
     if (!Number.isFinite(hvId)) continue;

@@ -598,12 +598,16 @@ export default function StudentManageModal({
 
   const ddHeatmapStudents = useMemo((): StudentManageRow[] => {
     const q = s2l(ddStudentQuery).trim();
+    const sortHeatmap = (list: StudentManageRow[]) =>
+      [...list].sort((a, b) => {
+        if (a.conNgayHoc !== b.conNgayHoc) return a.conNgayHoc ? -1 : 1;
+        return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
+      });
+
     if (students.length > 0) {
       let list = students;
       if (q) list = list.filter((s) => s2l(s.name).includes(q));
-      return [...list].sort((a, b) =>
-        a.name.localeCompare(b.name, "vi", { sensitivity: "base" })
-      );
+      return sortHeatmap(list);
     }
     const byHv = new Map<number, string>();
     for (const r of ddRows) {
@@ -623,9 +627,10 @@ export default function StudentManageModal({
       currentEx: null,
       latest: {},
       truongNganhPairs: null,
+      conNgayHoc: true,
     }));
     const list = q ? fake.filter((s) => s2l(s.name).includes(q)) : fake;
-    return list.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+    return sortHeatmap(list);
   }, [students, ddRows, ddStudentQuery]);
 
   const openPicker = (s: StudentManageRow) => setPicker(s);
@@ -2096,12 +2101,58 @@ export default function StudentManageModal({
                                   textAlign: "left",
                                   padding: "6px 10px 6px 8px",
                                   maxWidth: 220,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
+                                  verticalAlign: "top",
                                 }}
                               >
-                                {s.name}
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "flex-start",
+                                    gap: 4,
+                                    minWidth: 0,
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      maxWidth: "100%",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {s.name}
+                                  </span>
+                                  <span
+                                    aria-label={
+                                      s.conNgayHoc
+                                        ? "Còn học trong kỳ"
+                                        : "Đã nghỉ hoặc hết ngày trong kỳ"
+                                    }
+                                    style={{
+                                      fontSize: 9,
+                                      fontWeight: 700,
+                                      letterSpacing: "0.02em",
+                                      textTransform: "uppercase",
+                                      padding: "2px 6px",
+                                      borderRadius: 6,
+                                      lineHeight: 1.2,
+                                      flexShrink: 0,
+                                      ...(s.conNgayHoc
+                                        ? {
+                                            background: TINH_TRANG_COLOR["Đang học"].bg,
+                                            color: TINH_TRANG_COLOR["Đang học"].text,
+                                          }
+                                        : {
+                                            background: TINH_TRANG_COLOR["Nghỉ học"].bg,
+                                            color: TINH_TRANG_COLOR["Nghỉ học"].text,
+                                          }),
+                                    }}
+                                  >
+                                    {s.conNgayHoc ? "Còn học" : "Đã nghỉ"}
+                                  </span>
+                                </div>
                               </th>
                               {ddDateColumns.map((ymd) => {
                                 const lvl =

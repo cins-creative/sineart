@@ -20,10 +20,10 @@ export function OverviewPageSkeleton({ className }: { className?: string }) {
         <div className="min-h-0 flex-1 space-y-4">
           <div className="flex flex-wrap gap-2 md:gap-3">
             {Array.from({ length: 4 }, (_, i) => (
-              <Skeleton key={i} className="h-[88px] min-w-[120px] flex-1 rounded-[14px]" />
+              <Skeleton key={i} className="h-[88px] min-w-[120px] flex-1 rounded-2xl" />
             ))}
           </div>
-          <Skeleton className="h-[320px] w-full rounded-[14px]" />
+          <Skeleton className="h-[320px] w-full rounded-2xl" />
         </div>
       </div>
     </div>

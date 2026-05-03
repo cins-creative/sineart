@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import type { TeacherArtSlide } from "@/types/homepage";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -136,11 +138,17 @@ export default function TeachersSection({
               aria-label="Xem toàn màn hình tác phẩm của giáo viên"
               onClick={() => setLightboxSrc(slides[0]!.src)}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={cfImageForThumbnail(slides[0]!.src) || slides[0]!.src}
                 alt=""
+                width={240}
+                height={320}
+                sizes="240px"
                 className="tc-art-img"
+                loading="lazy"
+                unoptimized={nextImageShouldUnoptimize(
+                  cfImageForThumbnail(slides[0]!.src) || slides[0]!.src
+                )}
               />
             </button>
           </div>
@@ -156,11 +164,17 @@ export default function TeachersSection({
                   aria-label="Xem toàn màn hình tác phẩm của giáo viên"
                   onClick={() => setLightboxSrc(s.src)}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={cfImageForThumbnail(s.src) || s.src}
                     alt=""
+                    width={240}
+                    height={320}
+                    sizes="240px"
                     className="tc-art-img"
+                    loading="lazy"
+                    unoptimized={nextImageShouldUnoptimize(
+                      cfImageForThumbnail(s.src) || s.src
+                    )}
                   />
                 </button>
               </div>
@@ -201,12 +215,17 @@ export default function TeachersSection({
                 className="gallery-lightbox-body"
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={cfImageForLightbox(lightboxSrc) || lightboxSrc}
                   alt=""
+                  width={1200}
+                  height={900}
                   className="gallery-lightbox-img"
                   decoding="async"
+                  priority
+                  unoptimized={nextImageShouldUnoptimize(
+                    cfImageForLightbox(lightboxSrc) || lightboxSrc
+                  )}
                 />
               </div>
             </div>,

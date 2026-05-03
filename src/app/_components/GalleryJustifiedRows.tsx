@@ -2,6 +2,8 @@
 
 import type { GalleryDisplayItem } from "@/types/homepage";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
+import Image from "next/image";
 import { sortGalleryItemsByScoreDesc } from "@/lib/gallery-display-sort";
 import justifiedLayout from "justified-layout";
 import { gsap } from "gsap";
@@ -206,17 +208,19 @@ export default function GalleryJustifiedRows({
                 <button
                   type="button"
                   className="gallery-justified-btn"
+                  style={{ position: "relative" }}
                   onClick={() => onOpen(item)}
                   aria-label={`Xem ảnh — ${item.studentName}`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={thumb}
                     alt={`${item.studentName} – bài ${item.tenMonHoc ?? item.categoryLabel} tại Sine Art`}
                     className="gallery-justified-img"
+                    fill
+                    sizes={`${Math.max(1, Math.round(box.width))}px`}
                     loading="lazy"
-                    decoding="async"
                     onLoad={(e) => onImgLoad(id, e)}
+                    unoptimized={nextImageShouldUnoptimize(thumb)}
                   />
                 </button>
               ) : (

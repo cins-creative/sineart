@@ -9,7 +9,9 @@ import { compareGalleryByScoreDesc } from "@/lib/gallery-display-sort";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import Link from "next/link";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import GalleryJustifiedRows from "./GalleryJustifiedRows";
 
 export type GalleryLayoutVariant = "masonry" | "justified";
@@ -60,15 +62,19 @@ function GalleryCard({
 
   const artworkAlt = `${item.studentName} – bài ${item.tenMonHoc ?? item.categoryLabel} tại Sine Art`;
 
+  const thumbSrc = item.photo ? cfImageForThumbnail(item.photo) || item.photo : null;
   const inner = (
     <div className="mi-ph">
-      {item.photo ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={cfImageForThumbnail(item.photo) || item.photo}
+      {thumbSrc ? (
+        <Image
+          src={thumbSrc}
           alt={artworkAlt}
+          width={800}
+          height={1000}
+          sizes="(max-width: 640px) 44vw, (max-width: 900px) 30vw, 22vw"
           className="mi-ph-img"
           loading="lazy"
+          unoptimized={nextImageShouldUnoptimize(thumbSrc)}
         />
       ) : (
         <div
@@ -86,7 +92,7 @@ function GalleryCard({
 
   const catAttr = item.tenMonHoc ?? "";
 
-  if (item.photo) {
+  if (thumbSrc) {
     return (
       <button
         type="button"
@@ -355,12 +361,17 @@ export default function GallerySection({
                 className="gallery-lightbox-body"
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={cfImageForLightbox(lightbox.photo) || lightbox.photo}
                   alt=""
+                  width={1200}
+                  height={900}
                   className="gallery-lightbox-img"
                   decoding="async"
+                  priority
+                  unoptimized={nextImageShouldUnoptimize(
+                    cfImageForLightbox(lightbox.photo) || lightbox.photo
+                  )}
                 />
                 <div className="gallery-lightbox-meta">
                   {lightbox.baiMau ? (

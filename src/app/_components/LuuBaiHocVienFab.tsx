@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, Check, ChevronLeft, Save, Sparkles, Upload, X } from "lucide-react";
@@ -10,6 +11,7 @@ import {
   type ClassroomStudentSessionData,
 } from "@/lib/phong-hoc/classroom-session";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import "./LuuBaiHocVienFab.css";
 
 type ClassOption = {
@@ -468,8 +470,15 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
             <div className="luubai-form-body">
               <div className="luubai-who">
                 {student.hv_avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={student.hv_avatar} alt="" className="luubai-who-av" />
+                  <Image
+                    src={student.hv_avatar}
+                    alt=""
+                    width={40}
+                    height={40}
+                    className="luubai-who-av"
+                    loading="lazy"
+                    unoptimized={nextImageShouldUnoptimize(student.hv_avatar)}
+                  />
                 ) : (
                   <div className="luubai-who-av luubai-who-av--blank" aria-hidden />
                 )}
@@ -481,8 +490,16 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
 
               <div className={`luubai-preview luubai-preview--${uploadState}`}>
                 {imgPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={imgPreview} alt="Xem trước" />
+                  <Image
+                    src={imgPreview}
+                    alt="Xem trước"
+                    width={800}
+                    height={520}
+                    sizes="100vw"
+                    style={{ width: "100%", height: "auto", maxHeight: 260, objectFit: "cover" }}
+                    loading="lazy"
+                    unoptimized={nextImageShouldUnoptimize(imgPreview)}
+                  />
                 ) : null}
                 {uploadState === "uploading" && (
                   <div className="luubai-uploading">

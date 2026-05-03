@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { KHOA_HOC_FILTERS, type KhoaHocFilterId } from "@/lib/khoa-hoc-course-filters";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import { groupCoursesByGroup } from "@/lib/khoa-hoc-group-courses";
 import type { CourseGroupId, KhoaHocCourseCard } from "@/types/khoa-hoc";
 import Link from "next/link";
@@ -44,12 +46,15 @@ function CourseThumb({
   badge,
   className = "",
   hintOverlay,
+  thumbPriority,
 }: {
   course: KhoaHocCourseCard;
   badge?: string;
   className?: string;
   /** Lớp “Xem chi tiết” — nằm trong khối ảnh, dưới badge */
   hintOverlay?: ReactNode;
+  /** Ảnh đầu tiên danh sách — gợi ý LCP khi vào /khoa-hoc */
+  thumbPriority?: boolean;
 }) {
   const tone = course.group;
   const customGrad =
@@ -60,11 +65,15 @@ function CourseThumb({
   return (
     <div className={`kh-thumb kh-thumb--${tone} ${className}`.trim()}>
       {course.thumbnail ? (
-        // eslint-disable-next-line @next/next/no-img-element -- URL từ ql_mon_hoc.thumbnail
-        <img
+        <Image
           src={course.thumbnail}
           alt={`Khóa học ${course.tenMonHoc} tại Sine Art`}
           className="kh-thumb-img"
+          fill
+          sizes="(max-width: 719px) 50vw, 33vw"
+          priority={thumbPriority}
+          loading={thumbPriority ? undefined : "lazy"}
+          unoptimized={nextImageShouldUnoptimize(course.thumbnail)}
         />
       ) : (
         <div
@@ -85,11 +94,13 @@ function FlatGroupSection({
   title,
   dotColor,
   courses,
+  lcpThumbCourseId,
 }: {
   sectionId: string;
   title: string;
   dotColor: string;
   courses: KhoaHocCourseCard[];
+  lcpThumbCourseId: number | null;
 }) {
   const sorted = useMemo(() => sortCourses(courses), [courses]);
   if (!sorted.length) return null;
@@ -111,7 +122,11 @@ function FlatGroupSection({
             href={`/khoa-hoc/${c.slug}`}
             className={`kh-grid-card kh-grid-card--p${Math.abs(c.id) % 8}`}
           >
-            <CourseThumb course={c} badge={c.loaiKhoaHoc ?? undefined} />
+            <CourseThumb
+              course={c}
+              badge={c.loaiKhoaHoc ?? undefined}
+              thumbPriority={lcpThumbCourseId === c.id}
+            />
             <CourseCardBody course={c} compact />
           </CourseCardLink>
         ))}
@@ -162,6 +177,21 @@ export default function KhoaHocBento({
       botro: g.botro,
     };
   }, [filter, filteredCourses]);
+
+  /** Thẻ khóa đầu tiên trên trang (theo thứ tự section) — ưu tiên tải ảnh (LCP gợi ý). */
+  const lcpThumbCourseId = useMemo(() => {
+    const pick = (list: KhoaHocCourseCard[]) => sortCourses(list)[0]?.id ?? null;
+    if (grouped.lthi.length) return pick(grouped.lthi);
+    if (filter === "all") {
+      if (grouped.digitalKids.length) return pick(grouped.digitalKids);
+      if (grouped.botro.length) return pick(grouped.botro);
+      return null;
+    }
+    if (grouped.digital.length) return pick(grouped.digital);
+    if (grouped.kids.length) return pick(grouped.kids);
+    if (grouped.botro.length) return pick(grouped.botro);
+    return null;
+  }, [grouped, filter]);
 
   if (!courses.length) {
     return (
@@ -247,6 +277,7 @@ export default function KhoaHocBento({
           }
           dotColor="#7f77dd"
           courses={grouped.lthi}
+          lcpThumbCourseId={lcpThumbCourseId}
         />
 
         {filter === "all" ? (
@@ -255,6 +286,7 @@ export default function KhoaHocBento({
             title="Digital & Kids"
             dotColor="#1d9e75"
             courses={grouped.digitalKids}
+            lcpThumbCourseId={lcpThumbCourseId}
           />
         ) : (
           <>
@@ -263,12 +295,14 @@ export default function KhoaHocBento({
               title="Digital"
               dotColor="#1d9e75"
               courses={grouped.digital}
+              lcpThumbCourseId={lcpThumbCourseId}
             />
             <FlatGroupSection
               sectionId="kh-sec-kids"
               title="Kids"
               dotColor="#d4537e"
               courses={grouped.kids}
+              lcpThumbCourseId={lcpThumbCourseId}
             />
           </>
         )}
@@ -279,6 +313,7 @@ export default function KhoaHocBento({
             title="Bổ trợ"
             dotColor="#888780"
             courses={grouped.botro}
+            lcpThumbCourseId={lcpThumbCourseId}
           />
         ) : null}
       </div>

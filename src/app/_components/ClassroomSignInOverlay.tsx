@@ -13,10 +13,12 @@ import {
 } from "@/lib/phong-hoc/classroom-url";
 import { lookupClassroomByEmail } from "@/lib/phong-hoc/lookup-by-email";
 import { AnimatePresence, motion } from "framer-motion";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import "./classroom-sign-in-overlay.css";
 
 const cVariants = {
@@ -78,8 +80,17 @@ function studentCardInfoLine(data: ClassroomStudentSessionData & { lich_hoc?: st
 function ClassThumb({ src, isTeacher }: { src: string; isTeacher: boolean }) {
   const [err, setErr] = useState(false);
   if (src && !err) {
-    // eslint-disable-next-line @next/next/no-img-element -- URL ngoài / Cloudflare
-    return <img src={src} alt="" onError={() => setErr(true)} />;
+    return (
+      <Image
+        src={src}
+        alt=""
+        width={48}
+        height={48}
+        loading="lazy"
+        onError={() => setErr(true)}
+        unoptimized={nextImageShouldUnoptimize(src)}
+      />
+    );
   }
   return <span style={{ fontSize: 32 }}>{isTeacher ? "👩‍🏫" : "🎨"}</span>;
 }

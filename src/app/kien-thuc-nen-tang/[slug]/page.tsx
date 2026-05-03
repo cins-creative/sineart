@@ -117,22 +117,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /**
- * Streaming strategy (xem STREAMING_REFACTOR.md):
+ * Streaming (`STREAMING_REFACTOR.md`):
  *
- * 1. Top-level `await fetchLyThuyetBySlug(slug)` — single-row lookup, rất
- *    nhanh. Cần thiết cho:
- *    - 404 check (`notFound()` phải ở top level để trả status HTTP đúng).
- *    - `generateMetadata` (đã await riêng).
- *    - Render critical content ngay: hero title, body HTML, toc, tags, JSON-LD.
- *
- * 2. Phần còn lại stream qua 3 Suspense boundary độc lập:
- *    - `<NavBarBoundary />` — fetch `courses` cho navbar (không liên quan bài).
- *    - `<LibSidebarNav />` — fetch toàn bộ bài lý thuyết cho sidebar trái.
- *    - `<RelatedNav />` — fetch toàn bộ bài cho prev/next + related ở cuối.
- *
- * Các fetch ở data layer đều được `React.cache()` wrap → `fetchAllLyThuyet()`
- * gọi từ `LibSidebarNav` + `RelatedNav` chỉ gây 1 round-trip Supabase thật
- * sự, boundary còn lại share promise qua request-scoped cache.
+ * - `await fetchLyThuyetBySlug(slug)` giữ ở page để `notFound()` HTTP đúng +
+ *   hero/body/TOC từ một round-trip.
+ * - Ba boundary độc lập (navbar khóa học · sidebar danh mục · related/prev-next),
+ *   không `Promise.all` ở page — mỗi `<Suspense>` stream riêng.
+ * - `loading.tsx` cùng segment: skeleton tổng khi điều hướng tới `[slug]`.
  */
 export default async function LyThuyetDetailPage({ params }: Props) {
   const { slug } = await params;

@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import type { CareerCard } from "@/types/career";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import { useCallback, useEffect, useRef } from "react";
 
 function CareerCardLinks({
@@ -26,13 +28,16 @@ function CareerCardLinks({
             className={`cc-art${c.imageUrl ? " cc-art--has-img" : ""}`}
           >
             {c.imageUrl ? (
-              <img
+              <Image
                 className="cc-art-img"
                 src={c.imageUrl}
                 alt=""
+                fill
+                sizes="148px"
                 loading="lazy"
                 decoding="async"
                 draggable={false}
+                unoptimized={nextImageShouldUnoptimize(c.imageUrl)}
               />
             ) : null}
             <div className="ca-bg" style={{ background: c.grad }} aria-hidden />

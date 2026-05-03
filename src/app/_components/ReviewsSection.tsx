@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import type { HomeReview } from "@/types/homepage";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -121,12 +123,14 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
             >
               <span className="rp-av" aria-hidden="true">
                 {r.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={r.avatarUrl}
                     alt={`${r.name} — đánh giá tại Sine Art`}
+                    width={22}
+                    height={22}
                     loading="lazy"
                     decoding="async"
+                    unoptimized={nextImageShouldUnoptimize(r.avatarUrl)}
                   />
                 ) : (
                   reviewInitials(r.name)
@@ -147,12 +151,14 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
             >
               <span className="rp-av" aria-hidden="true">
                 {r.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={r.avatarUrl}
                     alt={`${r.name} — đánh giá tại Sine Art`}
+                    width={22}
+                    height={22}
                     loading="lazy"
                     decoding="async"
+                    unoptimized={nextImageShouldUnoptimize(r.avatarUrl)}
                   />
                 ) : (
                   reviewInitials(r.name)
@@ -184,11 +190,14 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
                 style={{ background: rv.grad }}
               >
                 {rv.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={rv.avatarUrl}
                     alt={`${rv.name} — đánh giá tại Sine Art`}
                     className="h-full w-full object-cover"
+                    width={40}
+                    height={40}
+                    loading="lazy"
+                    unoptimized={nextImageShouldUnoptimize(rv.avatarUrl)}
                   />
                 ) : (
                   <span className="rv-avatar-initials">{reviewInitials(rv.name)}</span>

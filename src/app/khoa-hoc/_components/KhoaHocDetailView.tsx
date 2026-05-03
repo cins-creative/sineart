@@ -13,6 +13,8 @@ import type { GalleryDisplayItem } from "@/types/homepage";
 import type { BaiTap } from "@/types/baiTap";
 import type { TeacherPortfolioSlide } from "@/types/khoa-hoc";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
+import Image from "next/image";
 import TeachersSection from "@/app/_components/TeachersSection";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -357,12 +359,15 @@ export default function KhoaHocDetailView({
                 <div className="kd-hv-gallery">
                   <div className="kd-hv-main">
                     {hvMainSrc ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         key={hvGalIdx}
                         src={hvMainSrc}
                         alt=""
+                        fill
                         className="kd-hv-main-img"
+                        sizes="(max-width: 900px) 100vw, min(640px, 55vw)"
+                        priority
+                        unoptimized={nextImageShouldUnoptimize(hvMainSrc)}
                       />
                     ) : (
                       <div className="kd-hv-ph kd-hv-ph--main" style={gradStyle} aria-hidden />
@@ -391,8 +396,16 @@ export default function KhoaHocDetailView({
                             onClick={() => setHvGalIdx(i)}
                           >
                             {thumbSrc ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={thumbSrc} alt="" className="kd-hv-thumb-img" loading="lazy" />
+                              <Image
+                                src={thumbSrc}
+                                alt=""
+                                width={72}
+                                height={72}
+                                className="kd-hv-thumb-img"
+                                sizes="72px"
+                                loading="lazy"
+                                unoptimized={nextImageShouldUnoptimize(thumbSrc)}
+                              />
                             ) : (
                               <div className="kd-hv-thumb-ph" style={gradStyle} aria-hidden />
                             )}

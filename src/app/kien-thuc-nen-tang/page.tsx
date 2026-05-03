@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { Suspense } from "react";
 
-import NavBar from "../_components/NavBar";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 import { LY_THUYET_LIST, getNhomList, getByNhom } from "@/data/ly-thuyet";
 
+import { KienThucLandingNav } from "./_components/KienThucLandingNav";
+import { NavBarBoundarySkeleton } from "./_components/NavBarBoundary.skeleton";
 import KienThucNenTangView, { type LandingGroup } from "./KienThucNenTangView";
 import "./kien-thuc-library.css";
 
-/** Listing page dùng config hardcode — không query DB */
+/** Listing: dữ liệu grid từ hardcode; chỉ NavBar gọi Supabase (trong `KienThucLandingNav`). */
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
@@ -27,9 +27,7 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export default async function KienThucNenTangPage() {
-  const { courses } = await getKhoaHocPageData();
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
+export default function KienThucNenTangPage() {
   const nhomList = getNhomList();
 
   const groups: LandingGroup[] = nhomList.map((nhom) => ({
@@ -71,7 +69,9 @@ export default async function KienThucNenTangPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div className="sa-root kien-thuc-nen-tang-root">
-        <NavBar khoaHocGroups={khoaHocGroups} />
+        <Suspense fallback={<NavBarBoundarySkeleton />}>
+          <KienThucLandingNav />
+        </Suspense>
         <KienThucNenTangView groups={groups} />
       </div>
     </>

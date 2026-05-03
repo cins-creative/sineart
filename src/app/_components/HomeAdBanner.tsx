@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import { isRenderableAdImageUrl } from "@/lib/admin/home-content-schema";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 
 type Dismissal = "banner" | "pill" | "none";
 
@@ -47,7 +49,16 @@ export default function HomeAdBanner({ imageUrl }: { imageUrl: string }) {
         aria-label="Quảng cáo"
       >
         <div className="sa-adbanner-inner">
-          <img className="sa-adbanner-img" src={src} alt="Quảng cáo Sine Art" />
+          <Image
+            className="sa-adbanner-img"
+            src={src}
+            alt="Quảng cáo Sine Art"
+            width={360}
+            height={176}
+            sizes="(max-width: 720px) min(360px, calc(100vw - 24px)), 360px"
+            loading="lazy"
+            unoptimized={nextImageShouldUnoptimize(src)}
+          />
           <button
             type="button"
             className="sa-adbanner-x"

@@ -77,6 +77,7 @@ function HeroImageCard({
           sizes={sizes}
           className="hero-card-img"
           priority={priority}
+          loading={priority ? undefined : "lazy"}
         />
       ) : null}
     </div>

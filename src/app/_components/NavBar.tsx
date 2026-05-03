@@ -7,6 +7,7 @@ import {
   type NavSubItem,
 } from "@/constants/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -18,7 +19,11 @@ import {
   parseClassroomSession,
   syncPhongHocCookiesWithStorage,
 } from "@/lib/phong-hoc/classroom-session";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import ClassroomSignInOverlay from "./ClassroomSignInOverlay";
+
+const NAV_LOGO_SRC =
+  "https://imagedelivery.net/PtnQ1mNuCedkboD0kJ2_4w/65b0e187-cbc0-42f6-4978-b3da96efe300/public";
 
 const MenuIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -429,13 +434,14 @@ export default function NavBar({
       <div className="nav-bottom-fixed">
         <div className="sticky">
           <Link href="/" className="sticky-logo" aria-label="Sine Art — Trang chủ">
-            <img
-              src="https://imagedelivery.net/PtnQ1mNuCedkboD0kJ2_4w/65b0e187-cbc0-42f6-4978-b3da96efe300/public"
+            <Image
+              src={NAV_LOGO_SRC}
               alt="Sine Art"
               className="sticky-logo-img"
               width={140}
               height={56}
               decoding="async"
+              unoptimized={nextImageShouldUnoptimize(NAV_LOGO_SRC)}
             />
           </Link>
           <nav className="nav-links" aria-label="Điều hướng chính">
@@ -533,13 +539,15 @@ export default function NavBar({
                   >
                     <LichThuNhoIcon />
                   </button>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={thiThuLichTrimmed}
                     alt="Lịch chấm bài"
                     className="nav-cta-lich-img"
+                    width={1200}
+                    height={336}
                     loading="lazy"
                     decoding="async"
+                    unoptimized={nextImageShouldUnoptimize(thiThuLichTrimmed)}
                   />
                 </div>
               ) : null}

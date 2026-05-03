@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { EbookKhoaHocNav } from "../_components/EbookKhoaHocNav";
@@ -8,6 +9,7 @@ import { EbookDetailMain } from "./_components/EbookDetailMain";
 import { EbookDetailMainSkeleton } from "./_components/EbookDetailMain.skeleton";
 
 import { fetchAllEbooks, fetchEbookBySlug } from "@/lib/data/ebook";
+import { normalizeEbookSlugSegment } from "@/lib/ebook-slug-normalize";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -56,6 +58,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function EbookDetailPage({ params }: Props) {
   const { slug } = await params;
+  const canonicalSlug = normalizeEbookSlugSegment(slug);
+  if (canonicalSlug !== slug) {
+    redirect(`/ebook/${canonicalSlug}`);
+  }
 
   return (
     <div className="sa-root sa-ebook-detail">

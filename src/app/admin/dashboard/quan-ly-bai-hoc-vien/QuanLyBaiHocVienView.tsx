@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
   ChevronLeft,
@@ -28,6 +28,7 @@ import {
 } from "@/app/admin/dashboard/quan-ly-bai-hoc-vien/actions";
 import {
   ADMIN_BHV_STATUS_TABS,
+  adminBhvScoreSortFromSearch,
   type AdminBaiHocVienRow,
   type AdminBhvExerciseOpt,
   type AdminBhvHocVienOpt,
@@ -39,7 +40,6 @@ import { cn } from "@/lib/utils";
 
 const STATUS_OPTS = ["Chờ xác nhận", "Hoàn thiện", "Không đủ chất lượng"] as const;
 
-const PAGE_SIZE = 20;
 const BHV_LAYOUT_STORAGE_KEY = "admin-quan-ly-bai-hoc-vien-layout";
 type BhvLayout = "table" | "grid";
 /** null = thứ tự mặc định (mới tạo trước, từ server). */
@@ -47,11 +47,17 @@ type BhvScoreSort = null | "desc" | "asc";
 
 type Props = {
   bundle: AdminQuanLyBaiHocVienBundle;
-  activeTab: AdminBhvStatusTab;
 };
 
-function tabHref(id: AdminBhvStatusTab): string {
-  return id === "cho" ? "/admin/dashboard/quan-ly-bai-hoc-vien" : `/admin/dashboard/quan-ly-bai-hoc-vien?tab=${id}`;
+const BHV_LIST_BASE = "/admin/dashboard/quan-ly-bai-hoc-vien";
+
+function tabHref(tabId: AdminBhvStatusTab, sp: URLSearchParams): string {
+  const next = new URLSearchParams(sp.toString());
+  next.set("page", "1");
+  if (tabId === "cho") next.delete("tab");
+  else next.set("tab", tabId);
+  const qs = next.toString();
+  return qs ? `${BHV_LIST_BASE}?${qs}` : BHV_LIST_BASE;
 }
 
 function statusBadgeClass(s: string): string {
@@ -391,19 +397,31 @@ const BhvPagedRow = memo(
     prev.onDeleteRow === next.onDeleteRow,
 );
 
-export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
+export default function QuanLyBaiHocVienView({ bundle }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pushParams = useCallback(
+    (patch: Record<string, string>) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v === "") next.delete(k);
+        else next.set(k, v);
+      }
+      const qs = next.toString();
+      router.push(qs ? `${BHV_LIST_BASE}?${qs}` : BHV_LIST_BASE);
+    },
+    [router, searchParams],
+  );
   const [pending, startTransition] = useTransition();
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
-  const [page, setPage] = useState(1);
   const [layout, setLayout] = useState<BhvLayout>("table");
   const [draftByRowId, setDraftByRowId] = useState<Record<number, UpdateBaiHocVienPayload>>({});
   const [saveBusy, setSaveBusy] = useState(false);
   const [uploadRowId, setUploadRowId] = useState<number | null>(null);
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<number>>(() => new Set());
-  const [filterMonHoc, setFilterMonHoc] = useState("");
-  const [scoreSort, setScoreSort] = useState<BhvScoreSort>(null);
+  const filterMonHoc = searchParams.get("mon") ?? "";
+  const scoreSort = adminBhvScoreSortFromSearch(searchParams.get("score") ?? undefined) as BhvScoreSort;
   const bulkAnchorIndexRef = useRef<number | null>(null);
   const bulkSelectedIdsRef = useRef(bulkSelectedIds);
   bulkSelectedIdsRef.current = bulkSelectedIds;
@@ -439,53 +457,24 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
 
   const monOptions = useMemo(() => {
     const s = new Set<string>();
-    for (const r of bundle.rows) {
-      const m = (r.ten_mon_hoc ?? "").trim();
+    for (const e of bundle.exercises) {
+      const m = (e.ten_mon_hoc ?? "").trim();
       if (m) s.add(m);
     }
     return [...s].sort((a, b) => a.localeCompare(b, "vi"));
-  }, [bundle.rows]);
+  }, [bundle.exercises]);
 
-  const rowsAfterMon = useMemo(() => {
-    const f = filterMonHoc.trim();
-    if (!f) return bundle.rows;
-    return bundle.rows.filter((r) => (r.ten_mon_hoc ?? "").trim() === f);
-  }, [bundle.rows, filterMonHoc]);
-
-  const rowsSorted = useMemo(() => {
-    if (scoreSort == null) return rowsAfterMon;
-    const list = [...rowsAfterMon];
-    list.sort((a, b) => {
-      const fa = a.score != null && Number.isFinite(a.score);
-      const fb = b.score != null && Number.isFinite(b.score);
-      if (scoreSort === "desc") {
-        if (fa && fb && b.score! !== a.score!) return b.score! - a.score!;
-        if (fa && !fb) return -1;
-        if (!fa && fb) return 1;
-      } else {
-        if (fa && fb && a.score! !== b.score!) return a.score! - b.score!;
-        if (fa && !fb) return -1;
-        if (!fa && fb) return 1;
-      }
-      const ta = a.created_at ? Date.parse(a.created_at) : 0;
-      const tb = b.created_at ? Date.parse(b.created_at) : 0;
-      if (tb !== ta) return tb - ta;
-      return b.id - a.id;
-    });
-    return list;
-  }, [rowsAfterMon, scoreSort]);
-
-  const totalRows = rowsSorted.length;
-  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
-
-  const pagedRows = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return rowsSorted.slice(start, start + PAGE_SIZE);
-  }, [rowsSorted, page]);
+  const totalRows = bundle.totalCount;
+  const totalPages = Math.max(1, Math.ceil(bundle.totalCount / bundle.pageSize));
 
   const cycleScoreSort = useCallback(() => {
-    setScoreSort((s) => (s == null ? "desc" : s === "desc" ? "asc" : null));
-  }, []);
+    const cur = adminBhvScoreSortFromSearch(searchParams.get("score") ?? undefined);
+    let nextScore = "";
+    if (cur === null) nextScore = "desc";
+    else if (cur === "desc") nextScore = "asc";
+    else nextScore = "";
+    pushParams({ score: nextScore, page: "1" });
+  }, [pushParams, searchParams]);
 
   const clearBulkSelection = useCallback(() => {
     setBulkSelectedIds(new Set());
@@ -503,7 +492,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
         const a = bulkAnchorIndexRef.current;
         const lo = Math.min(a, indexInPage);
         const hi = Math.max(a, indexInPage);
-        setBulkSelectedIds(new Set(pagedRows.slice(lo, hi + 1).map((r) => r.id)));
+        setBulkSelectedIds(new Set(bundle.rows.slice(lo, hi + 1).map((r) => r.id)));
       } else {
         bulkAnchorIndexRef.current = indexInPage;
         setBulkSelectedIds((prev) => {
@@ -514,12 +503,12 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
         });
       }
     },
-    [pagedRows],
+    [bundle.rows],
   );
 
   useEffect(() => {
     clearBulkSelection();
-  }, [page, activeTab, layout, filterMonHoc, scoreSort, clearBulkSelection]);
+  }, [bundle.page, bundle.tab, layout, filterMonHoc, scoreSort, clearBulkSelection]);
 
   useEffect(() => {
     if (layout !== "table") return;
@@ -534,16 +523,6 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
     () => Object.values(draftByRowId).some((p) => p != null && Object.keys(p).length > 0),
     [draftByRowId],
   );
-
-  useEffect(() => {
-    setPage(1);
-    setFilterMonHoc("");
-    setScoreSort(null);
-  }, [activeTab]);
-
-  useEffect(() => {
-    setPage((p) => Math.min(Math.max(1, p), totalPages));
-  }, [totalPages]);
 
   const notify = useCallback((msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -671,7 +650,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
           <div className="min-w-0">
             <div className="text-[17px] font-bold tracking-tight text-[#323232]">Quản lý bài học viên</div>
             <div className="text-xs text-[#AAAAAA]">
-              {totalRows} dòng · {PAGE_SIZE}/trang client · hv_bai_hoc_vien (tối đa 50k/tab)
+              {totalRows} dòng · {bundle.pageSize}/trang · phân trang server (LIMIT/OFFSET)
               {hasDirty ? <span className="text-amber-700"> · Chưa lưu</span> : null}
             </div>
           </div>
@@ -710,7 +689,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                   {ADMIN_BHV_STATUS_TABS.map((t) => (
                     <Link
                       key={t.id}
-                      href={tabHref(t.id)}
+                      href={tabHref(t.id, searchParams)}
                       onClick={(e) => {
                         if (!hasDirty) return;
                         if (!confirmLeave()) e.preventDefault();
@@ -718,7 +697,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                       }}
                       className={cn(
                         "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                        activeTab === t.id
+                        bundle.tab === t.id
                           ? "border-[#BC8AF9] bg-[#BC8AF9]/15 text-[#BC8AF9]"
                           : "border-[#EAEAEA] text-black/50 hover:border-black/15 hover:text-black/70",
                       )}
@@ -779,8 +758,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                     className="w-full rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-[12px] outline-none focus:border-[#BC8AF9]"
                     value={filterMonHoc}
                     onChange={(e) => {
-                      setFilterMonHoc(e.target.value);
-                      setPage(1);
+                      pushParams({ mon: e.target.value, page: "1" });
                     }}
                   >
                     <option value="">Tất cả môn</option>
@@ -880,7 +858,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                         </td>
                       </tr>
                     ) : (
-                      pagedRows.map((base, idx) => (
+                      bundle.rows.map((base, idx) => (
                         <BhvPagedRow
                           key={base.id}
                           layout="table"
@@ -918,7 +896,7 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                   <div className="py-12 text-center text-sm text-[#888]">Không có bản ghi khớp môn đã chọn.</div>
                 ) : (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {pagedRows.map((base) => (
+                    {bundle.rows.map((base) => (
                       <BhvPagedRow
                         key={base.id}
                         layout="grid"
@@ -949,18 +927,18 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                 <p className="text-[12px] text-black/55">
                   Hiển thị{" "}
                   <span className="font-semibold text-[#1a1a2e]">
-                    {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalRows)}
+                    {(bundle.page - 1) * bundle.pageSize + 1}–{Math.min(bundle.page * bundle.pageSize, totalRows)}
                   </span>{" "}
                   / {totalRows} · Trang{" "}
                   <span className="font-semibold text-[#1a1a2e]">
-                    {page}/{totalPages}
+                    {bundle.page}/{totalPages}
                   </span>
                 </p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={bundle.page <= 1}
+                    onClick={() => pushParams({ page: String(Math.max(1, bundle.page - 1)) })}
                     className="inline-flex items-center gap-1 rounded-xl border border-[#EAEAEA] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#323232] hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <ChevronLeft className="h-4 w-4" aria-hidden />
@@ -968,8 +946,8 @@ export default function QuanLyBaiHocVienView({ bundle, activeTab }: Props) {
                   </button>
                   <button
                     type="button"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={bundle.page >= totalPages}
+                    onClick={() => pushParams({ page: String(Math.min(totalPages, bundle.page + 1)) })}
                     className="inline-flex items-center gap-1 rounded-xl border border-[#EAEAEA] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#323232] hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Sau

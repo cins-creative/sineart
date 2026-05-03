@@ -2,11 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { isWrongLopFkColumnError } from "@/app/api/phong-hoc/hv-chatbox/lop-column";
 
-/** Mỗi lần gọi Supabase.range; lặp cho đến hết bản ghi (tối đa MAX_TOTAL). */
-const HV_BHV_FETCH_CHUNK = 1000;
-const HV_BHV_MAX_TOTAL = 50_000;
 const HV_OPTIONS_CHUNK = 1000;
 const HV_OPTIONS_MAX = 20_000;
+
+const PAGE_SIZE_DEFAULT = 20;
+const PAGE_SIZE_MIN = 5;
+const PAGE_SIZE_MAX = 100;
 
 export type AdminBhvStatusTab = "cho" | "hoan" | "kcl" | "tat_ca";
 
@@ -47,9 +48,23 @@ export type AdminBhvLopOpt = { id: number; label: string };
 export type AdminQuanLyBaiHocVienBundle = {
   tab: AdminBhvStatusTab;
   rows: AdminBaiHocVienRow[];
+  /** Tổng dòng khớp tab + lọc môn (không phụ thuộc sort/pagination). */
+  totalCount: number;
+  page: number;
+  pageSize: number;
   exercises: AdminBhvExerciseOpt[];
   hocVienOptions: AdminBhvHocVienOpt[];
   lopOptions: AdminBhvLopOpt[];
+};
+
+export type AdminBhvFetchParams = {
+  tab: AdminBhvStatusTab;
+  page: number;
+  pageSize: number;
+  /** `ql_mon_hoc.ten_mon_hoc` — rỗng = không lọc. */
+  filterMonHoc: string;
+  /** Sort điểm; null = mới tạo trước (`created_at` / `id`). */
+  scoreSort: "desc" | "asc" | null;
 };
 
 function nId(v: unknown): number | null {
@@ -63,52 +78,208 @@ function lopIdFromRow(r: Record<string, unknown>): number | null {
   return nId(r.class);
 }
 
-async function selectHvBaiHocVienRows(
+function clampPageSize(n: number): number {
+  if (!Number.isFinite(n)) return PAGE_SIZE_DEFAULT;
+  return Math.min(PAGE_SIZE_MAX, Math.max(PAGE_SIZE_MIN, Math.floor(n)));
+}
+
+type OrderMode = "created" | "score_desc" | "score_asc";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyQuery = any;
+
+function applyTabFilter(q: AnyQuery, tab: AdminBhvStatusTab): AnyQuery {
+  if (tab === "cho") return q.or("status.eq.Chờ xác nhận,status.is.null");
+  if (tab === "hoan") return q.eq("status", "Hoàn thiện");
+  if (tab === "kcl") return q.eq("status", "Không đủ chất lượng");
+  return q;
+}
+
+function applyOrdering(q: AnyQuery, mode: OrderMode): AnyQuery {
+  if (mode === "score_desc") {
+    return q
+      .order("score", { ascending: false, nullsFirst: false })
+      .order("id", { ascending: false });
+  }
+  if (mode === "score_asc") {
+    return q
+      .order("score", { ascending: true, nullsFirst: false })
+      .order("id", { ascending: false });
+  }
+  return q
+    .order("created_at", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: false });
+}
+
+function orderModeFromParams(scoreSort: AdminBhvFetchParams["scoreSort"]): OrderMode {
+  if (scoreSort === "desc") return "score_desc";
+  if (scoreSort === "asc") return "score_asc";
+  return "created";
+}
+
+async function resolveThuocBaiTapIdsForMon(
   supabase: SupabaseClient,
-  tab: AdminBhvStatusTab,
-): Promise<{ rows: Record<string, unknown>[]; error: { message: string } | null }> {
+  tenMonHoc: string,
+): Promise<number[] | null> {
+  const label = tenMonHoc.trim();
+  if (!label) return null;
+
+  const { data: monRow, error: mErr } = await supabase
+    .from("ql_mon_hoc")
+    .select("id")
+    .eq("ten_mon_hoc", label)
+    .maybeSingle();
+  if (mErr || !monRow) return [];
+
+  const mid = nId((monRow as { id?: unknown }).id);
+  if (!mid) return [];
+
+  const { data: btRows, error: btErr } = await supabase
+    .from("hv_he_thong_bai_tap")
+    .select("id")
+    .eq("mon_hoc", mid);
+  if (btErr) return [];
+  const ids = (btRows ?? [])
+    .map((r) => nId((r as { id?: unknown }).id))
+    .filter((x): x is number => x != null);
+  return ids;
+}
+
+async function fetchHvPageRaw(args: {
+  supabase: SupabaseClient;
+  tab: AdminBhvStatusTab;
+  cols: string;
+  thuocBaiTapFilter: number[] | null;
+  orderMode: OrderMode;
+  page: number;
+  pageSize: number;
+}): Promise<{
+  rows: Record<string, unknown>[];
+  totalCount: number;
+  error: { message: string } | null;
+}> {
+  const { supabase, tab, cols, thuocBaiTapFilter, orderMode, page, pageSize } = args;
+  const safePage = Math.max(1, page);
+  const size = clampPageSize(pageSize);
+  const from = (safePage - 1) * size;
+  const to = from + size - 1;
+
+  const buildFiltered = () => {
+    let q: AnyQuery = supabase.from("hv_bai_hoc_vien").select(cols);
+    q = applyTabFilter(q, tab);
+    if (thuocBaiTapFilter !== null) {
+      if (thuocBaiTapFilter.length === 0) return null;
+      q = q.in("thuoc_bai_tap", thuocBaiTapFilter);
+    }
+    q = applyOrdering(q, orderMode);
+    return q;
+  };
+
+  const filtered = buildFiltered();
+  if (!filtered) {
+    return { rows: [], totalCount: 0, error: null };
+  }
+
+  let countQ: AnyQuery = supabase.from("hv_bai_hoc_vien").select("*", { count: "exact", head: true });
+  countQ = applyTabFilter(countQ, tab);
+  if (thuocBaiTapFilter !== null) {
+    if (thuocBaiTapFilter.length === 0) {
+      return { rows: [], totalCount: 0, error: null };
+    }
+    countQ = countQ.in("thuoc_bai_tap", thuocBaiTapFilter);
+  }
+
+  const [{ count: totalRaw, error: cErr }, { data, error: dErr }] = await Promise.all([countQ, filtered.range(from, to)]);
+
+  if (cErr) {
+    return { rows: [], totalCount: 0, error: cErr as { message: string } };
+  }
+  if (dErr) {
+    return { rows: [], totalCount: 0, error: dErr as { message: string } };
+  }
+
+  const totalCount = typeof totalRaw === "number" ? totalRaw : 0;
+  const rows = ((data ?? []) as unknown) as Record<string, unknown>[];
+  return { rows, totalCount, error: null };
+}
+
+async function selectHvBaiHocVienPage(
+  supabase: SupabaseClient,
+  params: AdminBhvFetchParams,
+): Promise<{
+  rows: Record<string, unknown>[];
+  totalCount: number;
+  error: { message: string } | null;
+}> {
   const baseCols =
     "id,photo,status,score,bai_mau,thuoc_bai_tap,ten_hoc_vien,ghi_chu,lop_hoc,class,created_at";
   const baseCols2 = "id,photo,status,score,bai_mau,thuoc_bai_tap,ten_hoc_vien,ghi_chu,class,created_at";
 
-  const fetchAllForCols = async (cols: string): Promise<{ rows: Record<string, unknown>[]; error: { message: string } | null }> => {
-    const acc: Record<string, unknown>[] = [];
-    let from = 0;
-    for (;;) {
-      let q = supabase
-        .from("hv_bai_hoc_vien")
-        .select(cols)
-        .order("created_at", { ascending: false, nullsFirst: false })
-        .order("id", { ascending: false });
-      if (tab === "cho") q = q.or("status.eq.Chờ xác nhận,status.is.null");
-      else if (tab === "hoan") q = q.eq("status", "Hoàn thiện");
-      else if (tab === "kcl") q = q.eq("status", "Không đủ chất lượng");
-      const { data, error } = await q.range(from, from + HV_BHV_FETCH_CHUNK - 1);
-      if (error) return { rows: acc, error };
-      const chunk = ((data ?? []) as unknown) as Record<string, unknown>[];
-      acc.push(...chunk);
-      if (chunk.length < HV_BHV_FETCH_CHUNK) break;
-      from += HV_BHV_FETCH_CHUNK;
-      if (acc.length >= HV_BHV_MAX_TOTAL) break;
-    }
-    return { rows: acc, error: null };
-  };
+  const thuocBaiTapFilter = await resolveThuocBaiTapIdsForMon(supabase, params.filterMonHoc);
+  const orderMode = orderModeFromParams(params.scoreSort);
+  const page = Math.max(1, params.page);
+  const pageSize = clampPageSize(params.pageSize);
 
-  let { rows, error } = await fetchAllForCols(baseCols);
-  if (error && isWrongLopFkColumnError(error)) {
-    ({ rows, error } = await fetchAllForCols(baseCols2));
+  let result = await fetchHvPageRaw({
+    supabase,
+    tab: params.tab,
+    cols: baseCols,
+    thuocBaiTapFilter,
+    orderMode,
+    page,
+    pageSize,
+  });
+
+  if (result.error && isWrongLopFkColumnError(result.error)) {
+    result = await fetchHvPageRaw({
+      supabase,
+      tab: params.tab,
+      cols: baseCols2,
+      thuocBaiTapFilter,
+      orderMode,
+      page,
+      pageSize,
+    });
   }
-  return { rows, error };
+
+  return result;
+}
+
+function clampPageToTotal(page: number, totalCount: number, pageSize: number): number {
+  const size = clampPageSize(pageSize);
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, totalCount) / size));
+  return Math.min(Math.max(1, page), totalPages);
 }
 
 export async function fetchAdminQuanLyBaiHocVienBundle(
   supabase: SupabaseClient,
-  tab: AdminBhvStatusTab,
+  params: AdminBhvFetchParams,
 ): Promise<{ ok: true; data: AdminQuanLyBaiHocVienBundle } | { ok: false; error: string }> {
-  const { rows: raw, error } = await selectHvBaiHocVienRows(supabase, tab);
+  const pageSize = clampPageSize(params.pageSize);
+
+  let { rows: raw, totalCount, error } = await selectHvBaiHocVienPage(supabase, {
+    ...params,
+    pageSize,
+    page: Math.max(1, params.page),
+  });
+
   if (error) {
     return { ok: false, error: error.message || "Không đọc được hv_bai_hoc_vien." };
   }
+
+  const pageClamped = clampPageToTotal(params.page, totalCount, pageSize);
+  if (pageClamped !== params.page && totalCount > 0) {
+    ({ rows: raw, totalCount, error } = await selectHvBaiHocVienPage(supabase, {
+      ...params,
+      page: pageClamped,
+      pageSize,
+    }));
+    if (error) {
+      return { ok: false, error: error.message || "Không đọc được hv_bai_hoc_vien." };
+    }
+  }
+
+  const effectivePage = totalCount === 0 ? 1 : pageClamped;
 
   const hvIds = [...new Set(raw.map((r) => nId(r.ten_hoc_vien)).filter((x): x is number => x != null))];
   const lopIds = [...new Set(raw.map((r) => lopIdFromRow(r)).filter((x): x is number => x != null))];
@@ -209,15 +380,6 @@ export async function fetchAdminQuanLyBaiHocVienBundle(
     });
   }
 
-  rows.sort((a, b) => {
-    const ta = a.created_at ? Date.parse(a.created_at) : NaN;
-    const tb = b.created_at ? Date.parse(b.created_at) : NaN;
-    if (Number.isFinite(tb) && Number.isFinite(ta) && tb !== ta) return tb - ta;
-    if (Number.isFinite(tb) && !Number.isFinite(ta)) return -1;
-    if (!Number.isFinite(tb) && Number.isFinite(ta)) return 1;
-    return b.id - a.id;
-  });
-
   const { data: exAll, error: exErr } = await supabase
     .from("hv_he_thong_bai_tap")
     .select("id, ten_bai_tap, mon_hoc")
@@ -308,11 +470,46 @@ export async function fetchAdminQuanLyBaiHocVienBundle(
     })
     .filter((x): x is AdminBhvLopOpt => x != null);
 
-  return { ok: true, data: { tab, rows, exercises, hocVienOptions, lopOptions } };
+  return {
+    ok: true,
+    data: {
+      tab: params.tab,
+      rows,
+      totalCount,
+      page: effectivePage,
+      pageSize,
+      exercises,
+      hocVienOptions,
+      lopOptions,
+    },
+  };
 }
 
 export function adminBhvTabFromSearch(raw: string | string[] | undefined): AdminBhvStatusTab {
   const v = Array.isArray(raw) ? raw[0] : raw;
   if (v === "hoan" || v === "kcl" || v === "tat_ca" || v === "cho") return v;
   return "cho";
+}
+
+export function adminBhvScoreSortFromSearch(
+  raw: string | string[] | undefined,
+): "desc" | "asc" | null {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  if (v === "desc" || v === "asc") return v;
+  return null;
+}
+
+/** Đọc `page`, `pageSize`, `mon`, `score` từ `searchParams` App Router. */
+export function adminBhvListParamsFromSearch(
+  sp: Record<string, string | string[] | undefined>,
+): AdminBhvFetchParams {
+  const tab = adminBhvTabFromSearch(sp.tab);
+  const rawPage = Array.isArray(sp.page) ? sp.page[0] : sp.page;
+  const rawPs = Array.isArray(sp.pageSize) ? sp.pageSize[0] : sp.pageSize;
+  const page = Math.max(1, parseInt(String(rawPage ?? "1"), 10) || 1);
+  const pageSize = clampPageSize(parseInt(String(rawPs ?? String(PAGE_SIZE_DEFAULT)), 10) || PAGE_SIZE_DEFAULT);
+  const rawMon = Array.isArray(sp.mon) ? sp.mon[0] : sp.mon;
+  const filterMonHoc = typeof rawMon === "string" ? rawMon : "";
+  const scoreSort = adminBhvScoreSortFromSearch(sp.score);
+  return { tab, page, pageSize, filterMonHoc, scoreSort };
 }

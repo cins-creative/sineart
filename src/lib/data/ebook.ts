@@ -28,6 +28,7 @@
 import { cache } from "react";
 
 import { cfImageNormalizeAccount } from "@/lib/cfImageUrl";
+import { normalizeEbookSlugSegment } from "@/lib/ebook-slug-normalize";
 import { createStaticClient } from "@/lib/supabase/static";
 
 import type { EbookItem } from "./ebook-shared";
@@ -45,26 +46,9 @@ export {
 const SELECT_COLS =
   "id, slug, title, so_trang, featured, categories, thumbnail, image_demo, img_src_link, html_embed, content, noi_dung_sach, created_at, updated_at";
 
-/**
- * Slug URL vs DB: ký tự trộn (en dash, fullwidth hyphen), khoảng trắng đầu/cuối,
- * ký tự ẩn (ZWSP). Chuẩn hoá trước khi `.eq("slug", …)` hoặc so khớp với list đã tải.
- */
+/** Alias — cùng logic `normalizeEbookSlugSegment` (decode % + mọi dash Unicode). */
 function normalizeEbookSlugForLookup(slug: string): string {
-  let s = (slug ?? "").trim();
-  if (!s) return s;
-  try {
-    s = s.normalize("NFC");
-  } catch {
-    /* ignore */
-  }
-  return s
-    .replace(/[\u200B-\u200D\uFEFF]/g, "") // ZWSP / ZWNJ / ZWJ / BOM
-    .replace(/\u2013/g, "-") // en dash –
-    .replace(/\u2014/g, "-") // em dash —
-    .replace(/\u2212/g, "-") // minus −
-    .replace(/\uFE63/g, "-") // small hyphen-minus
-    .replace(/\uFF0D/g, "-") // fullwidth hyphen-minus
-    .trim();
+  return normalizeEbookSlugSegment(slug);
 }
 
 /**

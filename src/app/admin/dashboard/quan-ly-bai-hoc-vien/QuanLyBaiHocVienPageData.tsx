@@ -2,11 +2,14 @@ import { redirect } from "next/navigation";
 
 import QuanLyBaiHocVienView from "@/app/admin/dashboard/quan-ly-bai-hoc-vien/QuanLyBaiHocVienView";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
-import { adminBhvTabFromSearch, fetchAdminQuanLyBaiHocVienBundle } from "@/lib/data/admin-quan-ly-bai-hoc-vien";
+import {
+  adminBhvListParamsFromSearch,
+  fetchAdminQuanLyBaiHocVienBundle,
+} from "@/lib/data/admin-quan-ly-bai-hoc-vien";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 type PageProps = {
-  searchParams?: Promise<{ tab?: string | string[] }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function QuanLyBaiHocVienPageData({ searchParams }: PageProps) {
@@ -14,7 +17,7 @@ export default async function QuanLyBaiHocVienPageData({ searchParams }: PagePro
   if (!session) redirect("/admin");
 
   const sp = (await searchParams) ?? {};
-  const tab = adminBhvTabFromSearch(sp.tab);
+  const fetchParams = adminBhvListParamsFromSearch(sp);
 
   const supabase = createServiceRoleClient();
   if (!supabase) {
@@ -25,7 +28,7 @@ export default async function QuanLyBaiHocVienPageData({ searchParams }: PagePro
     );
   }
 
-  const bundle = await fetchAdminQuanLyBaiHocVienBundle(supabase, tab);
+  const bundle = await fetchAdminQuanLyBaiHocVienBundle(supabase, fetchParams);
   if (!bundle.ok) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
@@ -34,5 +37,5 @@ export default async function QuanLyBaiHocVienPageData({ searchParams }: PagePro
     );
   }
 
-  return <QuanLyBaiHocVienView bundle={bundle.data} activeTab={tab} />;
+  return <QuanLyBaiHocVienView bundle={bundle.data} />;
 }

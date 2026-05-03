@@ -3,7 +3,7 @@ import QuanLyBaiHocVienSessionAndData from "@/app/admin/dashboard/quan-ly-bai-ho
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams?: Promise<{ tab?: string | string[] }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default function QuanLyBaiHocVienPage({ searchParams }: PageProps) {

@@ -6,7 +6,7 @@ import { AdminDashboardTableSkeleton } from "@/components/skeletons";
 import QuanLyBaiHocVienPageData from "./QuanLyBaiHocVienPageData";
 
 type PageProps = {
-  searchParams?: Promise<{ tab?: string | string[] }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function QuanLyBaiHocVienSessionAndData({ searchParams }: PageProps) {

@@ -32,9 +32,11 @@ export type {
   TruongLookup,
 } from "./tra-cuu-shared";
 
-const LIST_COLS =
-  "id, slug, title, thumbnail_url, thumbnail_alt, nam, excerpt, is_featured, published_at, truong_ids, type";
-const DETAIL_COLS = `${LIST_COLS}, body_html, updated_at, album`;
+/** `"type"` phải quote — tránh PostgREST/Postgres lỗi cột (400). */
+const LIST_COLS = `id, slug, title, thumbnail_url, thumbnail_alt, nam, excerpt, is_featured, published_at, truong_ids, "type"`;
+/** Một số DB chưa có `album` — fallback select không album. */
+const DETAIL_COLS_CORE = `${LIST_COLS}, body_html, updated_at`;
+const DETAIL_COLS = `${DETAIL_COLS_CORE}, album`;
 
 const TYPE_VALUES: ReadonlySet<string> = new Set(TRA_CUU_TYPE_OPTIONS.map((o) => o.value));
 
@@ -121,12 +123,23 @@ async function fetchAllTraCuuUncached(): Promise<TraCuuListItem[]> {
   const supabase = await createClient();
   if (!supabase) return [];
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("tra_cuu_thong_tin")
     .select(LIST_COLS)
     .order("is_featured", { ascending: false })
     .order("published_at", { ascending: false, nullsFirst: false })
     .limit(500);
+
+  if (error) {
+    console.warn("[tra-cuu] fetchAllTraCuu (is_featured order) retry without:", error.message);
+    const retry = await supabase
+      .from("tra_cuu_thong_tin")
+      .select(LIST_COLS)
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(500);
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     console.error("[tra-cuu] fetchAllTraCuu error:", error);
@@ -166,14 +179,29 @@ async function fetchTraCuuBySlugUncached(slug: string): Promise<TraCuuDetail | n
   const supabase = await createClient();
   if (!supabase) return null;
 
-  const { data, error } = await supabase
+  const first = await supabase
     .from("tra_cuu_thong_tin")
     .select(DETAIL_COLS)
     .eq("slug", slug)
     .maybeSingle();
 
+  let data = first.data as Record<string, unknown> | null;
+  let error = first.error;
+
+  if (error) {
+    console.warn("[tra-cuu] fetchTraCuuBySlug full cols retry without album:", error.message);
+    const retry = await supabase
+      .from("tra_cuu_thong_tin")
+      .select(DETAIL_COLS_CORE)
+      .eq("slug", slug)
+      .maybeSingle();
+    data = retry.data as Record<string, unknown> | null;
+    error = retry.error;
+  }
+
   if (error || !data) return null;
-  return mapDetail(data as Record<string, unknown>);
+  if (data.album == null) data.album = [];
+  return mapDetail(data);
 }
 
 export const fetchTraCuuBySlug = cache(fetchTraCuuBySlugUncached);

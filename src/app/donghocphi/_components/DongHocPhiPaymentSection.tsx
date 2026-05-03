@@ -100,13 +100,26 @@ export async function DongHocPhiPaymentSection({
 
   if (supabase && effectiveEmail && isValidStudentEmail(effectiveEmail)) {
     const em = normalizeHocVienEmail(effectiveEmail);
-    const { data: hvRow, error: hvErr } = await supabase
+    const hvSel =
+      "id, full_name, sdt, email, sex, nam_thi, loai_khoa_hoc, facebook, avatar";
+    let { data: hvRow, error: hvErr } = await supabase
       .from("ql_thong_tin_hoc_vien")
-      .select("id, full_name, sdt, email, sex, nam_thi, loai_khoa_hoc, facebook, avatar")
-      .ilike("email", em)
+      .select(hvSel)
+      .eq("email", em)
       .order("id", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (!hvErr && !hvRow) {
+      const ilikeRes = await supabase
+        .from("ql_thong_tin_hoc_vien")
+        .select(hvSel)
+        .ilike("email", em)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      hvRow = ilikeRes.data;
+      hvErr = ilikeRes.error;
+    }
     if (!hvErr && hvRow) {
       const hvId = Number((hvRow as { id: unknown }).id);
       if (Number.isFinite(hvId) && hvId > 0) {

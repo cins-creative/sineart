@@ -5,6 +5,8 @@ import {
   BookOpen,
   Calendar,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   Filter,
   Search,
@@ -27,6 +29,8 @@ type Props = {
   items: EbookItem[];
   categories: string[];
 };
+
+const PAGE_SIZE = 20;
 
 function stripHtml(s: string): string {
   return s
@@ -56,7 +60,9 @@ export default function EbookListClient({ items, categories }: Props) {
   const [activeCat, setActiveCat] = useState<string>(""); // "" = tất cả
   const [catOpen, setCatOpen] = useState(false);
   const [previewId, setPreviewId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
   const catDdRef = useRef<HTMLDivElement | null>(null);
+  const gridTopRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -67,6 +73,25 @@ export default function EbookListClient({ items, categories }: Props) {
       return hay.includes(needle);
     });
   }, [items, q, activeCat]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const pagedItems = useMemo(
+    () =>
+      filtered.slice(
+        (safePage - 1) * PAGE_SIZE,
+        safePage * PAGE_SIZE,
+      ),
+    [filtered, safePage],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, activeCat]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
 
   const countByCat = useMemo(() => {
     const m = new Map<string, number>();
@@ -230,8 +255,10 @@ export default function EbookListClient({ items, categories }: Props) {
             : "Chưa có ebook nào."}
         </div>
       ) : (
-        <div className="eb-grid">
-          {filtered.map((b) => {
+        <>
+          <div ref={gridTopRef} className="eb-grid-anchor" aria-hidden />
+          <div className="eb-grid">
+          {pagedItems.map((b) => {
             const year = formatYear(b.created_at);
             return (
               <button
@@ -310,6 +337,56 @@ export default function EbookListClient({ items, categories }: Props) {
             );
           })}
         </div>
+
+          {totalPages > 1 && (
+            <nav className="eb-pager" aria-label="Phân trang danh sách ebook">
+              <button
+                type="button"
+                className="eb-pager-btn"
+                disabled={safePage <= 1}
+                onClick={() => {
+                  setPage((p) => Math.max(1, p - 1));
+                  queueMicrotask(() =>
+                    gridTopRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    }),
+                  );
+                }}
+              >
+                <ChevronLeft size={18} strokeWidth={2.4} aria-hidden />
+                Trước
+              </button>
+              <span className="eb-pager-meta">
+                Trang{" "}
+                <strong>
+                  {safePage} / {totalPages}
+                </strong>
+                <span className="eb-pager-count">
+                  {" "}
+                  ({filtered.length} cuốn)
+                </span>
+              </span>
+              <button
+                type="button"
+                className="eb-pager-btn"
+                disabled={safePage >= totalPages}
+                onClick={() => {
+                  setPage((p) => Math.min(totalPages, p + 1));
+                  queueMicrotask(() =>
+                    gridTopRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    }),
+                  );
+                }}
+              >
+                Sau
+                <ChevronRight size={18} strokeWidth={2.4} aria-hidden />
+              </button>
+            </nav>
+          )}
+        </>
       )}
 
       <AnimatePresence>

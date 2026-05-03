@@ -95,9 +95,18 @@ export type AdminGoiHocPhiBundle = {
 const GOI_SELECT_BASE =
   'id, created_at, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi';
 
+/** Khi DB không có cột `discount` — tránh 400. */
+const GOI_SELECT_BASE_NO_DISC =
+  'id, created_at, mon_hoc, "number", don_vi, gia_goc, combo_id, so_buoi';
+
 function goiSelectForTable(tableName: string): string {
   if (tableName === "hp_goi_hoc_phi") return GOI_SELECT_BASE;
   return `${GOI_SELECT_BASE}, special, note, post_title`;
+}
+
+function goiSelectForTableNoDiscount(tableName: string): string {
+  if (tableName === "hp_goi_hoc_phi") return GOI_SELECT_BASE_NO_DISC;
+  return `${GOI_SELECT_BASE_NO_DISC}, special, note, post_title`;
 }
 
 function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
@@ -112,7 +121,9 @@ function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
     goiNumber: parseNumericNullable(numRaw),
     don_vi: raw.don_vi == null || raw.don_vi === "" ? null : String(raw.don_vi).trim() || null,
     gia_goc: parseNumericNullable(raw.gia_goc),
-    discount: parseNumericNullable(raw.discount),
+    discount:
+      parseNumericNullable(raw.discount) ??
+      parseNumericNullable(raw.gia_giam),
     combo_id: null,
     combo_ids: parseComboIdsField(raw.combo_id),
     special:
@@ -137,10 +148,19 @@ export async function fetchAdminGoiHocPhiBundle(
   const tableName = hpGoiHocPhiTableName();
   let loadError: string | null = null;
 
-  const { data: goiRows, error: goiErr } = await supabase
+  let { data: goiRows, error: goiErr } = await supabase
     .from(tableName)
     .select(goiSelectForTable(tableName))
     .order("id", { ascending: false });
+
+  if (goiErr) {
+    const r2 = await supabase
+      .from(tableName)
+      .select(goiSelectForTableNoDiscount(tableName))
+      .order("id", { ascending: false });
+    goiRows = r2.data;
+    goiErr = r2.error;
+  }
 
   if (goiErr) {
     loadError =

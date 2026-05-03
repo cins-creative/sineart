@@ -484,6 +484,9 @@ const GOI_SELECT_FULL =
   'id, ten_goi_hoc_phi, gia_goc, discount, "number", don_vi, so_mon, thoi_han_thang, so_buoi, hinh_thuc, la_chuan_thi';
 const GOI_SELECT_MIN =
   'id, ten_goi_hoc_phi, gia_goc, discount, "number", don_vi, so_mon, thoi_han_thang, hinh_thuc, la_chuan_thi';
+/** Một số bản ghi `hp_goi_hoc_phi_new` không có cột `discount` (chỉ `gia_goc` / `gia_giam` legacy). */
+const GOI_SELECT_NO_DISCOUNT =
+  'id, ten_goi_hoc_phi, gia_goc, "number", don_vi, so_mon, thoi_han_thang, so_buoi, hinh_thuc, la_chuan_thi';
 
 function mapHpGoiHocPhiRow(row: Record<string, unknown>): GoiHocPhi {
   const soRaw = row.so_mon;
@@ -507,7 +510,10 @@ function mapHpGoiHocPhiRow(row: Record<string, unknown>): GoiHocPhi {
       ? null
       : String(hinhRaw).trim() || null;
   const giaGoc = parseMoney(row.gia_goc);
-  const discountRaw = parseMoney(row.discount);
+  const discountRaw =
+    row.discount != null && row.discount !== ""
+      ? parseMoney(row.discount)
+      : parseMoney(row.gia_giam);
   const discount = Math.min(100, Math.max(0, discountRaw));
   const numberRaw = row.number;
   const numberValue =
@@ -565,6 +571,17 @@ async function fetchGoiHocPhiForMon(
     const second = await q(GOI_SELECT_MIN);
     data = second.data;
     error = second.error;
+  }
+  if (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        `[${goiTable}] select retry without discount column:`,
+        error.message,
+      );
+    }
+    const third = await q(GOI_SELECT_NO_DISCOUNT);
+    data = third.data;
+    error = third.error;
   }
   if (error) {
     if (process.env.NODE_ENV === "development") {
@@ -982,13 +999,24 @@ function hocPhiBlockGoiSelectColumns(): string {
     : 'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi, special, note, post_title';
 }
 
+/** Khi bảng không có cột `discount` (400). */
+function hocPhiBlockGoiSelectColumnsNoDiscount(): string {
+  return hpGoiHocPhiTableName() === "hp_goi_hoc_phi"
+    ? 'id, mon_hoc, "number", don_vi, gia_goc, combo_id, so_buoi'
+    : 'id, mon_hoc, "number", don_vi, gia_goc, combo_id, so_buoi, special, note, post_title';
+}
+
 function mapHocPhiGoiRow(row: Record<string, unknown>): HocPhiGoiRow {
   const numRaw = row.number;
   const numberValue =
     numRaw == null || numRaw === "" ? 0 : Number(numRaw);
   const donVi = String(row.don_vi ?? "").trim();
   const giaGoc = parseMoney(row.gia_goc);
-  const discount = Math.min(100, Math.max(0, parseMoney(row.discount)));
+  const discountRaw =
+    row.discount != null && row.discount !== ""
+      ? parseMoney(row.discount)
+      : parseMoney(row.gia_giam);
+  const discount = Math.min(100, Math.max(0, discountRaw));
   // `combo_id` trên bảng mới có thể là int[] (mảng combo) hoặc int đơn; bảng legacy là int.
   const comboRaw = row.combo_id;
   let combo_ids: number[] = [];
@@ -1102,12 +1130,23 @@ export async function getHocPhiBlockData(
   }
 
   const goiTable = hpGoiHocPhiTableName();
-  const goiCols = hocPhiBlockGoiSelectColumns();
-  const { data: mainRows, error: e1 } = await supabase
+  let goiCols = hocPhiBlockGoiSelectColumns();
+  let { data: mainRows, error: e1 } = await supabase
     .from(goiTable)
     .select(goiCols)
     .eq("mon_hoc", monId)
     .order("number", { ascending: true });
+
+  if (e1) {
+    goiCols = hocPhiBlockGoiSelectColumnsNoDiscount();
+    const retry = await supabase
+      .from(goiTable)
+      .select(goiCols)
+      .eq("mon_hoc", monId)
+      .order("number", { ascending: true });
+    mainRows = retry.data;
+    e1 = retry.error;
+  }
 
   if (e1) {
     if (process.env.NODE_ENV === "development") {

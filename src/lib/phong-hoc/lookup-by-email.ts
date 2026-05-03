@@ -473,26 +473,45 @@ export async function lookupClassroomByEmail(
   let teacherWithoutClass = false;
 
   /* ── Học viên: ql_thong_tin_hoc_vien → ql_quan_ly_hoc_vien (hoc_vien_id) ── */
-  const stuRes = await supabase
+  /** Ưu tiên `.eq(email)` (dùng index btree trên email) — `.ilike` full scan dễ timeout. */
+  const hvSelect =
+    "id,full_name,email,email_prefix,nam_thi,ngay_bat_dau,ngay_ket_thuc,facebook,sdt,avatar,sex";
+
+  let stuRes = await supabase
     .from("ql_thong_tin_hoc_vien")
-    .select(
-      "id,full_name,email,email_prefix,nam_thi,ngay_bat_dau,ngay_ket_thuc,facebook,sdt,avatar,sex"
-    )
-    .ilike("email", clean);
-  const stuErr = stuRes.error;
+    .select(hvSelect)
+    .eq("email", clean);
+
+  let stuErr = stuRes.error;
   let students = stuRes.data;
+
+  if (!stuErr && !students?.length) {
+    stuRes = await supabase.from("ql_thong_tin_hoc_vien").select(hvSelect).ilike("email", clean).limit(50);
+    stuErr = stuRes.error;
+    students = stuRes.data;
+  }
 
   if (!stuErr && !students?.length && clean.includes("@")) {
     const prefix = clean.split("@")[0]?.trim();
     if (prefix) {
       const retry = await supabase
         .from("ql_thong_tin_hoc_vien")
-        .select(
-          "id,full_name,email,email_prefix,nam_thi,ngay_bat_dau,ngay_ket_thuc,facebook,sdt,avatar,sex"
-        )
-        .ilike("email_prefix", prefix);
-      if (!retry.error && retry.data?.length) {
-        const exact = (retry.data as HvRow[]).filter(
+        .select(hvSelect)
+        .eq("email_prefix", prefix)
+        .limit(50);
+      let prefixRows = retry.data;
+      let prefixErr = retry.error;
+      if (!prefixErr && !prefixRows?.length) {
+        const ilikeRetry = await supabase
+          .from("ql_thong_tin_hoc_vien")
+          .select(hvSelect)
+          .ilike("email_prefix", prefix)
+          .limit(50);
+        prefixRows = ilikeRetry.data;
+        prefixErr = ilikeRetry.error;
+      }
+      if (!prefixErr && prefixRows?.length) {
+        const exact = (prefixRows as HvRow[]).filter(
           (row) => String(row.email ?? "").trim().toLowerCase() === clean
         );
         if (exact.length) {

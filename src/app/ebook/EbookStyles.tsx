@@ -83,6 +83,14 @@ const css = `
   .sa-ebook .eb-cat{padding:3px 8px;border-radius:999px;font:700 10.5px/1 Quicksand;letter-spacing:.2px}
 
   .sa-ebook .eb-empty{text-align:center;padding:80px 20px;color:rgba(45,32,32,.45);font-weight:600}
+  .sa-ebook .eb-grid-anchor{height:0;overflow:hidden;pointer-events:none}
+  .sa-ebook .eb-pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px 20px;margin-top:32px;padding-top:24px;border-top:1.5px solid rgba(45,32,32,.08)}
+  .sa-ebook .eb-pager-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:12px;border:1.5px solid rgba(45,32,32,.12);background:#fff;font:800 14px/1 Quicksand;color:#2d2020;cursor:pointer;transition:background .15s,border-color .15s,opacity .15s}
+  .sa-ebook .eb-pager-btn:hover:not(:disabled){border-color:#f8a668;background:rgba(248,166,104,.08)}
+  .sa-ebook .eb-pager-btn:disabled{opacity:.4;cursor:not-allowed}
+  .sa-ebook .eb-pager-meta{font:600 14px/1.4 Quicksand;color:rgba(45,32,32,.72);text-align:center}
+  .sa-ebook .eb-pager-meta strong{font-weight:800;color:#2d2020}
+  .sa-ebook .eb-pager-count{font-weight:600;color:rgba(45,32,32,.45)}
 
   /* Preview slide-over */
   /* Trên .nav-bottom-fixed (102), .nav-cta-fixed (120), .nav-mobile-overlay (200), .gallery-lightbox (300) */

@@ -86,6 +86,9 @@ function coerceQlhvSdt(v: unknown): string | null {
 /**
  * Gói dữ liệu cho trang admin «Quản lý học viên».
  *
+ * **Supabase / hiệu năng:** nên có index trên `ql_thong_tin_hoc_vien(created_at DESC)` (và
+ * tối thiểu `btree` trên `email` nếu tra theo email) — tránh timeout khi bảng lớn.
+ *
  * Map UI chi tiết học viên (`StudentDetailBody`):
  * - `students` → `ql_thong_tin_hoc_vien`
  * - `truongNganhByHvId` → `ql_hv_truong_nganh` (+ `dh_truong_dai_hoc`, `dh_nganh_dao_tao`)

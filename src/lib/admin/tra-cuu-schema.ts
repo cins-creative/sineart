@@ -40,9 +40,8 @@ export type AdminTraCuuFullRow = AdminTraCuuListRow & {
 
 export type TruongLookupRow = { id: number; ten: string };
 
-/** Cột SELECT cho danh sách (không kèm `body_html` dài). */
-export const TRA_CUU_LIST_COLS =
-  "id, created_at, slug, title, thumbnail_url, thumbnail_alt, nam, excerpt, is_featured, published_at, truong_ids, type";
+/** Cột SELECT cho danh sách (không kèm `body_html` dài). `type` quote tránh 400 PostgREST. */
+export const TRA_CUU_LIST_COLS = `id, created_at, slug, title, thumbnail_url, thumbnail_alt, nam, excerpt, is_featured, published_at, truong_ids, "type"`;
 
 /** Cột SELECT chi tiết (có `body_html`). */
 export const TRA_CUU_FULL_COLS = `${TRA_CUU_LIST_COLS}, body_html, updated_at`;

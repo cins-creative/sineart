@@ -2,6 +2,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveHinhThucFromMon } from "@/lib/data/courses-page";
 
+export const HOA_CU_PAGE_SIZE = 15;
+
+/** Base URL admin họa cụ + các tab (App Router). */
+export const HOA_CU_BASE_PATH = "/admin/dashboard/quan-ly-hoa-cu";
+export const HOA_CU_KHO_PATH = `${HOA_CU_BASE_PATH}/danh-muc-kho`;
+export const HOA_CU_NHAP_PATH = `${HOA_CU_BASE_PATH}/don-nhap`;
+export const HOA_CU_BAN_PATH = `${HOA_CU_BASE_PATH}/don-ban`;
+
 const KHO_SELECT =
   "id, ten_hang, loai_san_pham, gia_nhap, gia_ban, ton_kho, thumbnail";
 
@@ -205,7 +213,10 @@ function groupByDon<T extends { don_nhap?: number; don_ban?: number }>(
   return m;
 }
 
-async function fetchSanPham(supabase: SupabaseClient): Promise<{ data: AdminHoaCuSanPham[]; error: string | null }> {
+/** Toàn bộ danh mục kho (dùng cho modal nhập/bán / picker). */
+export async function fetchAllHoaCuSanPham(
+  supabase: SupabaseClient,
+): Promise<{ data: AdminHoaCuSanPham[]; error: string | null }> {
   const viewRes = await supabase.from("hc_danh_sach_san_pham_view").select(KHO_SELECT).order("ten_hang");
   if (!viewRes.error && viewRes.data) {
     return { data: normalizeSanPham(viewRes.data), error: null };
@@ -237,7 +248,7 @@ export async function fetchAdminHoaCuBundle(
   supabase: SupabaseClient,
   opts?: { ensureStaffId?: number },
 ): Promise<{ ok: true; data: AdminHoaCuBundle } | { ok: false; error: string }> {
-  const { data: sp, error: spErr } = await fetchSanPham(supabase);
+  const { data: sp, error: spErr } = await fetchAllHoaCuSanPham(supabase);
   if (spErr) return { ok: false, error: spErr };
 
   const { data: nsRows, error: nsErr } = await supabase.from("hr_nhan_su").select("id, full_name").order("full_name");
@@ -395,5 +406,277 @@ export async function fetchAdminHoaCuBundle(
       staffOptions,
       studentOptions,
     },
+  };
+}
+
+export type KhoSanPhamPage = {
+  rows: AdminHoaCuSanPham[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+/** Một trang danh mục kho + tổng bản ghi (server pagination). */
+export async function fetchKhoSanPhamPage(
+  supabase: SupabaseClient,
+  opts: { page: number; pageSize?: number; q?: string | null },
+): Promise<{ ok: true } & KhoSanPhamPage | { ok: false; error: string }> {
+  const pageSize = opts.pageSize ?? HOA_CU_PAGE_SIZE;
+  const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const rawQ = (opts.q ?? "").trim();
+  const searchPat = rawQ ? `%${rawQ.replace(/%/g, "\\%")}%` : "";
+
+  async function runTable(table: "hc_danh_sach_san_pham_view" | "hc_danh_sach_san_pham") {
+    let qb = supabase.from(table).select(KHO_SELECT, { count: "exact" });
+    if (searchPat) {
+      qb = qb.or(`ten_hang.ilike.${searchPat},loai_san_pham.ilike.${searchPat}`);
+    }
+    return qb.order("ton_kho", { ascending: false }).order("ten_hang", { ascending: true }).range(from, to);
+  }
+
+  let res = await runTable("hc_danh_sach_san_pham_view");
+  if (res.error) {
+    res = await runTable("hc_danh_sach_san_pham");
+  }
+  if (res.error) return { ok: false, error: res.error.message };
+
+  return {
+    ok: true,
+    rows: normalizeSanPham((res.data ?? []) as Record<string, unknown>[]),
+    total: res.count ?? 0,
+    page,
+    pageSize,
+  };
+}
+
+/** Số mặt hàng + số hết tồn (header trang kho). */
+export async function fetchKhoInventoryStats(
+  supabase: SupabaseClient,
+): Promise<{ total: number; hetHang: number }> {
+  const { count: total } = await supabase
+    .from("hc_danh_sach_san_pham")
+    .select("id", { count: "exact", head: true });
+  const { count: het } = await supabase
+    .from("hc_danh_sach_san_pham")
+    .select("id", { count: "exact", head: true })
+    .lte("ton_kho", 0);
+  return { total: total ?? 0, hetHang: het ?? 0 };
+}
+
+export type DonNhapPage = {
+  rows: AdminHoaCuNhapDon[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type DonBanPage = {
+  rows: AdminHoaCuBanDon[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type HoaCuStaffStudentContext = {
+  staffOptions: AdminHoaCuStaffOpt[];
+  studentOptions: AdminHoaCuHvOpt[];
+  staffMap: Map<number, string>;
+  hvMap: Map<number, string>;
+};
+
+/** Nhân sự + học viên cho đơn bán / tên người nhập — tái sử dụng giữa các trang. */
+export async function fetchHoaCuStaffStudentContext(
+  supabase: SupabaseClient,
+  opts?: { ensureStaffId?: number },
+): Promise<{ ok: true; data: HoaCuStaffStudentContext } | { ok: false; error: string }> {
+  const { data: nsRows, error: nsErr } = await supabase.from("hr_nhan_su").select("id, full_name").order("full_name");
+  if (nsErr) return { ok: false, error: nsErr.message };
+  const staffMap = new Map<number, string>();
+  for (const r of nsRows ?? []) {
+    const id = Number((r as { id?: unknown }).id);
+    const name = String((r as { full_name?: unknown }).full_name ?? "").trim();
+    if (Number.isFinite(id) && id > 0 && name) staffMap.set(id, name);
+  }
+
+  const vanHanhMarketingIds = await fetchVanHanhMarketingNhanSuIds(supabase);
+  let staffOptions: AdminHoaCuStaffOpt[] = [...staffMap.entries()]
+    .filter(([id]) => vanHanhMarketingIds.size === 0 || vanHanhMarketingIds.has(id))
+    .map(([id, full_name]) => ({ id, full_name }))
+    .sort((a, b) => a.full_name.localeCompare(b.full_name, "vi"));
+
+  const ensureId = opts?.ensureStaffId;
+  if (ensureId != null && Number.isFinite(ensureId) && ensureId > 0 && !staffOptions.some((s) => s.id === ensureId)) {
+    let full_name = staffMap.get(ensureId) ?? "";
+    if (!full_name.trim()) {
+      const { data: one } = await supabase.from("hr_nhan_su").select("full_name").eq("id", ensureId).maybeSingle();
+      full_name = one?.full_name != null ? String(one.full_name).trim() : "";
+    }
+    if (full_name) {
+      staffOptions = [...staffOptions, { id: ensureId, full_name }].sort((a, b) =>
+        a.full_name.localeCompare(b.full_name, "vi"),
+      );
+    }
+  }
+
+  const { data: hvRows, error: hvErr } = await supabase
+    .from("ql_thong_tin_hoc_vien")
+    .select("id, full_name, avatar")
+    .order("full_name")
+    .limit(2500);
+  if (hvErr) return { ok: false, error: hvErr.message };
+
+  const studentBase = (hvRows ?? [])
+    .map((r) => {
+      const id = Number((r as { id?: unknown }).id);
+      const full_name = String((r as { full_name?: unknown }).full_name ?? "").trim();
+      const avRaw = (r as { avatar?: unknown }).avatar;
+      const avatar = avRaw != null && String(avRaw).trim() !== "" ? String(avRaw).trim() : null;
+      if (!Number.isFinite(id) || id <= 0 || !full_name) return null;
+      return { id, full_name, avatar };
+    })
+    .filter((x): x is { id: number; full_name: string; avatar: string | null } => x != null);
+
+  const tagByHv = await fetchStudentHocTagsByHvIds(
+    supabase,
+    studentBase.map((s) => s.id),
+  );
+  const studentOptions: AdminHoaCuHvOpt[] = studentBase.map((s) => ({
+    ...s,
+    hoc_tag: tagByHv.get(s.id) ?? null,
+  }));
+
+  const hvMap = new Map(studentOptions.map((h) => [h.id, h.full_name]));
+
+  return {
+    ok: true,
+    data: { staffOptions, studentOptions, staffMap, hvMap },
+  };
+}
+
+export async function fetchDonNhapPage(
+  supabase: SupabaseClient,
+  ctx: HoaCuStaffStudentContext,
+  opts: { page: number; pageSize?: number },
+): Promise<{ ok: true } & DonNhapPage | { ok: false; error: string }> {
+  const pageSize = opts.pageSize ?? HOA_CU_PAGE_SIZE;
+  const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { staffMap } = ctx;
+
+  const { data: nhapRecs, error: nhapErr, count } = await supabase
+    .from("hc_nhap_hoa_cu")
+    .select("id, created_at, nha_cung_cap, nguoi_nhap, tong_tien", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (nhapErr) return { ok: false, error: nhapErr.message };
+
+  const nhapIds = (nhapRecs ?? []).map((r) => Number((r as { id?: unknown }).id)).filter((id) => id > 0);
+  let nhapCtByDon = new Map<number, ChiNhapRow[]>();
+  if (nhapIds.length) {
+    const { data: ct, error: ctErr } = await supabase
+      .from("hc_nhap_hoa_cu_chi_tiet")
+      .select("don_nhap, so_luong_nhap, mat_hang, thanh_tien, hc_danh_sach_san_pham(gia_nhap, gia_ban)")
+      .in("don_nhap", nhapIds);
+    if (ctErr) return { ok: false, error: ctErr.message };
+    nhapCtByDon = groupByDon(ct as ChiNhapRow[], "don_nhap");
+  }
+
+  const donNhap: AdminHoaCuNhapDon[] = (nhapRecs ?? []).map((raw) => {
+    const r = raw as {
+      id: number;
+      created_at: string;
+      nha_cung_cap?: string | null;
+      nguoi_nhap?: number | null;
+      tong_tien?: unknown;
+    };
+    const ct = nhapCtByDon.get(r.id) ?? [];
+    const tong = tongTienHoaCuHeader(r.tong_tien, tongChiNhapLines(ct));
+    const nv = r.nguoi_nhap != null ? staffMap.get(r.nguoi_nhap) ?? "—" : "—";
+    return {
+      id: r.id,
+      created_at: r.created_at,
+      nha_cung_cap: r.nha_cung_cap ?? null,
+      nguoi_nhap: r.nguoi_nhap ?? null,
+      nguoi_nhap_name: nv,
+      so_mat_hang: ct.length,
+      tong_tien: tong,
+    };
+  });
+
+  return {
+    ok: true,
+    rows: donNhap,
+    total: count ?? 0,
+    page,
+    pageSize,
+  };
+}
+
+export async function fetchDonBanPage(
+  supabase: SupabaseClient,
+  ctx: HoaCuStaffStudentContext,
+  opts: { page: number; pageSize?: number },
+): Promise<{ ok: true } & DonBanPage | { ok: false; error: string }> {
+  const pageSize = opts.pageSize ?? HOA_CU_PAGE_SIZE;
+  const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { staffMap, hvMap } = ctx;
+
+  const { data: banRecs, error: banErr, count } = await supabase
+    .from("hc_don_ban_hoa_cu")
+    .select("id, created_at, hinh_thuc_thu, nguoi_ban, khach_hang, tong_tien", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (banErr) return { ok: false, error: banErr.message };
+
+  const banIds = (banRecs ?? []).map((r) => Number((r as { id?: unknown }).id)).filter((id) => id > 0);
+  let banCtByDon = new Map<number, ChiBanRow[]>();
+  if (banIds.length) {
+    const { data: ct, error: ctErr } = await supabase
+      .from("hc_ban_hc_chi_tiet")
+      .select("don_ban, so_luong_ban, mat_hang, thanh_tien, hc_danh_sach_san_pham(gia_nhap, gia_ban)")
+      .in("don_ban", banIds);
+    if (ctErr) return { ok: false, error: ctErr.message };
+    banCtByDon = groupByDon(ct as ChiBanRow[], "don_ban");
+  }
+
+  const donBan: AdminHoaCuBanDon[] = (banRecs ?? []).map((raw) => {
+    const r = raw as {
+      id: number;
+      created_at: string;
+      hinh_thuc_thu?: string | null;
+      nguoi_ban?: number | null;
+      khach_hang?: number | null;
+      tong_tien?: unknown;
+    };
+    const ct = banCtByDon.get(r.id) ?? [];
+    const tong = tongTienHoaCuHeader(r.tong_tien, tongChiBanLines(ct));
+    return {
+      id: r.id,
+      created_at: r.created_at,
+      hinh_thuc_thu: r.hinh_thuc_thu ?? null,
+      nguoi_ban: r.nguoi_ban ?? null,
+      khach_hang: r.khach_hang ?? null,
+      nguoi_ban_name: r.nguoi_ban != null ? staffMap.get(r.nguoi_ban) ?? "—" : "—",
+      khach_hang_name: r.khach_hang != null ? hvMap.get(r.khach_hang) ?? "—" : "—",
+      so_mat_hang: ct.length,
+      tong_tien: tong,
+    };
+  });
+
+  return {
+    ok: true,
+    rows: donBan,
+    total: count ?? 0,
+    page,
+    pageSize,
   };
 }

@@ -4,7 +4,21 @@ import { revalidatePath } from "next/cache";
 
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
-import { fetchMarketingMediaStaffNhanSuIds, MKT_MEDIA_TABLE } from "@/lib/data/admin-quan-ly-media";
+import type {
+  HrNhanSuStaffOption,
+  MktMediaProjectRow,
+  StaffAvatarById,
+  StaffNameById,
+} from "@/lib/data/admin-quan-ly-media";
+import {
+  fetchHrNhanSuStaffNameById,
+  fetchMarketingMediaStaffOptions,
+  fetchMarketingMediaStaffNhanSuIds,
+  fetchMediaBanStaffOptions,
+  fetchMktQuanLyMediaRowsFromOffset,
+  MEDIA_INITIAL_FETCH_LIMIT,
+  MKT_MEDIA_TABLE,
+} from "@/lib/data/admin-quan-ly-media";
 import { isAllowedMktMediaStatus, isAllowedMktMediaType } from "@/lib/data/mkt-media-form";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -304,4 +318,46 @@ export async function createMktMediaOrder(input: CreateMktMediaOrderInput): Prom
   revalidatePath(ADMIN_PATH);
   revalidatePath(ORDER_MEDIA_PATH);
   return { ok: true, id };
+}
+
+export type LoadQuanLyMediaSecondaryResult =
+  | {
+      ok: true;
+      moreProjects: MktMediaProjectRow[];
+      staffNameById: StaffNameById;
+      staffAvatarById: StaffAvatarById;
+      mediaTeamStaff: HrNhanSuStaffOption[];
+      mediaBanStaffFilter: HrNhanSuStaffOption[];
+    }
+  | { ok: false; error: string };
+
+/** Tải nền: các dự án từ offset trở đi + map nhân sự đầy đủ + filter ban Media / picker Marketing. */
+export async function loadQuanLyMediaSecondaryData(): Promise<LoadQuanLyMediaSecondaryResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const moreRes = await fetchMktQuanLyMediaRowsFromOffset(supabase, MEDIA_INITIAL_FETCH_LIMIT);
+  if (!moreRes.ok) return { ok: false, error: moreRes.error };
+
+  const [staffRes, mediaTeamRes, mediaBanFilterRes] = await Promise.all([
+    fetchHrNhanSuStaffNameById(supabase),
+    fetchMarketingMediaStaffOptions(supabase),
+    fetchMediaBanStaffOptions(supabase),
+  ]);
+
+  if (!staffRes.ok) return { ok: false, error: staffRes.error };
+  const mediaTeamStaff = mediaTeamRes.ok ? mediaTeamRes.rows : [];
+  const mediaBanStaffFilter = mediaBanFilterRes.ok ? mediaBanFilterRes.rows : [];
+
+  return {
+    ok: true,
+    moreProjects: moreRes.rows,
+    staffNameById: staffRes.map,
+    staffAvatarById: staffRes.avatarById,
+    mediaTeamStaff,
+    mediaBanStaffFilter,
+  };
 }

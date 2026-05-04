@@ -9,7 +9,7 @@ import AdminMinhHoaDropzone, {
   type MinhHoaUploadSlot,
 } from "@/app/admin/_components/AdminMinhHoaDropzone";
 import AdminRichTextEditor from "@/app/admin/_components/AdminRichTextEditor";
-import { updateMktMediaProjectDetail } from "@/app/admin/dashboard/quan-ly-media/actions";
+import { loadQuanLyMediaSecondaryData, updateMktMediaProjectDetail } from "@/app/admin/dashboard/quan-ly-media/actions";
 import { htmlToPlainText, sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
 import type {
   HrNhanSuStaffOption,
@@ -1414,14 +1414,27 @@ const BTN: React.CSSProperties = {
 const SCROLL_HIDE =
   "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0";
 
+function mergeMediaProjectsById(a: Project[], b: Project[]): Project[] {
+  const m = new Map<number, Project>();
+  for (const p of a) m.set(p.id, p);
+  for (const p of b) m.set(p.id, p);
+  return [...m.values()].sort((x, y) => y.id - x.id);
+}
+
 export default function MediaTimeline({
   initialProjects,
-  staffNameById = {},
-  staffAvatarById = {},
-  mediaTeamStaff = [],
-  mediaBanStaffFilter = [],
+  staffNameById: initialStaffNameById = {},
+  staffAvatarById: initialStaffAvatarById = {},
+  mediaTeamStaff: initialMediaTeamStaff = [],
+  mediaBanStaffFilter: initialMediaBanStaffFilter = [],
 }: MediaTimelineProps) {
   const [localProjects, setLocalProjects] = useState<Project[]>(initialProjects);
+  const [nameMap, setNameMap] = useState<StaffNameById>(() => ({ ...initialStaffNameById }));
+  const [avatarMap, setAvatarMap] = useState<StaffAvatarById>(() => ({ ...initialStaffAvatarById }));
+  const [teamStaffState, setTeamStaffState] = useState<HrNhanSuStaffOption[]>(() => [...initialMediaTeamStaff]);
+  const [banFilterState, setBanFilterState] = useState<HrNhanSuStaffOption[]>(() => [...initialMediaBanStaffFilter]);
+  const [hydratingExtra, setHydratingExtra] = useState(true);
+
   const [filterLamId, setFilterLamId] = useState<number | "">("");
   /** Lọc theo `project.status` (nhiều mục: giữ Shift + bấm); rỗng = tất cả. */
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
@@ -1445,8 +1458,43 @@ export default function MediaTimeline({
   const zoomFromWheelRef = useRef(false);
   const wheelViewportAnchorRef = useRef(0);
 
+  const staffNameById = nameMap;
+  const staffAvatarById = avatarMap;
+  const mediaTeamStaff = teamStaffState;
+  const mediaBanStaffFilter = banFilterState;
+
+  const initialProjectsRef = useRef(initialProjects);
+  initialProjectsRef.current = initialProjects;
+
+  /** Đồng bộ batch đầu từ RSC + tải nền phần còn lại (không chặn first paint). */
   useEffect(() => {
     setLocalProjects(initialProjects);
+    setNameMap({ ...initialStaffNameById });
+    setAvatarMap({ ...initialStaffAvatarById });
+    setTeamStaffState([...initialMediaTeamStaff]);
+    setBanFilterState([...initialMediaBanStaffFilter]);
+
+    let cancelled = false;
+    setHydratingExtra(true);
+    void loadQuanLyMediaSecondaryData().then((r) => {
+      if (cancelled) return;
+      if (!r.ok) {
+        setHydratingExtra(false);
+        return;
+      }
+      const base = initialProjectsRef.current;
+      setLocalProjects(mergeMediaProjectsById(base, r.moreProjects));
+      setNameMap(r.staffNameById);
+      setAvatarMap(r.staffAvatarById);
+      setTeamStaffState(r.mediaTeamStaff);
+      setBanFilterState(r.mediaBanStaffFilter);
+      setHydratingExtra(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Staff/filter props luôn khớp batch `initialProjects` từ cùng lần render RSC.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tránh vòng lặp khi mảng rỗng `[]` tạo tham chiếu mới
   }, [initialProjects]);
 
   const poolAfterAssignee = useMemo(() => {
@@ -1709,6 +1757,9 @@ export default function MediaTimeline({
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em", color: TEXT }}>
               Media timeline
             </h2>
+            {hydratingExtra ? (
+              <p style={{ margin: "4px 0 0", fontSize: 11, color: TEXT_MUTED }}>Đang tải thêm dữ liệu…</p>
+            ) : null}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: TEXT_MUTED }}>

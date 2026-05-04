@@ -160,5 +160,10 @@ export function resolveDashboardNavAccess(
 
 export function canAccessDashboardHref(allowedHrefs: Set<string> | null, href: string): boolean {
   if (allowedHrefs == null) return true;
-  return allowedHrefs.has(href);
+  if (allowedHrefs.has(href)) return true;
+  const path = href.split("?")[0] ?? href;
+  for (const h of allowedHrefs) {
+    if (path.length > h.length + 1 && path.startsWith(h + "/")) return true;
+  }
+  return false;
 }

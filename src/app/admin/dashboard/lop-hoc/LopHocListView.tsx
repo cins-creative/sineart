@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Copy, Flame, LayoutGrid, LayoutList, Loader2, Pencil, Plus, School, Search, Upload, X, Zap } from "lucide-react";
@@ -11,7 +12,9 @@ import type { LopHocFormState } from "@/app/admin/dashboard/lop-hoc/actions";
 import { createLopHoc, deleteLopHoc, duplicateLopHoc, toggleLopSpecial, updateLopHoc, updateTeacherPortfolio } from "@/app/admin/dashboard/lop-hoc/actions";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import { LEVEL_HINH_HOA_VALUES, isTenMonHinhHoa } from "@/lib/ql-lop-hoc/level-hinh-hoa";
+import type { LopHocListFilters } from "@/lib/data/admin-lop-hoc-page";
 import { cn } from "@/lib/utils";
+import type { AdminLopRow } from "@/types/admin-lop-hoc";
 
 const DS = {
   teacher: "#BC8AF9",
@@ -26,26 +29,7 @@ const DEVICE_CFG: Record<string, { bg: string; text: string }> = {
   Laptop: { bg: "#f0fdf4", text: "#16a34a" },
 };
 
-export type AdminLopRow = {
-  id: number;
-  class_name: string | null;
-  class_full_name: string | null;
-  mon_hoc: number | null;
-  /** Mảng ID giáo viên (có thể rỗng). */
-  teacher: number[];
-  chi_nhanh_id: number | null;
-  avatar: string | null;
-  lich_hoc: string | null;
-  url_class: string | null;
-  url_google_meet: string | null;
-  device: string | null;
-  /** Lớp cấp tốc — theo cột `special`. */
-  special: boolean;
-  /** Lớp đang hoạt động — theo cột `tinh_trang`. */
-  tinh_trang: boolean;
-  /** Chỉ dùng khi môn Hình họa — `ql_lop_hoc.level_hinh_hoa`. */
-  level_hinh_hoa: string | null;
-};
+export type { AdminLopRow };
 
 type MonOpt = { id: number; ten_mon_hoc: string | null };
 type NsOpt = { id: number; full_name: string; avatar: string | null; portfolio: string[] };
@@ -53,6 +37,11 @@ type ChiOpt = { id: number; ten: string };
 
 type Props = {
   rows: AdminLopRow[];
+  listState: { page: number; pageSize: number; total: number; filters: LopHocListFilters };
+  totalAllLop: number;
+  /** Tổng HV toàn hệ thống (mọi lớp) — dòng phụ đề. */
+  tongDangHoc: number;
+  tongDaNghi: number;
   monList: MonOpt[];
   nhanSuList: NsOpt[];
   /** Chỉ nhân sự thuộc ban Đào tạo — dùng trong picker. */
@@ -64,7 +53,39 @@ type Props = {
 
 type HvStats = { dang_hoc: number; da_nghi: number };
 
-const LOP_LIST_PAGE_SIZE = 20;
+const LOP_HOC_BASE = "/admin/dashboard/lop-hoc";
+
+function lopHocListHref(
+  patch: Partial<LopHocListFilters & { page: number }>,
+  current: { page: number; filters: LopHocListFilters }
+): string {
+  const page = patch.page ?? current.page;
+  const q = patch.q !== undefined ? patch.q : current.filters.q;
+  const mon = patch.mon !== undefined ? patch.mon : current.filters.mon;
+  const special = patch.special !== undefined ? patch.special : current.filters.special;
+  const tinhTrang =
+    patch.tinhTrang !== undefined ? patch.tinhTrang : current.filters.tinhTrang;
+
+  const resetPage =
+    patch.page !== undefined
+      ? false
+      : patch.q !== undefined ||
+        patch.mon !== undefined ||
+        patch.special !== undefined ||
+        patch.tinhTrang !== undefined;
+
+  const nextPage = resetPage ? 1 : page;
+
+  const sp = new URLSearchParams();
+  if (nextPage > 1) sp.set("page", String(nextPage));
+  if (q.trim()) sp.set("q", q.trim());
+  if (mon != null) sp.set("mon", String(mon));
+  if (special) sp.set("special", "1");
+  if (tinhTrang === "active") sp.set("tt", "active");
+  if (tinhTrang === "inactive") sp.set("tt", "inactive");
+  const s = sp.toString();
+  return s ? `${LOP_HOC_BASE}?${s}` : LOP_HOC_BASE;
+}
 
 function getAccent(tenMon: string | null): string {
   if (!tenMon) return DS.teacher;
@@ -1577,6 +1598,10 @@ function CreateLopModal({
 
 export default function LopHocListView({
   rows,
+  listState,
+  totalAllLop,
+  tongDangHoc,
+  tongDaNghi,
   monList,
   nhanSuList,
   pickerNhanSuList,
@@ -1586,14 +1611,16 @@ export default function LopHocListView({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(960);
-  const [lopSearch, setLopSearch] = useState("");
-  const [filterMon, setFilterMon] = useState<number | "">("");
-  const [filterSpecial, setFilterSpecial] = useState(false);
-  const [filterTinhTrang, setFilterTinhTrang] = useState<"" | "active" | "inactive">("");
-  const [lopListPage, setLopListPage] = useState(1);
+  const [qDraft, setQDraft] = useState(listState.filters.q);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "row">("grid");
+  const router = useRouter();
+  const qDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setQDraft(listState.filters.q);
+  }, [listState.filters.q]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -1603,59 +1630,28 @@ export default function LopHocListView({
     return () => ro.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (qDraft === listState.filters.q) return;
+    if (qDebounceRef.current) clearTimeout(qDebounceRef.current);
+    qDebounceRef.current = setTimeout(() => {
+      qDebounceRef.current = null;
+      const href = lopHocListHref(
+        { q: qDraft, page: 1 },
+        { page: listState.page, filters: listState.filters }
+      );
+      router.replace(href);
+    }, 350);
+    return () => {
+      if (qDebounceRef.current) clearTimeout(qDebounceRef.current);
+    };
+  }, [qDraft, listState.filters.q, listState.page, router]);
+
   const isMobile = w < 580;
 
-  const filteredLop = useMemo(() => {
-    const s = lopSearch.toLowerCase().trim();
-    return rows.filter((l) => {
-      const nameHit =
-        !s ||
-        (l.class_full_name ?? "").toLowerCase().includes(s) ||
-        (l.class_name ?? "").toLowerCase().includes(s);
-      const gvHit = l.teacher.some((tid) => {
-        const gv = nhanSuList.find((n) => n.id === tid);
-        return gv ? gv.full_name.toLowerCase().includes(s) : false;
-      });
-      const monOk = filterMon === "" || l.mon_hoc === filterMon;
-      const specialOk = !filterSpecial || l.special === true;
-      const tinhTrangOk =
-        filterTinhTrang === "" ||
-        (filterTinhTrang === "active" && l.tinh_trang) ||
-        (filterTinhTrang === "inactive" && !l.tinh_trang);
-      return (nameHit || gvHit) && monOk && specialOk && tinhTrangOk;
-    });
-  }, [rows, lopSearch, filterMon, filterSpecial, filterTinhTrang, nhanSuList]);
-
-  useEffect(() => {
-    setLopListPage(1);
-  }, [lopSearch, filterMon, filterSpecial, filterTinhTrang]);
-
-  const lopTotalPages = useMemo(
-    () => Math.max(1, Math.ceil(filteredLop.length / LOP_LIST_PAGE_SIZE)),
-    [filteredLop.length],
-  );
-
-  useEffect(() => {
-    setLopListPage((p) => Math.min(Math.max(1, p), lopTotalPages));
-  }, [lopTotalPages]);
-
-  const pagedFilteredLop = useMemo(() => {
-    const start = (lopListPage - 1) * LOP_LIST_PAGE_SIZE;
-    return filteredLop.slice(start, start + LOP_LIST_PAGE_SIZE);
-  }, [filteredLop, lopListPage]);
-
-  const { tongDangHoc, tongDaNghi } = useMemo(() => {
-    let d = 0;
-    let n = 0;
-    for (const r of rows) {
-      const st = statsByLopId[String(r.id)];
-      if (st) {
-        d += st.dang_hoc;
-        n += st.da_nghi;
-      }
-    }
-    return { tongDangHoc: d, tongDaNghi: n };
-  }, [rows, statsByLopId]);
+  const lopTotalPages = Math.max(1, Math.ceil(listState.total / Math.max(1, listState.pageSize)));
+  function hrefFor(patch: Partial<LopHocListFilters & { page: number }>) {
+    return lopHocListHref(patch, { page: listState.page, filters: listState.filters });
+  }
 
   const selected = selectedId != null ? rows.find((r) => r.id === selectedId) ?? null : null;
 
@@ -1669,7 +1665,7 @@ export default function LopHocListView({
           <div>
             <div className="text-[17px] font-bold tracking-tight text-[#323232]">Quản lý lớp học</div>
             <div className="text-xs text-[#AAAAAA]">
-              {rows.length} lớp · {tongDangHoc} học viên đang học
+              {totalAllLop} lớp · {tongDangHoc} học viên đang học
               {tongDaNghi > 0 ? ` · ${tongDaNghi} đã nghỉ` : ""}
             </div>
           </div>
@@ -1721,16 +1717,19 @@ export default function LopHocListView({
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
               <input
-                value={lopSearch}
-                onChange={(e) => setLopSearch(e.target.value)}
+                value={qDraft}
+                onChange={(e) => setQDraft(e.target.value)}
                 placeholder="Tìm tên lớp, giáo viên…"
                 className="h-9 w-full rounded-lg border border-[#EAEAEA] bg-white pl-9 pr-9 text-xs text-[#1a1a2e] outline-none focus:border-[#BC8AF9]"
               />
-              {lopSearch ? (
+              {qDraft ? (
                 <button
                   type="button"
                   aria-label="Xóa tìm"
-                  onClick={() => setLopSearch("")}
+                  onClick={() => {
+                    setQDraft("");
+                    router.replace(hrefFor({ q: "", page: 1 }));
+                  }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-black/35 hover:text-black/60"
                 >
                   <X size={16} />
@@ -1738,105 +1737,118 @@ export default function LopHocListView({
               ) : null}
             </div>
             <div className="flex flex-wrap gap-1">
-              <button
-                type="button"
-                onClick={() => setFilterMon("")}
+              <Link
+                href={hrefFor({ mon: null, page: 1 })}
+                scroll={false}
                 className={cn(
                   "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                  filterMon === "" ? "border-[#BC8AF9] bg-[#BC8AF9]/15 text-[#BC8AF9]" : "border-[#EAEAEA] text-black/50"
+                  listState.filters.mon == null
+                    ? "border-[#BC8AF9] bg-[#BC8AF9]/15 text-[#BC8AF9]"
+                    : "border-[#EAEAEA] text-black/50"
                 )}
               >
                 Tất cả
-              </button>
+              </Link>
               {monList.map((m) => (
-                <button
+                <Link
                   key={m.id}
-                  type="button"
-                  onClick={() => setFilterMon(filterMon === m.id ? "" : m.id)}
+                  href={hrefFor({ mon: listState.filters.mon === m.id ? null : m.id, page: 1 })}
+                  scroll={false}
                   className={cn(
                     "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                    filterMon === m.id ? "border-[#BC8AF9] bg-[#BC8AF9]/15 text-[#BC8AF9]" : "border-[#EAEAEA] text-black/50"
+                    listState.filters.mon === m.id
+                      ? "border-[#BC8AF9] bg-[#BC8AF9]/15 text-[#BC8AF9]"
+                      : "border-[#EAEAEA] text-black/50"
                   )}
                 >
                   {m.ten_mon_hoc ?? `#${m.id}`}
-                </button>
+                </Link>
               ))}
             </div>
             {/* Filter row 2 — cấp tốc + tình trạng */}
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#CCCCCC]">Lọc:</span>
               {/* Cấp tốc toggle */}
-              <button
-                type="button"
-                onClick={() => setFilterSpecial((v) => !v)}
+              <Link
+                href={hrefFor({ special: !listState.filters.special, page: 1 })}
+                scroll={false}
                 className={cn(
                   "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                  filterSpecial
+                  listState.filters.special
                     ? "border-orange-300 bg-gradient-to-r from-orange-400/20 to-red-400/20 text-orange-600"
                     : "border-[#EAEAEA] text-black/50 hover:border-orange-200 hover:text-orange-500",
                 )}
               >
-                <Zap size={10} strokeWidth={2.5} fill={filterSpecial ? "currentColor" : "none"} />
+                <Zap size={10} strokeWidth={2.5} fill={listState.filters.special ? "currentColor" : "none"} />
                 Cấp tốc
-              </button>
+              </Link>
               {/* Tình trạng hoạt động */}
-              <button
-                type="button"
-                onClick={() => setFilterTinhTrang(filterTinhTrang === "active" ? "" : "active")}
+              <Link
+                href={hrefFor({
+                  tinhTrang: listState.filters.tinhTrang === "active" ? "" : "active",
+                  page: 1,
+                })}
+                scroll={false}
                 className={cn(
                   "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                  filterTinhTrang === "active"
+                  listState.filters.tinhTrang === "active"
                     ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                     : "border-[#EAEAEA] text-black/50 hover:border-emerald-200 hover:text-emerald-600",
                 )}
               >
                 ✓ Đang HĐ
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterTinhTrang(filterTinhTrang === "inactive" ? "" : "inactive")}
+              </Link>
+              <Link
+                href={hrefFor({
+                  tinhTrang: listState.filters.tinhTrang === "inactive" ? "" : "inactive",
+                  page: 1,
+                })}
+                scroll={false}
                 className={cn(
                   "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                  filterTinhTrang === "inactive"
+                  listState.filters.tinhTrang === "inactive"
                     ? "border-gray-400 bg-gray-100 text-gray-600"
                     : "border-[#EAEAEA] text-black/50 hover:border-gray-300 hover:text-gray-500",
                 )}
               >
                 Ngừng HĐ
-              </button>
+              </Link>
               {/* Reset tất cả filter */}
-              {(filterSpecial || filterTinhTrang !== "" || filterMon !== "" || lopSearch) ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterSpecial(false);
-                    setFilterTinhTrang("");
-                    setFilterMon("");
-                    setLopSearch("");
-                  }}
+              {(listState.filters.special ||
+                listState.filters.tinhTrang !== "" ||
+                listState.filters.mon != null ||
+                listState.filters.q) ? (
+                <Link
+                  href={LOP_HOC_BASE}
+                  scroll={false}
                   className="ml-1 flex items-center gap-1 rounded-full border border-[#EAEAEA] px-2 py-1 text-[11px] text-black/40 transition-colors hover:border-red-200 hover:text-red-500"
                 >
                   <X size={10} /> Xóa tất cả
-                </button>
+                </Link>
               ) : null}
               {/* Đếm kết quả */}
               <span className="ml-auto text-[11px] tabular-nums text-[#AAAAAA]">
-                {filteredLop.length} / {rows.length} lớp
+                {listState.total} / {totalAllLop} lớp
               </span>
             </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
-            {filteredLop.length === 0 ? (
+            {listState.total === 0 ? (
               <div className="flex flex-col items-center gap-2 pt-12 text-center">
                 <span className="text-4xl">🏫</span>
                 <p className="m-0 text-sm text-[#888]">
-                  {lopSearch || filterMon !== "" || filterSpecial || filterTinhTrang !== "" ? "Không tìm thấy lớp phù hợp" : "Chưa có lớp học nào. Nhấn «Lớp học mới»."}
+                  {listState.filters.q ||
+                  listState.filters.mon != null ||
+                  listState.filters.special ||
+                  listState.filters.tinhTrang !== ""
+                    ? "Không tìm thấy lớp phù hợp"
+                    : "Chưa có lớp học nào. Nhấn «Lớp học mới»."}
                 </p>
               </div>
             ) : viewMode === "grid" ? (
               <div className={cn("grid gap-3.5 pb-2 pt-1", isMobile ? "grid-cols-1" : "grid-cols-[repeat(auto-fill,minmax(220px,1fr))]")}>
-                {pagedFilteredLop.map((item) => {
+                {rows.map((item) => {
                   const st = statsByLopId[String(item.id)];
                   return (
                     <LopHocCard
@@ -1863,7 +1875,7 @@ export default function LopHocListView({
                   <span className="text-right">HV</span>
                   <span />
                 </div>
-                {pagedFilteredLop.map((item) => {
+                {rows.map((item) => {
                   const st = statsByLopId[String(item.id)];
                   return (
                     <LopHocListRow
@@ -1879,34 +1891,44 @@ export default function LopHocListView({
                 })}
               </div>
             )}
-            {filteredLop.length > LOP_LIST_PAGE_SIZE ? (
+            {listState.total > listState.pageSize ? (
               <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[#EAEAEA] bg-slate-50/90 px-4 py-2 text-[11px] text-slate-600">
                 <span className="tabular-nums">
-                  {(lopListPage - 1) * LOP_LIST_PAGE_SIZE + 1}–
-                  {Math.min(lopListPage * LOP_LIST_PAGE_SIZE, filteredLop.length)} / {filteredLop.length}
+                  {(listState.page - 1) * listState.pageSize + 1}–
+                  {Math.min(listState.page * listState.pageSize, listState.total)} / {listState.total}
                 </span>
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={lopListPage <= 1}
-                    onClick={() => setLopListPage((p) => Math.max(1, p - 1))}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="Trang trước"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
+                  {listState.page <= 1 ? (
+                    <span className="flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-slate-600 opacity-40">
+                      <ChevronLeft size={14} />
+                    </span>
+                  ) : (
+                    <Link
+                      href={hrefFor({ page: listState.page - 1 })}
+                      scroll={false}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-slate-600"
+                      aria-label="Trang trước"
+                    >
+                      <ChevronLeft size={14} />
+                    </Link>
+                  )}
                   <span className="min-w-[4.75rem] text-center text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                    Trang <span className="text-slate-800">{lopListPage}</span> / {lopTotalPages}
+                    Trang <span className="text-slate-800">{listState.page}</span> / {lopTotalPages}
                   </span>
-                  <button
-                    type="button"
-                    disabled={lopListPage >= lopTotalPages}
-                    onClick={() => setLopListPage((p) => Math.min(lopTotalPages, p + 1))}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="Trang sau"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
+                  {listState.page >= lopTotalPages ? (
+                    <span className="flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-slate-600 opacity-40">
+                      <ChevronRight size={14} />
+                    </span>
+                  ) : (
+                    <Link
+                      href={hrefFor({ page: listState.page + 1 })}
+                      scroll={false}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-slate-600"
+                      aria-label="Trang sau"
+                    >
+                      <ChevronRight size={14} />
+                    </Link>
+                  )}
                 </div>
               </div>
             ) : null}

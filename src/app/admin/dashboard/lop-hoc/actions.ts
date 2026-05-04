@@ -16,7 +16,7 @@ export type LopHocFormState =
 const ADMIN_LOP = "/admin/dashboard/lop-hoc";
 
 function revalidateLopHocPublic(): void {
-  revalidatePath(ADMIN_LOP);
+  revalidatePath(ADMIN_LOP, "layout");
   revalidatePath("/khoa-hoc", "page");
   revalidatePath("/khoa-hoc", "layout");
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
+import { fetchAllHoaCuSanPham, type AdminHoaCuSanPham } from "@/lib/data/admin-hoa-cu";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const ADMIN_PATH = "/admin/dashboard/quan-ly-hoa-cu";
@@ -88,8 +89,82 @@ export async function createHoaCuSanPham(input: {
 
   if (error) return { ok: false, error: error.message || "Không thêm được mặt hàng." };
 
-  revalidatePath(ADMIN_PATH);
+  revalidatePath(ADMIN_PATH, "layout");
   return { ok: true, message: "Đã thêm mặt hàng." };
+}
+
+/** Toàn bộ danh mục cho modal nhập/bán khi trang kho không tải trước full list. */
+export async function loadHoaCuSanPhamCatalogAction(): Promise<
+  { ok: true; data: AdminHoaCuSanPham[] } | { ok: false; error: string }
+> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+  const { data, error } = await fetchAllHoaCuSanPham(supabase);
+  if (error) return { ok: false, error };
+  return { ok: true, data };
+}
+
+export async function updateHoaCuSanPham(input: {
+  id: number;
+  ten_hang: string;
+  loai_san_pham: string | null;
+  gia_nhap: number;
+  gia_ban: number;
+  thumbnail: string | null;
+}): Promise<HoaCuActionResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  if (!Number.isFinite(input.id) || input.id <= 0) return { ok: false, error: "Mặt hàng không hợp lệ." };
+
+  const ten_hang = input.ten_hang.trim();
+  if (!ten_hang) return { ok: false, error: "Nhập tên hàng." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const { error } = await supabase
+    .from("hc_danh_sach_san_pham")
+    .update({
+      ten_hang,
+      loai_san_pham: input.loai_san_pham?.trim() || null,
+      gia_nhap: Math.max(0, input.gia_nhap),
+      gia_ban: Math.max(0, input.gia_ban),
+      thumbnail: input.thumbnail?.trim() || null,
+    })
+    .eq("id", input.id);
+
+  if (error) return { ok: false, error: error.message || "Không cập nhật được mặt hàng." };
+
+  revalidatePath(ADMIN_PATH, "layout");
+  return { ok: true, message: "Đã cập nhật mặt hàng." };
+}
+
+export async function deleteHoaCuSanPham(id: number): Promise<HoaCuActionResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  if (!Number.isFinite(id) || id <= 0) return { ok: false, error: "Mặt hàng không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const { data: nhapRefs } = await supabase.from("hc_nhap_hoa_cu_chi_tiet").select("id").eq("mat_hang", id).limit(1);
+  if (nhapRefs?.length) {
+    return { ok: false, error: "Không xoá được: mặt hàng đã có trong đơn nhập." };
+  }
+  const { data: banRefs } = await supabase.from("hc_ban_hc_chi_tiet").select("id").eq("mat_hang", id).limit(1);
+  if (banRefs?.length) {
+    return { ok: false, error: "Không xoá được: mặt hàng đã có trong đơn bán." };
+  }
+
+  const { error } = await supabase.from("hc_danh_sach_san_pham").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message || "Không xoá được mặt hàng." };
+
+  revalidatePath(ADMIN_PATH, "layout");
+  return { ok: true, message: "Đã xoá mặt hàng." };
 }
 
 export async function createHoaCuDonNhap(input: {
@@ -159,7 +234,7 @@ export async function createHoaCuDonNhap(input: {
     return { ok: false, error: refreshed.error || "Không cập nhật tổng phiếu nhập." };
   }
 
-  revalidatePath(ADMIN_PATH);
+  revalidatePath(ADMIN_PATH, "layout");
   return { ok: true, message: "Đã lưu đơn nhập." };
 }
 
@@ -246,6 +321,6 @@ export async function createHoaCuDonBan(input: {
     return { ok: false, error: refreshed.error || "Không cập nhật tổng đơn bán." };
   }
 
-  revalidatePath(ADMIN_PATH);
+  revalidatePath(ADMIN_PATH, "layout");
   return { ok: true, message: "Đã lưu đơn bán." };
 }

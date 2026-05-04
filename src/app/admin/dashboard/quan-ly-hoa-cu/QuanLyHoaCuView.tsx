@@ -1,31 +1,44 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
   Loader2,
   Package,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
   ShoppingCart,
+  Trash2,
   Truck,
   User,
   X,
 } from "lucide-react";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
-import { createHoaCuDonBan, createHoaCuDonNhap, createHoaCuSanPham } from "@/app/admin/dashboard/quan-ly-hoa-cu/actions";
+import {
+  createHoaCuDonBan,
+  createHoaCuDonNhap,
+  createHoaCuSanPham,
+  deleteHoaCuSanPham,
+  loadHoaCuSanPhamCatalogAction,
+  updateHoaCuSanPham,
+} from "@/app/admin/dashboard/quan-ly-hoa-cu/actions";
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
-import type {
-  AdminHoaCuBanDon,
-  AdminHoaCuBundle,
-  AdminHoaCuHvOpt,
-  AdminHoaCuNhapDon,
-  AdminHoaCuSanPham,
+import {
+  HOA_CU_BAN_PATH,
+  HOA_CU_KHO_PATH,
+  HOA_CU_NHAP_PATH,
+  type AdminHoaCuBanDon,
+  type AdminHoaCuHvOpt,
+  type AdminHoaCuNhapDon,
+  type AdminHoaCuSanPham,
+  type AdminHoaCuStaffOpt,
 } from "@/lib/data/admin-hoa-cu";
 import { cn } from "@/lib/utils";
 
@@ -62,31 +75,88 @@ function fmtDt(iso: string): string {
   }
 }
 
-type Tab = "kho" | "nhap" | "ban";
+type Props = {
+  defaultStaffId: number;
+  loggedInStaffName: string;
+  staffOptions: AdminHoaCuStaffOpt[];
+  studentOptions: AdminHoaCuHvOpt[];
+  /** null = chỉ tải full danh mục khi mở modal nhập/bán (trang kho). */
+  sanPhamCatalog: AdminHoaCuSanPham[] | null;
+  activeSection: "kho" | "nhap" | "ban";
+  khoPage?: {
+    rows: AdminHoaCuSanPham[];
+    page: number;
+    pageSize: number;
+    total: number;
+    searchQ: string;
+    inventoryTotal: number;
+    inventoryHetHang: number;
+  };
+  nhapPage?: { rows: AdminHoaCuNhapDon[]; page: number; pageSize: number; total: number };
+  banPage?: { rows: AdminHoaCuBanDon[]; page: number; pageSize: number; total: number };
+};
 
-type Props = { bundle: AdminHoaCuBundle; defaultStaffId: number; loggedInStaffName: string };
-
-export default function QuanLyHoaCuView({ bundle, defaultStaffId, loggedInStaffName }: Props) {
+export default function QuanLyHoaCuView({
+  defaultStaffId,
+  loggedInStaffName,
+  staffOptions,
+  studentOptions,
+  sanPhamCatalog: initialCatalog,
+  activeSection,
+  khoPage,
+  nhapPage,
+  banPage,
+}: Props) {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("kho");
-  const [q, setQ] = useState("");
+  const [qInput, setQInput] = useState(khoPage?.searchQ ?? "");
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [modal, setModal] = useState<"sp" | "nhap" | "ban" | null>(null);
+  /** `null` = thêm mới; có giá trị = sửa mặt hàng đó. */
+  const [sanPhamDraft, setSanPhamDraft] = useState<AdminHoaCuSanPham | null>(null);
+  const [lazyCatalog, setLazyCatalog] = useState<AdminHoaCuSanPham[] | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
 
   const notify = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
     window.setTimeout(() => setToast(null), 2800);
   };
 
-  const filteredSp = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    if (!t) return bundle.sanPham;
-    return bundle.sanPham.filter(
-      (r) => r.ten_hang.toLowerCase().includes(t) || (r.loai_san_pham ?? "").toLowerCase().includes(t)
-    );
-  }, [bundle.sanPham, q]);
+  useEffect(() => {
+    setQInput(khoPage?.searchQ ?? "");
+  }, [khoPage?.searchQ]);
 
-  const hetHang = useMemo(() => bundle.sanPham.filter((s) => s.ton_kho <= 0).length, [bundle.sanPham]);
+  const sanPhamForPickers = useMemo(() => {
+    if (initialCatalog != null) return initialCatalog;
+    return lazyCatalog ?? [];
+  }, [initialCatalog, lazyCatalog]);
+
+  useEffect(() => {
+    if (modal !== "nhap" && modal !== "ban") return;
+    if (initialCatalog != null) return;
+    if (lazyCatalog != null) return;
+    let cancelled = false;
+    setCatalogLoading(true);
+    void loadHoaCuSanPhamCatalogAction().then((r) => {
+      if (cancelled) return;
+      setCatalogLoading(false);
+      if (r.ok) setLazyCatalog(r.data);
+      else notify(r.error, false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [modal, initialCatalog, lazyCatalog]);
+
+  const inventoryTotal = khoPage?.inventoryTotal ?? 0;
+  const hetHang = khoPage?.inventoryHetHang ?? 0;
+
+  function pushKhoSearch() {
+    const t = qInput.trim();
+    const p = new URLSearchParams();
+    if (t) p.set("q", t);
+    p.set("page", "1");
+    router.push(`${HOA_CU_KHO_PATH}?${p.toString()}`);
+  }
 
   return (
     <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
@@ -104,7 +174,7 @@ export default function QuanLyHoaCuView({ bundle, defaultStaffId, loggedInStaffN
             </p>
             <h1 className="m-0 text-[17px] font-bold tracking-tight">Quản lý họa cụ</h1>
             <p className="m-0 mt-0.5 text-xs text-[#AAAAAA]">
-              {bundle.sanPham.length} mặt hàng · {hetHang} hết tồn
+              {inventoryTotal} mặt hàng · {hetHang} hết tồn
             </p>
           </div>
         </div>
@@ -134,7 +204,10 @@ export default function QuanLyHoaCuView({ bundle, defaultStaffId, loggedInStaffN
           </button>
           <button
             type="button"
-            onClick={() => setModal("sp")}
+            onClick={() => {
+              setSanPhamDraft(null);
+              setModal("sp");
+            }}
             className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-[18px] py-2.5 text-[13px] font-semibold text-white"
           >
             <Plus size={16} strokeWidth={2.5} /> Thêm mặt hàng
@@ -146,68 +219,89 @@ export default function QuanLyHoaCuView({ bundle, defaultStaffId, loggedInStaffN
         <div className="flex min-w-0 flex-wrap gap-1">
           {(
             [
-              { id: "kho" as const, label: "Danh mục kho", icon: Package },
-              { id: "nhap" as const, label: "Đơn nhập", icon: Truck },
-              { id: "ban" as const, label: "Đơn bán", icon: ShoppingCart },
+              { id: "kho" as const, label: "Danh mục kho", icon: Package, href: HOA_CU_KHO_PATH },
+              { id: "nhap" as const, label: "Đơn nhập", icon: Truck, href: HOA_CU_NHAP_PATH },
+              { id: "ban" as const, label: "Đơn bán", icon: ShoppingCart, href: HOA_CU_BAN_PATH },
             ] as const
-          ).map(({ id, label, icon: Icon }) => (
-            <button
+          ).map(({ id, label, icon: Icon, href }) => (
+            <Link
               key={id}
-              type="button"
-              onClick={() => setTab(id)}
+              href={href}
               className={cn(
                 "flex items-center gap-1.5 rounded-t-lg border border-b-0 px-3 py-2.5 text-[13px] font-semibold transition",
-                tab === id
+                activeSection === id
                   ? "border-[#EAEAEA] bg-[#F5F7F7] text-[#1a1a2e]"
                   : "border-transparent text-[#888] hover:bg-black/[0.02]"
               )}
             >
               <Icon size={15} />
               {label}
-            </button>
+            </Link>
           ))}
         </div>
-        {tab === "kho" ? (
-          <div className="relative w-full min-w-0 sm:max-w-md md:flex-1 md:max-w-none lg:max-w-xl">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+        {activeSection === "kho" ? (
+          <div className="relative flex w-full min-w-0 flex-wrap gap-2 sm:max-w-md md:flex-1 md:max-w-none lg:max-w-xl">
+            <Search className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
             <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
+              value={qInput}
+              onChange={(e) => setQInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") pushKhoSearch();
+              }}
               placeholder="Tìm tên hàng, loại…"
-              className="h-10 w-full rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-9 text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white"
+              className="h-10 w-full min-w-0 rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-[88px] text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white"
             />
-            {q ? (
-              <button
-                type="button"
-                aria-label="Xóa tìm kiếm"
-                onClick={() => setQ("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-[#9ca3af] hover:bg-black/[0.05]"
-              >
-                <X size={16} />
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => pushKhoSearch()}
+              className="absolute right-1 top-1/2 z-[1] -translate-y-1/2 rounded-lg bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-3 py-1.5 text-[12px] font-bold text-white"
+            >
+              Tìm
+            </button>
           </div>
         ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 md:p-6">
-        {tab === "kho" ? (
-          <KhoTab rows={filteredSp} />
-        ) : tab === "nhap" ? (
-          <NhapTab rows={bundle.donNhap} />
-        ) : (
-          <BanTab rows={bundle.donBan} />
-        )}
+        {activeSection === "kho" && khoPage ? (
+          <KhoTab
+            rows={khoPage.rows}
+            pagination={{
+              page: khoPage.page,
+              total: khoPage.total,
+              pageSize: khoPage.pageSize,
+              basePath: HOA_CU_KHO_PATH,
+              searchQ: khoPage.searchQ,
+            }}
+            onEdit={(r) => {
+              setSanPhamDraft(r);
+              setModal("sp");
+            }}
+            onInventoryChanged={(msg, ok) => {
+              notify(msg, ok);
+              if (ok) router.refresh();
+            }}
+          />
+        ) : activeSection === "nhap" && nhapPage ? (
+          <NhapTab rows={nhapPage.rows} pagination={{ ...nhapPage, basePath: HOA_CU_NHAP_PATH }} />
+        ) : activeSection === "ban" && banPage ? (
+          <BanTab rows={banPage.rows} pagination={{ ...banPage, basePath: HOA_CU_BAN_PATH }} />
+        ) : null}
       </div>
 
       <AnimatePresence>
         {modal === "sp" ? (
           <ModalThemHang
-            key="sp"
-            onClose={() => setModal(null)}
+            key={sanPhamDraft ? `sp-${sanPhamDraft.id}` : "sp-new"}
+            initial={sanPhamDraft}
+            onClose={() => {
+              setSanPhamDraft(null);
+              setModal(null);
+            }}
             onDone={(msg, ok) => {
               notify(msg, ok);
               if (ok) {
+                setSanPhamDraft(null);
                 setModal(null);
                 router.refresh();
               }
@@ -217,7 +311,8 @@ export default function QuanLyHoaCuView({ bundle, defaultStaffId, loggedInStaffN
         {modal === "nhap" ? (
           <ModalNhapHang
             key="nhap"
-            sanPham={bundle.sanPham}
+            sanPham={sanPhamForPickers}
+            catalogLoading={catalogLoading && sanPhamForPickers.length === 0}
             defaultStaffId={defaultStaffId}
             loggedInStaffName={loggedInStaffName}
             onClose={() => setModal(null)}
@@ -233,8 +328,9 @@ export default function QuanLyHoaCuView({ bundle, defaultStaffId, loggedInStaffN
         {modal === "ban" ? (
           <ModalBanHang
             key="ban"
-            sanPham={bundle.sanPham}
-            students={bundle.studentOptions}
+            sanPham={sanPhamForPickers}
+            catalogLoading={catalogLoading && sanPhamForPickers.length === 0}
+            students={studentOptions}
             defaultStaffId={defaultStaffId}
             loggedInStaffName={loggedInStaffName}
             onClose={() => setModal(null)}
@@ -269,18 +365,109 @@ export default function QuanLyHoaCuView({ bundle, defaultStaffId, loggedInStaffN
   );
 }
 
-function KhoTab({ rows }: { rows: AdminHoaCuSanPham[] }) {
+function buildPageHref(basePath: string, page: number, extra?: Record<string, string>): string {
+  const p = new URLSearchParams();
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (v) p.set(k, v);
+    }
+  }
+  if (page > 1) p.set("page", String(page));
+  const s = p.toString();
+  return s ? `${basePath}?${s}` : basePath;
+}
+
+function HoaCuPager({
+  page,
+  total,
+  pageSize,
+  basePath,
+  extraQuery,
+}: {
+  page: number;
+  total: number;
+  pageSize: number;
+  basePath: string;
+  extraQuery?: Record<string, string>;
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  if (totalPages <= 1) return null;
+  const prev = Math.max(1, page - 1);
+  const next = Math.min(totalPages, page + 1);
+  const extra = extraQuery ?? {};
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#EAEAEA] bg-[#fafafa] px-3 py-2.5 text-[12px] text-[#555]">
+      <span className="tabular-nums">
+        Trang {page}/{totalPages} · {total} bản ghi
+      </span>
+      <div className="flex items-center gap-1">
+        <Link
+          href={buildPageHref(basePath, prev, extra)}
+          aria-disabled={page <= 1}
+          className={cn(
+            "rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1 font-semibold",
+            page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-[#f5f5f5]",
+          )}
+        >
+          ← Trước
+        </Link>
+        <Link
+          href={buildPageHref(basePath, next, extra)}
+          aria-disabled={page >= totalPages}
+          className={cn(
+            "rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1 font-semibold",
+            page >= totalPages ? "pointer-events-none opacity-40" : "hover:bg-[#f5f5f5]",
+          )}
+        >
+          Sau →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function KhoTab({
+  rows,
+  pagination,
+  onEdit,
+  onInventoryChanged,
+}: {
+  rows: AdminHoaCuSanPham[];
+  pagination: {
+    page: number;
+    total: number;
+    pageSize: number;
+    basePath: string;
+    searchQ: string;
+  };
+  onEdit: (r: AdminHoaCuSanPham) => void;
+  onInventoryChanged: (msg: string, ok: boolean) => void;
+}) {
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  async function handleDelete(r: AdminHoaCuSanPham) {
+    if (!window.confirm(`Xoá «${r.ten_hang}»? Thao tác không hoàn tác.`)) return;
+    setDeletingId(r.id);
+    const res = await deleteHoaCuSanPham(r.id);
+    setDeletingId(null);
+    if (res.ok) onInventoryChanged(res.message ?? "Đã xoá.", true);
+    else onInventoryChanged(res.error, false);
+  }
+
+  const pageExtra = pagination.searchQ.trim() ? { q: pagination.searchQ.trim() } : undefined;
+
   return (
     <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
       <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
-        <table className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
+        <table className="w-full min-w-[800px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
           <colgroup>
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "38%" }} />
-            <col style={{ width: "17%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "12%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "30%" }} />
+            <col style={{ width: "14%" }} />
             <col style={{ width: "11%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "15%" }} />
           </colgroup>
           <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
             <tr>
@@ -290,12 +477,13 @@ function KhoTab({ rows }: { rows: AdminHoaCuSanPham[] }) {
               <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Giá nhập</th>
               <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Giá bán</th>
               <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Tồn kho</th>
+              <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="border-b border-[#f8fafc] px-4 py-10 text-center text-sm text-[#888]">
+                <td colSpan={7} className="border-b border-[#f8fafc] px-4 py-10 text-center text-sm text-[#888]">
                   Không có mặt hàng.
                 </td>
               </tr>
@@ -303,6 +491,7 @@ function KhoTab({ rows }: { rows: AdminHoaCuSanPham[] }) {
               rows.map((r) => {
                 const loai = r.loai_san_pham ?? "";
                 const badge = loai && LOAI_BADGE[loai] ? LOAI_BADGE[loai] : { bg: "#f3f4f6", text: "#6b7280" };
+                const busy = deletingId === r.id;
                 return (
                   <tr key={r.id} className="hover:bg-[#fafafa]">
                     <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">
@@ -340,6 +529,29 @@ function KhoTab({ rows }: { rows: AdminHoaCuSanPham[] }) {
                         {r.ton_kho}
                       </span>
                     </td>
+                    <td className="border-b border-[#f8fafc] px-1 py-2 text-right align-middle sm:px-2">
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          title="Sửa"
+                          onClick={() => onEdit(r)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#EAEAEA] text-[#555] transition hover:border-[#BC8AF9]/50 hover:bg-[#BC8AF9]/8 hover:text-[#1a1a2e]"
+                        >
+                          <Pencil size={15} strokeWidth={2} aria-hidden />
+                          <span className="sr-only">Sửa</span>
+                        </button>
+                        <button
+                          type="button"
+                          title="Xoá"
+                          disabled={busy}
+                          onClick={() => void handleDelete(r)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Trash2 size={15} strokeWidth={2} aria-hidden />}
+                          <span className="sr-only">Xoá</span>
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })
@@ -347,11 +559,24 @@ function KhoTab({ rows }: { rows: AdminHoaCuSanPham[] }) {
           </tbody>
         </table>
       </div>
+      <HoaCuPager
+        page={pagination.page}
+        total={pagination.total}
+        pageSize={pagination.pageSize}
+        basePath={pagination.basePath}
+        extraQuery={pageExtra}
+      />
     </div>
   );
 }
 
-function NhapTab({ rows }: { rows: AdminHoaCuNhapDon[] }) {
+function NhapTab({
+  rows,
+  pagination,
+}: {
+  rows: AdminHoaCuNhapDon[];
+  pagination: { page: number; pageSize: number; total: number; basePath: string };
+}) {
   return (
     <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
       <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
@@ -402,11 +627,23 @@ function NhapTab({ rows }: { rows: AdminHoaCuNhapDon[] }) {
           </tbody>
         </table>
       </div>
+      <HoaCuPager
+        page={pagination.page}
+        total={pagination.total}
+        pageSize={pagination.pageSize}
+        basePath={pagination.basePath}
+      />
     </div>
   );
 }
 
-function BanTab({ rows }: { rows: AdminHoaCuBanDon[] }) {
+function BanTab({
+  rows,
+  pagination,
+}: {
+  rows: AdminHoaCuBanDon[];
+  pagination: { page: number; pageSize: number; total: number; basePath: string };
+}) {
   return (
     <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
       <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
@@ -460,6 +697,12 @@ function BanTab({ rows }: { rows: AdminHoaCuBanDon[] }) {
           </tbody>
         </table>
       </div>
+      <HoaCuPager
+        page={pagination.page}
+        total={pagination.total}
+        pageSize={pagination.pageSize}
+        basePath={pagination.basePath}
+      />
     </div>
   );
 }
@@ -953,7 +1196,16 @@ function HoaCuKhachPicker({
   );
 }
 
-function ModalThemHang({ onClose, onDone }: { onClose: () => void; onDone: (msg: string, ok: boolean) => void }) {
+function ModalThemHang({
+  initial,
+  onClose,
+  onDone,
+}: {
+  initial: AdminHoaCuSanPham | null;
+  onClose: () => void;
+  onDone: (msg: string, ok: boolean) => void;
+}) {
+  const isEdit = initial != null;
   const [ten, setTen] = useState("");
   const [loai, setLoai] = useState("");
   const [giaNhap, setGiaNhap] = useState("");
@@ -961,28 +1213,47 @@ function ModalThemHang({ onClose, onDone }: { onClose: () => void; onDone: (msg:
   const [thumb, setThumb] = useState("");
   const [busy, setBusy] = useState(false);
 
+  useLayoutEffect(() => {
+    if (initial) {
+      setTen(initial.ten_hang);
+      setLoai(initial.loai_san_pham ?? "");
+      setGiaNhap(String(initial.gia_nhap ?? 0));
+      setGiaBan(String(initial.gia_ban ?? 0));
+      setThumb(initial.thumbnail?.trim() ?? "");
+    } else {
+      setTen("");
+      setLoai("");
+      setGiaNhap("");
+      setGiaBan("");
+      setThumb("");
+    }
+  }, [initial]);
+
   async function save() {
     if (!ten.trim()) {
       onDone("Nhập tên hàng.", false);
       return;
     }
     setBusy(true);
-    const r = await createHoaCuSanPham({
+    const payload = {
       ten_hang: ten,
       loai_san_pham: loai.trim() || null,
       gia_nhap: Number(giaNhap.replace(/\s/g, "")) || 0,
       gia_ban: Number(giaBan.replace(/\s/g, "")) || 0,
       thumbnail: thumb.trim() || null,
-    });
+    };
+    const r = isEdit
+      ? await updateHoaCuSanPham({ id: initial!.id, ...payload })
+      : await createHoaCuSanPham(payload);
     setBusy(false);
-    if (r.ok) onDone(r.message ?? "Đã thêm.", true);
+    if (r.ok) onDone(r.message ?? (isEdit ? "Đã cập nhật." : "Đã thêm."), true);
     else onDone(r.error, false);
   }
 
   return (
     <ModalShell
       subtitle="Họa cụ"
-      title="Thêm mặt hàng mới"
+      title={isEdit ? "Sửa mặt hàng" : "Thêm mặt hàng mới"}
       onClose={onClose}
       footer={
         <div className="flex justify-end gap-2">
@@ -1074,12 +1345,14 @@ function FieldLoggedInStaffRow({ label, name }: { label: string; name: string })
 
 function ModalNhapHang({
   sanPham,
+  catalogLoading,
   defaultStaffId,
   loggedInStaffName,
   onClose,
   onDone,
 }: {
   sanPham: AdminHoaCuSanPham[];
+  catalogLoading?: boolean;
   defaultStaffId: number;
   loggedInStaffName: string;
   onClose: () => void;
@@ -1135,6 +1408,12 @@ function ModalNhapHang({
       }
     >
       <div className="space-y-4">
+        {catalogLoading ? (
+          <div className="flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#fafafa] px-4 py-8 text-[13px] text-[#666]">
+            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#BC8AF9]" aria-hidden />
+            Đang tải danh mục mặt hàng…
+          </div>
+        ) : null}
         <FieldLoggedInStaffRow label="Người nhập *" name={loggedInStaffName} />
         <label className="block">
           <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Nhà cung cấp</span>
@@ -1185,6 +1464,7 @@ function ModalNhapHang({
 
 function ModalBanHang({
   sanPham,
+  catalogLoading,
   students,
   defaultStaffId,
   loggedInStaffName,
@@ -1192,6 +1472,7 @@ function ModalBanHang({
   onDone,
 }: {
   sanPham: AdminHoaCuSanPham[];
+  catalogLoading?: boolean;
   students: AdminHoaCuHvOpt[];
   defaultStaffId: number;
   loggedInStaffName: string;
@@ -1312,6 +1593,12 @@ function ModalBanHang({
     >
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
         <div className="min-w-0 space-y-4">
+          {catalogLoading ? (
+            <div className="flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#fafafa] px-4 py-8 text-[13px] text-[#666]">
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#BC8AF9]" aria-hidden />
+              Đang tải danh mục mặt hàng…
+            </div>
+          ) : null}
           <FieldLoggedInStaffRow label="Người bán *" name={loggedInStaffName} />
           <label className="block min-w-0">
             <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Khách (học viên) *</span>

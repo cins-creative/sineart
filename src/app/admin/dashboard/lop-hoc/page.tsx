@@ -2,6 +2,8 @@ import LopHocSessionAndData from "@/app/admin/dashboard/lop-hoc/LopHocSessionAnd
 
 export const dynamic = "force-dynamic";
 
-export default function AdminLopHocPage() {
-  return <LopHocSessionAndData />;
+type Props = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
+
+export default function AdminLopHocPage({ searchParams }: Props) {
+  return <LopHocSessionAndData searchParams={searchParams} />;
 }

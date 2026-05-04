@@ -26,6 +26,9 @@ export type StaffAvatarById = Record<string, string | null>;
 const SELECT =
   "id, project_name, project_type, type, status, start_date, end_date, brief, minh_hoa, nguoi_tao, nguoi_lam";
 
+/** Lần đầu vào trang chỉ fetch tối đa nhiêu dòng — phần còn lại tải sau (client + server action). */
+export const MEDIA_INITIAL_FETCH_LIMIT = 60;
+
 export async function fetchMktQuanLyMediaRows(
   supabase: SupabaseClient,
 ): Promise<{ ok: true; rows: MktMediaProjectRow[] } | { ok: false; error: string }> {
@@ -36,6 +39,89 @@ export async function fetchMktQuanLyMediaRows(
 
   if (error) return { ok: false, error: error.message };
   return { ok: true, rows: (data as MktMediaProjectRow[]) ?? [] };
+}
+
+/** Cửa sổ phân trang theo `id` giảm dần — `rangeFrom`/`rangeTo` bao gồm (Supabase range inclusive). */
+export async function fetchMktQuanLyMediaRowsWindow(
+  supabase: SupabaseClient,
+  rangeFrom: number,
+  rangeTo: number,
+): Promise<{ ok: true; rows: MktMediaProjectRow[] } | { ok: false; error: string }> {
+  if (rangeFrom < 0 || rangeTo < rangeFrom) {
+    return { ok: true, rows: [] };
+  }
+  const { data, error } = await supabase
+    .from(MKT_MEDIA_TABLE)
+    .select(SELECT)
+    .order("id", { ascending: false })
+    .range(rangeFrom, rangeTo);
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, rows: (data as MktMediaProjectRow[]) ?? [] };
+}
+
+/** Mọi dòng từ offset trở đi (phục vụ tải nền sau trang đầu). */
+export async function fetchMktQuanLyMediaRowsFromOffset(
+  supabase: SupabaseClient,
+  startOffset: number,
+): Promise<{ ok: true; rows: MktMediaProjectRow[] } | { ok: false; error: string }> {
+  if (startOffset < 0) return { ok: true, rows: [] };
+  const out: MktMediaProjectRow[] = [];
+  const PAGE = 500;
+  let from = startOffset;
+  for (;;) {
+    const { data, error } = await supabase
+      .from(MKT_MEDIA_TABLE)
+      .select(SELECT)
+      .order("id", { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) return { ok: false, error: error.message };
+    const chunk = (data as MktMediaProjectRow[]) ?? [];
+    if (!chunk.length) break;
+    out.push(...chunk);
+    if (chunk.length < PAGE) break;
+    from += PAGE;
+  }
+  return { ok: true, rows: out };
+}
+
+export function collectStaffIdsFromMediaProjects(rows: MktMediaProjectRow[]): number[] {
+  const s = new Set<number>();
+  for (const p of rows) {
+    const nt = p.nguoi_tao;
+    if (nt != null && Number.isFinite(nt) && nt > 0) s.add(nt);
+    for (const id of p.nguoi_lam ?? []) {
+      const n = Number(id);
+      if (Number.isFinite(n) && n > 0) s.add(n);
+    }
+  }
+  return [...s];
+}
+
+/** Chỉ đọc nhân sự cần hiển thị cho batch dự án — nhẹ hơn load toàn bộ `hr_nhan_su`. */
+export async function fetchHrNhanSuByIds(
+  supabase: SupabaseClient,
+  ids: number[],
+): Promise<{ ok: true; map: StaffNameById; avatarById: StaffAvatarById } | { ok: false; error: string }> {
+  const unique = [...new Set(ids)].filter((id) => Number.isFinite(id) && id > 0);
+  if (!unique.length) return { ok: true, map: {}, avatarById: {} };
+
+  const map: StaffNameById = {};
+  const avatarById: StaffAvatarById = {};
+  const CHUNK = 120;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK);
+    const { data, error } = await supabase.from("hr_nhan_su").select("id, full_name, avatar").in("id", chunk);
+    if (error) return { ok: false, error: error.message };
+    for (const row of (data as { id: number; full_name: string | null; avatar?: string | null }[]) ?? []) {
+      const name = row.full_name?.trim();
+      map[String(row.id)] = name && name.length > 0 ? name : `Nhân sự #${row.id}`;
+      const av = row.avatar;
+      avatarById[String(row.id)] =
+        typeof av === "string" && av.trim().length > 0 ? av.trim() : null;
+    }
+  }
+  return { ok: true, map, avatarById };
 }
 
 /** Danh bạ nhân sự tối thiểu — join `nguoi_tao` / `nguoi_lam` với `hr_nhan_su`. */

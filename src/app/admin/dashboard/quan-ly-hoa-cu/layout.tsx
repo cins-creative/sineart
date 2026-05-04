@@ -3,14 +3,10 @@ import { Suspense } from "react";
 import AdminSessionGate from "@/app/admin/dashboard/_components/AdminSessionGate";
 import { AdminDashboardTableSkeleton } from "@/components/skeletons";
 
-import QuanLyHoaCuPageData from "./QuanLyHoaCuPageData";
-
-export default async function QuanLyHoaCuSessionAndData() {
+export default function QuanLyHoaCuLayout({ children }: { children: React.ReactNode }) {
   return (
     <AdminSessionGate>
-      <Suspense fallback={<AdminDashboardTableSkeleton />}>
-        <QuanLyHoaCuPageData />
-      </Suspense>
+      <Suspense fallback={<AdminDashboardTableSkeleton />}>{children}</Suspense>
     </AdminSessionGate>
   );
 }

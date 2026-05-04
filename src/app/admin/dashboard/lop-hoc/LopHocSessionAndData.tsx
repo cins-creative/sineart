@@ -5,11 +5,13 @@ import { AdminDashboardTableSkeleton } from "@/components/skeletons";
 
 import LopHocPageData from "./LopHocPageData";
 
-export default async function LopHocSessionAndData() {
+type Props = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
+
+export default async function LopHocSessionAndData({ searchParams }: Props) {
   return (
     <AdminSessionGate>
       <Suspense fallback={<AdminDashboardTableSkeleton />}>
-        <LopHocPageData />
+        <LopHocPageData searchParams={searchParams} />
       </Suspense>
     </AdminSessionGate>
   );

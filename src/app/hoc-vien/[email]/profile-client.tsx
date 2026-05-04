@@ -6,13 +6,15 @@ import HocVienAvatarEditor, {
 import LuuBaiHocVienFab from "@/app/_components/LuuBaiHocVienFab";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarDays, Clock, GraduationCap, Palette, User } from "lucide-react";
+import { BookOpen, CalendarDays, Clock, GraduationCap, Palette, User } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   hocVienProfileHref,
+  type HvpProfileSection,
   normalizeEmailProfileSegment,
   normalizeStudentEmail,
 } from "@/lib/hoc-vien/profile-url";
+import { cn } from "@/lib/utils";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import {
   CLASSROOM_SESSION_CHANGED_EVENT,
@@ -24,6 +26,7 @@ import {
   type ClassroomStudentSessionData,
 } from "@/lib/phong-hoc/classroom-session";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { buildHeThongBaiTapHref } from "@/lib/he-thong-bai-tap/slug";
 import {
   classroomGalleryEmoji,
   fetchClassroomGalleryForStudentHv,
@@ -31,11 +34,64 @@ import {
   type EnrolledMonOption,
   type StudentProfileGalleryRow,
 } from "@/lib/phong-hoc/classroom-gallery";
+import {
+  curriculumProgressIndex,
+  fetchLopCurriculumExercises,
+  formatLessonLabel,
+  type LopCurriculumExercise,
+} from "@/lib/phong-hoc/lop-curriculum";
 import { fetchAllClassSessionsForStudentHv } from "@/lib/phong-hoc/lookup-by-email";
 import "../../donghocphi/donghocphi.css";
 import "./profile.css";
 
-type TabId = "info" | "classes" | "artworks";
+type HvpAssignmentExerciseRow = {
+  exercise: LopCurriculumExercise;
+  listIndex: number;
+  unlocked: boolean;
+};
+
+type HvpAssignmentsClassBlock = {
+  qlhvId: number;
+  lopHocId: number;
+  classTitle: string;
+  subjectName: string | null;
+  monHocId: number | null;
+  /** Chỉ số bài đang mở (cùng `curriculumProgressIndex`); -1 nếu chưa gán */
+  progressIdx: number;
+  capTocUnlockAll: boolean;
+  rows: HvpAssignmentExerciseRow[];
+};
+
+type HvpAssignmentsMonGroup = {
+  key: string;
+  monHocId: number | null;
+  label: string;
+  blocks: HvpAssignmentsClassBlock[];
+};
+
+function groupAssignmentBlocksByMon(blocks: HvpAssignmentsClassBlock[]): HvpAssignmentsMonGroup[] {
+  const byKey = new Map<string, HvpAssignmentsClassBlock[]>();
+  for (const b of blocks) {
+    const monId = b.monHocId;
+    const key =
+      monId != null && Number.isFinite(monId) && monId > 0
+        ? `mon:${monId}`
+        : `subj:${(b.subjectName ?? "môn-khác").trim().toLowerCase() || "none"}:${b.lopHocId}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push(b);
+  }
+  return [...byKey.entries()]
+    .map(([key, bls]) => {
+      const first = bls[0];
+      return {
+        key,
+        monHocId: first?.monHocId ?? null,
+        label: first?.subjectName?.trim() || "Môn học",
+        blocks: bls,
+      };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label, "vi"));
+}
 
 const SEX_OPTIONS = ["Nam", "Nữ", "Khác"] as const;
 const LOAI_KHOA_HOC_OPTIONS = ["Luyện thi", "Digital", "Kids", "Bổ trợ"] as const;
@@ -205,8 +261,13 @@ function daysRemainingDhpBadge(days: number | null): { className: string; label:
   return { className: "dhp-oc-badge dhp-oc-badge--open", label: `Còn ${days} ngày` };
 }
 
-export default function HocVienProfileClient({ profileEmail }: { profileEmail: string }) {
-  const [tab, setTab] = useState<TabId>("info");
+export default function HocVienProfileClient({
+  profileEmail,
+  section,
+}: {
+  profileEmail: string;
+  section: HvpProfileSection;
+}) {
   const [session, setSession] = useState<ClassroomSessionRecord | null>(null);
   const [ready, setReady] = useState(false);
   const [form, setForm] = useState<HvProfileForm>(emptyForm);
@@ -228,6 +289,10 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
   const [paidInvoices, setPaidInvoices] = useState<PaidInvoiceRow[] | null>(null);
   const [paidInvoicesErr, setPaidInvoicesErr] = useState(false);
   const [invoiceDetailModal, setInvoiceDetailModal] = useState<InvoiceDetailModal | null>(null);
+  /** `null` = đang tải tab Hệ thống bài tập */
+  const [assignmentsBlocks, setAssignmentsBlocks] = useState<HvpAssignmentsClassBlock[] | null>(null);
+  const [assignmentsMonKey, setAssignmentsMonKey] = useState<string | null>(null);
+  const [assignmentsOpenExId, setAssignmentsOpenExId] = useState<number | null>(null);
 
   useEffect(() => {
     const read = () => {
@@ -265,10 +330,12 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
   }, [sessionRev]);
 
   useEffect(() => {
-    if (!selfStudent) {
-      setHvMeta(undefined);
-      setPaidInvoices(null);
-      setPaidInvoicesErr(false);
+    if (!selfStudent || section !== "thong-tin") {
+      if (!selfStudent) {
+        setHvMeta(undefined);
+        setPaidInvoices(null);
+        setPaidInvoicesErr(false);
+      }
       return;
     }
     let cancelled = false;
@@ -345,10 +412,10 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
     return () => {
       cancelled = true;
     };
-  }, [selfStudent?.id, selfStudent?.email]);
+  }, [section, selfStudent?.id, selfStudent?.email]);
 
   useEffect(() => {
-    if (tab !== "classes" || !selfStudent) return;
+    if (section !== "lop-hoc" || !selfStudent) return;
     let cancelled = false;
     const hvSnapshot = selfStudent;
     setAllClassRows(null);
@@ -357,7 +424,9 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
       if (!cancelled) setAllClassRows([hvSnapshot]);
       return;
     }
-    void fetchAllClassSessionsForStudentHv(sb, hvSnapshot.id)
+    void fetchAllClassSessionsForStudentHv(sb, hvSnapshot.id, {
+      preferQlhvId: hvSnapshot.qlhv_id,
+    })
       .then((rows) => {
         if (cancelled) return;
         setAllClassRows(rows.length > 0 ? rows : [hvSnapshot]);
@@ -368,10 +437,10 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
     return () => {
       cancelled = true;
     };
-  }, [tab, selfStudent?.id]);
+  }, [section, selfStudent?.id]);
 
   useEffect(() => {
-    if (tab !== "artworks" || !selfStudent) return;
+    if (section !== "bai-ve" || !selfStudent) return;
     let cancelled = false;
     const hvId = selfStudent.id;
     setArtworks(null);
@@ -397,11 +466,70 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
     return () => {
       cancelled = true;
     };
-  }, [tab, selfStudent?.id]);
+  }, [section, selfStudent?.id]);
 
   useEffect(() => {
-    if (tab !== "artworks") setArtLightboxHvId(null);
-  }, [tab]);
+    if (section !== "he-thong-bai-tap" || !selfStudent) return;
+    let cancelled = false;
+    const hvId = selfStudent.id;
+    setAssignmentsBlocks(null);
+    const sb = createBrowserSupabaseClient();
+    if (!sb) {
+      if (!cancelled) setAssignmentsBlocks([]);
+      return;
+    }
+    void (async () => {
+      const { data: mkt } = await sb
+        .from("mkt_home_content")
+        .select("htbt_cap_toc")
+        .eq("id", 1)
+        .maybeSingle();
+      if (cancelled) return;
+      const capToc = (mkt as { htbt_cap_toc?: unknown } | null)?.htbt_cap_toc === true;
+      const classRows = await fetchAllClassSessionsForStudentHv(sb, hvId, {
+        preferQlhvId: selfStudent.qlhv_id,
+      });
+      if (cancelled) return;
+      const blocks: HvpAssignmentsClassBlock[] = [];
+      for (const row of classRows) {
+        try {
+          const { exercises, subjectName, monHocId } = await fetchLopCurriculumExercises(
+            sb,
+            row.lop_hoc_id
+          );
+          const progressIdx = curriculumProgressIndex(exercises, row.tien_do_hoc);
+          const rows: HvpAssignmentExerciseRow[] = exercises.map((ex, i) => {
+            const unlocked = capToc || (progressIdx >= 0 && i <= progressIdx);
+            return {
+              exercise: ex,
+              listIndex: i,
+              unlocked,
+            };
+          });
+          blocks.push({
+            qlhvId: row.qlhv_id,
+            lopHocId: row.lop_hoc_id,
+            classTitle: row.class_full_name?.trim() || row.class_name || "—",
+            subjectName,
+            monHocId: monHocId != null && Number.isFinite(monHocId) ? monHocId : null,
+            progressIdx,
+            capTocUnlockAll: capToc,
+            rows,
+          });
+        } catch {
+          /* bỏ qua lớp lỗi tải chương trình */
+        }
+      }
+      if (!cancelled) setAssignmentsBlocks(blocks);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [section, selfStudent?.id]);
+
+  useEffect(() => {
+    if (section !== "bai-ve") setArtLightboxHvId(null);
+  }, [section]);
 
   /** Thanh flash (tab Lớp / Bài vẽ) và dòng trạng thái form tab Thông tin — tự tắt sau 5s. */
   useEffect(() => {
@@ -424,6 +552,30 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
     if (artMonFilter === "all") return artworks;
     return artworks.filter((a) => a.monHocId != null && a.monHocId === artMonFilter);
   }, [artworks, artMonFilter]);
+
+  const assignmentsMonGroups = useMemo(
+    () => (assignmentsBlocks?.length ? groupAssignmentBlocksByMon(assignmentsBlocks) : []),
+    [assignmentsBlocks],
+  );
+
+  const activeAssignmentsMonGroup =
+    assignmentsMonGroups.find((g) => g.key === assignmentsMonKey) ?? assignmentsMonGroups[0] ?? null;
+
+  useEffect(() => {
+    if (!assignmentsMonGroups.length) {
+      setAssignmentsMonKey(null);
+      return;
+    }
+    setAssignmentsMonKey((prev) =>
+      prev != null && assignmentsMonGroups.some((g) => g.key === prev)
+        ? prev
+        : assignmentsMonGroups[0]!.key
+    );
+  }, [assignmentsMonGroups]);
+
+  useEffect(() => {
+    if (section !== "he-thong-bai-tap") setAssignmentsOpenExId(null);
+  }, [section]);
 
   const artLightboxItem = useMemo(
     () => (artworks != null && artLightboxHvId != null ? artworks.find((x) => x.hvId === artLightboxHvId) ?? null : null),
@@ -693,41 +845,51 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
         <section className="hvp-card" aria-label="Hồ sơ học viên">
           <div className="hvp-card-layout">
             <div className="hvp-tabs" role="tablist" aria-label="Khu vực trang cá nhân">
-              <button
-                type="button"
+              <Link
+                href={hocVienProfileHref(selfStudent.email, "thong-tin") ?? "#"}
                 role="tab"
-                aria-selected={tab === "info"}
-                className={tab === "info" ? "active" : ""}
-                onClick={() => setTab("info")}
+                aria-selected={section === "thong-tin"}
+                className={section === "thong-tin" ? "active" : ""}
+                prefetch
               >
                 <User className="hvp-tab-icon" size={20} strokeWidth={2} aria-hidden />
                 <span className="hvp-tab-label">Thông tin</span>
-              </button>
-              <button
-                type="button"
+              </Link>
+              <Link
+                href={hocVienProfileHref(selfStudent.email, "lop-hoc") ?? "#"}
                 role="tab"
-                aria-selected={tab === "classes"}
-                className={tab === "classes" ? "active" : ""}
-                onClick={() => setTab("classes")}
+                aria-selected={section === "lop-hoc"}
+                className={section === "lop-hoc" ? "active" : ""}
+                prefetch
               >
                 <GraduationCap className="hvp-tab-icon" size={20} strokeWidth={2} aria-hidden />
                 <span className="hvp-tab-label">Lớp học</span>
-              </button>
-              <button
-                type="button"
+              </Link>
+              <Link
+                href={hocVienProfileHref(selfStudent.email, "he-thong-bai-tap") ?? "#"}
                 role="tab"
-                aria-selected={tab === "artworks"}
-                className={tab === "artworks" ? "active" : ""}
-                onClick={() => setTab("artworks")}
+                aria-selected={section === "he-thong-bai-tap"}
+                className={section === "he-thong-bai-tap" ? "active" : ""}
+                prefetch
+              >
+                <BookOpen className="hvp-tab-icon" size={20} strokeWidth={2} aria-hidden />
+                <span className="hvp-tab-label">Hệ thống bài tập</span>
+              </Link>
+              <Link
+                href={hocVienProfileHref(selfStudent.email, "bai-ve") ?? "#"}
+                role="tab"
+                aria-selected={section === "bai-ve"}
+                className={section === "bai-ve" ? "active" : ""}
+                prefetch
               >
                 <Palette className="hvp-tab-icon" size={20} strokeWidth={2} aria-hidden />
                 <span className="hvp-tab-label">Bài vẽ</span>
-              </button>
+              </Link>
             </div>
 
             <div className="hvp-card-main">
               <AnimatePresence>
-                {saveMsg != null && tab !== "info" ? (
+                {saveMsg != null && section !== "thong-tin" ? (
                   <motion.div
                     key={`${saveMsg.kind}\u0000${saveMsg.text}`}
                     role="status"
@@ -744,7 +906,7 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
               </AnimatePresence>
 
               <div className="hvp-body">
-            {tab === "info" ? (
+            {section === "thong-tin" ? (
               <div className="hvp-panel hvp-panel--info">
                 <div className="hvp-info-two-col">
                   <div className="hvp-info-col hvp-info-col--form">
@@ -1018,7 +1180,7 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
               </div>
             ) : null}
 
-            {tab === "classes" ? (
+            {section === "lop-hoc" ? (
               <div className="hvp-panel hvp-panel--classes">
                 <div className="hvp-classes-enroll-bar">
                   <Link
@@ -1150,7 +1312,160 @@ export default function HocVienProfileClient({ profileEmail }: { profileEmail: s
               </div>
             ) : null}
 
-            {tab === "artworks" ? (
+            {section === "he-thong-bai-tap" ? (
+              <div className="hvp-panel hvp-panel--assignments">
+                <h3 className="hvp-btap-h">Hệ thống bài tập</h3>
+                {assignmentsBlocks === null ? (
+                  <div className="hvp-classes-loading">Đang tải chương trình bài tập…</div>
+                ) : assignmentsBlocks.length === 0 ? (
+                  <p className="hvp-dd" style={{ margin: 0 }}>
+                    Chưa có dữ liệu lớp hoặc chương trình bài tập. Liên hệ Sine Art nếu cần hỗ trợ.
+                  </p>
+                ) : (
+                  <>
+                    {assignmentsMonGroups.length > 1 ? (
+                      <div className="hvp-btap-mon-bar" role="tablist" aria-label="Môn học">
+                        {assignmentsMonGroups.map((g) => (
+                          <button
+                            key={g.key}
+                            type="button"
+                            role="tab"
+                            aria-selected={g.key === assignmentsMonKey}
+                            className={cn(
+                              "hvp-btap-mon-chip",
+                              g.key === assignmentsMonKey && "hvp-btap-mon-chip--active",
+                            )}
+                            onClick={() => {
+                              setAssignmentsMonKey(g.key);
+                              setAssignmentsOpenExId(null);
+                            }}
+                          >
+                            {g.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="hvp-btap-phc">
+                      {activeAssignmentsMonGroup ? (
+                        <div className="hvp-btap-stack">
+                          {activeAssignmentsMonGroup.blocks.map((bl) => (
+                            <div className="hvp-btap-class" key={bl.qlhvId}>
+                              <div className="hvp-btap-class-head hvp-btap-class-head--compact">
+                                <h4 className="hvp-btap-class-title">{bl.classTitle}</h4>
+                                {bl.capTocUnlockAll ? (
+                                  <p className="hvp-btap-cap">Chế độ cấp tốc: toàn bộ bài đã mở.</p>
+                                ) : bl.progressIdx >= 0 ? (
+                                  <p className="hvp-btap-prog">
+                                    Bài đang học: {bl.progressIdx + 1}/{bl.rows.length}
+                                  </p>
+                                ) : (
+                                  <p className="hvp-btap-prog hvp-btap-prog--muted">
+                                    Chưa gán tiến độ trên ghi danh — liên hệ giáo viên.
+                                  </p>
+                                )}
+                              </div>
+                              {bl.rows.length === 0 ? (
+                                <div className="task-curr-empty">Chưa có bài tập cho môn của lớp này.</div>
+                              ) : (
+                                <div className="task-curr-list-wrap">
+                                  <div className="task-curr-list-heading">Danh sách bài theo môn</div>
+                                  <div className="task-curr-list" role="list">
+                                    {bl.rows.map(({ exercise: ex, listIndex: i, unlocked }) => {
+                                      const isCurrent = i === bl.progressIdx;
+                                      const expanded = assignmentsOpenExId === ex.id && unlocked;
+                                      const baiSoSlug =
+                                        ex.bai_so != null && Number.isFinite(ex.bai_so)
+                                          ? Math.max(0, Math.floor(Number(ex.bai_so)))
+                                          : i + 1;
+                                      const baiTapHref = buildHeThongBaiTapHref(
+                                        baiSoSlug,
+                                        ex.ten_bai_tap,
+                                        bl.monHocId
+                                      );
+                                      const thumbSrc =
+                                        cfImageForThumbnail(ex.thumbnail) ?? ex.thumbnail?.trim() ?? null;
+                                      return (
+                                        <div
+                                          key={ex.id}
+                                          className={cn(
+                                            "task-curr-row",
+                                            !unlocked && "task-curr-row--locked",
+                                            isCurrent && "task-curr-row--current",
+                                          )}
+                                          role="listitem"
+                                        >
+                                          <button
+                                            type="button"
+                                            className="task-curr-row-btn"
+                                            disabled={!unlocked}
+                                            title={
+                                              unlocked
+                                                ? expanded
+                                                  ? "Thu gọn"
+                                                  : "Mở xem tóm tắt và hướng dẫn"
+                                                : "Giáo viên sẽ mở bài này khi bạn hoàn thành các bài trước"
+                                            }
+                                            onClick={() => {
+                                              if (!unlocked) return;
+                                              setAssignmentsOpenExId((id) => (id === ex.id ? null : ex.id));
+                                            }}
+                                          >
+                                            {thumbSrc ? (
+                                              <div className="task-curr-row-thumb">
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img src={thumbSrc} alt="" />
+                                              </div>
+                                            ) : (
+                                              <div
+                                                className="task-curr-row-thumb task-curr-row-thumb--empty"
+                                                aria-hidden
+                                              >
+                                                <span className="task-curr-row-thumb-ph">Ảnh</span>
+                                              </div>
+                                            )}
+                                            <div className="task-curr-row-text">
+                                              <div className="task-curr-row-main">
+                                                <span className="task-curr-badge">
+                                                  {formatLessonLabel(ex, i)}
+                                                </span>
+                                                <span className="task-curr-row-title">{ex.ten_bai_tap}</span>
+                                              </div>
+                                              <span className="task-curr-row-chevron" aria-hidden>
+                                                {unlocked ? (expanded ? "▴" : "▾") : "🔒"}
+                                              </span>
+                                            </div>
+                                          </button>
+                                          {expanded && unlocked ? (
+                                            <div className="task-curr-detail">
+                                              <p className="task-curr-detail-txt">{ex.ten_bai_tap}</p>
+                                              <Link
+                                                href={baiTapHref}
+                                                className="task-curr-open-btn"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                Xem hướng dẫn bài tập
+                                              </Link>
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {section === "bai-ve" ? (
               <div className="hvp-panel hvp-panel--artworks">
                 <h3>Bài vẽ</h3>
                 <p className="hvp-artworks-intro">

@@ -3,6 +3,7 @@
 /** Bắt buộc khi modal dùng từ NavBar — các trang không import `khoa-hoc-detail.css` sẽ không có layout/z-index cho `.kd-dhp-*`. */
 import "@/app/khoa-hoc/khoa-hoc-detail.css";
 
+import { hocVienProfileHref } from "@/lib/hoc-vien/profile-url";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { lookupClassroomByEmail } from "@/lib/phong-hoc/lookup-by-email";
 import {
@@ -122,7 +123,8 @@ export default function DongHocPhiEmailGateModal({
       onClose();
       const fromRow = String(record.data.email ?? "").trim();
       const resolved = (fromRow !== "" ? fromRow : typedEmail.trim()).toLowerCase();
-      router.push(`/hoc-vien/${encodeURIComponent(resolved)}`);
+      const href = hocVienProfileHref(resolved);
+      if (href) router.push(href);
     },
     [onClose, router]
   );

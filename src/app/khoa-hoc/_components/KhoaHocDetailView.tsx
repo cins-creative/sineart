@@ -18,7 +18,7 @@ import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import Image from "next/image";
 import TeachersSection from "@/app/_components/TeachersSection";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   KD_DANH_CHO_AI,
   KD_DEFAULT_LEARN_BY_GROUP,
@@ -120,10 +120,16 @@ function KdReviewCard({
   r,
   courseLabel,
   index,
+  bodyText,
+  showCaret,
 }: {
   r: KhoaHocReviewListItem;
   courseLabel: string;
   index: number;
+  /** Ghi đè nội dung (typewriter); mặc định `r.noiDung` */
+  bodyText?: string;
+  /** Nhấp nháy con trỏ khi đang gõ */
+  showCaret?: boolean;
 }) {
   const [imgErr, setImgErr] = useState(false);
   const thumb =
@@ -132,6 +138,7 @@ function KdReviewCard({
   const courseLine = [courseLabel.trim() || "Khoá học", r.thoiGianHoc?.trim()]
     .filter(Boolean)
     .join(" · ");
+  const displayBody = bodyText !== undefined ? bodyText : r.noiDung;
 
   return (
     <article className="kd-rv-big">
@@ -161,8 +168,106 @@ function KdReviewCard({
         </div>
         {r.nguon ? <span className="kd-rv-source">{r.nguon}</span> : null}
       </div>
-      <div className="kd-rv-text-big">{r.noiDung}</div>
+      <div className="kd-rv-text-big" aria-live={showCaret ? "off" : "polite"}>
+        {displayBody}
+        {showCaret ? <span className="kd-rv-caret" aria-hidden /> : null}
+      </div>
     </article>
+  );
+}
+
+const KD_RV_TYPE_MS = 24;
+const KD_RV_PAUSE_AFTER_MS = 3600;
+
+/** Một đánh giá tại một thời điểm; nội dung gõ typewriter, sau đó chuyển bài tiếp theo. */
+function KdReviewTypewriterCarousel({
+  reviews,
+  courseLabel,
+}: {
+  reviews: KhoaHocReviewListItem[];
+  courseLabel: string;
+}) {
+  const [idx, setIdx] = useState(0);
+  /** Chỉ một đánh giá: `idx` không đổi sau một vòng — tăng key để chạy lại typewriter */
+  const [replayKey, setReplayKey] = useState(0);
+  const [typed, setTyped] = useState("");
+
+  const current = reviews[idx];
+  const full = current?.noiDung ?? "";
+  const fullLen = full.length;
+  const isTyping = fullLen > 0 && typed.length < fullLen;
+
+  useLayoutEffect(() => {
+    setTyped("");
+  }, [idx, replayKey]);
+
+  useEffect(() => {
+    if (reviews.length === 0 || !current) return;
+
+    let cancelled = false;
+    let tid: ReturnType<typeof setTimeout>;
+
+    const clearT = () => {
+      clearTimeout(tid);
+    };
+
+    const goNext = () => {
+      if (reviews.length > 1) setIdx((k) => (k + 1) % reviews.length);
+      else setReplayKey((k) => k + 1);
+    };
+
+    if (fullLen === 0) {
+      tid = setTimeout(() => {
+        if (!cancelled) goNext();
+      }, KD_RV_PAUSE_AFTER_MS);
+      return () => {
+        cancelled = true;
+        clearT();
+      };
+    }
+
+    let pos = 0;
+    const step = () => {
+      if (cancelled) return;
+      pos += 1;
+      setTyped(full.slice(0, pos));
+      if (pos < fullLen) {
+        tid = setTimeout(step, KD_RV_TYPE_MS);
+      } else {
+        tid = setTimeout(() => {
+          if (!cancelled) goNext();
+        }, KD_RV_PAUSE_AFTER_MS);
+      }
+    };
+
+    tid = setTimeout(step, 80);
+
+    return () => {
+      cancelled = true;
+      clearT();
+    };
+  }, [idx, replayKey, reviews.length, current?.id, full, fullLen]);
+
+  if (!current) return null;
+
+  return (
+    <div className="kd-review-carousel">
+      <KdReviewCard
+        key={current.id}
+        r={current}
+        courseLabel={courseLabel}
+        index={idx}
+        bodyText={typed}
+        showCaret={isTyping}
+      />
+      {reviews.length > 1 ? (
+        <div className="kd-review-carousel-dots" aria-hidden>
+          {reviews.map((r, i) => (
+            <span key={r.id} className={`kd-review-dot${i === idx ? " kd-review-dot--on" : ""}`} />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -440,9 +545,6 @@ export default function KhoaHocDetailView({
             <h2 className="kd-sec-title">
               Những gì bạn sẽ làm được <em>sau khoá học</em>
             </h2>
-            <p className="kd-sec-sub">
-              Tất cả đều là bài thật, không chỉnh sửa, chụp từ nguyên bản giấy.
-            </p>
 
             {studentGallery.length > 0 && hvMainItem ? (
               <>
@@ -520,9 +622,6 @@ export default function KhoaHocDetailView({
           {/* ── 02 OVERVIEW ── */}
           <section className="kd-block" id="overview">
             <div className="kd-sec-label">Tổng quan</div>
-            <h2 className="kd-sec-title">
-              Khoá học dành cho bạn <em>nghĩ bằng màu</em>
-            </h2>
 
             <div className="kd-ov-grid">
               {/* Body */}
@@ -685,9 +784,6 @@ export default function KhoaHocDetailView({
             <h2 className="kd-sec-title">
               Hoạ sĩ đang <em>hành nghề thực tế</em> dạy bạn
             </h2>
-            <p className="kd-sec-sub">
-              Không phải giáo viên thuần lý thuyết — tất cả đang làm việc tại các studio lớn.
-            </p>
             <TeachersSection slides={visibleTeacherSlides} />
           </section>
 
@@ -757,10 +853,6 @@ export default function KhoaHocDetailView({
             <h2 className="kd-sec-title">
               Học viên nói gì — <em>theo hệ thống</em>
             </h2>
-            <p className="kd-sec-sub">
-              Đánh giá học viên lưu trong hệ thống Sine Art. Ưu tiên những đánh giá gắn với khóa học này; nếu chưa có đủ dữ liệu,
-              phần thống kê và danh sách bên dưới dùng thêm đánh giá từ các khóa khác để tham khảo.
-            </p>
 
             {reviewStats.count <= 0 ? (
               <p className="m-0 rounded-xl border border-dashed border-black/[0.08] bg-black/[0.02] px-4 py-6 text-center text-[14px] text-[var(--kd-ink2)]">
@@ -792,11 +884,7 @@ export default function KhoaHocDetailView({
                     })}
                   </div>
                 </div>
-                <div className="kd-review-stack">
-                  {reviewList.map((r, i) => (
-                    <KdReviewCard key={r.id} r={r} courseLabel={title} index={i} />
-                  ))}
-                </div>
+                <KdReviewTypewriterCarousel reviews={reviewList} courseLabel={title} />
               </>
             )}
           </section>
@@ -836,10 +924,15 @@ export default function KhoaHocDetailView({
                   Bắt đầu từ buổi học thử miễn phí, gặp giáo viên, xem studio. Nếu không hợp, bạn không trả gì cả.
                 </p>
                 <div className="kd-cta-band-actions">
-                  <a href={autoRegisterHref} className="kd-cta-band-btn kd-cta-band-btn--primary">
+                  <a
+                    href="https://www.facebook.com/sineart0102"
+                    className="kd-cta-band-btn kd-cta-band-btn--primary"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     🎨 Đặt buổi học thử
                   </a>
-                  <a href="tel:+842838123456" className="kd-cta-band-btn kd-cta-band-btn--ghost">
+                  <a href="tel:+84867551531" className="kd-cta-band-btn kd-cta-band-btn--ghost">
                     Chat với tư vấn Zalo
                   </a>
                 </div>
@@ -913,7 +1006,7 @@ export default function KhoaHocDetailView({
             >
               Đăng ký tự động
             </button>
-            <a href="tel:+842838123456" className="kd-sb-btn kd-sb-btn--alt">
+            <a href="tel:+84867551531" className="kd-sb-btn kd-sb-btn--alt">
               Đăng ký qua tư vấn
             </a>
           </div>

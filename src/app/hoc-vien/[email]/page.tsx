@@ -1,9 +1,6 @@
 import { permanentRedirect } from "next/navigation";
-import NavBar from "@/app/_components/NavBar";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { HVP_DEFAULT_PROFILE_SECTION } from "@/lib/hoc-vien/profile-url";
 import { createClient } from "@/lib/supabase/server";
-import HocVienProfileClient from "./profile-client";
 
 type PageProps = {
   params: Promise<{ email: string }>;
@@ -17,7 +14,11 @@ function decodePathSegment(segment: string): string {
   }
 }
 
-export default async function HocVienProfilePage({ params }: PageProps) {
+/**
+ * `/hoc-vien/{email}` → `/hoc-vien/{email}/thong-tin`
+ * `/hoc-vien/{numeric-id}` → `/hoc-vien/{resolved-email}/thong-tin`
+ */
+export default async function HocVienProfileIndexPage({ params }: PageProps) {
   const { email: segment } = await params;
   const decoded = decodePathSegment(segment).trim();
 
@@ -32,18 +33,14 @@ export default async function HocVienProfilePage({ params }: PageProps) {
       const row = data as { email?: string | null } | null;
       const em = row?.email != null ? String(row.email).trim().toLowerCase() : "";
       if (em.includes("@")) {
-        permanentRedirect(`/hoc-vien/${encodeURIComponent(em)}`);
+        permanentRedirect(
+          `/hoc-vien/${encodeURIComponent(em)}/${HVP_DEFAULT_PROFILE_SECTION}`
+        );
       }
     }
   }
 
-  const { courses } = await getKhoaHocPageData();
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
-
-  return (
-    <div className="sa-root khoa-hoc-page">
-      <NavBar khoaHocGroups={khoaHocGroups} />
-      <HocVienProfileClient profileEmail={decoded} />
-    </div>
+  permanentRedirect(
+    `/hoc-vien/${encodeURIComponent(decoded)}/${HVP_DEFAULT_PROFILE_SECTION}`
   );
 }

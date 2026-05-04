@@ -1,6 +1,7 @@
 "use client";
 
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { hocVienProfileHref } from "@/lib/hoc-vien/profile-url";
 import { lookupClassroomByEmail } from "@/lib/phong-hoc/lookup-by-email";
 import { saveClassroomSession, type ClassroomSessionRecord } from "@/lib/phong-hoc/classroom-session";
 import { useRouter } from "next/navigation";
@@ -39,7 +40,8 @@ export default function StudentProfileSignInOverlay({ open, onClose }: Props) {
     onClose();
     const fromRow = String(record.data.email ?? "").trim();
     const resolved = (fromRow !== "" ? fromRow : typedEmail.trim()).toLowerCase();
-    router.push(`/hoc-vien/${encodeURIComponent(resolved)}`);
+    const href = hocVienProfileHref(resolved);
+    if (href) router.push(href);
   };
 
   const check = async () => {

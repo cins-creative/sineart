@@ -211,13 +211,40 @@ function mergeEnrollmentsFromRows(
 }
 
 /**
+ * Nhiều dòng `ql_quan_ly_hoc_vien` cùng lớp: bản mới (gia hạn) có thể chưa có `tien_do_hoc` trong khi
+ * bản cũ đã có tiến độ. Phòng học luôn đọc đúng `qlhv_id` của session — khi gộp một thẻ lớp phải giữ
+ * tiến độ nhất quán (ưu tiên đúng qlhv đang mở trong session, sau đó bản ghi có tiến độ với id lớn nhất).
+ */
+function mergeTienDoHocForSameLopSessions(
+  group: ClassroomStudentSessionData[],
+  preferQlhvId?: number | null
+): number | null {
+  if (group.length === 0) return null;
+  const pref =
+    preferQlhvId != null && Number.isFinite(preferQlhvId) && preferQlhvId > 0
+      ? group.find((s) => s.qlhv_id === preferQlhvId)
+      : undefined;
+  if (pref != null) {
+    const td = pref.tien_do_hoc;
+    if (td != null && Number.isFinite(td)) return td;
+  }
+  const withTd = group
+    .filter((s) => s.tien_do_hoc != null && Number.isFinite(s.tien_do_hoc))
+    .sort((a, b) => b.qlhv_id - a.qlhv_id);
+  if (withTd.length > 0) return withTd[0]!.tien_do_hoc ?? null;
+  return null;
+}
+
+/**
  * Cùng học viên + cùng `lop_hoc_id` có thể có nhiều dòng `ql_quan_ly_hoc_vien` (gia hạn / nhập trùng).
  * UI chỉ nên một thẻ lớp — giữ bản ghi ưu tiên `qlhv_id` lớn hơn, sau đó `days_remaining` cao hơn.
+ * `tien_do_hoc` trên thẻ được gộp riêng để không mất tiến độ khi bản mới chưa gán bài.
  */
 function dedupeStudentSessionDataByLop(
-  list: ClassroomStudentSessionData[]
+  list: ClassroomStudentSessionData[],
+  preferQlhvId?: number | null
 ): ClassroomStudentSessionData[] {
-  const byLop = new Map<number, ClassroomStudentSessionData>();
+  const byLop = new Map<number, ClassroomStudentSessionData[]>();
   const noLop: ClassroomStudentSessionData[] = [];
 
   for (const s of list) {
@@ -226,23 +253,32 @@ function dedupeStudentSessionDataByLop(
       noLop.push(s);
       continue;
     }
-    const prev = byLop.get(lid);
-    if (!prev) {
-      byLop.set(lid, s);
-      continue;
-    }
-    const pick =
-      s.qlhv_id > prev.qlhv_id
-        ? s
-        : s.qlhv_id < prev.qlhv_id
-          ? prev
-          : (s.days_remaining ?? -1e9) > (prev.days_remaining ?? -1e9)
-            ? s
-            : prev;
-    byLop.set(lid, pick);
+    if (!byLop.has(lid)) byLop.set(lid, []);
+    byLop.get(lid)!.push(s);
   }
 
-  const merged = [...byLop.values(), ...noLop];
+  const deduped: ClassroomStudentSessionData[] = [];
+  for (const [, group] of byLop) {
+    let winner = group[0]!;
+    for (let i = 1; i < group.length; i++) {
+      const s = group[i]!;
+      winner =
+        s.qlhv_id > winner.qlhv_id
+          ? s
+          : s.qlhv_id < winner.qlhv_id
+            ? winner
+            : (s.days_remaining ?? -1e9) > (winner.days_remaining ?? -1e9)
+              ? s
+              : winner;
+    }
+    const mergedTd = mergeTienDoHocForSameLopSessions(group, preferQlhvId);
+    deduped.push({
+      ...winner,
+      tien_do_hoc: mergedTd,
+    });
+  }
+
+  const merged = [...deduped, ...noLop];
   merged.sort((a, b) => {
     const an = a.class_name?.trim() ?? "";
     const bn = b.class_name?.trim() ?? "";
@@ -371,10 +407,16 @@ async function classroomStudentDataForEnrollment(
   };
 }
 
+export type FetchAllClassSessionsOptions = {
+  /** `ql_quan_ly_hoc_vien.id` của ghi danh đang dùng trong session Phòng học — ưu tiên `tien_do_hoc` của dòng này khi gộp trùng lớp */
+  preferQlhvId?: number | null;
+};
+
 /** Mọi lớp ghi danh của một học viên (`ql_thong_tin_hoc_vien.id`) — ví dụ tab Lớp học trên trang cá nhân. */
 export async function fetchAllClassSessionsForStudentHv(
   supabase: SupabaseClient,
-  hocVienId: number
+  hocVienId: number,
+  options?: FetchAllClassSessionsOptions
 ): Promise<ClassroomStudentSessionData[]> {
   const pk = asHvPk(hocVienId);
   if (!pk) return [];
@@ -411,7 +453,7 @@ export async function fetchAllClassSessionsForStudentHv(
     if (data) list.push(data);
   }
 
-  return dedupeStudentSessionDataByLop(list);
+  return dedupeStudentSessionDataByLop(list, options?.preferQlhvId);
 }
 
 export type LookupClassroomOutcome = {

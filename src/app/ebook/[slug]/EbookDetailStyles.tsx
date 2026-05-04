@@ -5,13 +5,13 @@
  */
 
 const css = `
-  .sa-ebook-detail{--bg:#fefcf9;--ink:#2d2020;--ink-2:rgba(45,32,32,.78);--ink-muted:rgba(45,32,32,.56);--font-display:"Be Vietnam Pro","Grandstander",system-ui,sans-serif;--font-body:"Quicksand",system-ui,sans-serif;--grad:linear-gradient(90deg,#f8a568,#ee5ca2);background:var(--bg);color:var(--ink);font-family:var(--font-body);min-height:100vh}
+  .sa-ebook-detail{--bg:#fefcf9;--ink:#2d2020;--ink-2:rgba(45,32,32,.78);--ink-muted:rgba(45,32,32,.56);--font-display:"Be Vietnam Pro","Grandstander",system-ui,sans-serif;--font-body:"Quicksand",system-ui,sans-serif;--grad:linear-gradient(90deg,#f8a568,#ee5ca2);background:var(--bg);color:var(--ink);font-family:var(--font-body);min-height:100vh;width:100%;min-width:0}
   .sa-ebook-detail *{box-sizing:border-box}
   .sa-ebook-detail a{color:inherit;text-decoration:none}
   .sa-ebook-detail button{font-family:inherit}
 
-  .sa-ebook-detail .ebd-shell{max-width:1200px;margin:0 auto;padding:0 28px}
-  .sa-ebook-detail .ebd-body{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:48px;padding:32px 0 80px}
+  .sa-ebook-detail .ebd-shell{max-width:1200px;width:100%;margin:0 auto;padding:0 28px}
+  .sa-ebook-detail .ebd-body{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:48px;padding:32px 0 80px;width:100%;min-width:0}
   .sa-ebook-detail .ebd-main{min-width:0}
 
   /* Breadcrumb */
@@ -100,8 +100,8 @@ const css = `
   .sa-ebook-detail .ebd-fb-meter{display:flex;align-items:center;justify-content:center;gap:10px;flex:1;min-width:0;padding:8px 18px;border-radius:999px;background:rgba(45,32,32,.04);border:1.5px solid rgba(45,32,32,.06)}
   .sa-ebook-detail .ebd-fb-label{margin:0;font:800 14px/1 "Be Vietnam Pro",Quicksand;color:#2d2020;white-space:nowrap;letter-spacing:.02em}
 
-  .sa-ebook-detail .ebd-fb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;max-width:880px;margin:0 auto}
-  .sa-ebook-detail .ebd-fb-card{position:relative;overflow:hidden;border:2px solid rgba(45,32,32,.06);border-radius:14px;background:#fbf7f2}
+  .sa-ebook-detail .ebd-fb-grid{display:grid;grid-template-columns:repeat(2,1fr);column-gap:0;row-gap:18px;max-width:880px;margin:0 auto}
+  .sa-ebook-detail .ebd-fb-card{position:relative;overflow:hidden;border:2px solid rgba(45,32,32,.06);border-radius:0;background:#fbf7f2}
   .sa-ebook-detail .ebd-fb-card-img{width:100%;height:auto;display:block;object-fit:contain}
 
   /* Fullscreen mode — CSS-based, position:fixed phủ kín viewport.
@@ -167,12 +167,13 @@ const css = `
     .sa-ebook-detail .ebd-sidebar{position:static}
   }
   @media (max-width:720px){
+    .sa-ebook-detail .ebd-shell{padding:0 10px}
     .sa-ebook-detail .ebd-header{grid-template-columns:100px 1fr;gap:16px;padding:16px}
     .sa-ebook-detail .ebd-h-thumb{width:100px}
     .sa-ebook-detail .ebd-pages{grid-template-columns:1fr;gap:14px}
     .sa-ebook-detail .ebd-flipbook-wrap{aspect-ratio:3/4}
     .sa-ebook-detail .ebd-navpn{grid-template-columns:1fr}
-    .sa-ebook-detail .ebd-fb-grid{grid-template-columns:1fr;gap:14px}
+    .sa-ebook-detail .ebd-fb-grid{grid-template-columns:repeat(2,1fr);column-gap:0;row-gap:12px}
     .sa-ebook-detail .ebd-fb-ctrl{max-width:100%;gap:10px;margin-top:28px}
     .sa-ebook-detail .ebd-fb-nav{width:44px;height:44px}
     .sa-ebook-detail .ebd-fb-toolbar{justify-content:center}

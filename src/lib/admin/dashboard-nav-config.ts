@@ -20,24 +20,24 @@ export type NavMainItem = {
 };
 
 export const NAV_MAIN: NavMainItem[] = [
-  { label: "Chi nhánh", href: "/admin/dashboard/chi-nhanh" },
-  { label: "Khóa học", href: "/admin/dashboard/khoa-hoc" },
-  { label: "Lớp học", href: "/admin/dashboard/lop-hoc" },
+  { label: "Quản lý học viên", href: "/admin/dashboard/quan-ly-hoc-vien" },
+  { label: "Quản lý họa cụ", href: "/admin/dashboard/quan-ly-hoa-cu" },
+  { label: "Thu chi khác", href: "/admin/dashboard/thu-chi-khac" },
   {
     label: "Agent Tư vấn",
     href: AGENT_CONSULT_HREF,
     icon: MessageCircle,
     visibleForRoles: ["admin", "quan_ly", "tu_van"],
   },
+  { label: "Lớp học", href: "/admin/dashboard/lop-hoc" },
+  { label: "Khóa học", href: "/admin/dashboard/khoa-hoc" },
+  { label: "Chi nhánh", href: "/admin/dashboard/chi-nhanh" },
   { label: "Gói học phí", href: "/admin/dashboard/goi-hoc-phi" },
   { label: "Quản lý hóa đơn", href: "/admin/dashboard/quan-ly-hoa-don" },
   {
     label: "Trường & ngành thi ĐH",
     href: "/admin/dashboard/dh-truong-nganh",
   },
-  { label: "Quản lý học viên", href: "/admin/dashboard/quan-ly-hoc-vien" },
-  { label: "Thu chi khác", href: "/admin/dashboard/thu-chi-khac" },
-  { label: "Quản lý họa cụ", href: "/admin/dashboard/quan-ly-hoa-cu" },
   { label: "Hệ thống bài tập", href: "/admin/dashboard/he-thong-bai-tap" },
 ];
 

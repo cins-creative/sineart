@@ -26,6 +26,21 @@ import AdminRichTextEditor from "@/app/admin/_components/AdminRichTextEditor";
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import { buildBlogSlug } from "@/lib/data/blog-slug";
 
+const SITE_ORIGIN = "https://sineart.vn";
+
+function canonicalBlogPostUrl(id: number, title: string | null): string {
+  return `${SITE_ORIGIN}/blogs/${buildBlogSlug(id, title)}`;
+}
+
+function isSineartPublicUrl(href: string): boolean {
+  try {
+    const u = new URL(href);
+    return u.hostname.replace(/^www\./i, "").toLowerCase() === "sineart.vn";
+  } catch {
+    return false;
+  }
+}
+
 export type AdminBlogRow = {
   id: number;
   created_at: string;
@@ -253,9 +268,15 @@ export default function QuanLyBlogView({ initialBlogs, missingServiceRole, loadE
                     <td className="qlb-cell-title">{b.title || <em>(không tiêu đề)</em>}</td>
                     <td className="qlb-cell-nguon">
                       {b.nguon ? (
-                        <a href={b.nguon} target="_blank" rel="noreferrer">
-                          {tryDomain(b.nguon)}
-                        </a>
+                        isSineartPublicUrl(b.nguon) ? (
+                          <a href={b.nguon} target="_blank" rel="noreferrer">
+                            {tryDomain(b.nguon)}
+                          </a>
+                        ) : (
+                          <span className="qlb-cell-nguon--ext" title={b.nguon}>
+                            {tryDomain(b.nguon)}
+                          </span>
+                        )
                       ) : (
                         "—"
                       )}
@@ -543,13 +564,13 @@ function BlogEditorModal({
               </label>
 
               <label className="qlb-field">
-                <span className="qlb-label">URL nguồn</span>
+                <span className="qlb-label">URL bài công khai (sineart.vn)</span>
                 <input
                   type="url"
                   value={form.nguon}
                   onChange={(e) => update("nguon", e.target.value)}
                   disabled={saving}
-                  placeholder="https://..."
+                  placeholder="https://sineart.vn/blogs/..."
                 />
               </label>
 
@@ -762,14 +783,31 @@ function BatchImporter({
             opening: data.opening,
             content: data.content,
             ending: data.ending,
-            nguon: data.nguon,
+            nguon: null,
             feature: false,
           }),
           signal: controller.signal,
         });
         const json = await res.json().catch(() => ({})) as { ok?: boolean; error?: string; row?: AdminBlogRow };
         if (!res.ok || !json.ok || !json.row) throw new Error(json.error || `HTTP ${res.status}`);
-        onRowCreated(json.row!);
+
+        const row = json.row;
+        const publicUrl = canonicalBlogPostUrl(row.id, row.title);
+        const patchRes = await fetch("/admin/api/blog-update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: row.id, nguon: publicUrl }),
+          signal: controller.signal,
+        });
+        const patchJson = await patchRes.json().catch(() => ({})) as {
+          ok?: boolean;
+          error?: string;
+          row?: AdminBlogRow;
+        };
+        if (!patchRes.ok || !patchJson.ok || !patchJson.row) {
+          throw new Error(patchJson.error || "Không gán được URL công khai (sineart.vn) cho bài viết.");
+        }
+        onRowCreated(patchJson.row);
         updateItem(item.id, { status: "done", title: data.title });
       } catch (err) {
         if ((err as { name?: string }).name === "AbortError") break;
@@ -786,7 +824,7 @@ function BatchImporter({
     const done = finalItems.filter((i) => i.status === "done").length;
     const err = finalItems.filter((i) => i.status === "error").length;
     if (done > 0 || err > 0) {
-      onToast(`Batch xong: ${done} thành công${err ? `, ${err} lỗi` : ""}.`, err === 0);
+      onToast(`Đã xử lý xong: ${done} bài${err ? `, ${err} bị lỗi` : ""}.`, err === 0);
     }
   }
 
@@ -815,7 +853,7 @@ function BatchImporter({
       >
         <div className="qlb-section-title">
           <Layers size={16} className="qlb-accent-icon" />
-          <span>Batch Import nhiều URL</span>
+          <span>Import hàng loạt từ URL</span>
           {total > 0 && (
             <span className="qlb-badge">
               {doneCount}/{total}
@@ -829,14 +867,16 @@ function BatchImporter({
       {open && (
         <div className="qlb-batch-body">
           <p className="qlb-batch-hint">
-            Dán nhiều URL (mỗi dòng 1 URL). Hệ thống sẽ xử lý tuần tự và tự động lưu vào Supabase — không cần preview thủ công.
+            Mỗi dòng là một đường dẫn bài ngoài (bài tham khảo). Máy chủ sẽ lấy nội dung, soạn lại cho phù hợp Sine Art,
+            bỏ liên kết trỏ ra site khác trong bài, rồi lưu bài mới. Cột <strong>Nguồn</strong> trên danh sách sẽ là
+            link bài đã xuất bản trên <strong>sineart.vn</strong> (không còn dẫn về trang ngoài).
           </p>
 
           <textarea
             className="qlb-batch-textarea"
             value={raw}
             onChange={(e) => { setRaw(e.target.value); setItems([]); }}
-            placeholder={"https://example.com/bai-viet-1\nhttps://example.com/bai-viet-2\nhttps://example.com/bai-viet-3"}
+            placeholder={"https://domain.com/bai-mau-1\nhttps://domain.com/bai-mau-2"}
             rows={6}
             disabled={running}
           />
@@ -844,7 +884,7 @@ function BatchImporter({
           {validUrls.length > 0 && items.length === 0 && (
             <p className="qlb-batch-count">
               <Check size={13} style={{ color: "#059669" }} />
-              {validUrls.length} URL hợp lệ — sẵn sàng xử lý
+              Đã nhận {validUrls.length} đường dẫn hợp lệ
             </p>
           )}
 
@@ -869,7 +909,7 @@ function BatchImporter({
                 disabled={validUrls.length === 0}
               >
                 <Wand2 size={16} />
-                <span>Bắt đầu import {validUrls.length > 0 ? `(${validUrls.length} bài)` : ""}</span>
+                <span>Chạy import {validUrls.length > 0 ? `(${validUrls.length} bài)` : ""}</span>
               </button>
             )}
           </div>
@@ -892,16 +932,16 @@ function BatchImporter({
                       {it.title || it.url.replace(/^https?:\/\//, "").slice(0, 72)}
                     </span>
                     {it.status === "importing" && (
-                      <span className="qlb-batch-sub">Đang đọc & viết lại...</span>
+                      <span className="qlb-batch-sub">Đang tải trang và soạn lại nội dung...</span>
                     )}
                     {it.status === "saving" && (
-                      <span className="qlb-batch-sub">Đang lưu vào Supabase...</span>
+                      <span className="qlb-batch-sub">Đang lưu bài và gán link sineart.vn...</span>
                     )}
                     {it.status === "error" && (
                       <span className="qlb-batch-sub qlb-batch-sub--err">{it.error}</span>
                     )}
                     {it.status === "done" && (
-                      <span className="qlb-batch-sub qlb-batch-sub--ok">Đã lưu</span>
+                      <span className="qlb-batch-sub qlb-batch-sub--ok">Đã lưu — Nguồn trỏ về bài trên sineart.vn</span>
                     )}
                   </div>
                 </div>
@@ -1021,6 +1061,7 @@ const QLB_CSS = `
   .qlb-cell-title{font-weight:600;color:#2d2020;line-height:1.4;max-width:340px}
   .qlb-cell-nguon a{color:#5a4a4a;text-decoration:none;font-size:12px}
   .qlb-cell-nguon a:hover{color:#ee5b9f;text-decoration:underline}
+  .qlb-cell-nguon--ext{color:#9c8a8a;font-size:12px;cursor:default}
   .qlb-cell-date{color:#9c8a8a;font-size:12px}
   .qlb-empty{text-align:center;padding:40px 20px !important;color:#9c8a8a;font-style:italic}
 
@@ -1057,7 +1098,7 @@ const QLB_CSS = `
   .qlb-modal-body{overflow-y:auto;padding:20px 22px;flex:1}
   .qlb-modal-grid{display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start}
   @media (max-width:960px){.qlb-modal-grid{grid-template-columns:1fr}}
-  .qlb-modal-col-left{display:flex;flex-direction:column;gap:14px;position:sticky;top:0}
+  .qlb-modal-col-left{display:flex;flex-direction:column;gap:14px}
   .qlb-modal-col-right{display:flex;flex-direction:column;gap:16px;min-width:0}
   .qlb-editor-block{display:flex;flex-direction:column;gap:6px}
   .qlb-modal-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 22px;border-top:1px solid rgba(45,32,32,.08);background:#fafafa}

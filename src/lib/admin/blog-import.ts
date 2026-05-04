@@ -369,6 +369,11 @@ const CLAUDE_SYSTEM = [
   "10. Them callout box bang <div class='tip-box'><strong>Meo cua Sine:</strong> noi dung</div> cho cac tip thuc hanh.",
   "11. Su dung <ol> cho cac buoc huong dan co trinh tu, <ul> cho danh sach khong co thu tu.",
   "",
+  "LIEN KET NGOAI SINE ART:",
+  "- KHONG chen the <a href> tro den bat ky domain nao khac sineart.vn.",
+  "- Neu can nhac ten website khac, viet bang chu thong (khong hyperlink).",
+  "- Cho phep link noi bo: https://sineart.vn/... hoac duong dan bat dau bang / (vd /blogs/...).",
+  "",
   "OUTPUT FORMAT — Tra ve CHINH XAC theo format XML tag sau, khong them gi khac (khong JSON, khong markdown, khong giai thich):",
   "<title>Tieu de SEO hap dan <= 70 ky tu</title>",
   "<opening><p><strong>3-5 cau mo bai tom luoc gia tri bai viet</strong></p></opening>",
@@ -480,6 +485,36 @@ function isRewriteShape(v: unknown): v is ClaudeRewrite {
   );
 }
 
+/** Gỡ thẻ `<a>` trỏ ra ngoài sineart.vn — chỉ giữ nội dung text bên trong. */
+function sanitizeExternalAnchors(html: string): string {
+  const h = html.trim();
+  if (!h) return html;
+  const wrapId = "sa-blog-anchor-san";
+  const $ = cheerio.load(`<div id="${wrapId}">${h}</div>`);
+  $(`#${wrapId} a`).each((_, el) => {
+    const $a = $(el);
+    const raw = ($a.attr("href") ?? "").trim();
+    if (isAllowedOutboundHref(raw)) return;
+    const inner = $a.html() ?? "";
+    $a.replaceWith(inner);
+  });
+  return $(`#${wrapId}`).html() ?? h;
+}
+
+function isAllowedOutboundHref(href: string): boolean {
+  const raw = href.trim();
+  if (!raw || raw.startsWith("#")) return true;
+  if (raw.startsWith("mailto:") || raw.startsWith("tel:")) return true;
+  if (raw.startsWith("/") && !raw.startsWith("//")) return true;
+  try {
+    const u = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    const host = u.hostname.replace(/^www\./i, "").toLowerCase();
+    return host === "sineart.vn";
+  } catch {
+    return false;
+  }
+}
+
 export async function importBlogFromUrl(url: string): Promise<ImportedBlogPayload> {
   const html = await fetchHtml(url);
   const article = extractArticle(html, url);
@@ -492,9 +527,10 @@ export async function importBlogFromUrl(url: string): Promise<ImportedBlogPayloa
     title: rewrite.title,
     thumbnail,
     image_alt: article.imageAlt || rewrite.title,
-    opening: rewrite.opening,
-    content: rewrite.content,
-    ending: rewrite.ending,
+    opening: sanitizeExternalAnchors(rewrite.opening),
+    content: sanitizeExternalAnchors(rewrite.content),
+    ending: sanitizeExternalAnchors(rewrite.ending),
+    /** Batch map sang URL public sineart.vn sau khi có id + slug trong DB. */
     nguon: url,
   };
 }

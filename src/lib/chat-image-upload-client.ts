@@ -4,6 +4,27 @@
  * - Parse JSON an toàn khi server trả plain text (413, nginx, …).
  */
 
+/** Khớp `experimental.proxyClientMaxBodySize` trong `next.config.ts`. */
+export const CHAT_IMAGE_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+export const CHAT_IMAGE_UPLOAD_MAX_LABEL = "25 MB";
+
+export function chatImageExceedsMaxSizeMessage(): string {
+  return `Dung lượng ảnh vượt quá giới hạn cho phép (${CHAT_IMAGE_UPLOAD_MAX_LABEL}), vui lòng chọn ảnh khác.`;
+}
+
+function responseLooksLikePayloadTooLarge(res: Response, text: string): boolean {
+  if (res.status === 413) return true;
+  const lower = text.trim().toLowerCase();
+  return (
+    lower.includes("entity too large") ||
+    lower.includes("request entity too large") ||
+    lower.includes("body exceeded") ||
+    lower.includes("payload too large") ||
+    lower.includes("maximum body") ||
+    lower.includes("content too large")
+  );
+}
+
 const COMPRESS_IF_LARGER_THAN = 900_000;
 const MAX_EDGE_PX = 2048;
 const JPEG_QUALITY = 0.85;
@@ -94,24 +115,15 @@ export async function parseUploadChatImageResponse(
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    const snippet = text.trim().slice(0, 160);
-    const lower = snippet.toLowerCase();
-    if (
-      res.status === 413 ||
-      lower.includes("entity too large") ||
-      lower.includes("body exceeded")
-    ) {
-      return {
-        ok: false,
-        error:
-          "Ảnh quá lớn so với giới hạn máy chủ. Thử ảnh nhỏ hơn hoặc định dạng JPEG/PNG nén.",
-      };
+    const snippet = text.trim().slice(0, 200);
+    if (responseLooksLikePayloadTooLarge(res, snippet)) {
+      return { ok: false, error: chatImageExceedsMaxSizeMessage() };
     }
     return {
       ok: false,
       error:
         snippet ||
-        (res.status ? `Lỗi tải ảnh (HTTP ${res.status}).` : "Lỗi tải ảnh."),
+        (res.status ? `Không tải được ảnh (HTTP ${res.status}).` : "Không tải được ảnh."),
     };
   }
 
@@ -125,10 +137,18 @@ export async function parseUploadChatImageResponse(
     return { ok: true, url: obj.url };
   }
 
+  if (!res.ok && responseLooksLikePayloadTooLarge(res, typeof obj.error === "string" ? obj.error : "")) {
+    return { ok: false, error: chatImageExceedsMaxSizeMessage() };
+  }
+
   const errMsg =
     typeof obj.error === "string" && obj.error.length > 0
       ? obj.error
-      : `Upload thất bại${res.status ? ` (HTTP ${res.status})` : ""}.`;
+      : res.status === 503
+        ? "Không kết nối được dịch vụ upload. Thử lại sau hoặc liên hệ quản trị."
+        : res.status === 502
+          ? "Máy chủ không xử lý được ảnh (lỗi tải lên). Thử lại sau."
+          : `Không gửi được ảnh${res.status ? ` (HTTP ${res.status})` : ""}.`;
 
   return { ok: false, error: errMsg };
 }
@@ -136,6 +156,9 @@ export async function parseUploadChatImageResponse(
 /** Nén (nếu cần) + POST multipart + parse JSON an toàn. */
 export async function postUploadChatImage(file: File): Promise<UploadChatImageResult> {
   const prepared = await compressImageFileForChat(file);
+  if (prepared.size > CHAT_IMAGE_UPLOAD_MAX_BYTES) {
+    return { ok: false, error: chatImageExceedsMaxSizeMessage() };
+  }
   const fd = new FormData();
   fd.append(
     "file",

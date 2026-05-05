@@ -1633,82 +1633,22 @@ button.tc-art-full.tc-art-btn:hover .tc-art-img {
   line-height: 1.55;
   max-width: 56ch;
 }
-
-/* Ticker 2 hàng — trên: trái→phải (translate 0 → -50%); dưới: phải→trái (đối chiều) */
-.classroom-real-ticker {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 0 -12px;
-  padding: 4px 0 8px;
-  overflow: hidden;
-}
-@media (min-width: 768px) {
-  .classroom-real-ticker {
-    gap: 14px;
-  }
-}
-.classroom-real-ticker-row {
-  overflow: hidden;
-  width: 100%;
-  /* Viền mờ hai đầu */
-  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
-}
-.classroom-real-ticker-track {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  width: max-content;
-  will-change: transform;
-}
-.classroom-real-ticker-track--pan-ltr {
-  animation: classroom-ticker-ltr linear infinite;
-}
-.classroom-real-ticker-track--pan-rtl {
-  animation: classroom-ticker-rtl linear infinite;
-}
-.classroom-real-ticker-row:hover .classroom-real-ticker-track {
-  animation-play-state: paused;
-}
-@media (prefers-reduced-motion: reduce) {
-  .classroom-real-ticker-track--pan-ltr,
-  .classroom-real-ticker-track--pan-rtl {
-    animation: none !important;
-    transform: none !important;
-  }
-  .classroom-real-ticker-row:hover .classroom-real-ticker-track {
-    animation-play-state: running;
-  }
-}
-
-@keyframes classroom-ticker-ltr {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-@keyframes classroom-ticker-rtl {
-  from {
-    transform: translateX(-50%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-.classroom-real-ticker-group {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  flex-shrink: 0;
+.classroom-real-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
-  padding-right: 10px;
-  box-sizing: border-box;
 }
-
+@media (min-width: 640px) {
+  .classroom-real-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+}
+@media (min-width: 960px) {
+  .classroom-real-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
 .classroom-real-card {
   display: block;
   padding: 0;
@@ -1723,10 +1663,6 @@ button.tc-art-full.tc-art-btn:hover .tc-art-img {
 }
 .classroom-real-card:active {
   transform: scale(0.98);
-}
-.classroom-real-ticker-card {
-  flex-shrink: 0;
-  width: min(220px, 38vw);
 }
 .classroom-real-media {
   display: block;

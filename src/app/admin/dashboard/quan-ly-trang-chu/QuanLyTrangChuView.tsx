@@ -30,9 +30,7 @@ import {
   type VideoContent,
   type WhyContent,
   type WhyPillar,
-  sanitizeAdClickUrl,
 } from "@/lib/admin/home-content-schema";
-import { readResponseJson } from "@/lib/admin/parse-fetch-json";
 import { parseYoutubeVideoId } from "@/lib/youtube";
 
 type Props = {
@@ -285,8 +283,6 @@ export default function QuanLyTrangChuView({
 // Ảnh lớp thực tế (mkt_home_content.img_class)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const MAX_CLASSROOM_FILE_BYTES = 4 * 1024 * 1024;
-
 function ImgClassPhotosSection({
   urls,
   onChange,
@@ -296,9 +292,6 @@ function ImgClassPhotosSection({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(
-    null,
-  );
   const [error, setError] = useState<string | null>(null);
 
   const handleFiles = useCallback(
@@ -306,57 +299,33 @@ function ImgClassPhotosSection({
       const list = e.target.files;
       if (!list?.length) return;
       setUploading(true);
-      setUploadProgress(null);
       setError(null);
-      const errs: string[] = [];
-      let accumulated = [...urls];
-      const total = list.length;
-
       try {
-        for (let i = 0; i < total; i++) {
-          const file = list[i]!;
-          setUploadProgress({ current: i + 1, total });
-
-          if (file.size > MAX_CLASSROOM_FILE_BYTES) {
-            errs.push(
-              `${file.name ? `"${file.name}"` : `Ảnh ${i + 1}`}: quá lớn (tối đa ~4MB).`,
-            );
-            continue;
-          }
-
-          const fd = new FormData();
-          fd.append("files", file);
-
-          try {
-            const res = await fetch("/admin/api/upload-classroom-photos", {
-              method: "POST",
-              body: fd,
-            });
-            const json = await readResponseJson<{
-              ok?: boolean;
-              urls?: string[];
-              error?: string;
-              warnings?: string[];
-            }>(res);
-
-            if (!res.ok || !json.ok || !json.urls?.length) {
-              errs.push(json.error || `Ảnh ${i + 1}: upload thất bại.`);
-              continue;
-            }
-            accumulated = [...accumulated, ...json.urls];
-            onChange(accumulated);
-            if (json.warnings?.length) errs.push(...json.warnings);
-          } catch (inner) {
-            errs.push(inner instanceof Error ? inner.message : "Upload thất bại.");
-          }
+        const fd = new FormData();
+        for (let i = 0; i < list.length; i++) {
+          fd.append("files", list[i]!);
         }
-
-        if (errs.length) setError(errs.join(" "));
+        const res = await fetch("/admin/api/upload-classroom-photos", {
+          method: "POST",
+          body: fd,
+        });
+        const json = (await res.json()) as {
+          ok?: boolean;
+          urls?: string[];
+          error?: string;
+          warnings?: string[];
+        };
+        if (!res.ok || !json.ok || !json.urls?.length) {
+          throw new Error(json.error || "Upload thất bại.");
+        }
+        onChange([...urls, ...json.urls]);
+        if (json.warnings?.length) {
+          setError(json.warnings.join(" "));
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Upload thất bại.");
       } finally {
         setUploading(false);
-        setUploadProgress(null);
         if (fileRef.current) fileRef.current.value = "";
       }
     },
@@ -372,9 +341,8 @@ function ImgClassPhotosSection({
         <div>
           <h2 className="qlh-section-title">Ảnh lớp thực tế</h2>
           <p className="qlh-section-sub">
-            Hiển thị giữa khối Giáo viên và CTA. Mỗi ảnh tối đa ~4MB; upload lần lượt để
-            tránh giới hạn hosting. Server nén WebP (max cạnh 1600px) rồi gửi Cloudflare
-            Images.
+            Hiển thị giữa khối Giáo viên và CTA. Chọn nhiều file — server nén WebP
+            (max cạnh 1600px) rồi upload Cloudflare Images.
           </p>
         </div>
       </header>
@@ -391,11 +359,7 @@ function ImgClassPhotosSection({
           ) : (
             <Upload size={14} />
           )}
-          {uploading && uploadProgress
-            ? `Đang upload ${uploadProgress.current}/${uploadProgress.total}…`
-            : uploading
-              ? "Đang upload…"
-              : "Chọn nhiều ảnh"}
+          {uploading ? "Đang upload…" : "Chọn nhiều ảnh"}
         </button>
         <input
           ref={fileRef}
@@ -990,21 +954,6 @@ function AdSection({
               placeholder="https://imagedelivery.net/... hoặc URL ảnh"
             />
           </label>
-          <label className="qlh-field">
-            <span className="qlh-field-label">URL khi bấm vào ảnh (tuỳ chọn)</span>
-            <input
-              type="url"
-              className="qlh-field-input"
-              value={data.clickUrl}
-              onChange={(e) => onChange({ ...data, clickUrl: e.target.value })}
-              placeholder="https://... — mở tab mới; chỉ http/https"
-            />
-          </label>
-          {data.clickUrl.trim() && !sanitizeAdClickUrl(data.clickUrl) ? (
-            <p className="qlh-hero-err" style={{ margin: 0 }}>
-              URL không hợp lệ — cần bắt đầu bằng http:// hoặc https://
-            </p>
-          ) : null}
           {error ? <div className="qlh-hero-err">{error}</div> : null}
           <p className="qlh-ad-hint">
             Ảnh nên xuất đúng canvas <b>360 × 176px</b> để không bị crop.

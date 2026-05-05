@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
-import { isRenderableAdImageUrl, sanitizeAdClickUrl } from "@/lib/admin/home-content-schema";
+import { isRenderableAdImageUrl } from "@/lib/admin/home-content-schema";
 import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 
 type Dismissal = "banner" | "pill" | "none";
@@ -12,18 +12,11 @@ const STORAGE_KEY = "sa_home_ad_dismissal";
 
 /**
  * Banner quảng cáo nổi cho trang public (home + subpages).
- * - URL ảnh: `mkt_home_content.ads`. Link khi bấm: `ad_click_url` (tab mới).
+ * - URL ảnh đến từ `mkt_home_content.ads`.
  * - Có nút ✕ để thu gọn thành pill; pill click lại để mở banner.
  * - Trạng thái dismissal lưu `sessionStorage` — reload tab trả về `banner`.
  */
-export default function HomeAdBanner({
-  imageUrl,
-  clickUrl = "",
-}: {
-  imageUrl: string;
-  /** URL mở tab mới khi bấm ảnh — rỗng = không bọc thẻ link */
-  clickUrl?: string;
-}) {
+export default function HomeAdBanner({ imageUrl }: { imageUrl: string }) {
   const [dismissal, setDismissal] = useState<Dismissal>("banner");
 
   useEffect(() => {
@@ -48,22 +41,6 @@ export default function HomeAdBanner({
   const src = imageUrl.trim();
   if (!isRenderableAdImageUrl(src)) return null;
 
-  const href = sanitizeAdClickUrl(clickUrl);
-  const linked = href.length > 0;
-
-  const bannerImg = (
-    <Image
-      className="sa-adbanner-img"
-      src={src}
-      alt="Quảng cáo Sine Art"
-      width={360}
-      height={176}
-      sizes="(max-width: 720px) min(360px, calc(100vw - 24px)), 360px"
-      loading="lazy"
-      unoptimized={nextImageShouldUnoptimize(src)}
-    />
-  );
-
   return (
     <>
       <div
@@ -72,19 +49,16 @@ export default function HomeAdBanner({
         aria-label="Quảng cáo"
       >
         <div className="sa-adbanner-inner">
-          {linked ? (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="sa-adbanner-link"
-              aria-label="Mở liên kết quảng cáo (tab mới)"
-            >
-              {bannerImg}
-            </a>
-          ) : (
-            bannerImg
-          )}
+          <Image
+            className="sa-adbanner-img"
+            src={src}
+            alt="Quảng cáo Sine Art"
+            width={360}
+            height={176}
+            sizes="(max-width: 720px) min(360px, calc(100vw - 24px)), 360px"
+            loading="lazy"
+            unoptimized={nextImageShouldUnoptimize(src)}
+          />
           <button
             type="button"
             className="sa-adbanner-x"

@@ -53,7 +53,7 @@ import {
   type StudentManageRow,
 } from "@/lib/phong-hoc/student-manage-data";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-import { isRenderableAdImageUrl, sanitizeAdClickUrl } from "@/lib/admin/home-content-schema";
+import { isRenderableAdImageUrl } from "@/lib/admin/home-content-schema";
 import {
   normalizePhongHocPathSlug,
   phongHocSlugFromClassName,
@@ -559,8 +559,6 @@ type ClassroomClientProps = {
   classSlug?: string;
   /** URL ảnh quảng cáo đến từ `mkt_home_content.ads`. Rỗng = ẩn hẳn banner. */
   adImageUrl?: string;
-  /** URL mở tab mới — `mkt_home_content.ad_click_url`. */
-  adClickUrl?: string;
 };
 
 type MediaPermissionState = "idle" | "checking" | "granted" | "denied" | "unsupported";
@@ -646,13 +644,10 @@ function MediaPermissionControl() {
 export default function ClassroomClient({
   classSlug,
   adImageUrl = "",
-  adClickUrl = "",
 }: ClassroomClientProps = {}) {
   const router = useRouter();
   const adSrc = adImageUrl.trim();
   const hasAdImage = isRenderableAdImageUrl(adSrc);
-  const adHref = sanitizeAdClickUrl(adClickUrl);
-  const adLinked = adHref.length > 0;
   const [mounted, setMounted] = useState(false);
   const [role, setRole] = useState<Role>("student");
   const [storedSession, setStoredSession] = useState<ClassroomSessionRecord | null>(null);
@@ -3116,19 +3111,11 @@ export default function ClassroomClient({
       {hasAdImage ? (
         <div className={cx("adb", adDismissal !== "banner" && "hid")}>
           <div className="adinner">
-            {adLinked ? (
-              <a
-                href={adHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="adlink"
-                aria-label="Mở liên kết quảng cáo (tab mới)"
-              >
-                <img className="adimg" src={adSrc} alt="Quảng cáo Sine Art" />
-              </a>
-            ) : (
-              <img className="adimg" src={adSrc} alt="Quảng cáo Sine Art" />
-            )}
+            <img
+              className="adimg"
+              src={adSrc}
+              alt="Quảng cáo Sine Art"
+            />
             <button
               type="button"
               className="adx"

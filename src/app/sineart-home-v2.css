@@ -504,10 +504,6 @@
   z-index: 2;
   transform: rotate(-2deg);
   background-image: linear-gradient(135deg, #ffd0a8, #ffb0d5);
-  background-image: var(
-    --hero-cover-img,
-    linear-gradient(135deg, #ffd0a8, #ffb0d5)
-  );
 }
 .hero-card--top {
   width: 32%;

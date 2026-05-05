@@ -406,8 +406,14 @@ function mergeHeroCards(v: unknown): HeroCardsContent {
 
 function mergeHeroCard(v: unknown, d: HeroCardImage): HeroCardImage {
   const o = isObj(v) ? v : {};
+  const urlRaw =
+    typeof o.imageUrl === "string"
+      ? o.imageUrl
+      : typeof o.image_url === "string"
+        ? o.image_url
+        : undefined;
   return {
-    imageUrl: str(o.imageUrl, d.imageUrl),
+    imageUrl: str(urlRaw !== undefined ? urlRaw : o.imageUrl, d.imageUrl),
     alt: str(o.alt, d.alt),
   };
 }

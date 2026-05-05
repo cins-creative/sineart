@@ -147,17 +147,39 @@ export type HomeAdConfig = {
   /** URL ảnh quảng cáo. Khung public/phòng học hiện tại: 360 × 176px. */
   ads: string;
   visibleWhere: AdVisibleWhere;
+  /**
+   * URL mở tab mới khi user bấm ảnh — cột `mkt_home_content.ad_click_url`.
+   * Rỗng = ảnh không bọc link.
+   */
+  clickUrl: string;
 };
 
 export const DEFAULT_HOME_AD: HomeAdConfig = {
   ads: "",
   visibleWhere: "home",
+  clickUrl: "",
 };
+
+/** Chỉ cho phép http(s) — trả chuỗi rỗng nếu không hợp lệ. */
+export function sanitizeAdClickUrl(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  const s = raw.trim();
+  if (!s) return "";
+  try {
+    const u = new URL(s);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    return u.href;
+  } catch {
+    return "";
+  }
+}
 
 export function normalizeAdConfig(raw: {
   ads?: unknown;
   visible_where?: unknown;
   visibleWhere?: unknown;
+  ad_click_url?: unknown;
+  clickUrl?: unknown;
 }): HomeAdConfig {
   const vwRaw =
     typeof raw.visibleWhere === "string"
@@ -169,9 +191,16 @@ export function normalizeAdConfig(raw: {
     vwRaw === "home" || vwRaw === "class" || vwRaw === "both"
       ? vwRaw
       : "home";
+  const clickRaw =
+    typeof raw.clickUrl === "string"
+      ? raw.clickUrl
+      : typeof raw.ad_click_url === "string"
+        ? raw.ad_click_url
+        : "";
   return {
     ads: typeof raw.ads === "string" ? raw.ads : "",
     visibleWhere,
+    clickUrl: sanitizeAdClickUrl(clickRaw),
   };
 }
 

@@ -26,7 +26,12 @@ export async function POST(req: Request) {
 
   const body = (raw as { content?: unknown; ad?: unknown; img_class?: unknown }) ?? {};
   const normalized = mergeHomeContent(body.content);
-  const adRaw = (body.ad ?? {}) as { ads?: unknown; visibleWhere?: unknown; visible_where?: unknown };
+  const adRaw = (body.ad ?? {}) as {
+    ads?: unknown;
+    visibleWhere?: unknown;
+    visible_where?: unknown;
+    clickUrl?: unknown;
+  };
   const adConfig = normalizeAdConfig(adRaw);
 
   function normalizeImgClassColumn(v: unknown): string[] {
@@ -55,35 +60,54 @@ export async function POST(req: Request) {
     content: normalized,
     ads: adConfig.ads,
     visible_where: adConfig.visibleWhere,
+    ad_click_url: adConfig.clickUrl,
     updated_by: updatedBy,
   } as const;
 
   let imgClassSkipped = false;
+  let adClickSkipped = false;
+
+  type UpsertPayload = Record<string, unknown>;
+  let payload: UpsertPayload = {
+    ...baseRow,
+    img_class: imgClass,
+  };
 
   let { data, error } = await supabase
     .from("mkt_home_content")
-    .upsert(
-      { ...baseRow, img_class: imgClass },
-      { onConflict: "id" },
-    )
+    .upsert(payload, { onConflict: "id" })
     .select("content, ads, visible_where, updated_at")
     .single();
 
-  const errMsg = error?.message ?? "";
+  const errMsg0 = error?.message ?? "";
   const missingImgClassColumn =
-    /img_class/i.test(errMsg) ||
-    (/schema cache/i.test(errMsg) &&
-      (/column/i.test(errMsg) || /could not find/i.test(errMsg)));
+    /img_class/i.test(errMsg0) ||
+    (/schema cache/i.test(errMsg0) &&
+      (/column/i.test(errMsg0) || /could not find/i.test(errMsg0)));
 
-  if (error && missingImgClassColumn) {
+  if (error && missingImgClassColumn && "img_class" in payload) {
+    delete payload.img_class;
+    imgClassSkipped = true;
     const retry = await supabase
       .from("mkt_home_content")
-      .upsert(baseRow, { onConflict: "id" })
+      .upsert(payload, { onConflict: "id" })
       .select("content, ads, visible_where, updated_at")
       .single();
     data = retry.data;
     error = retry.error;
-    imgClassSkipped = true;
+  }
+
+  const errMsg1 = error?.message ?? "";
+  if (error && /ad_click_url/i.test(errMsg1) && "ad_click_url" in payload) {
+    delete payload.ad_click_url;
+    adClickSkipped = true;
+    const retry2 = await supabase
+      .from("mkt_home_content")
+      .upsert(payload, { onConflict: "id" })
+      .select("content, ads, visible_where, updated_at")
+      .single();
+    data = retry2.data;
+    error = retry2.error;
   }
 
   if (error || !data) {
@@ -98,18 +122,23 @@ export async function POST(req: Request) {
   revalidatePath("/admin/dashboard/quan-ly-trang-chu", "page");
   revalidateTag(MKT_HOME_CONTENT_TAG, "max");
 
+  const warnParts: string[] = [];
+  if (imgClassSkipped) {
+    warnParts.push(
+      "Ảnh lớp học chưa được ghi (thiếu cột `img_class` hoặc PostgREST chưa reload). SQL: `alter table public.mkt_home_content add column if not exists img_class text[] not null default '{}';` rồi `notify pgrst, 'reload schema';`.",
+    );
+  }
+  if (adClickSkipped) {
+    warnParts.push(
+      "Link click banner chưa được ghi (thiếu cột `ad_click_url`). SQL: `alter table public.mkt_home_content add column if not exists ad_click_url text not null default '';` rồi `notify pgrst, 'reload schema';`.",
+    );
+  }
+
   return NextResponse.json({
     ok: true,
     content: normalized,
     ad: adConfig,
     updated_at: (data.updated_at as string | null) ?? null,
-    ...(imgClassSkipped
-      ? {
-          warning:
-            "Ảnh lớp học chưa được ghi (thiếu cột `img_class` hoặc PostgREST chưa reload). Trên Supabase SQL Editor chạy: " +
-            "`alter table public.mkt_home_content add column if not exists img_class text[] not null default '{}';` " +
-            "rồi `notify pgrst, 'reload schema';` — sau đó bấm Lưu lại.",
-        }
-      : {}),
+    ...(warnParts.length ? { warning: warnParts.join(" ") } : {}),
   });
 }

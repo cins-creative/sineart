@@ -1031,6 +1031,16 @@
   display: block;
 }
 
+.phc .adlink {
+  display: block;
+  line-height: 0;
+  outline: none;
+}
+.phc .adlink:focus-visible {
+  outline: 2px solid var(--phc-accent, #ee5b9f);
+  outline-offset: 2px;
+}
+
 .phc .adimg {
   display: block;
   width: 100%;

@@ -11,7 +11,7 @@ import {
 import { getMktHomeContentRow } from "@/lib/data/mkt-home-cached";
 
 /**
- * Lấy cấu hình quảng cáo trang chủ (`mkt_home_content.ads` + `visible_where`).
+ * Lấy cấu hình quảng cáo (`ads`, `visible_where`, `ad_click_url`).
  * Dùng cho public site (anon SELECT).
  *
  * - Cùng cache Data Cache với `getHomeContent` (`getMktHomeContentRow`).
@@ -25,6 +25,7 @@ export const getHomeAdConfig = cache(async (): Promise<HomeAdConfig> => {
   return normalizeAdConfig({
     ads: row.ads,
     visible_where: row.visible_where,
+    ad_click_url: row.ad_click_url,
   });
 });
 

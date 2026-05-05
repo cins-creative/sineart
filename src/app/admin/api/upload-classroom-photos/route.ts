@@ -6,8 +6,11 @@ import { optimizeBufferForCfUpload } from "@/lib/admin/sharp-classroom-photo";
 
 export const runtime = "nodejs";
 
+/** Vercel Serverless thường giới hạn ~4.5MB/request — giữ từng file dưới mức an toàn. */
+export const maxDuration = 60;
+
 const MAX_FILES = 24;
-const MAX_INPUT_BYTES = 18 * 1024 * 1024;
+const MAX_INPUT_BYTES = 4 * 1024 * 1024;
 
 export async function POST(req: Request) {
   const session = await getAdminSessionOrNull();
@@ -51,7 +54,7 @@ export async function POST(req: Request) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i]!;
     if (file.size > MAX_INPUT_BYTES) {
-      errors.push(`Ảnh ${i + 1}: quá lớn (tối đa ~18MB).`);
+      errors.push(`Ảnh ${i + 1}: quá lớn (tối đa ~4MB mỗi ảnh — giới hạn upload hosting).`);
       continue;
     }
     if (!/^image\//i.test(file.type) && !/\.(jpe?g|png|webp|gif|bmp|tif)$/i.test(file.name)) {

@@ -11,6 +11,8 @@ export const metadata: Metadata = {
 
 export default async function PhongHocPage() {
   const adConfig = await getHomeAdConfig();
-  const adImageUrl = shouldShowAd(adConfig, "class") ? adConfig.ads : "";
-  return <ClassroomClient adImageUrl={adImageUrl} />;
+  const showAd = shouldShowAd(adConfig, "class");
+  const adImageUrl = showAd ? adConfig.ads : "";
+  const adClickUrl = showAd ? adConfig.clickUrl : "";
+  return <ClassroomClient adImageUrl={adImageUrl} adClickUrl={adClickUrl} />;
 }

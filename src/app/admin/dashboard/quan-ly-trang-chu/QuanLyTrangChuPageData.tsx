@@ -27,7 +27,7 @@ export default async function QuanLyTrangChuPageData() {
 
   const { data, error } = await supabase
     .from("mkt_home_content")
-    .select("content, ads, visible_where, updated_at, img_class")
+    .select("content, ads, visible_where, ad_click_url, updated_at, img_class")
     .eq("id", 1)
     .maybeSingle();
 
@@ -48,6 +48,7 @@ export default async function QuanLyTrangChuPageData() {
     ? normalizeAdConfig({
         ads: (data as Record<string, unknown>).ads,
         visible_where: (data as Record<string, unknown>).visible_where,
+        ad_click_url: (data as Record<string, unknown>).ad_click_url,
       })
     : DEFAULT_HOME_AD;
   const imgClass = normalizeImgClassUrls((data as Record<string, unknown> | null)?.img_class);

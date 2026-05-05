@@ -13,6 +13,10 @@ export async function PhongHocSlugClassroomSection({
 }) {
   const { slug } = await params;
   const adConfig = await getHomeAdConfig();
-  const adImageUrl = shouldShowAd(adConfig, "class") ? adConfig.ads : "";
-  return <ClassroomClient classSlug={slug} adImageUrl={adImageUrl} />;
+  const showAd = shouldShowAd(adConfig, "class");
+  const adImageUrl = showAd ? adConfig.ads : "";
+  const adClickUrl = showAd ? adConfig.clickUrl : "";
+  return (
+    <ClassroomClient classSlug={slug} adImageUrl={adImageUrl} adClickUrl={adClickUrl} />
+  );
 }

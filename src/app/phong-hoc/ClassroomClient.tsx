@@ -64,6 +64,7 @@ import {
 } from "@/lib/phong-hoc/chat-saved-student-work-ids";
 import { buildHeThongBaiTapHref } from "@/lib/he-thong-bai-tap/slug";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { postUploadChatImage } from "@/lib/chat-image-upload-client";
 import { classroomGalleryEmoji, fetchClassroomGalleryForLop } from "@/lib/phong-hoc/classroom-gallery";
 import ClassroomSignInOverlay from "@/app/_components/ClassroomSignInOverlay";
 import StudentAvatarMenu from "@/components/StudentAvatarMenu";
@@ -1906,14 +1907,9 @@ export default function ClassroomClient({
       try {
         let photoUrl: string | null = null;
         if (chatSelectedFile) {
-          const fd = new FormData();
-          fd.append("file", chatSelectedFile, chatSelectedFile.name || "chat.jpg");
-          const up = await fetch("/api/phong-hoc/upload-chat-image", { method: "POST", body: fd });
-          const uj = (await up.json()) as { ok?: boolean; url?: string; error?: string };
-          if (!up.ok || !uj.ok || typeof uj.url !== "string") {
-            throw new Error(uj.error || "Upload ảnh thất bại.");
-          }
-          photoUrl = uj.url;
+          const up = await postUploadChatImage(chatSelectedFile);
+          if (!up.ok) throw new Error(up.error);
+          photoUrl = up.url;
         }
 
         const qlhvIdForInsert =

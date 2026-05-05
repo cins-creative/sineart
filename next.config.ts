@@ -18,6 +18,11 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     optimizePackageImports: ["lucide-react"],
+    /** Ảnh chat / upload lớn — tránh 413 & plain-text “Request Entity Too Large” khi proxy dev. */
+    proxyClientMaxBodySize: "25mb",
+    serverActions: {
+      bodySizeLimit: "25mb",
+    },
   },
   async redirects() {
     return [

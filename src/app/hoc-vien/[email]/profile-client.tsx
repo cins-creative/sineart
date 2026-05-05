@@ -26,6 +26,7 @@ import {
   type ClassroomStudentSessionData,
 } from "@/lib/phong-hoc/classroom-session";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { postUploadChatImage } from "@/lib/chat-image-upload-client";
 import { buildHeThongBaiTapHref } from "@/lib/he-thong-bai-tap/slug";
 import {
   classroomGalleryEmoji,
@@ -653,12 +654,9 @@ export default function HocVienProfileClient({
       setAvatarUploading(true);
       setSaveMsg(null);
       try {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await fetch("/api/phong-hoc/upload-chat-image", { method: "POST", body: fd });
-        const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
-        if (!res.ok || !j.ok || !j.url) {
-          throw new Error(j.error ?? "Upload ảnh thất bại.");
+        const j = await postUploadChatImage(file);
+        if (!j.ok) {
+          throw new Error(j.error);
         }
         const sb = createBrowserSupabaseClient();
         if (!sb) throw new Error("Chưa cấu hình kết nối dữ liệu.");

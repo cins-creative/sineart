@@ -1,6 +1,7 @@
 "use client";
 
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { postUploadChatImage } from "@/lib/chat-image-upload-client";
 import {
   buildVietQrImageUrl,
   getTpBankQrRecipient,
@@ -679,12 +680,9 @@ export default function DongHocPhiClient({
       setAvatarUploading(true);
       setAvatarError(null);
       try {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await fetch("/api/phong-hoc/upload-chat-image", { method: "POST", body: fd });
-        const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
-        if (!res.ok || !j.ok || !j.url) {
-          throw new Error(j.error ?? "Upload ảnh thất bại.");
+        const j = await postUploadChatImage(file);
+        if (!j.ok) {
+          throw new Error(j.error);
         }
         const url = j.url.trim();
         if (initialHocVienId != null && initialHocVienId > 0) {

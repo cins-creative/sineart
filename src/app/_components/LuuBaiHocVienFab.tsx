@@ -12,6 +12,7 @@ import {
 } from "@/lib/phong-hoc/classroom-session";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
+import { postUploadChatImage } from "@/lib/chat-image-upload-client";
 import "./LuuBaiHocVienFab.css";
 
 type ClassOption = {
@@ -272,16 +273,8 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
 
     try {
       setUploadPct(45);
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/phong-hoc/upload-chat-image", {
-        method: "POST",
-        body: fd,
-      });
-      const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
-      if (!res.ok || !j.ok || !j.url) {
-        throw new Error(j.error ?? `HTTP ${res.status}`);
-      }
+      const j = await postUploadChatImage(file);
+      if (!j.ok) throw new Error(j.error);
       setUploadedUrl(j.url);
       setUploadState("done");
       setUploadPct(100);

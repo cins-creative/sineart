@@ -33,13 +33,13 @@ export const CONTENT_HTML = `
 
 <div class="mosaic">
   <div class="mosaic-big">
-    <img src="/img/phuong-phap-ve-silhouette/hero-cover.png" alt="Ví dụ đọc silhouette và khối sáng tối" />
+    <img src="/img/phuong-phap-ve-silhouette/mosaic-main.png" alt="Ví dụ đọc silhouette và khối sáng tối" />
   </div>
   <div class="mosaic-small">
     <img src="/img/phuong-phap-ve-silhouette/thumbnail.jpg" alt="Phác silhouette nhanh" />
   </div>
   <div class="mosaic-small">
-    <img src="/img/phuong-phap-ve-silhouette/hero-cover.png" alt="So sánh không gian âm" />
+    <img src="/img/phuong-phap-ve-silhouette/mosaic-small-2.png" alt="So sánh không gian âm" />
   </div>
 </div>
 
@@ -65,12 +65,18 @@ export const CONTENT_HTML = `
       <p class="el-name">Nhìn mờ <em>Squint</em></p>
       <p class="el-desc">Híp mắt để gom chi tiết thành mảng lớn. Xác định điểm sáng nhất và tối nhất.</p>
     </div>
+    <div class="el-item-img">
+      <img src="/img/phuong-phap-ve-silhouette/el-step-01.png" alt="Minh họa nhìn mờ — gom mảng lớn" loading="lazy" decoding="async" />
+    </div>
   </div>
   <div class="el-item">
     <div class="el-item-text">
       <span class="el-n">02</span>
       <p class="el-name">Khối nền <em>Mass-in</em></p>
       <p class="el-desc">Phủ một lớp nhẹ (hoặc tô đặc) theo dáng tổng — chưa vẽ chi tiết.</p>
+    </div>
+    <div class="el-item-img">
+      <img src="/img/phuong-phap-ve-silhouette/el-step-02.png" alt="Minh họa khối nền mass-in" loading="lazy" decoding="async" />
     </div>
   </div>
   <div class="el-item">
@@ -79,12 +85,18 @@ export const CONTENT_HTML = `
       <p class="el-name">Đo không gian âm</p>
       <p class="el-desc">So sánh khoảng trống giữa tay và thân, giữa đầu và khung — lỗi tỉ lệ thường nằm ở đây.</p>
     </div>
+    <div class="el-item-img">
+      <img src="/img/phuong-phap-ve-silhouette/el-step-03.png" alt="Minh họa không gian âm và tương phản" loading="lazy" decoding="async" />
+    </div>
   </div>
   <div class="el-item">
     <div class="el-item-text">
       <span class="el-n">04</span>
       <p class="el-name">Silhouette test</p>
       <p class="el-desc">Chụp ảnh thu nhỏ bài: nếu vẫn đọc được hành động/chủ đề, mới đi sâu vào đường bao và chi tiết.</p>
+    </div>
+    <div class="el-item-img">
+      <img src="/img/phuong-phap-ve-silhouette/el-step-04.png" alt="Minh họa silhouette test — đọc dáng từ hình bìa" loading="lazy" decoding="async" />
     </div>
   </div>
 </div>

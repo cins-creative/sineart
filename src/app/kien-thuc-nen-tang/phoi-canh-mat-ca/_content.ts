@@ -29,15 +29,15 @@ export const CONTENT_HTML = `
   </div>
 </div>
 
-<div class="mosaic">
+<div class="mosaic mosaic--image">
   <div class="mosaic-big">
-    <img src="/img/phoi-canh-mat-ca/hero-cover.png" alt="Phối cảnh mắt cá" />
+    <img src="/img/phoi-canh-mat-ca/mosaic-main.png" alt="Phối cảnh mắt cá trong khung tròn — tàu điện, đường lưới cong" loading="lazy" decoding="async" />
   </div>
   <div class="mosaic-small">
-    <img src="/img/phoi-canh-mat-ca/thumbnail.jpg" alt="Đường chân trời cong" />
+    <img src="/img/phoi-canh-mat-ca/thumbnail.png" alt="Lớp học méo mắt cá — phác kèm góc nhìn và sơ đồ trên" loading="lazy" decoding="async" />
   </div>
   <div class="mosaic-small">
-    <img src="/img/phoi-canh-mat-ca/hero-cover.png" alt="Góc siêu rộng" />
+    <img src="/img/phoi-canh-mat-ca/mosaic-small-2.png" alt="Ảnh chụp hành lang góc siêu rộng — méo thùng điển hình ống mắt cá" loading="lazy" decoding="async" />
   </div>
 </div>
 

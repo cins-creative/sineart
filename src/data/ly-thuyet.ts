@@ -87,7 +87,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["force", "gesture", "đường-chỉ-phương", "nhân-vật"],
     doc_time: 11,
     hero_image: "/img/phuong-phap-ve-force/hero-cover.png",
-    thumbnail: "/img/phuong-phap-ve-force/thumbnail.jpg",
+    thumbnail: "/img/phuong-phap-ve-force/thumbnail.png",
   },
   {
     slug: "phuong-phap-ky-hoa",
@@ -97,9 +97,9 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     mo_ta:
       "Ghi nhanh quan sát — trọng tâm, thời gian giới hạn và làm giàu nhật ký hình.",
     tags: ["ký-họa", "sketch", "quan-sát", "urban-sketch"],
-    doc_time: 10,
+    doc_time: 14,
     hero_image: "/img/phuong-phap-ky-hoa/hero-cover.png",
-    thumbnail: "/img/phuong-phap-ky-hoa/thumbnail.jpg",
+    thumbnail: "/img/phuong-phap-ky-hoa/hero-cover.png",
   },
   {
     slug: "cach-dieu",
@@ -111,7 +111,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["cách-điệu", "stylize", "trang-trí", "hình-tượng"],
     doc_time: 14,
     hero_image: "/img/cach-dieu/hero-cover.png",
-    thumbnail: "/img/cach-dieu/thumbnail.jpg",
+    thumbnail: "/img/cach-dieu/thumbnail.png",
   },
   {
     slug: "ly-thuyet-phoi-canh",
@@ -134,7 +134,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["phối-cảnh", "axonometric", "song-song", "kỹ-thuật"],
     doc_time: 11,
     hero_image: "/img/phoi-canh-song-song/hero-cover.png",
-    thumbnail: "/img/phoi-canh-song-song/thumbnail.jpg",
+    thumbnail: "/img/phoi-canh-song-song/thumbnail.png",
   },
   {
     slug: "phoi-canh-mat-ca",
@@ -146,7 +146,7 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     tags: ["phối-cảnh", "fisheye", "góc-rộng", "curvilinear"],
     doc_time: 10,
     hero_image: "/img/phoi-canh-mat-ca/hero-cover.png",
-    thumbnail: "/img/phoi-canh-mat-ca/thumbnail.jpg",
+    thumbnail: "/img/phoi-canh-mat-ca/thumbnail.png",
   },
   {
     slug: "phoi-canh-panorama-360",

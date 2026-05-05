@@ -29,15 +29,15 @@ export const CONTENT_HTML = `
   </div>
 </div>
 
-<div class="mosaic">
+<div class="mosaic mosaic--image">
   <div class="mosaic-big">
-    <img src="/img/phoi-canh-song-song/hero-cover.png" alt="Minh họa phối cảnh song song" />
+    <img src="/img/phoi-canh-song-song/mosaic-main.png" alt="Nhân vật dựng từ khối hộp trên lưới isometric — tỉ lệ và tư thế" loading="lazy" decoding="async" />
   </div>
   <div class="mosaic-small">
-    <img src="/img/phoi-canh-song-song/thumbnail.jpg" alt="Axonometric" />
+    <img src="/img/phoi-canh-song-song/thumbnail.png" alt="So sánh perspective, isometric và axonometric — từ khối cơ bản tới tòa nhà" loading="lazy" decoding="async" />
   </div>
   <div class="mosaic-small">
-    <img src="/img/phoi-canh-song-song/hero-cover.png" alt="Khối song song" />
+    <img src="/img/phoi-canh-song-song/mosaic-small-2.png" alt="Minh họa isometric phức tạp — không gian nhiều tầng, đường song song" loading="lazy" decoding="async" />
   </div>
 </div>
 

@@ -12,6 +12,9 @@ const PencilIcon = () => (
   </svg>
 );
 
+/** Fanpage Facebook — đăng ký học thử qua Messenger / form Meta. */
+const CTA_TRIAL_FB_URL = "https://www.facebook.com/sineart0102";
+
 const STICKS = [
   { n: "2 phút", l: "để đăng ký online" },
   { n: "100%", l: "buổi học thử miễn phí" },
@@ -36,10 +39,15 @@ export default function CtaBandSection() {
             Học thử 1 buổi miễn phí — không cần kinh nghiệm, chỉ cần giấy bút và đam mê.
           </p>
           <div className="cta-band-actions">
-            <Link href="/dang-ky" className="cta-band-btn-primary">
+            <a
+              href={CTA_TRIAL_FB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="cta-band-btn-primary"
+            >
               <PencilIcon />
               Đăng ký học thử
-            </Link>
+            </a>
             <Link href="/khoa-hoc" className="cta-band-btn-ghost">
               Tư vấn lộ trình
             </Link>

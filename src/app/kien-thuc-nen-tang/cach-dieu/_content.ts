@@ -30,15 +30,15 @@ export const CONTENT_HTML = `
   </div>
 </div>
 
-<div class="mosaic">
+<div class="mosaic mosaic--image">
   <div class="mosaic-big">
-    <img src="/img/cach-dieu/hero-cover.png" alt="Minh họa quy trình cách điệu" />
+    <img src="/img/cach-dieu/mosaic-main.png" alt="Nhân vật cách điệu hình học — xe đạp, xe scooter, tư thế gọn" loading="lazy" decoding="async" />
   </div>
   <div class="mosaic-small">
-    <img src="/img/cach-dieu/thumbnail.jpg" alt="Phác concept nhiều phương án" />
+    <img src="/img/cach-dieu/thumbnail.png" alt="Ba tư thế người cách điệu khối — nhận diện qua dáng và màu phẳng" loading="lazy" decoding="async" />
   </div>
   <div class="mosaic-small">
-    <img src="/img/cach-dieu/hero-cover.png" alt="Ứng dụng trang trí" />
+    <img src="/img/cach-dieu/mosaic-small-2.png" alt="Ngựa cách điệu khối và họa tiết — một chủ thể, nhiều mặt phẳng" loading="lazy" decoding="async" />
   </div>
 </div>
 
@@ -97,12 +97,18 @@ export const CONTENT_HTML = `
       <p class="el-name">Silhouette</p>
       <p class="el-desc">Tối ưu <strong>hình bóng viền ngoài</strong>: chỉ nhìn khối đặc cũng đoán được đối tượng. Tránh các phần dính vào nhau (đuôi dính chân, cánh dính thân) làm mất đọc hình.</p>
     </div>
+    <div class="el-item-img">
+      <img src="/img/cach-dieu/el-step-01.svg" alt="Minh họa silhouette — khối đặc đọc được dáng, tránh dính nhánh" loading="lazy" decoding="async" />
+    </div>
   </div>
   <div class="el-item">
     <div class="el-item-text">
       <span class="el-n">02</span>
       <p class="el-name">Action line</p>
       <p class="el-desc">Xác định <strong>hướng chuyển động</strong> — đường dẫn mắt uyển chuyển, tránh nét gãy khúc khiến thị giác “khựng”. Tạo sức sống và liên kết với các yếu tố trong bố cục.</p>
+    </div>
+    <div class="el-item-img">
+      <img src="/img/cach-dieu/el-step-02.svg" alt="Minh họa đường action — đường cong dẫn nhịp qua khối" loading="lazy" decoding="async" />
     </div>
   </div>
   <div class="el-item">
@@ -111,12 +117,18 @@ export const CONTENT_HTML = `
       <p class="el-name">Cấu trúc lớn</p>
       <p class="el-desc">Chia rõ các phần (ví dụ cú: chân mày, mắt, mỏ, lông cổ, cánh, chân, đuôi). Giữ <strong>tỷ lệ sinh học cơ bản</strong> giữa các cụm — tránh cánh quá nhỏ so với thân bầu, v.v.</p>
     </div>
+    <div class="el-item-img">
+      <img src="/img/cach-dieu/el-step-03.svg" alt="Minh họa chia cụm đầu — thân — chi trước khi họa tiết" loading="lazy" decoding="async" />
+    </div>
   </div>
   <div class="el-item">
     <div class="el-item-text">
       <span class="el-n">04</span>
       <p class="el-name">Chính — phụ &amp; họa tiết</p>
       <p class="el-desc">Chọn <strong>một điểm nhấn</strong> (sừng nai, lưng cá voi…) để trang trí mạnh; phần còn lại tối giản. Họa tiết phải <strong>đồng nhất chủ đề</strong> — ví dụ chủ đề cơ khí thì dùng bánh răng, vi mạch, góc cạnh; tránh trộn ngẫu hứng gây rối.</p>
+    </div>
+    <div class="el-item-img">
+      <img src="/img/cach-dieu/el-step-04.svg" alt="Minh họa một điểm nhấn trang trí và phần còn lại giữ nền" loading="lazy" decoding="async" />
     </div>
   </div>
 </div>

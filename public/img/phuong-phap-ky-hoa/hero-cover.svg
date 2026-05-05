@@ -1,0 +1,11 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" fill="none" aria-hidden="true">
+  <rect width="1920" height="1080" fill="#f7f2ea"/>
+  <path stroke="#2c2825" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M120 620 L420 480 L820 520 L1200 440 L1680 500 L1800 580 L1800 920 L120 920 Z"/>
+  <path stroke="#2c2825" stroke-width="2.5" opacity=".85" d="M280 500 L280 900 M420 480 L420 900 M580 520 L580 900 M900 460 L900 900 M1120 450 L1120 900 M1380 480 L1380 900"/>
+  <path stroke="#2c2825" stroke-width="2" opacity=".55" d="M100 520 Q520 400 960 480 T1820 540"/>
+  <path stroke="#c4a574" stroke-width="4" stroke-linecap="round" opacity=".9" d="M1240 380 L1520 340"/>
+  <path stroke="#2c2825" stroke-width="2" opacity=".45" d="M200 700 Q360 640 520 680 Q720 560 960 620 Q1200 540 1420 600 Q1580 560 1720 640"/>
+  <circle cx="1480" cy="220" r="48" stroke="#d4a574" stroke-width="3" fill="#fff5e0" opacity=".95"/>
+  <path stroke="#2c2825" stroke-width="2" opacity=".35" d="M150 780 L400 760 L620 800 L900 740 L1180 780 L1500 720 L1780 760"/>
+  <path stroke="#2c2825" stroke-width="2.5" opacity=".7" d="M1560 880 Q1620 820 1680 860 M1320 860 Q1280 800 1240 840 M980 880 Q920 820 880 860"/>
+</svg>

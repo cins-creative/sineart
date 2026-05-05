@@ -63,7 +63,7 @@ export default function ClassroomPhotosSection({ urls }: { urls: string[] }) {
         Không gian học <em>thực tế</em>
       </h2>
       <p className="classroom-real-sub">
-        Ảnh chụp tại lớp — cập nhật từ ban Đào tạo Sine Art.
+        Ảnh chụp tại lớp — cập nhật từ Sine Art cơ sở 67 Tân Sơn Nhì, Q. Tân Phú
       </p>
 
       <div className="classroom-real-ticker-mask">
@@ -159,8 +159,9 @@ function TickerSlide({
         <Image
           src={thumb}
           alt=""
-          fill
-          sizes="200px"
+          width={1600}
+          height={1200}
+          sizes="(max-width: 640px) 78vw, 450px"
           className="classroom-real-slide-img"
           loading="lazy"
           unoptimized={nextImageShouldUnoptimize(thumb)}

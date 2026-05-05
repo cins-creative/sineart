@@ -1638,20 +1638,6 @@ button.tc-art-full.tc-art-btn:hover .tc-art-img {
   width: 100%;
   margin: 0 -6px;
   padding: 6px 6px 10px;
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent,
-    #000 28px,
-    #000 calc(100% - 28px),
-    transparent
-  );
-  mask-image: linear-gradient(
-    to right,
-    transparent,
-    #000 28px,
-    #000 calc(100% - 28px),
-    transparent
-  );
 }
 .classroom-real-ticker-track {
   display: flex;
@@ -1665,16 +1651,16 @@ button.tc-art-full.tc-art-btn:hover .tc-art-img {
   flex-shrink: 0;
   padding: 0;
   margin: 0;
-  border-radius: 8px;
-  overflow: hidden;
+  border-radius: 0;
+  overflow: visible;
   cursor: zoom-in;
-  background: rgba(45, 32, 32, 0.05);
-  border: 1px solid rgba(45, 32, 32, 0.1);
-  transition: transform 0.2s, border-color 0.2s;
+  background: transparent;
+  border: none;
+  transition: transform 0.2s, opacity 0.2s;
   -webkit-tap-highlight-color: transparent;
 }
 .classroom-real-slide:hover {
-  border-color: rgba(238, 91, 159, 0.35);
+  opacity: 0.92;
 }
 .classroom-real-slide:active {
   transform: scale(0.98);
@@ -1682,20 +1668,17 @@ button.tc-art-full.tc-art-btn:hover .tc-art-img {
 .classroom-real-slide-media {
   display: block;
   position: relative;
-  width: 200px;
-  height: 132px;
   line-height: 0;
-}
-@media (min-width: 640px) {
-  .classroom-real-slide-media {
-    width: 224px;
-    height: 148px;
-  }
+  border-radius: calc(var(--r) * 0.5);
+  overflow: hidden;
 }
 .classroom-real-slide-img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-height: clamp(168px, 54vw, 300px);
+  max-width: min(88vw, 510px);
   object-fit: contain;
-  padding: 6px;
-  box-sizing: border-box;
 }
 
 /* ─────────────────────────────

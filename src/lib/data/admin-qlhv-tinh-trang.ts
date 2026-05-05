@@ -50,6 +50,15 @@ export function computeOverallStatus(khs: AdminQlhvEnrollment[]): string {
   return "Nghỉ";
 }
 
+/**
+ * Ít nhất một ghi danh và mọi khoá đều hết kỳ HP — không còn lớp «Đang học» hay «Chưa học».
+ * (Từng khoá đã có kỳ thì ngày học còn lại = 0; khoá không kỳ làm tổng trạng thái khác «Nghỉ».)
+ */
+export function isAllKhoaHetHanTheoKy(khs: AdminQlhvEnrollment[]): boolean {
+  if (!khs?.length) return false;
+  return computeOverallStatus(khs) === "Nghỉ";
+}
+
 /** Số học viên có `computeOverallStatus === "Đang học"` — không tính học viên mẫu (`is_hoc_vien_mau`). */
 export function countHocVienDangHoc(students: AdminQlhvStudent[], enrollments: AdminQlhvEnrollment[]): number {
   const byHv = new Map<number, AdminQlhvEnrollment[]>();

@@ -42,7 +42,11 @@ import type {
   AdminQlhvTruongNganhItem,
   QlhvTrangThaiTuVan,
 } from "@/lib/data/admin-quan-ly-hoc-vien";
-import { computeOverallStatus, deriveEnrollmentStatus } from "@/lib/data/admin-qlhv-tinh-trang";
+import {
+  computeOverallStatus,
+  deriveEnrollmentStatus,
+  isAllKhoaHetHanTheoKy,
+} from "@/lib/data/admin-qlhv-tinh-trang";
 import {
   adminReplaceQlHvTruongNganhRows,
   createEnrollment,
@@ -86,8 +90,8 @@ type LopOpt = { id: number; name: string; mon_hoc: number | null; special: boole
 /** Lọc theo `ql_thong_tin_hoc_vien.trang_thai_tu_van` (tư vấn). */
 type QuanLyHvTuVanFilter = "all" | QlhvTrangThaiTuVan;
 
-/** Lọc theo số khoá đang còn hạn (`deriveEnrollmentStatus === "Đang học"`). */
-type QuanLyHvDangKhoaBucket = null | "1" | "2" | "3+";
+/** Lọc theo số khoá đang còn hạn (`deriveEnrollmentStatus === "Đang học"`) hoặc chưa có ghi danh. */
+type QuanLyHvDangKhoaBucket = null | "1" | "2" | "3+" | "chua_ghi_danh";
 
 const LOAI_KHOA_OPTIONS = ["Luyện thi", "Digital", "Kids", "Bổ trợ"] as const;
 const SEX_OPTIONS = ["Nam", "Nữ", "Khác"] as const;
@@ -1483,10 +1487,6 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
             />
             <HvInfoRow label="Số tháng học" value={soThangTaiSine} />
             <HvInfoRow label="Năm thi" value={student.nam_thi != null ? String(student.nam_thi) : "—"} />
-            <p className="mt-1.5 text-[9px] leading-snug text-slate-400">
-              Ngày bắt đầu: ngày tạo tài khoản trên Supabase. Ngày kết thúc và số tháng: khi cả lớp đều hết hạn kỳ (0 ngày
-              còn). Nghỉ rồi học lại — chưa tách từng đợt «đang học» nếu chưa có lịch sử trạng thái.
-            </p>
           </>
         ) : (
           <div className="space-y-2.5">
@@ -1767,6 +1767,11 @@ export default function QuanLyHocVienView({
   const [tvBusy, setTvBusy] = useState(false);
   const [tvToast, setTvToast] = useState<{ ok: boolean; msg: string } | null>(null);
 
+  /** Bộ lọc «Đang học — tư vấn» đã bỏ khỏi menu — gỡ trạng thái lọc legacy. */
+  useEffect(() => {
+    if (filterTuVan === "dang_hoc") setFilterTuVan("all");
+  }, [filterTuVan]);
+
   useEffect(() => {
     setHtbtCapToc(initialHtbtCapToc);
   }, [initialHtbtCapToc]);
@@ -1856,15 +1861,23 @@ export default function QuanLyHocVienView({
       list = list.filter((hv) => !hv.is_hoc_vien_mau);
     }
     if (filterTuVan !== "all") {
-      list = list.filter((hv) => hv.trang_thai_tu_van === filterTuVan);
+      if (filterTuVan === "nghi") {
+        list = list.filter((hv) => isAllKhoaHetHanTheoKy(byHv.get(hv.id) ?? []));
+      } else {
+        list = list.filter((hv) => hv.trang_thai_tu_van === filterTuVan);
+      }
     }
     if (filterDangKhoaBucket) {
-      list = list.filter((hv) => {
-        const n = (byHv.get(hv.id) ?? []).filter((k) => deriveEnrollmentStatus(k) === "Đang học").length;
-        if (filterDangKhoaBucket === "1") return n === 1;
-        if (filterDangKhoaBucket === "2") return n === 2;
-        return n >= 3;
-      });
+      if (filterDangKhoaBucket === "chua_ghi_danh") {
+        list = list.filter((hv) => (byHv.get(hv.id) ?? []).length === 0);
+      } else {
+        list = list.filter((hv) => {
+          const n = (byHv.get(hv.id) ?? []).filter((k) => deriveEnrollmentStatus(k) === "Đang học").length;
+          if (filterDangKhoaBucket === "1") return n === 1;
+          if (filterDangKhoaBucket === "2") return n === 2;
+          return n >= 3;
+        });
+      }
     }
     if (filterClass.trim()) {
       list = list.filter((hv) =>
@@ -1878,6 +1891,16 @@ export default function QuanLyHocVienView({
       );
     }
     list = [...list].sort((a, b) => {
+      if (filterTuVan === "nghi") {
+        const ma = maxNgayCuoiKy(byHv.get(a.id) ?? []);
+        const mb = maxNgayCuoiKy(byHv.get(b.id) ?? []);
+        if (ma !== mb) {
+          if (!ma) return 1;
+          if (!mb) return -1;
+          const c = ma.localeCompare(mb);
+          if (c !== 0) return c;
+        }
+      }
       if (sortTT !== null) {
         const oa = TT_TV_ORDER[a.trang_thai_tu_van] ?? 99;
         const ob = TT_TV_ORDER[b.trang_thai_tu_van] ?? 99;
@@ -1891,7 +1914,17 @@ export default function QuanLyHocVienView({
       return 0;
     });
     return list;
-  }, [students, filterMau, filterTuVan, filterDangKhoaBucket, filterClass, query, sortTT, sortDays, byHv]);
+  }, [
+    students,
+    filterMau,
+    filterTuVan,
+    filterDangKhoaBucket,
+    filterClass,
+    query,
+    sortTT,
+    sortDays,
+    byHv,
+  ]);
 
   const activeLopEnrollmentCount = useMemo(() => {
     let n = 0;
@@ -1918,6 +1951,16 @@ export default function QuanLyHocVienView({
     return { oneLop, twoLop, threePlusLop };
   }, [students, byHv]);
 
+  /** Đã tạo tài khoản nhưng chưa có ghi danh lớp nào (`ql_quan_ly_hoc_vien`). */
+  const hvChuaGhiDanhCount = useMemo(() => {
+    let n = 0;
+    for (const hv of students) {
+      if (hv.is_hoc_vien_mau) continue;
+      if ((byHv.get(hv.id) ?? []).length === 0) n += 1;
+    }
+    return n;
+  }, [students, byHv]);
+
   useEffect(() => {
     setHvPage(1);
   }, [query, filterClass, filterMau, filterTuVan, filterDangKhoaBucket, sortTT, sortDays]);
@@ -1937,15 +1980,13 @@ export default function QuanLyHocVienView({
   }, [filtered, hvPage]);
 
   const countsTuVan = useMemo(() => {
-    let dang_hoc = 0;
     let nghi = 0;
     for (const hv of students) {
       if (hv.is_hoc_vien_mau) continue;
-      if (hv.trang_thai_tu_van === "nghi") nghi++;
-      else dang_hoc++;
+      if (isAllKhoaHetHanTheoKy(byHv.get(hv.id) ?? [])) nghi++;
     }
-    return { dang_hoc, nghi };
-  }, [students]);
+    return { nghi };
+  }, [students, byHv]);
 
   const mauCount = useMemo(() => students.filter((h) => h.is_hoc_vien_mau).length, [students]);
 
@@ -1953,8 +1994,8 @@ export default function QuanLyHocVienView({
     if (filterDangKhoaBucket === "1") return "bucket_1";
     if (filterDangKhoaBucket === "2") return "bucket_2";
     if (filterDangKhoaBucket === "3+") return "bucket_3p";
+    if (filterDangKhoaBucket === "chua_ghi_danh") return "bucket_chua_gd";
     if (filterMau) return "mau";
-    if (filterTuVan === "dang_hoc") return "tv_dang";
     if (filterTuVan === "nghi") return "tv_nghi";
     return "all";
   }, [filterDangKhoaBucket, filterMau, filterTuVan]);
@@ -1980,8 +2021,11 @@ export default function QuanLyHocVienView({
       setFilterDangKhoaBucket("3+");
       return;
     }
-    if (v === "tv_dang") setFilterTuVan("dang_hoc");
-    else if (v === "tv_nghi") setFilterTuVan("nghi");
+    if (v === "bucket_chua_gd") {
+      setFilterDangKhoaBucket("chua_ghi_danh");
+      return;
+    }
+    if (v === "tv_nghi") setFilterTuVan("nghi");
   }, []);
 
   const extractRow = useCallback(
@@ -2166,8 +2210,8 @@ export default function QuanLyHocVienView({
               onChange={(e) => onBulkFilterSelect(e.target.value)}
             >
               <option value="all">{`Tất cả học viên (${nonMauStudentCount})`}</option>
-              <option value="tv_dang">{`Đang học — tư vấn (${countsTuVan.dang_hoc})`}</option>
-              <option value="tv_nghi">{`Nghỉ — tư vấn (${countsTuVan.nghi})`}</option>
+              <option value="tv_nghi">{`🔴Hết HP cần Tư vấn (${countsTuVan.nghi})`}</option>
+              <option value="bucket_chua_gd">{`🔴Tư vấn HV mới (${hvChuaGhiDanhCount})`}</option>
               <option value="bucket_1">{`Một lớp còn hạn (${hvDangHocLopBuckets.oneLop})`}</option>
               <option value="bucket_2">{`Hai lớp còn hạn (${hvDangHocLopBuckets.twoLop})`}</option>
               <option value="bucket_3p">{`Ba lớp trở lên (${hvDangHocLopBuckets.threePlusLop})`}</option>
@@ -2237,6 +2281,7 @@ export default function QuanLyHocVienView({
                   />
                 </div>
                 <div className="w-[130px] shrink-0">Email</div>
+                <div className="w-[92px] shrink-0">Ngày tạo TK</div>
                 <div className="w-[180px] shrink-0">
                   <SortableHeader
                     label="Tổng ngày còn (mọi lớp)"
@@ -2290,6 +2335,9 @@ export default function QuanLyHocVienView({
                               {hv.is_hoc_vien_mau ? <HocVienMauBadge small /> : null}
                             </div>
                             <span className="text-[11px] text-slate-500">{lopName || "—"}</span>
+                            <span className="block text-[10px] tabular-nums text-slate-400">
+                              Tạo TK: {fmtDate(isoDateFromCreatedAt(hv.created_at))}
+                            </span>
                           </div>
                           <TuVanTrangThaiBadge value={hv.trang_thai_tu_van} />
                         </div>
@@ -2359,6 +2407,9 @@ export default function QuanLyHocVienView({
                         <TuVanTrangThaiBadge value={hv.trang_thai_tu_van} />
                       </div>
                       <div className="w-[130px] shrink-0 truncate text-[11px] text-slate-500">{hv.email || "—"}</div>
+                      <div className="w-[92px] shrink-0 text-[11px] tabular-nums text-slate-600">
+                        {fmtDate(isoDateFromCreatedAt(hv.created_at))}
+                      </div>
                       <div className="flex w-[180px] shrink-0 flex-col gap-1 overflow-hidden">
                         {khs.length === 0 ? <span className="text-[10px] text-slate-200">—</span> : null}
                         {khs.slice(0, 2).map((kh, ki) => {

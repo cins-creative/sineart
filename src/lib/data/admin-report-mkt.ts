@@ -59,3 +59,40 @@ export async function fetchMkDataAnalysisRows(
 
   return { ok: true, rows: (data ?? []) as MkDataAnalysisRow[] };
 }
+
+/** Ngày ISO liền sau `ymd` — dùng cận trên nửa khoảng [start, end] (tránh lệch timezone với `…Z`). */
+function addOneCalendarDayYmd(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + 1);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+/**
+ * Chỉ các kỳ có `ngay_thang_nhap` trong [startYmd, endYmd] (chuỗi ISO ngày, inclusive).
+ * So sánh: `>= start` và `< end+1 ngày` — ổn định với cột date/timestamptz.
+ */
+export async function fetchMkDataAnalysisRowsInRange(
+  supabase: SupabaseClient,
+  startYmd: string,
+  endYmd: string,
+): Promise<{ ok: true; rows: MkDataAnalysisRow[] } | { ok: false; error: string }> {
+  const start = startYmd.trim().slice(0, 10);
+  const end = endYmd.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    return { ok: false, error: "Khoảng ngày không hợp lệ." };
+  }
+  const endExclusive = addOneCalendarDayYmd(end);
+  const { data, error } = await supabase
+    .from(MK_DATA_TABLE)
+    .select("*")
+    .gte("ngay_thang_nhap", start)
+    .lt("ngay_thang_nhap", endExclusive)
+    .order("ngay_thang_nhap", { ascending: true });
+
+  if (error) return { ok: false, error: error.message };
+
+  return { ok: true, rows: (data ?? []) as MkDataAnalysisRow[] };
+}

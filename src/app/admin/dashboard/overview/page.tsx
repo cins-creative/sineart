@@ -1,29 +1,10 @@
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
-import { OverviewBctcPanel } from "@/app/admin/dashboard/overview/_components/OverviewBctcPanel";
-import { OverviewBctcPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewBctcPanel.skeleton";
-import { OverviewMarketingPanel } from "@/app/admin/dashboard/overview/_components/OverviewMarketingPanel";
-import { OverviewMarketingPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewMarketingPanel.skeleton";
-
-import DashboardOverviewClient from "./DashboardOverviewClient";
+import { OVERVIEW_DEFAULT_PATH } from "@/app/admin/dashboard/overview/overview-routes";
 
 export const dynamic = "force-dynamic";
 
+/** Mặc định: tab Marketing + kỳ tháng (`/marketing-data-analysis/thang`). */
 export default function AdminDashboardOverviewPage() {
-  return (
-    <div className="-m-4 flex h-full min-h-0 flex-col md:-m-6">
-      <DashboardOverviewClient
-        marketingContent={
-          <Suspense fallback={<OverviewMarketingPanelSkeleton />}>
-            <OverviewMarketingPanel />
-          </Suspense>
-        }
-        bctcContent={
-          <Suspense fallback={<OverviewBctcPanelSkeleton />}>
-            <OverviewBctcPanel />
-          </Suspense>
-        }
-      />
-    </div>
-  );
+  redirect(OVERVIEW_DEFAULT_PATH);
 }

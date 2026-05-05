@@ -40,9 +40,12 @@ function staffInitial(name: string): string {
   return t.charAt(0).toUpperCase();
 }
 
-/** Trang tổng quan — chỉ highlight khi đúng `/admin/dashboard/overview`. */
+/** Trang tổng quan — highlight trên mọi segment `/admin/dashboard/overview/...`. */
 function overviewNavClass(pathname: string | null): string {
-  const active = pathname === DASHBOARD_OVERVIEW_HREF || pathname === "/admin/dashboard";
+  const active =
+    pathname === DASHBOARD_OVERVIEW_HREF ||
+    pathname?.startsWith(`${DASHBOARD_OVERVIEW_HREF}/`) ||
+    pathname === "/admin/dashboard";
   const base =
     "mb-1 block rounded-xl px-3 py-2.5 text-[13px] font-bold tracking-tight transition";
   if (active) {

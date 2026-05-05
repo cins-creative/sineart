@@ -1,11 +1,40 @@
-import { countHocVienDangHoc } from "@/lib/data/admin-qlhv-tinh-trang";
-import { fetchAdminQuanLyHocVienBundle } from "@/lib/data/admin-quan-ly-hoc-vien";
-import { fetchMkDataAnalysisRows } from "@/lib/data/admin-report-mkt";
+import {
+  fetchMkDataAnalysisRows,
+  fetchMkDataAnalysisRowsInRange,
+} from "@/lib/data/admin-report-mkt";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 import MarketingDataAnalysisCharts from "../MarketingDataAnalysisCharts";
+import {
+  normalizeCustomRange,
+  resolveOverviewActiveRange,
+  type MkDatePreset,
+} from "../marketing-date-range";
+import {
+  OVERVIEW_PERIOD_CUSTOM,
+  overviewPeriodSlugToMkPreset,
+  type OverviewPeriodSlug,
+} from "../overview-routes";
 
-export async function OverviewMarketingPanel() {
+function mkActiveRangeForFetch(
+  preset: MkDatePreset,
+  customFrom: string,
+  customTo: string,
+): { startYmd: string; endYmd: string } | null {
+  if (preset === "all") return null;
+  if (preset === "custom") return normalizeCustomRange(customFrom, customTo);
+  return resolveOverviewActiveRange(preset, "", "");
+}
+
+export async function OverviewMarketingPanel({
+  period,
+  customFrom,
+  customTo,
+}: {
+  period: OverviewPeriodSlug;
+  customFrom: string;
+  customTo: string;
+}) {
   const supabase = createServiceRoleClient();
   if (!supabase) {
     return (
@@ -15,22 +44,39 @@ export async function OverviewMarketingPanel() {
     );
   }
 
-  const mkPromise = fetchMkDataAnalysisRows(supabase);
-  const hvPromise = fetchAdminQuanLyHocVienBundle(supabase);
-  const res = await mkPromise;
-  const hvBundle = await hvPromise;
+  const preset = overviewPeriodSlugToMkPreset(period);
+  const activeRange = mkActiveRangeForFetch(
+    preset,
+    period === OVERVIEW_PERIOD_CUSTOM ? customFrom : "",
+    period === OVERVIEW_PERIOD_CUSTOM ? customTo : "",
+  );
 
-  if (!res.ok) {
+  let mkRes =
+    preset === "all"
+      ? await fetchMkDataAnalysisRows(supabase)
+      : activeRange
+        ? await fetchMkDataAnalysisRowsInRange(supabase, activeRange.startYmd, activeRange.endYmd)
+        : await fetchMkDataAnalysisRows(supabase);
+
+  if (!mkRes.ok) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
-        Không tải được dữ liệu marketing: {res.error}
+        Không tải được dữ liệu marketing: {mkRes.error}
       </div>
     );
   }
 
-  const hocVienDangHoc = hvBundle.error
-    ? null
-    : countHocVienDangHoc(hvBundle.students, hvBundle.enrollments);
+  const mkPrefix = "/admin/dashboard/overview/marketing-data-analysis";
 
-  return <MarketingDataAnalysisCharts rows={res.rows} hocVienDangHoc={hocVienDangHoc} />;
+  return (
+    <MarketingDataAnalysisCharts
+      rows={mkRes.rows}
+      hocVienDangHoc={null}
+      marketingOverviewHrefPrefix={mkPrefix}
+      overviewPeriodSlug={period}
+      customFromInitial={period === OVERVIEW_PERIOD_CUSTOM ? customFrom : ""}
+      customToInitial={period === OVERVIEW_PERIOD_CUSTOM ? customTo : ""}
+      deferFullMkHydration={preset !== "all"}
+    />
+  );
 }

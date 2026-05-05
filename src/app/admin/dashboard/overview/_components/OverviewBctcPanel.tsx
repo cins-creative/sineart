@@ -1,7 +1,18 @@
-import { fetchAdminBaoCaoTaiChinhRows, rowsToInitialColumns } from "@/lib/data/admin-bao-cao-tai-chinh";
+import {
+  fetchAdminBaoCaoTaiChinhMeta,
+  fetchAdminBaoCaoTaiChinhRows,
+  fetchAdminBaoCaoTaiChinhRowsByIds,
+  rowsToInitialColumns,
+} from "@/lib/data/admin-bao-cao-tai-chinh";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 import BctcOverviewCharts from "../BctcOverviewCharts";
+import { filterBctcMetaIdsForOverviewPeriod } from "../overview-bctc-period";
+import {
+  OVERVIEW_PERIOD_ALL,
+  OVERVIEW_PERIOD_CUSTOM,
+  type OverviewPeriodSlug,
+} from "../overview-routes";
 
 function BctcErrorBanner({ message }: { message: string }) {
   return (
@@ -11,7 +22,7 @@ function BctcErrorBanner({ message }: { message: string }) {
   );
 }
 
-export async function OverviewBctcPanel() {
+export async function OverviewBctcPanel({ period }: { period: OverviewPeriodSlug }) {
   const supabase = createServiceRoleClient();
   if (!supabase) {
     return (
@@ -21,13 +32,35 @@ export async function OverviewBctcPanel() {
     );
   }
 
-  const bctcBundle = await fetchAdminBaoCaoTaiChinhRows(supabase);
+  let bctcBundle: Awaited<ReturnType<typeof fetchAdminBaoCaoTaiChinhRows>>;
+  let usedPartial = false;
+
+  if (period === OVERVIEW_PERIOD_ALL || period === OVERVIEW_PERIOD_CUSTOM) {
+    bctcBundle = await fetchAdminBaoCaoTaiChinhRows(supabase);
+  } else {
+    const meta = await fetchAdminBaoCaoTaiChinhMeta(supabase);
+    if (!meta.ok) {
+      bctcBundle = { ok: false, error: meta.error };
+    } else {
+      const ids = filterBctcMetaIdsForOverviewPeriod(meta.rows, period);
+      bctcBundle = await fetchAdminBaoCaoTaiChinhRowsByIds(supabase, ids);
+      usedPartial = true;
+    }
+  }
+
   const initialBctcColumns = bctcBundle.ok ? rowsToInitialColumns(bctcBundle.rows) : [];
   const bctcLoadError = bctcBundle.ok ? null : bctcBundle.error;
+  const deferFullBctcHydration = bctcBundle.ok && usedPartial;
 
   if (bctcLoadError) {
     return <BctcErrorBanner message={bctcLoadError} />;
   }
 
-  return <BctcOverviewCharts key="bctc-summary" columns={initialBctcColumns} />;
+  return (
+    <BctcOverviewCharts
+      key={`bctc-${period}`}
+      columns={initialBctcColumns}
+      deferFullBctcHydration={deferFullBctcHydration}
+    />
+  );
 }

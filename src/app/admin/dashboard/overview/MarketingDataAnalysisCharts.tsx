@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -28,9 +30,20 @@ import {
   filterMkRowsByRange,
   formatYMDLocal,
   formatYmdVi,
-  resolveActiveRange,
+  resolveOverviewActiveRange,
   type MkDatePreset,
 } from "./marketing-date-range";
+import { readOverviewMkCache, writeOverviewMkCache } from "./overview-local-cache";
+import {
+  OVERVIEW_PERIOD_ALL,
+  OVERVIEW_PERIOD_CUSTOM,
+  OVERVIEW_PERIOD_MONTH,
+  OVERVIEW_PERIOD_QUARTER,
+  OVERVIEW_PERIOD_WEEK,
+  OVERVIEW_PERIOD_YEAR,
+  overviewPeriodSlugToMkPreset,
+  type OverviewPeriodSlug,
+} from "./overview-routes";
 import { colIsPct, rowsToChartData, sortMkRowsByDate, withNetCumulative } from "./marketing-series";
 
 /** Palette tham khảo Framer `MKT analystic.txt` — chỉ dùng cột có trong `MK_INPUT_COLS` / bảng nhập liệu. */
@@ -213,17 +226,110 @@ function KpiCard({
 type Props = {
   rows: MkDataAnalysisRow[];
   hocVienDangHoc: number | null;
+  /** VD `/admin/dashboard/overview/marketing-data-analysis` — nút kỳ là segment tiếp theo */
+  marketingOverviewHrefPrefix: string;
+  overviewPeriodSlug: OverviewPeriodSlug;
+  customFromInitial?: string;
+  customToInitial?: string;
+  /** true khi SSR chỉ tải khoảng ngày — sau đó gọi API full + cache */
+  deferFullMkHydration: boolean;
 };
 
-export default function MarketingDataAnalysisCharts({ rows, hocVienDangHoc }: Props) {
+export default function MarketingDataAnalysisCharts({
+  rows: initialRows,
+  hocVienDangHoc,
+  marketingOverviewHrefPrefix,
+  overviewPeriodSlug,
+  customFromInitial = "",
+  customToInitial = "",
+  deferFullMkHydration,
+}: Props) {
+  const router = useRouter();
+  const datePreset: MkDatePreset = overviewPeriodSlugToMkPreset(overviewPeriodSlug);
+
+  const [rows, setRows] = useState<MkDataAnalysisRow[]>(() => {
+    if (typeof window === "undefined") return initialRows;
+    if (!deferFullMkHydration) return initialRows;
+    const cached = readOverviewMkCache();
+    return cached?.length ? cached : initialRows;
+  });
+  useEffect(() => {
+    if (deferFullMkHydration && readOverviewMkCache()?.length) return;
+    setRows(initialRows);
+  }, [initialRows, deferFullMkHydration]);
+
+  const [hvExtra, setHvExtra] = useState<number | null>(hocVienDangHoc);
+  useEffect(() => {
+    setHvExtra(hocVienDangHoc);
+  }, [hocVienDangHoc]);
+
+  useEffect(() => {
+    if (hocVienDangHoc != null) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await fetch("/admin/api/overview/hv-dang-hoc-count");
+        const j = (await res.json()) as { ok?: boolean; count?: number };
+        if (!cancelled && j.ok && typeof j.count === "number") setHvExtra(j.count);
+      } catch {
+        /* ignore */
+      }
+    };
+    const ric =
+      typeof requestIdleCallback !== "undefined" ? requestIdleCallback(run) : undefined;
+    const tid = ric === undefined ? window.setTimeout(run, 1) : undefined;
+    return () => {
+      cancelled = true;
+      if (ric !== undefined) cancelIdleCallback(ric);
+      if (tid !== undefined) window.clearTimeout(tid);
+    };
+  }, [hocVienDangHoc]);
+
+  /** Sau khi idle-fetch full xong mới cho phép hiện «Chưa có kỳ» — tránh flash trắng khi SSR range trả về 0 dòng. */
+  const [mkIdleFetchDone, setMkIdleFetchDone] = useState(!deferFullMkHydration);
+
+  useEffect(() => {
+    setMkIdleFetchDone(!deferFullMkHydration);
+  }, [deferFullMkHydration]);
+
+  useEffect(() => {
+    if (!deferFullMkHydration) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await fetch("/admin/api/overview/marketing-rows-full");
+        const j = (await res.json()) as { ok?: boolean; rows?: MkDataAnalysisRow[] };
+        if (!cancelled && j.ok && Array.isArray(j.rows)) {
+          setRows(j.rows);
+          writeOverviewMkCache(j.rows);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setMkIdleFetchDone(true);
+      }
+    };
+    const ric =
+      typeof requestIdleCallback !== "undefined" ? requestIdleCallback(run) : undefined;
+    const tid = ric === undefined ? window.setTimeout(run, 1) : undefined;
+    return () => {
+      cancelled = true;
+      if (ric !== undefined) cancelIdleCallback(ric);
+      if (tid !== undefined) window.clearTimeout(tid);
+    };
+  }, [deferFullMkHydration]);
+
+  const [customFrom, setCustomFrom] = useState(customFromInitial);
+  const [customTo, setCustomTo] = useState(customToInitial);
+  useEffect(() => {
+    setCustomFrom(customFromInitial);
+    setCustomTo(customToInitial);
+  }, [customFromInitial, customToInitial]);
+
   const sorted = useMemo(() => sortMkRowsByDate(rows), [rows]);
 
-  const [datePreset, setDatePreset] = useState<MkDatePreset>("all");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-
   const activeRange = useMemo(
-    () => resolveActiveRange(datePreset, customFrom, customTo),
+    () => resolveOverviewActiveRange(datePreset, customFrom, customTo),
     [datePreset, customFrom, customTo],
   );
 
@@ -263,7 +369,22 @@ export default function MarketingDataAnalysisCharts({ rows, hocVienDangHoc }: Pr
 
   const bounceData = useMemo(() => chartData.filter((r) => r.web_ti_le_thoat_bounce_rate != null), [chartData]);
 
+  const customDefaultHref = useMemo(() => {
+    const t = new Date();
+    const to = formatYMDLocal(t);
+    const from = formatYMDLocal(new Date(t.getFullYear(), t.getMonth(), 1));
+    return `${marketingOverviewHrefPrefix}/${OVERVIEW_PERIOD_CUSTOM}?tu=${encodeURIComponent(from)}&den=${encodeURIComponent(to)}`;
+  }, [marketingOverviewHrefPrefix]);
+
   if (sorted.length === 0) {
+    if (deferFullMkHydration && !mkIdleFetchDone) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[#EAEAEA] bg-white px-6 py-16 text-center">
+          <Loader2 className="h-9 w-9 animate-spin text-[#E8527A]" aria-hidden />
+          <p className="m-0 text-sm text-black/55">Đang tải dữ liệu marketing…</p>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[#EAEAEA] bg-white px-6 py-16 text-center">
         <span className="text-4xl" aria-hidden>
@@ -296,35 +417,13 @@ export default function MarketingDataAnalysisCharts({ rows, hocVienDangHoc }: Pr
     </button>
   );
 
-  const startCustomFromToday = () => {
-    const t = new Date();
-    setCustomTo(formatYMDLocal(t));
-    setCustomFrom(formatYMDLocal(new Date(t.getFullYear(), t.getMonth(), 1)));
-  };
-
-  const rangeFilterBtn = (id: MkDatePreset, label: string, title: string) => (
-    <button
-      key={id}
-      type="button"
-      title={title}
-      onClick={() => {
-        if (id === "custom") {
-          setDatePreset("custom");
-          startCustomFromToday();
-        } else {
-          setDatePreset(id);
-        }
-      }}
-      className={cn(
-        "rounded-full border-[1.5px] px-2.5 py-1 text-[11px] font-semibold transition",
-        datePreset === id
-          ? "border-[#E8527A] bg-[#E8527A] text-white"
-          : "border-[#EDE8E9] bg-white text-[#9E8A90] hover:border-black/10",
-      )}
-    >
-      {label}
-    </button>
-  );
+  const periodPillClass = (active: boolean) =>
+    cn(
+      "rounded-full border-[1.5px] px-2.5 py-1 text-[11px] font-semibold transition",
+      active
+        ? "border-[#E8527A] bg-[#E8527A] text-white"
+        : "border-[#EDE8E9] bg-white text-[#9E8A90] hover:border-black/10",
+    );
 
   return (
     <div className="space-y-4 pb-4">
@@ -354,12 +453,48 @@ export default function MarketingDataAnalysisCharts({ rows, hocVienDangHoc }: Pr
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          {rangeFilterBtn("all", "Tất cả", "Mọi kỳ trong bảng")}
-          {rangeFilterBtn("week", "Tuần", "7 ngày gần nhất (đến hôm nay)")}
-          {rangeFilterBtn("month", "Tháng", "Đầu tháng đến hôm nay")}
-          {rangeFilterBtn("quarter", "Quý", "Đầu quý đến hôm nay")}
-          {rangeFilterBtn("year", "Năm", "1/1 đến hôm nay")}
-          {rangeFilterBtn("custom", "Từ … đến …", "Chọn ngày cụ thể")}
+          <Link
+            href={`${marketingOverviewHrefPrefix}/${OVERVIEW_PERIOD_ALL}`}
+            title="Mọi kỳ trong bảng"
+            className={periodPillClass(overviewPeriodSlug === OVERVIEW_PERIOD_ALL)}
+          >
+            Tất cả
+          </Link>
+          <Link
+            href={`${marketingOverviewHrefPrefix}/${OVERVIEW_PERIOD_WEEK}`}
+            title="Tuần ISO liền trước (Thứ 2 → Chủ nhật)"
+            className={periodPillClass(overviewPeriodSlug === OVERVIEW_PERIOD_WEEK)}
+          >
+            Tuần
+          </Link>
+          <Link
+            href={`${marketingOverviewHrefPrefix}/${OVERVIEW_PERIOD_MONTH}`}
+            title="Tháng lịch liền trước"
+            className={periodPillClass(overviewPeriodSlug === OVERVIEW_PERIOD_MONTH)}
+          >
+            Tháng
+          </Link>
+          <Link
+            href={`${marketingOverviewHrefPrefix}/${OVERVIEW_PERIOD_QUARTER}`}
+            title="Quý lịch liền trước"
+            className={periodPillClass(overviewPeriodSlug === OVERVIEW_PERIOD_QUARTER)}
+          >
+            Quý
+          </Link>
+          <Link
+            href={`${marketingOverviewHrefPrefix}/${OVERVIEW_PERIOD_YEAR}`}
+            title="Năm lịch liền trước"
+            className={periodPillClass(overviewPeriodSlug === OVERVIEW_PERIOD_YEAR)}
+          >
+            Năm
+          </Link>
+          <Link
+            href={customDefaultHref}
+            title="Chọn ngày cụ thể (mặc định đầu tháng → hôm nay)"
+            className={periodPillClass(overviewPeriodSlug === OVERVIEW_PERIOD_CUSTOM)}
+          >
+            Từ … đến …
+          </Link>
         </div>
         {datePreset === "custom" ? (
           <div className="flex flex-wrap items-center gap-2 md:ml-auto">
@@ -381,6 +516,17 @@ export default function MarketingDataAnalysisCharts({ rows, hocVienDangHoc }: Pr
                 className="rounded-lg border border-[#EDE8E9] bg-white px-2 py-1 text-[12px] text-[#1a1a1a]"
               />
             </label>
+            <button
+              type="button"
+              onClick={() => {
+                router.replace(
+                  `${marketingOverviewHrefPrefix}/${OVERVIEW_PERIOD_CUSTOM}?tu=${encodeURIComponent(customFrom)}&den=${encodeURIComponent(customTo)}`,
+                );
+              }}
+              className="rounded-lg border border-[#E8527A]/40 bg-[#fff4eb] px-2.5 py-1 text-[11px] font-semibold text-[#323232] transition hover:bg-[#fdeef6]"
+            >
+              Áp dụng
+            </button>
           </div>
         ) : null}
       </div>
@@ -397,9 +543,7 @@ export default function MarketingDataAnalysisCharts({ rows, hocVienDangHoc }: Pr
           value={fNum(totalHVMoi)}
           sub={`−${fNum(totalHVNghi)} nghỉ`}
           extra={
-            hocVienDangHoc != null
-              ? `Đang học — tổng (${fNum(hocVienDangHoc)})`
-              : undefined
+            hvExtra != null ? `Đang học — tổng (${fNum(hvExtra)})` : undefined
           }
           icon="🎓"
           color={C.pink}

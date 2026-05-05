@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -13,8 +13,12 @@ import {
   YAxis,
 } from "recharts";
 
+import type { TcBaoCaoTaiChinhRow } from "@/lib/data/admin-bao-cao-tai-chinh";
+import { rowsToInitialColumns } from "@/lib/data/admin-bao-cao-tai-chinh";
 import type { BaoCaoColumn, ColData } from "@/lib/data/bao-cao-tai-chinh-config";
 import { cn } from "@/lib/utils";
+
+import { readOverviewBctcCache, writeOverviewBctcCache } from "./overview-local-cache";
 
 import {
   buildBctcAlignedYearSplitSeries,
@@ -62,7 +66,11 @@ function kpiTargetMet(rowKey: string, currentSum: number, target: number): boole
   return currentSum >= target;
 }
 
-type Props = { columns: BaoCaoColumn[] };
+type Props = {
+  columns: BaoCaoColumn[];
+  /** Đã tải subset theo kỳ URL — idle fetch full + cache */
+  deferFullBctcHydration?: boolean;
+};
 
 function fmtPctSub(pct: number | null): string {
   if (pct === null || !Number.isFinite(pct)) return "—";
@@ -233,7 +241,46 @@ function extentForKeys(data: BctcMonthAlignedDatum[], keys: string[]): { min: nu
   return { min, max };
 }
 
-export default function BctcOverviewCharts({ columns }: Props) {
+export default function BctcOverviewCharts({
+  columns: columnsProp,
+  deferFullBctcHydration = false,
+}: Props) {
+  const [columns, setColumns] = useState<BaoCaoColumn[]>(() => {
+    if (typeof window === "undefined") return columnsProp;
+    if (!deferFullBctcHydration) return columnsProp;
+    const cached = readOverviewBctcCache();
+    return cached?.length ? rowsToInitialColumns(cached) : columnsProp;
+  });
+  useEffect(() => {
+    if (deferFullBctcHydration && readOverviewBctcCache()?.length) return;
+    setColumns(columnsProp);
+  }, [columnsProp, deferFullBctcHydration]);
+
+  useEffect(() => {
+    if (!deferFullBctcHydration) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await fetch("/admin/api/overview/bctc-rows-full");
+        const j = (await res.json()) as { ok?: boolean; rows?: TcBaoCaoTaiChinhRow[] };
+        if (!cancelled && j.ok && Array.isArray(j.rows)) {
+          setColumns(rowsToInitialColumns(j.rows));
+          writeOverviewBctcCache(j.rows);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    const ric =
+      typeof requestIdleCallback !== "undefined" ? requestIdleCallback(run) : undefined;
+    const tid = ric === undefined ? window.setTimeout(run, 1) : undefined;
+    return () => {
+      cancelled = true;
+      if (ric !== undefined) cancelIdleCallback(ric);
+      if (tid !== undefined) window.clearTimeout(tid);
+    };
+  }, [deferFullBctcHydration]);
+
   const { currentYear, previousYear, plotYears } = useMemo(
     () => resolveCurrentPreviousYears(columns),
     [columns],

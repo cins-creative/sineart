@@ -1,3 +1,5 @@
+import { THANG_FULL_ORDER } from "@/lib/data/bao-cao-tai-chinh-config";
+
 import type { MkDataAnalysisRow } from "@/lib/data/admin-report-mkt";
 
 /** Chuỗi `YYYY-MM-DD` — so sánh chuỗi được với ISO date-only. */
@@ -77,6 +79,105 @@ export function resolveActiveRange(
   if (preset === "all") return null;
   if (preset === "custom") return normalizeCustomRange(customFrom, customTo);
   return presetToRange(preset);
+}
+
+/** Tuần ISO trước (Thứ 2 → Chủ nhật), giờ địa phương. */
+function previousIsoWeekRangeLocal(now: Date): MkDateRangeBound {
+  const day = now.getDay();
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday);
+  const prevMonday = new Date(thisMonday);
+  prevMonday.setDate(thisMonday.getDate() - 7);
+  const prevSunday = new Date(prevMonday);
+  prevSunday.setDate(prevMonday.getDate() + 6);
+  return { startYmd: formatYMDLocal(prevMonday), endYmd: formatYMDLocal(prevSunday) };
+}
+
+function previousCalendarMonthRangeLocal(now: Date): MkDateRangeBound {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const first = new Date(y, m - 1, 1);
+  const last = new Date(y, m, 0);
+  return { startYmd: formatYMDLocal(first), endYmd: formatYMDLocal(last) };
+}
+
+function previousCalendarQuarterRangeLocal(now: Date): MkDateRangeBound {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const q = Math.floor(m / 3);
+  let pq = q - 1;
+  let py = y;
+  if (pq < 0) {
+    pq = 3;
+    py -= 1;
+  }
+  const sm = pq * 3;
+  const start = new Date(py, sm, 1);
+  const end = new Date(py, sm + 3, 0);
+  return { startYmd: formatYMDLocal(start), endYmd: formatYMDLocal(end) };
+}
+
+function previousCalendarYearRangeLocal(now: Date): MkDateRangeBound {
+  const y = now.getFullYear() - 1;
+  const start = new Date(y, 0, 1);
+  const end = new Date(y, 11, 31);
+  return { startYmd: formatYMDLocal(start), endYmd: formatYMDLocal(end) };
+}
+
+/**
+ * Dashboard overview: Tuần/Tháng/Quý/Năm = **kỳ liền trước** (-1), không gồm kỳ hiện tại.
+ * (Trang nhập liệu khác vẫn dùng `presetToRange` / `resolveActiveRange`.)
+ */
+export function presetToOverviewMinusOneRange(
+  preset: Exclude<MkDatePreset, "all" | "custom">,
+): MkDateRangeBound {
+  const now = new Date();
+  switch (preset) {
+    case "week":
+      return previousIsoWeekRangeLocal(now);
+    case "month":
+      return previousCalendarMonthRangeLocal(now);
+    case "quarter":
+      return previousCalendarQuarterRangeLocal(now);
+    case "year":
+      return previousCalendarYearRangeLocal(now);
+    default:
+      return previousCalendarMonthRangeLocal(now);
+  }
+}
+
+/** Overview marketing — preset «-1» hoặc custom. */
+export function resolveOverviewActiveRange(
+  preset: MkDatePreset,
+  customFrom: string,
+  customTo: string,
+): MkDateRangeBound | null {
+  if (preset === "all") return null;
+  if (preset === "custom") return normalizeCustomRange(customFrom, customTo);
+  return presetToOverviewMinusOneRange(preset);
+}
+
+/** Mọi cặp (năm, «Tháng n») có ngày thuộc [startYmd, endYmd] inclusive — phục vụ lọc BCTC theo kỳ. */
+export function enumerateNamThangPairsInInclusiveRange(
+  startYmd: string,
+  endYmd: string,
+): { nam: string; thang: string }[] {
+  const s = startYmd.trim().slice(0, 10);
+  const e = endYmd.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(e)) return [];
+  const [ys, ms, ds] = s.split("-").map(Number);
+  const [ye, me, de] = e.split("-").map(Number);
+  const start = new Date(ys, ms - 1, ds);
+  const end = new Date(ye, me - 1, de);
+  if (start > end) return [];
+  const map = new Map<string, { nam: string; thang: string }>();
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const nam = String(d.getFullYear());
+    const thang = THANG_FULL_ORDER[d.getMonth()] ?? "";
+    if (!thang) continue;
+    map.set(`${nam}|${thang}`, { nam, thang });
+  }
+  return [...map.values()];
 }
 
 export function filterMkRowsByRange(

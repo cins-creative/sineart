@@ -537,9 +537,11 @@
   animation: heroFloaty 5s ease-in-out infinite;
 }
 .hero-sticker--1 {
-  top: 8%;
-  right: -1%;
-  transform: rotate(4deg);
+  /* Góc trên-trái khớp .hero-card--main (inset 6% … 6%) — desktop */
+  top: 6%;
+  left: 6%;
+  right: auto;
+  transform: rotate(-2deg);
 }
 .hero-sticker--2 {
   right: 0;

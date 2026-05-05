@@ -36,12 +36,14 @@ import { parseYoutubeVideoId } from "@/lib/youtube";
 type Props = {
   initialContent: HomeContent;
   initialAd: HomeAdConfig;
+  /** URL Cloudflare — cột `mkt_home_content.img_class`. */
+  initialImgClass: string[];
   initialUpdatedAt: string | null;
   missingServiceRole?: boolean;
   loadError?: string;
 };
 
-type Toast = { ok: boolean; msg: string } | null;
+type Toast = { ok: boolean; msg: string; warn?: boolean } | null;
 
 type HeroCardKey = "top" | "main" | "bottom";
 
@@ -84,14 +86,18 @@ function fmtUpdatedAt(iso: string | null): string {
 export default function QuanLyTrangChuView({
   initialContent,
   initialAd,
+  initialImgClass,
   initialUpdatedAt,
   missingServiceRole,
   loadError,
 }: Props) {
   const [content, setContent] = useState<HomeContent>(initialContent);
   const [ad, setAd] = useState<HomeAdConfig>(initialAd);
+  const [imgClass, setImgClass] = useState<string[]>(initialImgClass);
   const [initialSnapshot, setInitialSnapshot] = useState<HomeContent>(initialContent);
   const [initialAdSnapshot, setInitialAdSnapshot] = useState<HomeAdConfig>(initialAd);
+  const [initialImgClassSnapshot, setInitialImgClassSnapshot] =
+    useState<string[]>(initialImgClass);
   const [updatedAt, setUpdatedAt] = useState<string | null>(initialUpdatedAt);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
@@ -99,8 +105,9 @@ export default function QuanLyTrangChuView({
   const dirty = useMemo(
     () =>
       JSON.stringify(content) !== JSON.stringify(initialSnapshot) ||
-      JSON.stringify(ad) !== JSON.stringify(initialAdSnapshot),
-    [content, initialSnapshot, ad, initialAdSnapshot],
+      JSON.stringify(ad) !== JSON.stringify(initialAdSnapshot) ||
+      JSON.stringify(imgClass) !== JSON.stringify(initialImgClassSnapshot),
+    [content, initialSnapshot, ad, initialAdSnapshot, imgClass, initialImgClassSnapshot],
   );
 
   const setHero = useCallback((hero: HeroContent) => {
@@ -123,29 +130,42 @@ export default function QuanLyTrangChuView({
     }
     setContent(DEFAULT_HOME_CONTENT);
     setAd(DEFAULT_HOME_AD);
+    setImgClass([]);
   }, []);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     setToast(null);
+    let toastDismissMs = 4500;
     try {
       const res = await fetch("/admin/api/home-content-save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, ad }),
+        body: JSON.stringify({ content, ad, img_class: imgClass }),
       });
       const json = (await res.json()) as {
         ok?: boolean;
         error?: string;
+        warning?: string;
         updated_at?: string | null;
       };
       if (!res.ok || !json.ok) {
         throw new Error(json.error || "Lưu thất bại.");
       }
+      if (json.warning) toastDismissMs = 12000;
       setInitialSnapshot(content);
       setInitialAdSnapshot(ad);
+      setInitialImgClassSnapshot(imgClass);
       setUpdatedAt(json.updated_at ?? new Date().toISOString());
-      setToast({ ok: true, msg: "Đã lưu nội dung trang chủ." });
+      setToast(
+        json.warning
+          ? {
+              ok: true,
+              warn: true,
+              msg: `Đã lưu nội dung. ${json.warning}`,
+            }
+          : { ok: true, msg: "Đã lưu nội dung trang chủ." },
+      );
     } catch (e) {
       setToast({
         ok: false,
@@ -153,9 +173,9 @@ export default function QuanLyTrangChuView({
       });
     } finally {
       setSaving(false);
-      setTimeout(() => setToast(null), 4500);
+      setTimeout(() => setToast(null), toastDismissMs);
     }
-  }, [content, ad]);
+  }, [content, ad, imgClass]);
 
   return (
     <div className="qlh-root">
@@ -211,17 +231,18 @@ export default function QuanLyTrangChuView({
       <div className="qlh-note">
         <Info size={16} />
         <span>
-          Chỉ quản lý 3 nhóm phần tử tĩnh trên trang chủ:{" "}
-          <b>ảnh Hero (3 khung)</b>, <b>nội dung</b> (đoạn mô tả Hero + 3 trụ
-          cột <em>Tại sao Sine Art</em>), và <b>URL video</b> (2 tab Online /
-          Offline). Các block động (khóa học, review, giáo viên, gallery) quản
-          lý ở trang riêng.
+          Quản lý ảnh Hero, nội dung Hero / 3 trụ, video 2 tab,{" "}
+          <b>ảnh lớp thực tế</b> (giữa Giáo viên và CTA), và banner quảng cáo.
+          Khóa học, review, giáo viên, gallery học viên quản lý ở trang riêng.
         </span>
       </div>
 
       {toast ? (
-        <div className={`qlh-toast ${toast.ok ? "ok" : "err"}`} role="status">
-          {toast.ok ? <Check size={16} /> : <AlertTriangle size={16} />}
+        <div
+          className={`qlh-toast ${toast.warn ? "warn" : toast.ok ? "ok" : "err"}`}
+          role="status"
+        >
+          {toast.warn ? <Info size={16} /> : toast.ok ? <Check size={16} /> : <AlertTriangle size={16} />}
           <span>{toast.msg}</span>
         </div>
       ) : null}
@@ -234,6 +255,7 @@ export default function QuanLyTrangChuView({
         onChangeWhy={setWhy}
       />
       <VideoSection data={content.video} onChange={setVideo} />
+      <ImgClassPhotosSection urls={imgClass} onChange={setImgClass} />
       <AdSection data={ad} onChange={setAd} />
 
       <div className="qlh-footer-save">
@@ -254,6 +276,132 @@ export default function QuanLyTrangChuView({
 
       <style dangerouslySetInnerHTML={{ __html: QLH_CSS }} />
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Ảnh lớp thực tế (mkt_home_content.img_class)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function ImgClassPhotosSection({
+  urls,
+  onChange,
+}: {
+  urls: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFiles = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const list = e.target.files;
+      if (!list?.length) return;
+      setUploading(true);
+      setError(null);
+      try {
+        const fd = new FormData();
+        for (let i = 0; i < list.length; i++) {
+          fd.append("files", list[i]!);
+        }
+        const res = await fetch("/admin/api/upload-classroom-photos", {
+          method: "POST",
+          body: fd,
+        });
+        const json = (await res.json()) as {
+          ok?: boolean;
+          urls?: string[];
+          error?: string;
+          warnings?: string[];
+        };
+        if (!res.ok || !json.ok || !json.urls?.length) {
+          throw new Error(json.error || "Upload thất bại.");
+        }
+        onChange([...urls, ...json.urls]);
+        if (json.warnings?.length) {
+          setError(json.warnings.join(" "));
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Upload thất bại.");
+      } finally {
+        setUploading(false);
+        if (fileRef.current) fileRef.current.value = "";
+      }
+    },
+    [onChange, urls],
+  );
+
+  return (
+    <section className="qlh-section">
+      <header className="qlh-section-head">
+        <span className="qlh-section-icon">
+          <ImageIcon size={18} />
+        </span>
+        <div>
+          <h2 className="qlh-section-title">Ảnh lớp thực tế</h2>
+          <p className="qlh-section-sub">
+            Hiển thị giữa khối Giáo viên và CTA. Chọn nhiều file — server nén WebP
+            (max cạnh 1600px) rồi upload Cloudflare Images.
+          </p>
+        </div>
+      </header>
+
+      <div className="qlh-img-class-toolbar">
+        <button
+          type="button"
+          className="qlh-btn qlh-btn-primary qlh-btn-sm"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? (
+            <Loader2 size={14} className="qlh-spin" />
+          ) : (
+            <Upload size={14} />
+          )}
+          {uploading ? "Đang upload…" : "Chọn nhiều ảnh"}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handleFiles}
+          style={{ display: "none" }}
+        />
+      </div>
+
+      {error ? <div className="qlh-hero-err">{error}</div> : null}
+
+      {urls.length > 0 ? (
+        <div className="qlh-img-class-grid">
+          {urls.map((url, i) => (
+            <div key={`${url}-${i}`} className="qlh-img-class-tile">
+              <Image
+                src={url}
+                alt=""
+                fill
+                sizes="140px"
+                className="object-cover"
+                unoptimized
+              />
+              <button
+                type="button"
+                className="qlh-img-class-remove"
+                aria-label="Xóa khỏi danh sách"
+                onClick={() => onChange(urls.filter((_, j) => j !== i))}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="qlh-section-sub" style={{ margin: 0 }}>
+          Chưa có ảnh — section sẽ ẩn trên trang chủ.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -940,6 +1088,8 @@ const QLH_CSS = `
 
 .qlh-toast{display:flex;align-items:center;gap:8px;padding:11px 14px;border-radius:10px;font-size:13.5px;font-weight:600;position:sticky;top:12px;z-index:10}
 .qlh-toast.ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#047857}
+.qlh-toast.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;align-items:flex-start}
+.qlh-toast.warn span{font-weight:600;line-height:1.45;font-size:13px}
 .qlh-toast.err{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
 
 /* Section */
@@ -989,6 +1139,12 @@ const QLH_CSS = `
 .qlh-field-ta{resize:vertical;min-height:66px;line-height:1.55}
 
 .qlh-footer-save{display:flex;justify-content:flex-end;padding-top:4px}
+
+.qlh-img-class-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.qlh-img-class-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.qlh-img-class-tile{position:relative;aspect-ratio:4/3;border-radius:10px;overflow:hidden;border:1px solid rgba(45,32,32,.1);background:#fafafa}
+.qlh-img-class-remove{position:absolute;top:6px;right:6px;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.85);background:rgba(0,0,0,.42);color:#fff;cursor:pointer;transition:background .15s,border-color .15s}
+.qlh-img-class-remove:hover{background:rgba(185,28,28,.9);border-color:#fecaca}
 
 /* Ad section */
 .qlh-section--ad{border-left-color:#bb89f8}

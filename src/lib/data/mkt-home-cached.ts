@@ -9,6 +9,7 @@ type MktHomeRow = {
   content: unknown;
   ads: unknown;
   visible_where: unknown;
+  img_class: unknown;
 };
 
 async function loadMktHomeRowUncached(): Promise<MktHomeRow | null> {
@@ -16,7 +17,7 @@ async function loadMktHomeRowUncached(): Promise<MktHomeRow | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from("mkt_home_content")
-    .select("content, ads, visible_where")
+    .select("content, ads, visible_where, img_class")
     .eq("id", 1)
     .maybeSingle();
   if (error || !data) return null;

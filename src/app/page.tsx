@@ -12,6 +12,7 @@ import { HomeNavSection } from "./_components/home/HomeNavSection";
 import { HomeNavSectionSkeleton } from "./_components/home/HomeNavSection.skeleton";
 import { HomeReviewsSection } from "./_components/home/HomeReviewsSection";
 import { HomeReviewsSectionSkeleton } from "./_components/home/HomeReviewsSection.skeleton";
+import { HomeClassroomPhotosSection } from "./_components/home/HomeClassroomPhotosSection";
 import { HomeTeachersSection } from "./_components/home/HomeTeachersSection";
 import { HomeTeachersSectionSkeleton } from "./_components/home/HomeTeachersSection.skeleton";
 import "./sineart-home.css";
@@ -51,6 +52,10 @@ export default function Home() {
 
       <Suspense fallback={<HomeTeachersSectionSkeleton />}>
         <HomeTeachersSection />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <HomeClassroomPhotosSection />
       </Suspense>
 
       <CtaBandSection />

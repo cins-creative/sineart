@@ -1,13 +1,38 @@
 "use client";
 
 import Image from "next/image";
+import { motion, useReducedMotion } from "framer-motion";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+/** px/giây — chỉnh tốc độ ticker */
+const TICKER_SPEED_PX = 42;
 
 export default function ClassroomPhotosSection({ urls }: { urls: string[] }) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [halfLoopPx, setHalfLoopPx] = useState(0);
+  const prefersReducedMotion = useReducedMotion();
+
+  const loopUrls = urls.length > 0 ? [...urls, ...urls] : [];
+
+  useLayoutEffect(() => {
+    const el = trackRef.current;
+    if (!el || urls.length === 0) {
+      setHalfLoopPx(0);
+      return;
+    }
+    const measure = () => {
+      const w = el.scrollWidth;
+      setHalfLoopPx(w > 0 ? w / 2 : 0);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [urls]);
 
   useEffect(() => {
     if (!lightboxSrc) return;
@@ -25,6 +50,10 @@ export default function ClassroomPhotosSection({ urls }: { urls: string[] }) {
 
   if (urls.length === 0) return null;
 
+  const durationSec =
+    halfLoopPx > 0 ? Math.max(14, halfLoopPx / TICKER_SPEED_PX) : 20;
+  const runTicker = !prefersReducedMotion && halfLoopPx > 0;
+
   return (
     <section className="classroom-real-wrap" id="lop-thuc-te" aria-labelledby="classroom-real-heading">
       <div className="sec-label" style={{ padding: "0 12px" }}>
@@ -37,29 +66,34 @@ export default function ClassroomPhotosSection({ urls }: { urls: string[] }) {
         Ảnh chụp tại lớp — cập nhật từ ban Đào tạo Sine Art.
       </p>
 
-      <div className="classroom-real-grid">
-        {urls.map((src, i) => (
-          <button
-            key={`${src}-${i}`}
-            type="button"
-            className="classroom-real-card"
-            aria-label={`Xem ảnh lớp học ${i + 1} — phóng to`}
-            onClick={() => setLightboxSrc(src)}
-          >
-            <span className="classroom-real-media">
-              <Image
-                src={cfImageForThumbnail(src) || src}
-                alt=""
-                width={400}
-                height={300}
-                sizes="(max-width: 640px) 50vw, (max-width: 960px) 33vw, 25vw"
-                className="classroom-real-img"
-                loading="lazy"
-                unoptimized={nextImageShouldUnoptimize(cfImageForThumbnail(src) || src)}
-              />
-            </span>
-          </button>
-        ))}
+      <div className="classroom-real-ticker-mask">
+        <motion.div
+          key={urls.join("\0")}
+          ref={trackRef}
+          className="classroom-real-ticker-track"
+          animate={runTicker ? { x: [0, -halfLoopPx] } : false}
+          transition={
+            runTicker
+              ? {
+                  x: {
+                    repeat: Infinity,
+                    repeatType: "loop",
+                    ease: "linear",
+                    duration: durationSec,
+                  },
+                }
+              : {}
+          }
+        >
+          {loopUrls.map((src, i) => (
+            <TickerSlide
+              key={`${src}-${i}`}
+              src={src}
+              labelIndex={(i % urls.length) + 1}
+              onOpen={() => setLightboxSrc(src)}
+            />
+          ))}
+        </motion.div>
       </div>
 
       {lightboxSrc && typeof document !== "undefined"
@@ -101,5 +135,37 @@ export default function ClassroomPhotosSection({ urls }: { urls: string[] }) {
           )
         : null}
     </section>
+  );
+}
+
+function TickerSlide({
+  src,
+  labelIndex,
+  onOpen,
+}: {
+  src: string;
+  labelIndex: number;
+  onOpen: () => void;
+}) {
+  const thumb = cfImageForThumbnail(src) || src;
+  return (
+    <button
+      type="button"
+      className="classroom-real-slide"
+      aria-label={`Xem ảnh lớp học ${labelIndex} — phóng to`}
+      onClick={onOpen}
+    >
+      <span className="classroom-real-slide-media">
+        <Image
+          src={thumb}
+          alt=""
+          fill
+          sizes="200px"
+          className="classroom-real-slide-img"
+          loading="lazy"
+          unoptimized={nextImageShouldUnoptimize(thumb)}
+        />
+      </span>
+    </button>
   );
 }

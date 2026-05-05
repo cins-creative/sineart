@@ -1633,48 +1633,69 @@ button.tc-art-full.tc-art-btn:hover .tc-art-img {
   line-height: 1.55;
   max-width: 56ch;
 }
-.classroom-real-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+.classroom-real-ticker-mask {
+  overflow: hidden;
+  width: 100%;
+  margin: 0 -6px;
+  padding: 6px 6px 10px;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent
+  );
 }
-@media (min-width: 640px) {
-  .classroom-real-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-  }
+.classroom-real-ticker-track {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  width: max-content;
+  will-change: transform;
 }
-@media (min-width: 960px) {
-  .classroom-real-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-.classroom-real-card {
+.classroom-real-slide {
   display: block;
+  flex-shrink: 0;
   padding: 0;
   margin: 0;
-  border-radius: var(--r);
+  border-radius: 8px;
   overflow: hidden;
   cursor: zoom-in;
-  background: rgba(45, 32, 32, 0.06);
-  border: 1.5px solid rgba(45, 32, 32, 0.07);
-  transition: transform 0.2s;
+  background: rgba(45, 32, 32, 0.05);
+  border: 1px solid rgba(45, 32, 32, 0.1);
+  transition: transform 0.2s, border-color 0.2s;
   -webkit-tap-highlight-color: transparent;
 }
-.classroom-real-card:active {
+.classroom-real-slide:hover {
+  border-color: rgba(238, 91, 159, 0.35);
+}
+.classroom-real-slide:active {
   transform: scale(0.98);
 }
-.classroom-real-media {
+.classroom-real-slide-media {
   display: block;
   position: relative;
-  aspect-ratio: 4/3;
-  width: 100%;
+  width: 200px;
+  height: 132px;
   line-height: 0;
 }
-.classroom-real-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+@media (min-width: 640px) {
+  .classroom-real-slide-media {
+    width: 224px;
+    height: 148px;
+  }
+}
+.classroom-real-slide-img {
+  object-fit: contain;
+  padding: 6px;
+  box-sizing: border-box;
 }
 
 /* ─────────────────────────────

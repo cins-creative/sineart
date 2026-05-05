@@ -1914,6 +1914,19 @@
   margin: 4px 0 0;
 }
 
+.phc .chat-photo-wrap--pending .chat-cphoto {
+  opacity: 0.94;
+}
+
+.phc .chat-upload-pending {
+  margin: 6px 0 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--phc-muted2);
+}
+
 .phc .chat-photo-btn {
   display: block;
   width: 100%;
@@ -3309,6 +3322,10 @@
   color: #fca5a5;
   background: rgba(248, 113, 113, 0.14);
   border-top-color: var(--phc-line);
+}
+
+.phc.phc--dark .sb .chat-upload-pending {
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .phc.phc--dark .chat-preview-row {

@@ -1896,33 +1896,103 @@ export default function ClassroomClient({
   const phcRootClass = cx("phc", fontBody.className, dark && "phc--dark");
 
   const chatIdRef = useRef(Math.max(...CHAT_SEED.map((m) => m.id), 0));
+  /** ID âm cho bubble ảnh lạc quan (chưa upload xong) — không trùng id DB dương. */
+  const hvOptimisticChatSeqRef = useRef(0);
 
   const sendChat = async () => {
     const txt = chatDraft.trim();
-    if (!txt && !chatSelectedFile) return;
+    const filePick = chatSelectedFile;
+    const previewPick = chatPreviewUrl;
+    if (!txt && !filePick) return;
 
     if (liveChatEnabled && Number.isFinite(lopHocIdForDb) && storedSession) {
+      const qlhvIdForInsert =
+        storedSession.userType === "Student" && Number.isFinite(storedSession.data.qlhv_id)
+          ? storedSession.data.qlhv_id
+          : null;
+
+      /** Ảnh: hiện bubble ngay (blob), upload + insert chạy nền. */
+      if (filePick) {
+        hvOptimisticChatSeqRef.current += 1;
+        const tempId = -hvOptimisticChatSeqRef.current;
+        const createdAt = new Date().toISOString();
+        const localPhotoUrl =
+          previewPick && previewPick.startsWith("blob:")
+            ? previewPick
+            : URL.createObjectURL(filePick);
+
+        const optimisticRow: HvChatboxRow = {
+          id: tempId,
+          created_at: createdAt,
+          content: txt.length > 0 ? txt : null,
+          photo: localPhotoUrl,
+          usertype: storedSession.userType === "Teacher" ? "Teacher" : "Student",
+          name: qlhvIdForInsert,
+        };
+
+        setHvChatErr(null);
+        setHvChatRows((prev) =>
+          [optimisticRow, ...prev.filter((p) => p.id !== tempId)].slice(0, 200)
+        );
+        setChatDraft("");
+        setChatSelectedFile(null);
+        setChatPreviewUrl(null);
+        if (chatFileInputRef.current) chatFileInputRef.current.value = "";
+
+        const draftSnapshot = txt;
+        const fileSnapshot = filePick;
+
+        void (async () => {
+          try {
+            const up = await postUploadChatImage(fileSnapshot);
+            if (!up.ok) throw new Error(up.error);
+            const row = await apiInsertHvChatboxMessage({
+              lopHocId: lopHocIdForDb,
+              usertype: storedSession.userType === "Teacher" ? "Teacher" : "Student",
+              name: qlhvIdForInsert,
+              content: draftSnapshot.length > 0 ? draftSnapshot : null,
+              photo: up.url,
+            });
+            if (row.created_at > hvLatestCreatedAtRef.current) {
+              hvLatestCreatedAtRef.current = row.created_at;
+            }
+            hvKnownIdsRef.current.add(row.id);
+            setHvChatRows((prev) => {
+              const withoutTemp = prev.filter((p) => p.id !== tempId);
+              const hasReal = withoutTemp.some((p) => p.id === row.id);
+              const next = (hasReal ? withoutTemp : [row, ...withoutTemp]).slice(0, 200);
+              try {
+                localStorage.setItem(
+                  chatCacheKey(lopHocIdForDb),
+                  JSON.stringify(next.slice(0, 50))
+                );
+              } catch {
+                /* ignore */
+              }
+              return next;
+            });
+            if (localPhotoUrl.startsWith("blob:")) URL.revokeObjectURL(localPhotoUrl);
+          } catch (e: unknown) {
+            setHvChatRows((prev) => prev.filter((p) => p.id !== tempId));
+            if (localPhotoUrl.startsWith("blob:")) URL.revokeObjectURL(localPhotoUrl);
+            setChatDraft(draftSnapshot);
+            setChatSelectedFile(fileSnapshot);
+            setChatPreviewUrl(URL.createObjectURL(fileSnapshot));
+            setHvChatErr(e instanceof Error ? e.message : "Gửi ảnh thất bại.");
+          }
+        })();
+        return;
+      }
+
       setHvChatSending(true);
       setHvChatErr(null);
       try {
-        let photoUrl: string | null = null;
-        if (chatSelectedFile) {
-          const up = await postUploadChatImage(chatSelectedFile);
-          if (!up.ok) throw new Error(up.error);
-          photoUrl = up.url;
-        }
-
-        const qlhvIdForInsert =
-          storedSession.userType === "Student" && Number.isFinite(storedSession.data.qlhv_id)
-            ? storedSession.data.qlhv_id
-            : null;
-
         const row = await apiInsertHvChatboxMessage({
           lopHocId: lopHocIdForDb,
           usertype: storedSession.userType === "Teacher" ? "Teacher" : "Student",
           name: qlhvIdForInsert,
           content: txt.length > 0 ? txt : null,
-          photo: photoUrl,
+          photo: null,
         });
         if (!hvKnownIdsRef.current.has(row.id)) {
           hvKnownIdsRef.current.add(row.id);
@@ -2551,7 +2621,12 @@ export default function ClassroomClient({
                                 {isGV ? <span className="gv-tag">GV</span> : null}
                               </div>
                               {hasPhoto ? (
-                                <div className="chat-photo-wrap">
+                                <div
+                                  className={cx(
+                                    "chat-photo-wrap",
+                                    m.id < 0 && "chat-photo-wrap--pending"
+                                  )}
+                                >
                                   <button
                                     type="button"
                                     className="chat-photo-btn"
@@ -2561,9 +2636,15 @@ export default function ClassroomClient({
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img src={m.photo!.trim()} alt="" className="chat-cphoto" />
                                   </button>
+                                  {m.id < 0 ? (
+                                    <p className="chat-upload-pending" aria-live="polite">
+                                      Đang tải ảnh lên…
+                                    </p>
+                                  ) : null}
                                   {isTeacher &&
                                   !isGV &&
                                   qlhvKey != null &&
+                                  m.id > 0 &&
                                   storedSession?.userType === "Teacher" &&
                                   Number.isFinite(storedSession.data.id) ? (
                                     <button

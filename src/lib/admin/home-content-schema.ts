@@ -209,7 +209,10 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
     headlineAfter: "công nghệ",
     headlineSuffix: ".",
     lead: "Sine Art xây dựng nền tảng Mỹ thuật bài bản và khoa học, giúp các bạn đủ kiến thức để trở thành Họa sỹ công nghệ trong Hoạt hình, Phim và Game.",
-    ctaPrimary: { label: "Học thử miễn phí", href: "/dang-ky" },
+    ctaPrimary: {
+      label: "Học thử miễn phí",
+      href: "https://www.facebook.com/sineart0102",
+    },
     ctaGhost: { label: "Xem khoá học", href: "/khoa-hoc" },
     ratingScore: "4.9/5",
     ratingSource: "Google Reviews",

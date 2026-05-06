@@ -56,6 +56,10 @@ function cardImageStyle(card: HeroCardImage): CSSProperties | undefined {
   return card.imageUrl ? { backgroundImage: `url("${card.imageUrl}")` } : undefined;
 }
 
+function isAbsoluteHttpHref(href: string): boolean {
+  return /^https?:\/\//i.test(href.trim());
+}
+
 function HeroImageCard({
   className,
   card,
@@ -111,10 +115,22 @@ export default function HeroSection({ content = DEFAULT_HOME_CONTENT.hero }: Pro
           </h1>
           <p className="hero-lead">{content.lead}</p>
           <div className="hero-actions">
-            <Link href={content.ctaPrimary.href} className="btn-p">
-              <PencilIcon />
-              {content.ctaPrimary.label}
-            </Link>
+            {isAbsoluteHttpHref(content.ctaPrimary.href) ? (
+              <a
+                href={content.ctaPrimary.href.trim()}
+                className="btn-p"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <PencilIcon />
+                {content.ctaPrimary.label}
+              </a>
+            ) : (
+              <Link href={content.ctaPrimary.href} className="btn-p">
+                <PencilIcon />
+                {content.ctaPrimary.label}
+              </Link>
+            )}
             <Link href={content.ctaGhost.href} className="btn-g">
               <BookIcon />
               {content.ctaGhost.label}

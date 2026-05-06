@@ -55,6 +55,17 @@ export function staffBelongsToVanHanhPhong(phongTenPhongs: readonly string[]): b
   return false;
 }
 
+/** Ban «Vận hành» / «Điều hành» — theo `hr_ban.ten_ban` (không dấu; có thể là «Ban Vận hành», …). */
+export function staffBelongsToVanHanhBan(tenBans: readonly string[]): boolean {
+  for (const raw of tenBans) {
+    const p = tonelessVi(String(raw));
+    if (!p) continue;
+    if (p.includes("van hanh") || p.includes("vanhanh")) return true;
+    if (p.includes("dieu hanh") || p.includes("dieuhanh")) return true;
+  }
+  return false;
+}
+
 function classifyPhongTen(tenPhongRaw: string): PhongRule {
   const p = tonelessVi(tenPhongRaw);
   if (!p) return "unknown";

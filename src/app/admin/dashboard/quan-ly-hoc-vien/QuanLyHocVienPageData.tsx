@@ -8,6 +8,7 @@ import { fetchDhNguyenVongCatalog } from "@/lib/donghocphi/dh-catalog";
 import {
   fetchAdminStaffShellPhongTenPhongs,
   fetchAdminStaffShellProfile,
+  fetchAdminStaffShellTenBans,
 } from "@/lib/data/admin-shell-user";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -27,9 +28,10 @@ export default async function QuanLyHocVienPageData() {
   const dhRes = await fetchDhNguyenVongCatalog(supabase);
   const dhCatalog = !dhRes.error && dhRes.catalog ? dhRes.catalog : null;
 
-  const [profile, phongTenPhongs, mktCapRow] = await Promise.all([
+  const [profile, phongTenPhongs, tenBans, mktCapRow] = await Promise.all([
     fetchAdminStaffShellProfile(supabase, session.staffId),
     fetchAdminStaffShellPhongTenPhongs(supabase, session.staffId),
+    fetchAdminStaffShellTenBans(supabase, session.staffId),
     supabase.from("mkt_home_content").select("htbt_cap_toc").eq("id", 1).maybeSingle(),
   ]);
   const initialHtbtCapToc =
@@ -42,6 +44,7 @@ export default async function QuanLyHocVienPageData() {
   const canEditTrangThaiTuVan = adminStaffCanEditTrangThaiTuVan({
     vai_tro: profile.vai_tro,
     phongTenPhongs,
+    tenBans,
   });
 
   /** Đổi theo từng request RSC (kể cả `router.refresh()`) — client dùng để refetch bundle. */

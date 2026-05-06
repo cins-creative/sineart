@@ -1,11 +1,15 @@
-import { staffBelongsToVanHanhPhong } from "@/lib/admin/dashboard-nav-visibility";
-
 /**
  * Quyền thao tác dữ liệu dashboard theo `hr_nhan_su.vai_tro`.
  * - `nhan_vien`: thêm / sửa (không xóa bản ghi qua các action delete của admin).
  * - `quan_ly`, `admin`: thêm / sửa / xóa.
  * Menu theo phòng ban (`resolveDashboardNavAccess`) giữ nguyên — không gắn vào file này.
  */
+
+import {
+  staffBelongsToTuVanPhong,
+  staffBelongsToVanHanhBan,
+  staffBelongsToVanHanhPhong,
+} from "@/lib/admin/dashboard-nav-visibility";
 
 export const ADMIN_DELETE_FORBIDDEN_MSG =
   "Tài khoản không có quyền xóa dữ liệu. Chỉ quản lý hoặc admin được xóa.";
@@ -71,13 +75,17 @@ export function adminStaffCanAccessAgentPage(vaiTro: string | null | undefined):
 }
 
 /**
- * Chỉnh `ql_thong_tin_hoc_vien.trang_thai_tu_van` — `admin`, hoặc nhân sự thuộc phòng **Vận hành / Điều hành**
- * (`hr_phong.ten_phong`: khớp vận hành, điều hành — xem `staffBelongsToVanHanhPhong`).
+ * Chỉnh `ql_thong_tin_hoc_vien.trang_thai_tu_van` — admin; hoặc phòng «Tư vấn»; hoặc phòng tên Vận hành/Điều hành;
+ * hoặc ban «Vận hành»/«Điều hành» (qua `hr_nhan_su.ban` / phòng → `hr_ban.ten_ban`).
  */
 export function adminStaffCanEditTrangThaiTuVan(staff: {
   vai_tro?: string | null;
   phongTenPhongs: readonly string[];
+  tenBans?: readonly string[];
 }): boolean {
   if (normalizeStaffVaiTro(staff.vai_tro) === "admin") return true;
-  return staffBelongsToVanHanhPhong(staff.phongTenPhongs);
+  if (staffBelongsToTuVanPhong(staff.phongTenPhongs)) return true;
+  if (staffBelongsToVanHanhPhong(staff.phongTenPhongs)) return true;
+  if (staff.tenBans?.length && staffBelongsToVanHanhBan(staff.tenBans)) return true;
+  return false;
 }

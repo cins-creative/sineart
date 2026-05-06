@@ -70,3 +70,54 @@ export async function fetchAdminStaffShellPhongTenPhongs(
   }
   return [...out];
 }
+
+/**
+ * Các `hr_ban.ten_ban` liên quan nhân sự: `hr_nhan_su.ban` + các ban suy ra từ `hr_nhan_su_phong` → `hr_phong.ban`.
+ */
+export async function fetchAdminStaffShellTenBans(
+  supabase: SupabaseClient,
+  staffId: number,
+): Promise<string[]> {
+  if (!Number.isFinite(staffId) || staffId <= 0) return [];
+
+  const out = new Set<string>();
+
+  const nsRes = await supabase
+    .from("hr_nhan_su")
+    .select("ban, hr_ban(ten_ban)")
+    .eq("id", staffId)
+    .maybeSingle();
+
+  if (!nsRes.error && nsRes.data) {
+    const row = nsRes.data as { hr_ban?: unknown };
+    const ban = unwrapJoin(row.hr_ban as Record<string, unknown> | Record<string, unknown>[] | null);
+    const ten =
+      ban && typeof (ban as { ten_ban?: unknown }).ten_ban === "string"
+        ? String((ban as { ten_ban: string }).ten_ban).trim()
+        : "";
+    if (ten) out.add(ten);
+  }
+
+  const phRes = await supabase
+    .from("hr_nhan_su_phong")
+    .select("hr_phong!inner(ban, hr_ban!inner(ten_ban))")
+    .eq("nhan_su_id", staffId);
+
+  if (phRes.error || !phRes.data?.length) {
+    return [...out];
+  }
+
+  for (const row of phRes.data as { hr_phong?: unknown }[]) {
+    const ph = unwrapJoin(row.hr_phong as Record<string, unknown> | Record<string, unknown>[] | null);
+    if (!ph) continue;
+    const banRaw = (ph as { hr_ban?: unknown }).hr_ban;
+    const ban = unwrapJoin(banRaw as Record<string, unknown> | Record<string, unknown>[] | null);
+    const ten =
+      ban && typeof (ban as { ten_ban?: unknown }).ten_ban === "string"
+        ? String((ban as { ten_ban: string }).ten_ban).trim()
+        : "";
+    if (ten) out.add(ten);
+  }
+
+  return [...out];
+}

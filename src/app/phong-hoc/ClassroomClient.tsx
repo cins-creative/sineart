@@ -44,6 +44,7 @@ import {
   fetchLopHocMeetRow,
   patchLopHocGoogleMeetUrl,
   studentVisibleGoogleMeetUrl,
+  type LopHocMeetRow,
 } from "@/lib/phong-hoc/lop-hoc-meet-fields";
 import {
   buildExerciseModel,
@@ -965,6 +966,65 @@ export default function ClassroomClient({
     return NaN;
   }, [storedSession, d.lop_hoc_id]);
 
+  /** Meet + Daily: ưu tiên API (cookie HV/GV + service role); fallback Supabase anon (RLS). */
+  const refreshClassMeetRow = useCallback(async () => {
+    if (!Number.isFinite(lopHocIdForDb)) return;
+    const id = lopHocIdForDb;
+
+    const applyRow = (row: LopHocMeetRow) => {
+      setMeetingRoomRefreshed(row.meeting_room);
+      setGoogleMeetUrl(row.url_google_meet);
+      setGoogleMeetSetAt(row.url_google_meet_set_at);
+      setLopDevice(row.device);
+      setGmeetRowReady(true);
+      setStoredSession((prev) => {
+        if (!prev) return prev;
+        const v = row.meeting_room;
+        const cur =
+          prev.data.meeting_room != null && String(prev.data.meeting_room).trim() !== ""
+            ? String(prev.data.meeting_room).trim()
+            : null;
+        if (cur === v) return prev;
+        const next: ClassroomSessionRecord =
+          prev.userType === "Teacher"
+            ? { userType: "Teacher", data: { ...prev.data, meeting_room: v } }
+            : { userType: "Student", data: { ...prev.data, meeting_room: v } };
+        saveClassroomSession(next);
+        return next;
+      });
+    };
+
+    try {
+      const res = await fetch(
+        `/api/phong-hoc/class-meet-row?lopHocId=${encodeURIComponent(String(id))}`,
+        { credentials: "include" }
+      );
+      if (res.ok) {
+        const j = (await res.json()) as LopHocMeetRow;
+        applyRow(j);
+        return;
+      }
+    } catch {
+      /* fallback Supabase */
+    }
+
+    const supabase = createBrowserSupabaseClient();
+    if (!supabase) {
+      setGmeetRowReady(true);
+      return;
+    }
+    const row = await fetchLopHocMeetRow(supabase, id);
+    if (!row) {
+      setMeetingRoomRefreshed(undefined);
+      setGoogleMeetUrl(null);
+      setGoogleMeetSetAt(null);
+      setLopDevice(null);
+      setGmeetRowReady(true);
+      return;
+    }
+    applyRow(row);
+  }, [lopHocIdForDb]);
+
   /**
    * Điểm danh «đã vào phòng» + làm mới `last_seen_at` (heartbeat).
    * Gọi khi HV mở Phòng học, định kỳ khi tab đang hiển thị, và sau Daily `joined-meeting`.
@@ -1227,67 +1287,31 @@ export default function ClassroomClient({
       setGmeetRowReady(false);
       return;
     }
-    let cancelled = false;
-    const supabase = createBrowserSupabaseClient();
-    if (!supabase) {
-      setMeetingRoomRefreshed(undefined);
-      setGmeetRowReady(true);
-      return;
-    }
-    void (async () => {
-      const row = await fetchLopHocMeetRow(supabase, lopHocIdForDb);
-      if (cancelled) return;
-      setGmeetRowReady(true);
-      if (!row) {
-        setMeetingRoomRefreshed(undefined);
-        setGoogleMeetUrl(null);
-        setGoogleMeetSetAt(null);
-        setLopDevice(null);
-        return;
-      }
-      setMeetingRoomRefreshed(row.meeting_room);
-      setGoogleMeetUrl(row.url_google_meet);
-      setGoogleMeetSetAt(row.url_google_meet_set_at);
-      setLopDevice(row.device);
-      if (storedSession && !cancelled) {
-        const v = row.meeting_room;
-        const cur =
-          storedSession.data.meeting_room != null &&
-          String(storedSession.data.meeting_room).trim() !== ""
-            ? String(storedSession.data.meeting_room).trim()
-            : null;
-        if (cur !== v) {
-          const next: ClassroomSessionRecord =
-            storedSession.userType === "Teacher"
-              ? { userType: "Teacher", data: { ...storedSession.data, meeting_room: v } }
-              : { userType: "Student", data: { ...storedSession.data, meeting_room: v } };
-          saveClassroomSession(next);
-          setStoredSession(next);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [lopHocIdForDb, storedSession]);
+    void refreshClassMeetRow();
+  }, [lopHocIdForDb, refreshClassMeetRow]);
 
-  /** Poll dự phòng (Realtime có thể chưa bật trên bảng `ql_lop_hoc`). */
+  /** Poll dự phòng (HV hay bị RLS; cookie + API đã xử lý trong `refreshClassMeetRow`). */
   useEffect(() => {
     if (!storedSession || !Number.isFinite(lopHocIdForDb)) return;
-    const supabase = createBrowserSupabaseClient();
-    if (!supabase) return;
-    const tick = () => {
-      void fetchLopHocMeetRow(supabase, lopHocIdForDb).then((row) => {
-        if (!row) return;
-        setGoogleMeetUrl(row.url_google_meet);
-        setGoogleMeetSetAt(row.url_google_meet_set_at);
-        setMeetingRoomRefreshed(row.meeting_room);
-        setLopDevice(row.device);
-      });
-    };
-    const id = window.setInterval(tick, 15000);
+    void refreshClassMeetRow();
+    const id = window.setInterval(() => void refreshClassMeetRow(), 5000);
     return () => window.clearInterval(id);
-  }, [storedSession, lopHocIdForDb]);
+  }, [storedSession, lopHocIdForDb, refreshClassMeetRow]);
+
+  /** HV: khi quay lại tab — tải lại Meet / Daily ngay. */
+  useEffect(() => {
+    if (storedSession?.userType !== "Student") return;
+    if (!Number.isFinite(lopHocIdForDb)) return;
+    const onBecameVisible = () => {
+      if (document.visibilityState === "visible") void refreshClassMeetRow();
+    };
+    document.addEventListener("visibilitychange", onBecameVisible);
+    window.addEventListener("focus", onBecameVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onBecameVisible);
+      window.removeEventListener("focus", onBecameVisible);
+    };
+  }, [storedSession?.userType, lopHocIdForDb, refreshClassMeetRow]);
 
   /**
    * GV lưu Meet → HV nhận ngay qua Realtime (không chờ poll).
@@ -1295,7 +1319,6 @@ export default function ClassroomClient({
    */
   useEffect(() => {
     if (!browserSb || !Number.isFinite(lopHocIdForDb)) return;
-    let cancelled = false;
     if (lopMeetRealtimeChannelRef.current) {
       browserSb.removeChannel(lopMeetRealtimeChannelRef.current);
       lopMeetRealtimeChannelRef.current = null;
@@ -1311,41 +1334,18 @@ export default function ClassroomClient({
           filter: `id=eq.${lopHocIdForDb}`,
         },
         () => {
-          void fetchLopHocMeetRow(browserSb, lopHocIdForDb).then((row) => {
-            if (cancelled || !row) return;
-            setMeetingRoomRefreshed(row.meeting_room);
-            setGoogleMeetUrl(row.url_google_meet);
-            setGoogleMeetSetAt(row.url_google_meet_set_at);
-            setLopDevice(row.device);
-            if (storedSession) {
-              const v = row.meeting_room;
-              const cur =
-                storedSession.data.meeting_room != null &&
-                String(storedSession.data.meeting_room).trim() !== ""
-                  ? String(storedSession.data.meeting_room).trim()
-                  : null;
-              if (cur !== v) {
-                const next: ClassroomSessionRecord =
-                  storedSession.userType === "Teacher"
-                    ? { userType: "Teacher", data: { ...storedSession.data, meeting_room: v } }
-                    : { userType: "Student", data: { ...storedSession.data, meeting_room: v } };
-                saveClassroomSession(next);
-                setStoredSession(next);
-              }
-            }
-          });
+          void refreshClassMeetRow();
         }
       )
       .subscribe();
     lopMeetRealtimeChannelRef.current = channel;
     return () => {
-      cancelled = true;
       if (lopMeetRealtimeChannelRef.current) {
         browserSb.removeChannel(lopMeetRealtimeChannelRef.current);
         lopMeetRealtimeChannelRef.current = null;
       }
     };
-  }, [browserSb, lopHocIdForDb, storedSession]);
+  }, [browserSb, lopHocIdForDb, refreshClassMeetRow]);
 
   const saveGoogleMeetUrl = useCallback(async () => {
     const url = gmeetInput.trim();

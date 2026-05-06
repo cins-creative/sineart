@@ -8,16 +8,27 @@
   scrollbar-width: none;
 }
 
-.cso-overlay {
+/* Outer không nhận tap — tránh WebKit giữ hit-test khi opacity→0 lúc đóng modal */
+.cso-overlay-outer {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(12px);
+  z-index: 10000;
+  padding: 16px;
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 10000;
-  padding: 16px;
+  pointer-events: none;
+}
+
+.cso-backdrop {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .cso-modal {
@@ -27,6 +38,8 @@
   border-radius: 24px;
   padding: 48px 24px 32px;
   position: relative;
+  pointer-events: auto;
+  touch-action: manipulation;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
   overflow: hidden;
   font-family: inherit;

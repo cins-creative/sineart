@@ -356,7 +356,7 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
 
       <AnimatePresence>
         {pickerOpen && (
-          <>
+          <div className="luubai-picker-stack">
             <motion.div
               key="luubai-backdrop"
               className="luubai-backdrop"
@@ -426,7 +426,7 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
                 </button>
               </div>
             </motion.div>
-          </>
+          </div>
         )}
       </AnimatePresence>
 

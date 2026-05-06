@@ -275,12 +275,16 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
       {open ? (
         <motion.div
           key="cso-root"
-          className="cso-overlay"
+          className="cso-overlay-outer"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={closeOverlay}
         >
+          <div
+            className="cso-backdrop"
+            aria-hidden
+            onClick={closeOverlay}
+          />
           <motion.div
             layout
             className="cso-modal"

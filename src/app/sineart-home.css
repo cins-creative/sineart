@@ -533,15 +533,19 @@
   opacity: 0.65;
 }
 
+/* Wrapper không nhận tap — tránh WebKit giữ hit-test khi opacity→0 lúc đóng menu */
 .nav-mobile-overlay {
   position: fixed;
   inset: 0;
   z-index: 200;
   font-family: var(--font);
+  pointer-events: none;
 }
 .nav-mobile-backdrop {
   position: absolute;
   inset: 0;
+  pointer-events: auto;
+  touch-action: manipulation;
   /* Không phủ tối, không blur — vẫn bắt click để đóng menu */
   background: transparent;
   backdrop-filter: none;
@@ -556,6 +560,8 @@
   left: 0;
   right: 0;
   bottom: 0;
+  pointer-events: auto;
+  touch-action: pan-y;
   max-height: min(88vh, 640px);
   overflow: auto;
   padding-bottom: max(20px, env(safe-area-inset-bottom));
@@ -566,7 +572,6 @@
   -webkit-backdrop-filter: var(--nav-menu-sheet-blur);
   border-top: var(--nav-glass-border);
   box-shadow: var(--nav-glass-shadow);
-  touch-action: pan-y;
 }
 .nav-mobile-sheet-handle {
   display: flex;

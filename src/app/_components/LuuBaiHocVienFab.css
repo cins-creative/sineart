@@ -47,20 +47,31 @@
 }
 
 /* ───── Picker bottom sheet ───── */
-.luubai-backdrop {
+/* Wrapper không nhận tap — backdrop/sheet mới nhận (tránh lớp trong suốt chặn cảm ứng khi đóng) */
+.luubai-picker-stack {
   position: fixed;
   inset: 0;
   z-index: 9998;
+  pointer-events: none;
+}
+.luubai-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+  touch-action: manipulation;
   background: rgba(0, 0, 0, 0.48);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
 .luubai-sheet {
-  position: fixed;
+  position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9999;
+  z-index: 1;
+  pointer-events: auto;
+  touch-action: manipulation;
   background: #fff;
   border-radius: 20px 20px 0 0;
   padding: 0 0 calc(24px + env(safe-area-inset-bottom, 0px));

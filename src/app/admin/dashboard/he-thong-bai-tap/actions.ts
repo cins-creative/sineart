@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const ADMIN_PATH = "/admin/dashboard/he-thong-bai-tap";
 
@@ -18,11 +19,11 @@ function revalidateHeThongPublic(): void {
 
 export type BaiTapMutResult = { ok: true; message?: string } | { ok: false; error: string };
 
-/** Khớp cột thật `hv_he_thong_bai_tap` (không có `url_bai_tap`). */
+/** Payload form — một hoặc nhiều `ql_mon_hoc.id` (bảng nối `hv_he_thong_bai_tap_mon_hoc`). */
 export type BaiTapSaveInput = {
   ten_bai_tap: string;
   bai_so: number | null;
-  mon_hoc: number | null;
+  mon_hoc_ids: number[];
   thumbnail: string | null;
   noi_dung_liet_ke: string | null;
   mo_ta_bai_tap: string | null;
@@ -46,6 +47,38 @@ function normTextArr(a: string[] | null | undefined): string[] | null {
   return out.length ? out : null;
 }
 
+function junctionErrorHint(message: string): string {
+  if (!/permission denied|42501/i.test(message)) return message;
+  return (
+    `${message} — Chạy GRANT trên bảng hv_he_thong_bai_tap_mon_hoc (xem sql/grants_hv_he_thong_bai_tap_mon_hoc.sql) ` +
+    "và kiểm tra .env dùng đúng SUPABASE_SERVICE_ROLE_KEY (role service_role), không dùng anon key."
+  );
+}
+
+/** Đồng bộ bảng nối bài ↔ môn (service role). */
+async function syncHeThongBaiTapMonJunction(
+  supabase: SupabaseClient,
+  baiTapId: number,
+  monHocIds: number[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const uniq = [
+    ...new Set(
+      monHocIds.map((n) => Math.trunc(Number(n))).filter((n) => Number.isFinite(n) && n > 0)
+    ),
+  ].sort((a, b) => a - b);
+  const { error: delErr } = await supabase
+    .from("hv_he_thong_bai_tap_mon_hoc")
+    .delete()
+    .eq("bai_tap_id", baiTapId);
+  if (delErr) return { ok: false, error: junctionErrorHint(delErr.message) };
+  if (uniq.length === 0) return { ok: true };
+  const { error: insErr } = await supabase.from("hv_he_thong_bai_tap_mon_hoc").insert(
+    uniq.map((mon_hoc_id) => ({ bai_tap_id: baiTapId, mon_hoc_id }))
+  );
+  if (insErr) return { ok: false, error: junctionErrorHint(insErr.message) };
+  return { ok: true };
+}
+
 function parsePayload(input: BaiTapSaveInput): { ok: true; data: BaiTapSaveInput } | { ok: false; error: string } {
   const ten_bai_tap = input.ten_bai_tap.trim();
   if (!ten_bai_tap) return { ok: false, error: "Nhập tên bài tập." };
@@ -66,15 +99,25 @@ function parsePayload(input: BaiTapSaveInput): { ok: true; data: BaiTapSaveInput
         ? muc
         : null;
 
+  const rawIds = input.mon_hoc_ids;
+  if (!Array.isArray(rawIds) || rawIds.length === 0) {
+    return { ok: false, error: "Chọn ít nhất một môn học." };
+  }
+  const mon_hoc_ids = [
+    ...new Set(
+      rawIds.map((x) => Math.trunc(Number(x))).filter((n) => Number.isFinite(n) && n > 0)
+    ),
+  ].sort((a, b) => a - b);
+  if (mon_hoc_ids.length === 0) {
+    return { ok: false, error: "Chọn ít nhất một môn học hợp lệ." };
+  }
+
   return {
     ok: true,
     data: {
       ten_bai_tap,
       bai_so: input.bai_so != null && Number.isFinite(input.bai_so) ? Math.trunc(input.bai_so) : null,
-      mon_hoc:
-        input.mon_hoc != null && Number.isFinite(input.mon_hoc) && input.mon_hoc > 0
-          ? Math.trunc(input.mon_hoc)
-          : null,
+      mon_hoc_ids,
       thumbnail: normText(input.thumbnail),
       noi_dung_liet_ke: normText(input.noi_dung_liet_ke),
       mo_ta_bai_tap: normText(input.mo_ta_bai_tap),
@@ -92,6 +135,7 @@ function parsePayload(input: BaiTapSaveInput): { ok: true; data: BaiTapSaveInput
 type HvBaiTapInsert = {
   ten_bai_tap: string;
   bai_so: number | null;
+  /** Legacy — trigger / MIN từ bảng nối */
   mon_hoc: number | null;
   thumbnail: string | null;
   noi_dung_liet_ke: string | null;
@@ -106,10 +150,12 @@ type HvBaiTapInsert = {
 };
 
 function rowForDb(d: BaiTapSaveInput): HvBaiTapInsert {
+  const mon_hoc =
+    d.mon_hoc_ids.length > 0 ? Math.min(...d.mon_hoc_ids) : null;
   return {
     ten_bai_tap: d.ten_bai_tap,
     bai_so: d.bai_so,
-    mon_hoc: d.mon_hoc,
+    mon_hoc,
     thumbnail: d.thumbnail,
     noi_dung_liet_ke: d.noi_dung_liet_ke,
     mo_ta_bai_tap: d.mo_ta_bai_tap,
@@ -133,8 +179,23 @@ export async function createHeThongBaiTap(input: BaiTapSaveInput): Promise<BaiTa
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
 
-  const { error } = await supabase.from("hv_he_thong_bai_tap").insert(rowForDb(parsed.data));
+  const { data: inserted, error } = await supabase
+    .from("hv_he_thong_bai_tap")
+    .insert(rowForDb(parsed.data))
+    .select("id")
+    .single();
   if (error) return { ok: false, error: error.message || "Không tạo được bài tập." };
+
+  const newId = Number(inserted?.id);
+  if (!Number.isFinite(newId) || newId <= 0) {
+    return { ok: false, error: "Không lấy được id bài tập sau khi tạo." };
+  }
+
+  const sync = await syncHeThongBaiTapMonJunction(supabase, newId, parsed.data.mon_hoc_ids);
+  if (!sync.ok) {
+    await supabase.from("hv_he_thong_bai_tap").delete().eq("id", newId);
+    return { ok: false, error: sync.error };
+  }
 
   revalidateHeThongPublic();
   return { ok: true, message: "Đã tạo bài tập." };
@@ -153,6 +214,9 @@ export async function updateHeThongBaiTap(id: number, input: BaiTapSaveInput): P
 
   const { error } = await supabase.from("hv_he_thong_bai_tap").update(rowForDb(parsed.data)).eq("id", id);
   if (error) return { ok: false, error: error.message || "Không cập nhật được." };
+
+  const sync = await syncHeThongBaiTapMonJunction(supabase, id, parsed.data.mon_hoc_ids);
+  if (!sync.ok) return { ok: false, error: sync.error };
 
   revalidateHeThongPublic();
   return { ok: true, message: "Đã cập nhật." };
@@ -266,7 +330,16 @@ export async function bulkUpdateHeThongBaiTap(
       .update(u.patch)
       .eq("id", u.id);
     if (error) errs.push(`#${u.id}: ${error.message}`);
-    else updated++;
+    else {
+      updated++;
+      if ("mon_hoc" in u.patch) {
+        const mid = u.patch.mon_hoc as number | null | undefined;
+        const ids =
+          mid != null && Number.isFinite(Number(mid)) && Number(mid) > 0 ? [Math.trunc(Number(mid))] : [];
+        const sync = await syncHeThongBaiTapMonJunction(supabase, u.id, ids);
+        if (!sync.ok) errs.push(`#${u.id} (môn): ${sync.error}`);
+      }
+    }
   }
 
   revalidateHeThongPublic();

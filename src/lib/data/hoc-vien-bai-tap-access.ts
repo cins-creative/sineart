@@ -1,4 +1,5 @@
 import { getHtbtCapTocCached } from "@/lib/data/htbt-cap-toc";
+import { lopClassNameIndicatesTaiLop } from "@/lib/data/htbt-tai-lop-class-name";
 import { createClient } from "@/lib/supabase/server";
 import { getGvHrIdFromSyncedCookie } from "@/lib/phong-hoc/gv-session-cookie";
 import { getHvIdFromSyncedCookie } from "@/lib/phong-hoc/hv-session-cookie";
@@ -97,15 +98,34 @@ export async function getHeThongBaiTapAccess(
     return { viewer: "hv", maxAccessibleIndex: last >= 0 ? last : -1 };
   }
 
-  const { data: lops } = await supabase.from("ql_lop_hoc").select("id").eq("mon_hoc", monHocId);
+  const { data: lops } = await supabase
+    .from("ql_lop_hoc")
+    .select("id, class_name, class_full_name")
+    .eq("mon_hoc", monHocId);
   const lopIds = (lops ?? [])
     .map((row) => Number((row as { id: unknown }).id))
     .filter(Number.isFinite);
   if (lopIds.length === 0) return { viewer: "hv", maxAccessibleIndex: -1 };
 
+  const taiLopLopIds = new Set<number>();
+  for (const lr of lops ?? []) {
+    const id = Number((lr as { id: unknown }).id);
+    if (!Number.isFinite(id)) continue;
+    const rawCn = (lr as { class_name?: unknown }).class_name;
+    const rawCf = (lr as { class_full_name?: unknown }).class_full_name;
+    if (
+      lopClassNameIndicatesTaiLop(
+        rawCf != null ? String(rawCf) : null,
+        rawCn != null ? String(rawCn) : null
+      )
+    ) {
+      taiLopLopIds.add(id);
+    }
+  }
+
   const { data: ens, error } = await supabase
     .from("ql_quan_ly_hoc_vien")
-    .select("tien_do_hoc")
+    .select("tien_do_hoc, lop_hoc")
     .eq("hoc_vien_id", hvId)
     .in("lop_hoc", lopIds);
 
@@ -114,6 +134,17 @@ export async function getHeThongBaiTapAccess(
       console.error("[getHeThongBaiTapAccess]", error.message);
     }
     return { viewer: "hv", maxAccessibleIndex: -1 };
+  }
+
+  /** Ghi danh lớp có tên chứa «tại lớp» hoặc «offline» → mở hết bài (khớp tab profile HV). */
+  if (taiLopLopIds.size > 0 && (ens?.length ?? 0) > 0) {
+    for (const row of ens ?? []) {
+      const lid = Number((row as { lop_hoc?: unknown }).lop_hoc);
+      if (Number.isFinite(lid) && taiLopLopIds.has(lid)) {
+        const last = sortedAscByBaiSo.length - 1;
+        return { viewer: "hv", maxAccessibleIndex: last >= 0 ? last : -1 };
+      }
+    }
   }
 
   let maxIdx = -1;

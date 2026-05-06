@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BookOpen,
+  ChevronDown,
   LayoutGrid,
   List as ListIcon,
   Loader2,
@@ -88,13 +89,15 @@ export default function HeThongBaiTapView({ bundle }: Props) {
 
   /** Môn có ít nhất một bài — chỉ dùng làm filter, không hiển thị số lượng. */
   const monFilterOptions = useMemo(() => {
-    return bundle.monHoc.filter((m) => bundle.baiTap.some((b) => b.mon_hoc === m.id));
+    return bundle.monHoc.filter((m) =>
+      bundle.baiTap.some((b) => b.mon_hoc_ids.includes(m.id) || b.mon_hoc === m.id)
+    );
   }, [bundle.baiTap, bundle.monHoc]);
 
   const filtered = useMemo(() => {
     return bundle.baiTap.filter((it) => {
-      if (filterMon !== "" && it.mon_hoc !== filterMon) return false;
-      return true;
+      if (filterMon === "") return true;
+      return it.mon_hoc_ids.includes(filterMon) || it.mon_hoc === filterMon;
     });
   }, [bundle.baiTap, filterMon]);
 
@@ -430,9 +433,12 @@ function BaiTapDrawer({
   const [baiSo, setBaiSo] = useState(() =>
     mode === "create" || row?.bai_so == null ? "" : String(row.bai_so)
   );
-  const [monId, setMonId] = useState(() =>
-    mode === "create" || row?.mon_hoc == null ? "" : String(row.mon_hoc)
-  );
+  const [monIds, setMonIds] = useState<number[]>(() => {
+    if (mode === "create") return [];
+    if (row?.mon_hoc_ids?.length) return [...row.mon_hoc_ids];
+    if (row?.mon_hoc != null && Number.isFinite(row.mon_hoc)) return [row.mon_hoc];
+    return [];
+  });
   const [thumb, setThumb] = useState(() => (mode === "create" ? "" : row?.thumbnail ?? ""));
   const [videoBaiGiang, setVideoBaiGiang] = useState(() =>
     mode === "create" ? "" : row?.video_bai_giang ?? ""
@@ -462,6 +468,7 @@ function BaiTapDrawer({
     return m || "Bắt buộc";
   });
   const [busy, setBusy] = useState(false);
+  const [monPickerOpen, setMonPickerOpen] = useState(true);
 
   async function save() {
     if (!ten.trim()) {
@@ -473,13 +480,9 @@ function BaiTapDrawer({
       onError("Bài số không hợp lệ.");
       return;
     }
-    const mon_hoc = monId === "" ? null : Number(monId);
-    if (monId !== "") {
-      const m = mon_hoc;
-      if (m == null || !Number.isFinite(m) || m <= 0) {
-        onError("Chọn môn học hợp lệ.");
-        return;
-      }
+    if (monIds.length === 0) {
+      onError("Chọn ít nhất một môn học (giữ Ctrl hoặc ⌘ để chọn nhiều).");
+      return;
     }
     const so_buoi = soBuoi.trim() === "" ? null : Number(soBuoi);
     if (soBuoi.trim() !== "") {
@@ -493,7 +496,7 @@ function BaiTapDrawer({
     const payload = {
       ten_bai_tap: ten,
       bai_so,
-      mon_hoc,
+      mon_hoc_ids: monIds,
       thumbnail: thumb.trim() || null,
       noi_dung_liet_ke: noiDungLietKe.trim() || null,
       mo_ta_bai_tap: moTa.trim() || null,
@@ -579,19 +582,67 @@ function BaiTapDrawer({
                   />
                 </div>
                 <div>
-                  <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-[#AAAAAA]">Môn học</div>
-                  <select
-                    value={monId}
-                    onChange={(e) => setMonId(e.target.value)}
-                    className="w-full rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
-                  >
-                    <option value="">— Chọn môn học —</option>
-                    {monList.map((m) => (
-                      <option key={m.id} value={String(m.id)}>
-                        {m.ten_mon_hoc}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-[#AAAAAA]">
+                    Môn học (có thể chọn nhiều)
+                  </div>
+                  <p className="mb-1.5 text-[11px] leading-snug text-[#AAAAAA]">
+                    Tích chọn từng môn — cần ít nhất một môn khi lưu (giống chọn bài Thư viện lý thuyết).
+                  </p>
+                  <div className="overflow-hidden rounded-[10px] border-[1.5px] border-[#EAEAEA] bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setMonPickerOpen((v) => !v)}
+                      className="flex w-full items-center justify-between gap-2 bg-[#fafafa] px-3 py-2.5 text-left"
+                      aria-expanded={monPickerOpen}
+                    >
+                      <div>
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#888]">
+                          Danh sách môn
+                        </div>
+                        <div className="text-[12px] font-bold text-[#1a1a2e]">
+                          {monIds.length > 0
+                            ? `Đã chọn ${monIds.length} môn — bấm để ${monPickerOpen ? "thu gọn" : "mở rộng"}`
+                            : "Chưa chọn môn — bấm để chọn"}
+                        </div>
+                      </div>
+                      <ChevronDown
+                        className={cn(
+                          "h-5 w-5 shrink-0 text-[#888] transition-transform",
+                          monPickerOpen && "rotate-180",
+                        )}
+                        aria-hidden
+                      />
+                    </button>
+                    {monPickerOpen ? (
+                      <div className="max-h-[min(52vh,380px)] overflow-y-auto border-t border-[#EAEAEA] px-2 py-2">
+                        <ul className="m-0 list-none p-0">
+                          {monList.map((m) => (
+                            <li key={m.id}>
+                              <label
+                                className={cn(
+                                  "flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-[12px] leading-snug text-[#323232] transition hover:bg-[#BC8AF9]/10",
+                                  monIds.includes(m.id) && "bg-[#BC8AF9]/12",
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-[#EAEAEA] text-[#BC8AF9] focus:ring-[#BC8AF9]"
+                                  checked={monIds.includes(m.id)}
+                                  onChange={() => {
+                                    setMonIds((prev) => {
+                                      if (prev.includes(m.id)) return prev.filter((x) => x !== m.id);
+                                      return [...prev, m.id].sort((a, b) => a - b);
+                                    });
+                                  }}
+                                />
+                                <span className="font-bold">{m.ten_mon_hoc}</span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 <div>
                   <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-[#AAAAAA]">

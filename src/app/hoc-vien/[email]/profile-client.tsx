@@ -35,6 +35,7 @@ import {
   type EnrolledMonOption,
   type StudentProfileGalleryRow,
 } from "@/lib/phong-hoc/classroom-gallery";
+import { lopClassNameIndicatesTaiLop } from "@/lib/data/htbt-tai-lop-class-name";
 import {
   curriculumProgressIndex,
   fetchLopCurriculumExercises,
@@ -60,6 +61,8 @@ type HvpAssignmentsClassBlock = {
   /** Chỉ số bài đang mở (cùng `curriculumProgressIndex`); -1 nếu chưa gán */
   progressIdx: number;
   capTocUnlockAll: boolean;
+  /** Tên lớp có «tại lớp» hoặc «Offline» — mở toàn bộ bài giảng */
+  taiLopUnlockByClassName: boolean;
   rows: HvpAssignmentExerciseRow[];
 };
 
@@ -92,6 +95,28 @@ function groupAssignmentBlocksByMon(blocks: HvpAssignmentsClassBlock[]): HvpAssi
       };
     })
     .sort((a, b) => a.label.localeCompare(b.label, "vi"));
+}
+
+/** Theo cột scalar `hv_he_thong_bai_tap.mon_hoc` (tên từ `ql_mon_hoc`). */
+function distinctScalarMonFilterOptions(rows: HvpAssignmentExerciseRow[]): { id: number; label: string }[] {
+  const map = new Map<number, string>();
+  for (const r of rows) {
+    const mid = r.exercise.mon_hoc;
+    if (mid == null || !Number.isFinite(mid) || mid <= 0) continue;
+    const label = r.exercise.ten_mon_hoc_goc?.trim() || `Môn #${mid}`;
+    if (!map.has(mid)) map.set(mid, label);
+  }
+  return [...map.entries()]
+    .map(([id, label]) => ({ id, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, "vi"));
+}
+
+function filterAssignmentRowsByScalarMon(
+  rows: HvpAssignmentExerciseRow[],
+  scalarMonId: number | null,
+): HvpAssignmentExerciseRow[] {
+  if (scalarMonId == null) return rows;
+  return rows.filter((r) => r.exercise.mon_hoc === scalarMonId);
 }
 
 const SEX_OPTIONS = ["Nam", "Nữ", "Khác"] as const;
@@ -293,6 +318,10 @@ export default function HocVienProfileClient({
   /** `null` = đang tải tab Hệ thống bài tập */
   const [assignmentsBlocks, setAssignmentsBlocks] = useState<HvpAssignmentsClassBlock[] | null>(null);
   const [assignmentsMonKey, setAssignmentsMonKey] = useState<string | null>(null);
+  /** Lọc theo `hv_he_thong_bai_tap.mon_hoc` trong từng khối lớp (`qlhvId`). `null` = tất cả. */
+  const [assignmentsScalarMonByQlhv, setAssignmentsScalarMonByQlhv] = useState<Record<number, number | null>>(
+    {},
+  );
   const [assignmentsOpenExId, setAssignmentsOpenExId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -498,9 +527,14 @@ export default function HocVienProfileClient({
             sb,
             row.lop_hoc_id
           );
+          const taiLopUnlockByClassName = lopClassNameIndicatesTaiLop(
+            row.class_full_name,
+            row.class_name
+          );
           const progressIdx = curriculumProgressIndex(exercises, row.tien_do_hoc);
+          const unlockAll = capToc || taiLopUnlockByClassName;
           const rows: HvpAssignmentExerciseRow[] = exercises.map((ex, i) => {
-            const unlocked = capToc || (progressIdx >= 0 && i <= progressIdx);
+            const unlocked = unlockAll || (progressIdx >= 0 && i <= progressIdx);
             return {
               exercise: ex,
               listIndex: i,
@@ -515,6 +549,7 @@ export default function HocVienProfileClient({
             monHocId: monHocId != null && Number.isFinite(monHocId) ? monHocId : null,
             progressIdx,
             capTocUnlockAll: capToc,
+            taiLopUnlockByClassName,
             rows,
           });
         } catch {
@@ -573,6 +608,11 @@ export default function HocVienProfileClient({
         : assignmentsMonGroups[0]!.key
     );
   }, [assignmentsMonGroups]);
+
+  useEffect(() => {
+    setAssignmentsScalarMonByQlhv({});
+    setAssignmentsOpenExId(null);
+  }, [assignmentsMonKey]);
 
   useEffect(() => {
     if (section !== "he-thong-bai-tap") setAssignmentsOpenExId(null);
@@ -1335,6 +1375,7 @@ export default function HocVienProfileClient({
                             )}
                             onClick={() => {
                               setAssignmentsMonKey(g.key);
+                              setAssignmentsScalarMonByQlhv({});
                               setAssignmentsOpenExId(null);
                             }}
                           >
@@ -1346,12 +1387,25 @@ export default function HocVienProfileClient({
                     <div className="hvp-btap-phc">
                       {activeAssignmentsMonGroup ? (
                         <div className="hvp-btap-stack">
-                          {activeAssignmentsMonGroup.blocks.map((bl) => (
+                          {activeAssignmentsMonGroup.blocks.map((bl) => {
+                            const scalarMonOpts = distinctScalarMonFilterOptions(bl.rows);
+                            const scalarFilterRaw = assignmentsScalarMonByQlhv[bl.qlhvId];
+                            const scalarFilterId =
+                              scalarFilterRaw === undefined ? null : scalarFilterRaw;
+                            const displayRows = filterAssignmentRowsByScalarMon(bl.rows, scalarFilterId);
+                            const currentProgressExId =
+                              bl.progressIdx >= 0 && bl.rows[bl.progressIdx]
+                                ? bl.rows[bl.progressIdx].exercise.id
+                                : null;
+
+                            return (
                             <div className="hvp-btap-class" key={bl.qlhvId}>
                               <div className="hvp-btap-class-head hvp-btap-class-head--compact">
                                 <h4 className="hvp-btap-class-title">{bl.classTitle}</h4>
                                 {bl.capTocUnlockAll ? (
                                   <p className="hvp-btap-cap">Chế độ cấp tốc: toàn bộ bài đã mở.</p>
+                                ) : bl.taiLopUnlockByClassName ? (
+                                  <p className="hvp-btap-cap">Toàn bộ bài giảng đã mở.</p>
                                 ) : bl.progressIdx >= 0 ? (
                                   <p className="hvp-btap-prog">
                                     Bài đang học: {bl.progressIdx + 1}/{bl.rows.length}
@@ -1362,14 +1416,68 @@ export default function HocVienProfileClient({
                                   </p>
                                 )}
                               </div>
+                              {scalarMonOpts.length > 1 ? (
+                                <div
+                                  className="hvp-btap-scalar-mon-bar"
+                                  role="group"
+                                  aria-label="Lọc theo môn ghi trên bài (hv_he_thong_bai_tap.mon_hoc)"
+                                >
+                                  <button
+                                    type="button"
+                                    className={cn(
+                                      "hvp-btap-mon-chip",
+                                      scalarFilterId == null && "hvp-btap-mon-chip--active",
+                                    )}
+                                    onClick={() =>
+                                      setAssignmentsScalarMonByQlhv((p) => ({
+                                        ...p,
+                                        [bl.qlhvId]: null,
+                                      }))
+                                    }
+                                  >
+                                    Tất cả
+                                  </button>
+                                  {scalarMonOpts.map((o) => (
+                                    <button
+                                      key={o.id}
+                                      type="button"
+                                      className={cn(
+                                        "hvp-btap-mon-chip",
+                                        scalarFilterId === o.id && "hvp-btap-mon-chip--active",
+                                      )}
+                                      onClick={() =>
+                                        setAssignmentsScalarMonByQlhv((p) => ({
+                                          ...p,
+                                          [bl.qlhvId]: o.id,
+                                        }))
+                                      }
+                                    >
+                                      {o.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
                               {bl.rows.length === 0 ? (
                                 <div className="task-curr-empty">Chưa có bài tập cho môn của lớp này.</div>
+                              ) : displayRows.length === 0 ? (
+                                <div className="task-curr-empty">
+                                  Không có bài nào thuộc môn đã chọn — chọn &quot;Tất cả&quot; hoặc môn khác.
+                                </div>
                               ) : (
                                 <div className="task-curr-list-wrap">
-                                  <div className="task-curr-list-heading">Danh sách bài theo môn</div>
+                                  <div className="task-curr-list-heading">
+                                    Danh sách bài tập
+                                    {scalarFilterId != null ? (
+                                      <span className="task-curr-list-heading-note">
+                                        {" "}
+                                        · đang lọc theo <strong>môn trên bài</strong>
+                                      </span>
+                                    ) : null}
+                                  </div>
                                   <div className="task-curr-list" role="list">
-                                    {bl.rows.map(({ exercise: ex, listIndex: i, unlocked }) => {
-                                      const isCurrent = i === bl.progressIdx;
+                                    {displayRows.map(({ exercise: ex, listIndex: i, unlocked }) => {
+                                      const isCurrent =
+                                        currentProgressExId != null && ex.id === currentProgressExId;
                                       const expanded = assignmentsOpenExId === ex.id && unlocked;
                                       const baiSoSlug =
                                         ex.bai_so != null && Number.isFinite(ex.bai_so)
@@ -1378,7 +1486,7 @@ export default function HocVienProfileClient({
                                       const baiTapHref = buildHeThongBaiTapHref(
                                         baiSoSlug,
                                         ex.ten_bai_tap,
-                                        bl.monHocId
+                                        ex.mon_hoc ?? bl.monHocId
                                       );
                                       const thumbSrc =
                                         cfImageForThumbnail(ex.thumbnail) ?? ex.thumbnail?.trim() ?? null;
@@ -1454,7 +1562,8 @@ export default function HocVienProfileClient({
                                 </div>
                               )}
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ) : null}
                     </div>

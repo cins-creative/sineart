@@ -1,3 +1,4 @@
+import { collectHeThongBaiTapIdsForMon } from "@/lib/data/htbt-linked-to-mon";
 import { createClient } from "@/lib/supabase/server";
 import { parseHeThongBaiTapSlug, slugifyTenBaiTap } from "@/lib/he-thong-bai-tap/slug";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -195,26 +196,43 @@ export async function getBaiTapGroupsForLoaiKhoaHoc(
   return groups.filter((g) => g.items.length > 0);
 }
 
-/** Bài tập theo `hv_he_thong_bai_tap.mon_hoc` — dùng trang chi tiết khóa học. */
+/** Bài tập thuộc môn (junction `hv_he_thong_bai_tap_mon_hoc` + cột legacy `mon_hoc`). */
 export async function getBaiTapListForMon(monId: number): Promise<BaiTap[]> {
   const supabase = await createClient();
   if (!supabase || !Number.isFinite(monId)) return [];
 
-  const { data, error } = await supabase
-    .from("hv_he_thong_bai_tap")
-    .select(BAI_TAP_SELECT)
-    .eq("mon_hoc", monId)
-    .order("bai_so", { ascending: true });
-
-  if (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("[getBaiTapListForMon] full select:", error.message);
-    }
+  let ids: number[];
+  try {
+    ids = await collectHeThongBaiTapIdsForMon(supabase, monId);
+  } catch {
     return getBaiTapListForMonFallback(supabase, monId);
   }
 
-  const rows = (data ?? []) as Record<string, unknown>[];
-  return rows.map(mapRow).filter((r) => r.id > 0);
+  if (ids.length === 0) return [];
+
+  const CHUNK = 120;
+  const rows: Record<string, unknown>[] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("hv_he_thong_bai_tap")
+      .select(BAI_TAP_SELECT)
+      .in("id", slice);
+    if (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("[getBaiTapListForMon] full select:", error.message);
+      }
+      return getBaiTapListForMonFallback(supabase, monId);
+    }
+    rows.push(...((data ?? []) as Record<string, unknown>[]));
+  }
+
+  const mapped = rows.map(mapRow).filter((r) => r.id > 0);
+  mapped.sort((a, b) => {
+    if (a.bai_so !== b.bai_so) return a.bai_so - b.bai_so;
+    return a.id - b.id;
+  });
+  return mapped;
 }
 
 /**
@@ -222,7 +240,7 @@ export async function getBaiTapListForMon(monId: number): Promise<BaiTap[]> {
  * Không lọc `is_visible` (danh sách bài & trang chi tiết dùng mọi bản ghi hợp lệ).
  *
  * Disambiguation giữa các môn có cùng `bai_so` + slug tên:
- * - Nếu `opts.monId` > 0: chỉ trả bản ghi khớp đúng `mon_hoc`.
+ * - Nếu `opts.monId` > 0: chỉ bài được gán môn đó (junction + cột `mon_hoc`).
  * - Nếu không có `monId`: ưu tiên bản `is_visible`, fallback bản đầu tiên.
  */
 export async function getBaiTapByHeThongSlug(
@@ -235,26 +253,50 @@ export async function getBaiTapByHeThongSlug(
   const supabase = await createClient();
   if (!supabase) return null;
 
-  let query = supabase
-    .from("hv_he_thong_bai_tap")
-    .select(BAI_TAP_SELECT)
-    .eq("bai_so", parsed.baiSo);
-
   const monHint = Number(opts?.monId);
+
+  let rawRows: Record<string, unknown>[] = [];
+
   if (Number.isFinite(monHint) && monHint > 0) {
-    query = query.eq("mon_hoc", monHint);
-  }
-
-  const { data, error } = await query;
-
-  if (error || !data?.length) {
-    if (process.env.NODE_ENV === "development" && error) {
-      console.error("[getBaiTapByHeThongSlug]", error.message);
+    let linkedIds: number[];
+    try {
+      linkedIds = await collectHeThongBaiTapIdsForMon(supabase, monHint);
+    } catch {
+      linkedIds = [];
     }
-    return null;
+    if (linkedIds.length === 0) return null;
+    const CHUNK = 120;
+    for (let i = 0; i < linkedIds.length; i += CHUNK) {
+      const slice = linkedIds.slice(i, i + CHUNK);
+      const { data, error } = await supabase
+        .from("hv_he_thong_bai_tap")
+        .select(BAI_TAP_SELECT)
+        .eq("bai_so", parsed.baiSo)
+        .in("id", slice);
+      if (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("[getBaiTapByHeThongSlug]", error.message);
+        }
+        return null;
+      }
+      rawRows.push(...((data ?? []) as Record<string, unknown>[]));
+    }
+  } else {
+    const { data, error } = await supabase
+      .from("hv_he_thong_bai_tap")
+      .select(BAI_TAP_SELECT)
+      .eq("bai_so", parsed.baiSo);
+
+    if (error || !data?.length) {
+      if (process.env.NODE_ENV === "development" && error) {
+        console.error("[getBaiTapByHeThongSlug]", error.message);
+      }
+      return null;
+    }
+    rawRows = data as Record<string, unknown>[];
   }
 
-  const rows = (data as Record<string, unknown>[]).map(mapRow);
+  const rows = rawRows.map(mapRow);
   const match = rows.filter((r) => slugifyTenBaiTap(r.ten_bai_tap) === parsed.titleSlug);
   if (match.length === 0) return null;
   const published = match.find((r) => r.is_visible);

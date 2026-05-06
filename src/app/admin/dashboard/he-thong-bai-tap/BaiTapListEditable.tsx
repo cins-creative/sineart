@@ -452,23 +452,32 @@ export default function BaiTapListEditable({
                 className="w-full truncate rounded-md border border-transparent bg-transparent px-2 py-1 text-[13px] font-semibold text-[#1a1a2e] outline-none focus:border-[#BC8AF9] focus:bg-white focus:ring-[2px] focus:ring-[#BC8AF9]/15"
               />
 
-              {/* Môn */}
-              <select
-                value={mon == null ? "" : String(mon)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  patchDraft(row, { mon_hoc: v === "" ? null : Number(v) });
-                }}
-                className="w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-[12px] text-[#444] outline-none focus:border-[#BC8AF9] focus:bg-white focus:ring-[2px] focus:ring-[#BC8AF9]/15"
-                title={mon != null ? monLabel.get(Number(mon)) ?? "" : "—"}
-              >
-                <option value="">— không gán —</option>
-                {monList.map((m) => (
-                  <option key={m.id} value={String(m.id)}>
-                    {m.ten_mon_hoc}
-                  </option>
-                ))}
-              </select>
+              {/* Môn — nhiều môn: chỉ đọc; một môn: chỉnh inline */}
+              {row.mon_hoc_ids.length > 1 ? (
+                <div
+                  className="truncate rounded-md border border-transparent px-2 py-1 text-[12px] text-[#444]"
+                  title={row.ten_mon_hoc ?? ""}
+                >
+                  {row.ten_mon_hoc ?? "—"}
+                </div>
+              ) : (
+                <select
+                  value={mon == null ? "" : String(mon)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    patchDraft(row, { mon_hoc: v === "" ? null : Number(v) });
+                  }}
+                  className="w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-[12px] text-[#444] outline-none focus:border-[#BC8AF9] focus:bg-white focus:ring-[2px] focus:ring-[#BC8AF9]/15"
+                  title={mon != null ? monLabel.get(Number(mon)) ?? "" : "—"}
+                >
+                  <option value="">— không gán —</option>
+                  {monList.map((m) => (
+                    <option key={m.id} value={String(m.id)}>
+                      {m.ten_mon_hoc}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               {/* Số buổi */}
               <input

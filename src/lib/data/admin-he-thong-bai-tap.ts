@@ -10,7 +10,11 @@ export type AdminBaiTapRow = {
   ten_bai_tap: string;
   bai_so: number | null;
   thumbnail: string | null;
+  /** Một hoặc nhiều môn — bảng nối `hv_he_thong_bai_tap_mon_hoc`. */
+  mon_hoc_ids: number[];
+  /** Khớp cột legacy — trùng MIN(mon_hoc_ids) khi có trigger đồng bộ. */
   mon_hoc: number | null;
+  /** Nhãn hiển thị: các tên môn nối bằng « · ». */
   ten_mon_hoc: string | null;
   noi_dung_liet_ke: string | null;
   mo_ta_bai_tap: string | null;
@@ -73,6 +77,33 @@ export async function fetchAdminHeThongBaiTapBundle(supabase: SupabaseClient): P
 
   if (btErr) return { ok: false, error: btErr.message };
 
+  const btIds = (btRows ?? [])
+    .map((r) => Number((r as { id?: unknown }).id))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
+  const junctionByBai = new Map<number, number[]>();
+  if (btIds.length > 0) {
+    const { data: jRows, error: jErr } = await supabase
+      .from("hv_he_thong_bai_tap_mon_hoc")
+      .select("bai_tap_id, mon_hoc_id")
+      .in("bai_tap_id", btIds);
+    if (jErr && process.env.NODE_ENV === "development") {
+      console.warn("[admin-he-thong-bai-tap] junction table:", jErr.message);
+    }
+    if (!jErr && jRows?.length) {
+      for (const jr of jRows) {
+        const bid = Number((jr as { bai_tap_id?: unknown }).bai_tap_id);
+        const mid = Number((jr as { mon_hoc_id?: unknown }).mon_hoc_id);
+        if (!Number.isFinite(bid) || bid <= 0 || !Number.isFinite(mid) || mid <= 0) continue;
+        if (!junctionByBai.has(bid)) junctionByBai.set(bid, []);
+        junctionByBai.get(bid)!.push(mid);
+      }
+      for (const [, ids] of junctionByBai) {
+        ids.sort((a, b) => a - b);
+      }
+    }
+  }
+
   const asTextArr = (v: unknown): string[] | null => {
     if (v == null) return null;
     if (Array.isArray(v)) {
@@ -100,7 +131,18 @@ export async function fetchAdminHeThongBaiTapBundle(supabase: SupabaseClient): P
       muc_do_quan_trong?: unknown;
     };
     const id = Number(r.id);
-    const monId = r.mon_hoc != null && r.mon_hoc !== "" ? Number(r.mon_hoc) : null;
+    const legacyMon = r.mon_hoc != null && r.mon_hoc !== "" ? Number(r.mon_hoc) : null;
+    const fromJunction =
+      Number.isFinite(id) && id > 0 ? junctionByBai.get(id) : undefined;
+    const mon_hoc_ids =
+      fromJunction && fromJunction.length > 0
+        ? [...fromJunction]
+        : legacyMon != null && Number.isFinite(legacyMon) && legacyMon > 0
+          ? [legacyMon]
+          : [];
+    const monId =
+      mon_hoc_ids.length > 0 ? Math.min(...mon_hoc_ids) : legacyMon != null && Number.isFinite(legacyMon) && legacyMon > 0 ? legacyMon : null;
+    const tenLabels = mon_hoc_ids.map((mid) => monMap.get(mid)).filter(Boolean);
     const vis =
       r.is_visible === true || r.is_visible === "true" || r.is_visible === 1 || r.is_visible === "t";
     return {
@@ -108,8 +150,9 @@ export async function fetchAdminHeThongBaiTapBundle(supabase: SupabaseClient): P
       ten_bai_tap: String(r.ten_bai_tap ?? "").trim() || "—",
       bai_so: r.bai_so != null && r.bai_so !== "" && Number.isFinite(Number(r.bai_so)) ? Number(r.bai_so) : null,
       thumbnail: r.thumbnail != null && String(r.thumbnail).trim() ? String(r.thumbnail).trim() : null,
+      mon_hoc_ids,
       mon_hoc: monId != null && Number.isFinite(monId) && monId > 0 ? monId : null,
-      ten_mon_hoc: monId != null && monId > 0 ? monMap.get(monId) ?? null : null,
+      ten_mon_hoc: tenLabels.length > 0 ? tenLabels.join(" · ") : monId != null && monId > 0 ? monMap.get(monId) ?? null : null,
       noi_dung_liet_ke:
         r.noi_dung_liet_ke != null && String(r.noi_dung_liet_ke).trim() ? String(r.noi_dung_liet_ke) : null,
       mo_ta_bai_tap: r.mo_ta_bai_tap != null && String(r.mo_ta_bai_tap).trim() ? String(r.mo_ta_bai_tap) : null,

@@ -1902,11 +1902,57 @@
 
 .phc .chat-cphoto {
   width: 100%;
+  height: 100%;
   max-height: 200px;
   object-fit: cover;
   border-radius: 10px;
   display: block;
+  margin-top: 0;
+}
+
+.phc .chat-photo-grid {
+  display: grid;
+  gap: 4px;
+  width: 100%;
   margin-top: 4px;
+}
+
+.phc .chat-photo-grid--one {
+  grid-template-columns: 1fr;
+}
+
+.phc .chat-photo-grid--one .chat-cphoto {
+  max-height: 200px;
+}
+
+.phc .chat-photo-grid--two {
+  grid-template-columns: 1fr 1fr;
+}
+
+.phc .chat-photo-grid--two .chat-photo-btn {
+  aspect-ratio: 1;
+  min-height: 0;
+}
+
+.phc .chat-photo-grid--two .chat-cphoto {
+  max-height: 140px;
+}
+
+.phc .chat-photo-grid--many {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.phc .chat-photo-grid--many .chat-photo-btn {
+  aspect-ratio: 1;
+  min-height: 0;
+}
+
+.phc .chat-photo-grid--many .chat-cphoto {
+  max-height: 96px;
+}
+
+.phc .chat-photo-wrap--album .chat-teacher-save-btn {
+  bottom: 10px;
 }
 
 .phc .chat-photo-wrap {
@@ -1937,6 +1983,7 @@
   border-radius: 10px;
   cursor: zoom-in;
   line-height: 0;
+  overflow: hidden;
 }
 
 .phc .chat-teacher-save-btn {
@@ -2011,8 +2058,9 @@
 
 .phc .chat-preview-row {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   padding: 8px 12px;
   border-top: 1px solid var(--phc-line);
   background: var(--phc-surface);
@@ -2020,17 +2068,37 @@
   position: relative;
 }
 
+.phc .chat-preview-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.phc .chat-preview-item {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
 .phc .chat-preview-thumb {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border-radius: 8px;
   object-fit: cover;
+  display: block;
+}
+
+.phc .chat-preview-cap-hint {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--phc-muted2);
 }
 
 .phc .chat-preview-x {
   position: absolute;
-  left: 50px;
-  top: 4px;
+  right: -6px;
+  top: -6px;
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -3162,6 +3230,16 @@
   color: var(--phc-muted2);
 }
 
+/* Link/menu items dùng màu nâu cố định — phải ghi đè khi dropdown nền tối */
+.phc.phc--dark .phc-topbar-avatar .nav-user-avatar-dd-item {
+  color: var(--phc-ink);
+}
+
+.phc.phc--dark .phc-topbar-avatar .nav-user-avatar-dd-item:hover {
+  background: rgba(248, 166, 104, 0.16);
+  color: #f5d0e6;
+}
+
 .phc.phc--dark .topbar-home:hover {
   border-color: #3a3a40;
   color: var(--phc-ink);
@@ -3681,6 +3759,90 @@
   width: 100%;
   border: none;
   display: block;
+}
+
+/* Google Meet — khung chính: CTA thay cho Daily nhúng */
+.phc .canvas-ph--meet-cta {
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+  background: linear-gradient(165deg, #14141c 0%, #0a0a10 55%, #060608 100%);
+}
+
+.phc .phc-meet-cta-card {
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  padding: 28px 22px;
+  border-radius: var(--phc-r);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
+}
+
+.phc .phc-meet-cta-card--muted {
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.phc .phc-meet-cta-ico {
+  font-size: 36px;
+  line-height: 1;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.phc .phc-meet-cta-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #fafafa;
+  letter-spacing: -0.02em;
+}
+
+.phc .phc-meet-cta-hint {
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.phc .phc-meet-cta-card--muted .phc-meet-cta-title {
+  font-size: 15px;
+}
+
+.phc .phc-meet-cta-card--muted .phc-meet-cta-hint {
+  text-align: left;
+}
+
+.phc a.phc-meet-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 800;
+  font-family: inherit;
+  text-decoration: none;
+  color: #fff;
+  background: var(--phc-grad);
+  box-shadow: 0 10px 28px rgba(238, 91, 159, 0.35);
+  transition: opacity 0.15s ease, transform 0.12s ease;
+}
+
+.phc a.phc-meet-cta-btn:hover {
+  opacity: 0.96;
+}
+
+.phc a.phc-meet-cta-btn:active {
+  transform: scale(0.98);
+}
+
+.phc.phc--dark .canvas-ph--meet-cta {
+  background: linear-gradient(165deg, #101014 0%, #060608 100%);
 }
 
 .phc .daily-meet-frame-root {

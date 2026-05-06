@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /** FK lớp trên `hv_chatbox` — thử `lop_hoc` trước, lỗi schema thì `class` (Framer cũ). */
 export type HvChatLopColumn = "lop_hoc" | "class";
 
+/** Khi đã migration `photos text[]`; fallback nếu cột chưa có. */
+const HV_SELECT_WITH_PHOTOS = "id,created_at,content,photo,photos,usertype,name";
 const HV_SELECT_WITH_PHOTO = "id,created_at,content,photo,usertype,name";
 const HV_SELECT_NO_PHOTO = "id,created_at,content,usertype,name";
 
@@ -53,7 +55,10 @@ export async function hvChatboxSelectByLop(
   };
 
   const tryCol = async (col: HvChatLopColumn) => {
-    let { data, error } = await runQuery(col, HV_SELECT_WITH_PHOTO);
+    let { data, error } = await runQuery(col, HV_SELECT_WITH_PHOTOS);
+    if (error && isSelectableColumnMissingError(error)) {
+      ({ data, error } = await runQuery(col, HV_SELECT_WITH_PHOTO));
+    }
     if (error && isSelectableColumnMissingError(error)) {
       ({ data, error } = await runQuery(col, HV_SELECT_NO_PHOTO));
     }
@@ -77,15 +82,22 @@ export async function hvChatboxInsert(
 ): Promise<{ message: Record<string, unknown>; usedColumn: HvChatLopColumn }> {
   const baseRow = { ...row };
 
-  const insertWithSelect = (col: HvChatLopColumn, selectList: string) => {
-    const insertPayload = col === "lop_hoc" ? { ...baseRow, lop_hoc: lopId } : { ...baseRow, class: lopId };
+  const insertWithSelect = (col: HvChatLopColumn, selectList: string, payload: Record<string, unknown>) => {
+    const insertPayload = col === "lop_hoc" ? { ...payload, lop_hoc: lopId } : { ...payload, class: lopId };
     return sb.from("hv_chatbox").insert(insertPayload).select(selectList).limit(1);
   };
 
   const insertForColumn = async (col: HvChatLopColumn) => {
-    let r = await insertWithSelect(col, HV_SELECT_WITH_PHOTO);
+    const rowWithPhotos = { ...baseRow };
+    const rowNoPhotos = { ...baseRow };
+    delete rowNoPhotos.photos;
+
+    let r = await insertWithSelect(col, HV_SELECT_WITH_PHOTOS, rowWithPhotos);
     if (r.error && isSelectableColumnMissingError(r.error)) {
-      r = await insertWithSelect(col, HV_SELECT_NO_PHOTO);
+      r = await insertWithSelect(col, HV_SELECT_WITH_PHOTO, rowNoPhotos);
+    }
+    if (r.error && isSelectableColumnMissingError(r.error)) {
+      r = await insertWithSelect(col, HV_SELECT_NO_PHOTO, rowNoPhotos);
     }
     return r;
   };

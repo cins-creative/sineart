@@ -98,6 +98,7 @@ const PHC_SIDEBAR_TWEEN = { type: "tween" as const, duration: 0.48, ease: PHC_SI
 
 const HV_CHAT_INITIAL = 30;
 const HV_CHAT_LOAD_MORE = 20;
+const HV_CHAT_MAX_IMAGES = 12;
 
 /** Vòng tiến độ bài (theo prototype Class_Chatbox). GV có thể bấm để mở gán tiến độ. */
 function ChatMiniRing({
@@ -680,8 +681,10 @@ export default function ClassroomClient({
   const [chatExMap, setChatExMap] = useState<Record<number, ChatExerciseEntry>>({});
   const [chatTotalByMon, setChatTotalByMon] = useState<Record<string, number>>({});
   const [chatClassTeacherAvatarUrl, setChatClassTeacherAvatarUrl] = useState<string | null>(null);
-  const [chatPreviewUrl, setChatPreviewUrl] = useState<string | null>(null);
-  const [chatSelectedFile, setChatSelectedFile] = useState<File | null>(null);
+  /** Ảnh chưa gửi: chọn file / dán clipboard — tối đa `HV_CHAT_MAX_IMAGES`. */
+  const [chatPendingImages, setChatPendingImages] = useState<
+    { key: string; file: File; previewUrl: string }[]
+  >([]);
   const [chatFullImg, setChatFullImg] = useState<string | null>(null);
   /** Tin chat đang gọi API lưu bài (giáo viên). */
   const [teacherSaveChatBusy, setTeacherSaveChatBusy] = useState<Record<number, boolean>>({});
@@ -720,9 +723,9 @@ export default function ClassroomClient({
   const [stuCurrTienDo, setStuCurrTienDo] = useState<number | null>(null);
   const [taskDetailOpenId, setTaskDetailOpenId] = useState<number | null>(null);
 
+  const gmeetSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dailyMeetContainerRef = useRef<HTMLDivElement>(null);
   const dailyCallFrameRef = useRef<DailyCall | null>(null);
-  const gmeetSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Timer id (DOM `window.setTimeout`). */
   const teacherSaveToastTimerRef = useRef<number | null>(null);
   const hvKnownIdsRef = useRef<Set<number>>(new Set());
@@ -731,10 +734,38 @@ export default function ClassroomClient({
   const chatFileInputRef = useRef<HTMLInputElement>(null);
   /** Realtime `hv_chatbox` — gỡ bằng `supabase.removeChannel` khi unmount / đổi lớp. */
   const hvChatRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  /** Realtime `ql_lop_hoc` — Meet / meeting_room cập nhật ngay khi GV lưu. */
+  const lopMeetRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
   /** Tránh async fetch/subscribe cũ ghi đè sau khi đổi lớp / unmount. */
   const hvChatEffectGenerationRef = useRef(0);
 
   const browserSb = useMemo(() => createBrowserSupabaseClient(), []);
+
+  const appendChatImageFiles = useCallback((incoming: File[]) => {
+    const imageFiles = incoming.filter((f) => f.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
+    setChatPendingImages((prev) => {
+      const room = HV_CHAT_MAX_IMAGES - prev.length;
+      if (room <= 0) return prev;
+      const take = imageFiles.slice(0, room);
+      return [
+        ...prev,
+        ...take.map((file) => ({
+          key: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+          file,
+          previewUrl: URL.createObjectURL(file),
+        })),
+      ];
+    });
+  }, []);
+
+  const removeChatPendingImage = useCallback((key: string) => {
+    setChatPendingImages((prev) => {
+      const hit = prev.find((p) => p.key === key);
+      if (hit?.previewUrl.startsWith("blob:")) URL.revokeObjectURL(hit.previewUrl);
+      return prev.filter((p) => p.key !== key);
+    });
+  }, []);
 
   useEffect(() => {
     try {
@@ -742,6 +773,16 @@ export default function ClassroomClient({
     } catch {
       /* ignore */
     }
+  }, []);
+
+  const chatPendingImagesRef = useRef(chatPendingImages);
+  chatPendingImagesRef.current = chatPendingImages;
+  useEffect(() => {
+    return () => {
+      for (const p of chatPendingImagesRef.current) {
+        if (p.previewUrl.startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -1127,7 +1168,7 @@ export default function ClassroomClient({
     async (m: HvChatboxRow, enrollmentQlhvId: number) => {
       if (!isTeacher || !Number.isFinite(lopHocIdForDb)) return;
       if (storedSession?.userType !== "Teacher" || !Number.isFinite(storedSession.data.id)) return;
-      const photo = m.photo?.trim();
+      const photo = (m.photos?.[0] ?? m.photo)?.trim();
       if (!photo) return;
       const teacherHrId = storedSession.data.id;
       setTeacherSaveChatBusy((prev) => ({ ...prev, [m.id]: true }));
@@ -1230,9 +1271,9 @@ export default function ClassroomClient({
     };
   }, [lopHocIdForDb, storedSession]);
 
+  /** Poll dự phòng (Realtime có thể chưa bật trên bảng `ql_lop_hoc`). */
   useEffect(() => {
-    if (storedSession?.userType !== "Student") return;
-    if (!Number.isFinite(lopHocIdForDb)) return;
+    if (!storedSession || !Number.isFinite(lopHocIdForDb)) return;
     const supabase = createBrowserSupabaseClient();
     if (!supabase) return;
     const tick = () => {
@@ -1241,11 +1282,70 @@ export default function ClassroomClient({
         setGoogleMeetUrl(row.url_google_meet);
         setGoogleMeetSetAt(row.url_google_meet_set_at);
         setMeetingRoomRefreshed(row.meeting_room);
+        setLopDevice(row.device);
       });
     };
-    const id = window.setInterval(tick, 5000);
+    const id = window.setInterval(tick, 15000);
     return () => window.clearInterval(id);
-  }, [storedSession?.userType, lopHocIdForDb]);
+  }, [storedSession, lopHocIdForDb]);
+
+  /**
+   * GV lưu Meet → HV nhận ngay qua Realtime (không chờ poll).
+   * Trên Supabase: Database → Publications → bật `ql_lop_hoc` cho `supabase_realtime` (nếu chưa).
+   */
+  useEffect(() => {
+    if (!browserSb || !Number.isFinite(lopHocIdForDb)) return;
+    let cancelled = false;
+    if (lopMeetRealtimeChannelRef.current) {
+      browserSb.removeChannel(lopMeetRealtimeChannelRef.current);
+      lopMeetRealtimeChannelRef.current = null;
+    }
+    const channel = browserSb
+      .channel(`lop-hoc-meet-${lopHocIdForDb}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "ql_lop_hoc",
+          filter: `id=eq.${lopHocIdForDb}`,
+        },
+        () => {
+          void fetchLopHocMeetRow(browserSb, lopHocIdForDb).then((row) => {
+            if (cancelled || !row) return;
+            setMeetingRoomRefreshed(row.meeting_room);
+            setGoogleMeetUrl(row.url_google_meet);
+            setGoogleMeetSetAt(row.url_google_meet_set_at);
+            setLopDevice(row.device);
+            if (storedSession) {
+              const v = row.meeting_room;
+              const cur =
+                storedSession.data.meeting_room != null &&
+                String(storedSession.data.meeting_room).trim() !== ""
+                  ? String(storedSession.data.meeting_room).trim()
+                  : null;
+              if (cur !== v) {
+                const next: ClassroomSessionRecord =
+                  storedSession.userType === "Teacher"
+                    ? { userType: "Teacher", data: { ...storedSession.data, meeting_room: v } }
+                    : { userType: "Student", data: { ...storedSession.data, meeting_room: v } };
+                saveClassroomSession(next);
+                setStoredSession(next);
+              }
+            }
+          });
+        }
+      )
+      .subscribe();
+    lopMeetRealtimeChannelRef.current = channel;
+    return () => {
+      cancelled = true;
+      if (lopMeetRealtimeChannelRef.current) {
+        browserSb.removeChannel(lopMeetRealtimeChannelRef.current);
+        lopMeetRealtimeChannelRef.current = null;
+      }
+    };
+  }, [browserSb, lopHocIdForDb, storedSession]);
 
   const saveGoogleMeetUrl = useCallback(async () => {
     const url = gmeetInput.trim();
@@ -1342,6 +1442,21 @@ export default function ClassroomClient({
     return normalizeMeetingRoomUrl(raw.trim()) ?? raw.trim();
   }, [googleMeetUrl, googleMeetSetAt, storedSession?.userType]);
 
+  /**
+   * Link Meet hiển thị khung chính: HV (theo ngày VN) / GV (URL đã lưu).
+   * Khi có URL → CTA Google Meet; **không** có thì fallback `meeting_room` (Daily / iframe).
+   */
+  const canvasMeetJoinUrl = useMemo((): string | null => {
+    if (storedSession?.userType === "Student") return studentSidebarMeetUrl;
+    if (storedSession?.userType === "Teacher") {
+      const u = googleMeetUrl?.trim();
+      if (!u) return null;
+      return normalizeMeetingRoomUrl(u) ?? u;
+    }
+    return null;
+  }, [storedSession?.userType, studentSidebarMeetUrl, googleMeetUrl]);
+
+  /** Tên hiển thị trong Daily Prebuilt (`join.userName`). */
   const participantDisplayName = useMemo(() => {
     const n = d.full_name?.trim();
     let base = n ? n : "";
@@ -1364,6 +1479,83 @@ export default function ClassroomClient({
     storedSession?.userType,
     storedSession?.data.id,
     hvPkResolvedForDaily,
+  ]);
+
+  /** Daily chỉ khi **không** ưu tiên Google Meet (`canvasMeetJoinUrl`). */
+  useLayoutEffect(() => {
+    if (canvasMeetJoinUrl || !meetingRoomUrl || !isDailyRoomUrl(meetingRoomUrl)) {
+      const prev = dailyCallFrameRef.current;
+      if (prev) {
+        void prev.destroy().finally(() => {
+          if (dailyCallFrameRef.current === prev) dailyCallFrameRef.current = null;
+        });
+      }
+      return;
+    }
+
+    const container = dailyMeetContainerRef.current;
+    if (!container) return;
+
+    let cancelled = false;
+    const forStudentRecord =
+      storedSession?.userType === "Student" && Number.isFinite(lopHocIdForDb);
+    const lopIdRecord = lopHocIdForDb;
+
+    void import("@daily-co/daily-js").then(({ default: DailyIframe }) => {
+      if (cancelled || !dailyMeetContainerRef.current) return;
+
+      void (async () => {
+        try {
+          await dailyCallFrameRef.current?.destroy();
+        } catch {
+          /* ignore */
+        }
+        dailyCallFrameRef.current = null;
+
+        if (!dailyMeetContainerRef.current || cancelled) return;
+
+        const frame = DailyIframe.createFrame(dailyMeetContainerRef.current, {
+          showLeaveButton: true,
+          iframeStyle: {
+            position: "absolute",
+            top: "0",
+            left: "0",
+            width: "100%",
+            height: "100%",
+            border: "0",
+          },
+        });
+        dailyCallFrameRef.current = frame;
+
+        frame.on("joined-meeting", () => {
+          if (!forStudentRecord || cancelled || !Number.isFinite(lopIdRecord)) return;
+          void recordDiemDanhWhenStudentInRoom();
+        });
+
+        try {
+          await frame.join({ url: meetingRoomUrl, userName: participantDisplayName });
+        } catch {
+          /* lỗi join Daily — thử tải lại trang */
+        }
+      })();
+    });
+
+    return () => {
+      cancelled = true;
+      const frame = dailyCallFrameRef.current;
+      if (frame) {
+        void frame.destroy().finally(() => {
+          if (dailyCallFrameRef.current === frame) dailyCallFrameRef.current = null;
+        });
+      }
+    };
+  }, [
+    canvasMeetJoinUrl,
+    meetingRoomUrl,
+    participantDisplayName,
+    storedSession?.userType,
+    lopHocIdForDb,
+    recordDiemDanhWhenStudentInRoom,
   ]);
 
   /** Tiêu đề topbar — tên lớp (`class_name`), fallback tên đầy đủ / slug URL. */
@@ -1707,7 +1899,9 @@ export default function ClassroomClient({
           }
           const t0 = typeof first.created_at === "string" ? first.created_at : "";
           if (t0) hvLatestCreatedAtRef.current = t0;
-          setHvChatRows(parsed as HvChatboxRow[]);
+          setHvChatRows(
+            parsed.map((row) => mapChatboxRow(row as Record<string, unknown>))
+          );
         }
       }
     } catch {
@@ -1806,81 +2000,6 @@ export default function ClassroomClient({
     };
   }, [browserSb, lopHocIdForDb, storedSession]);
 
-  useLayoutEffect(() => {
-    if (!meetingRoomUrl || !isDailyRoomUrl(meetingRoomUrl)) {
-      const prev = dailyCallFrameRef.current;
-      if (prev) {
-        void prev.destroy().finally(() => {
-          if (dailyCallFrameRef.current === prev) dailyCallFrameRef.current = null;
-        });
-      }
-      return;
-    }
-
-    const container = dailyMeetContainerRef.current;
-    if (!container) return;
-
-    let cancelled = false;
-    const forStudentRecord =
-      storedSession?.userType === "Student" && Number.isFinite(lopHocIdForDb);
-    const lopIdRecord = lopHocIdForDb;
-
-    void import("@daily-co/daily-js").then(({ default: DailyIframe }) => {
-      if (cancelled || !dailyMeetContainerRef.current) return;
-
-      void (async () => {
-        try {
-          await dailyCallFrameRef.current?.destroy();
-        } catch {
-          /* ignore */
-        }
-        dailyCallFrameRef.current = null;
-
-        if (!dailyMeetContainerRef.current || cancelled) return;
-
-        const frame = DailyIframe.createFrame(dailyMeetContainerRef.current, {
-          showLeaveButton: true,
-          iframeStyle: {
-            position: "absolute",
-            top: "0",
-            left: "0",
-            width: "100%",
-            height: "100%",
-            border: "0",
-          },
-        });
-        dailyCallFrameRef.current = frame;
-
-        frame.on("joined-meeting", () => {
-          if (!forStudentRecord || cancelled || !Number.isFinite(lopIdRecord)) return;
-          void recordDiemDanhWhenStudentInRoom();
-        });
-
-        try {
-          await frame.join({ url: meetingRoomUrl, userName: participantDisplayName });
-        } catch {
-          /* lỗi join Daily — người dùng vẫn có thể thử tải lại trang */
-        }
-      })();
-    });
-
-    return () => {
-      cancelled = true;
-      const frame = dailyCallFrameRef.current;
-      if (frame) {
-        void frame.destroy().finally(() => {
-          if (dailyCallFrameRef.current === frame) dailyCallFrameRef.current = null;
-        });
-      }
-    };
-  }, [
-    meetingRoomUrl,
-    participantDisplayName,
-    storedSession?.userType,
-    lopHocIdForDb,
-    recordDiemDanhWhenStudentInRoom,
-  ]);
-
   const toggleDark = () => {
     setDark((prev) => {
       const next = !prev;
@@ -1901,9 +2020,8 @@ export default function ClassroomClient({
 
   const sendChat = async () => {
     const txt = chatDraft.trim();
-    const filePick = chatSelectedFile;
-    const previewPick = chatPreviewUrl;
-    if (!txt && !filePick) return;
+    const pendingSnapshot = chatPendingImages.slice();
+    if (!txt && pendingSnapshot.length === 0) return;
 
     if (liveChatEnabled && Number.isFinite(lopHocIdForDb) && storedSession) {
       const qlhvIdForInsert =
@@ -1912,20 +2030,18 @@ export default function ClassroomClient({
           : null;
 
       /** Ảnh: hiện bubble ngay (blob), upload + insert chạy nền. */
-      if (filePick) {
+      if (pendingSnapshot.length > 0) {
         hvOptimisticChatSeqRef.current += 1;
         const tempId = -hvOptimisticChatSeqRef.current;
         const createdAt = new Date().toISOString();
-        const localPhotoUrl =
-          previewPick && previewPick.startsWith("blob:")
-            ? previewPick
-            : URL.createObjectURL(filePick);
+        const localPhotoUrls = pendingSnapshot.map((p) => p.previewUrl);
 
         const optimisticRow: HvChatboxRow = {
           id: tempId,
           created_at: createdAt,
           content: txt.length > 0 ? txt : null,
-          photo: localPhotoUrl,
+          photo: localPhotoUrls[0] ?? null,
+          photos: localPhotoUrls,
           usertype: storedSession.userType === "Teacher" ? "Teacher" : "Student",
           name: qlhvIdForInsert,
         };
@@ -1935,23 +2051,28 @@ export default function ClassroomClient({
           [optimisticRow, ...prev.filter((p) => p.id !== tempId)].slice(0, 200)
         );
         setChatDraft("");
-        setChatSelectedFile(null);
-        setChatPreviewUrl(null);
+        setChatPendingImages([]);
         if (chatFileInputRef.current) chatFileInputRef.current.value = "";
 
         const draftSnapshot = txt;
-        const fileSnapshot = filePick;
 
         void (async () => {
           try {
-            const up = await postUploadChatImage(fileSnapshot);
-            if (!up.ok) throw new Error(up.error);
+            const uploads = await Promise.all(
+              pendingSnapshot.map((p) => postUploadChatImage(p.file))
+            );
+            const urls: string[] = [];
+            for (const up of uploads) {
+              if (!up.ok) throw new Error(up.error);
+              urls.push(up.url);
+            }
             const row = await apiInsertHvChatboxMessage({
               lopHocId: lopHocIdForDb,
               usertype: storedSession.userType === "Teacher" ? "Teacher" : "Student",
               name: qlhvIdForInsert,
               content: draftSnapshot.length > 0 ? draftSnapshot : null,
-              photo: up.url,
+              photo: urls[0] ?? null,
+              photos: urls,
             });
             if (row.created_at > hvLatestCreatedAtRef.current) {
               hvLatestCreatedAtRef.current = row.created_at;
@@ -1971,13 +2092,13 @@ export default function ClassroomClient({
               }
               return next;
             });
-            if (localPhotoUrl.startsWith("blob:")) URL.revokeObjectURL(localPhotoUrl);
+            for (const p of pendingSnapshot) {
+              if (p.previewUrl.startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+            }
           } catch (e: unknown) {
             setHvChatRows((prev) => prev.filter((p) => p.id !== tempId));
-            if (localPhotoUrl.startsWith("blob:")) URL.revokeObjectURL(localPhotoUrl);
             setChatDraft(draftSnapshot);
-            setChatSelectedFile(fileSnapshot);
-            setChatPreviewUrl(URL.createObjectURL(fileSnapshot));
+            setChatPendingImages(pendingSnapshot);
             setHvChatErr(e instanceof Error ? e.message : "Gửi ảnh thất bại.");
           }
         })();
@@ -1993,6 +2114,7 @@ export default function ClassroomClient({
           name: qlhvIdForInsert,
           content: txt.length > 0 ? txt : null,
           photo: null,
+          photos: [],
         });
         if (!hvKnownIdsRef.current.has(row.id)) {
           hvKnownIdsRef.current.add(row.id);
@@ -2013,9 +2135,6 @@ export default function ClassroomClient({
           });
         }
         setChatDraft("");
-        setChatSelectedFile(null);
-        if (chatPreviewUrl) URL.revokeObjectURL(chatPreviewUrl);
-        setChatPreviewUrl(null);
       } catch (e: unknown) {
         setHvChatErr(e instanceof Error ? e.message : "Gửi tin thất bại.");
       } finally {
@@ -2287,30 +2406,56 @@ export default function ClassroomClient({
       <div className="main">
         <LayoutGroup id="phc-main-layout">
           <motion.div layout className="canvas-wrap" transition={PHC_SIDEBAR_TWEEN}>
-            {meetingRoomUrl ? (
+            {canvasMeetJoinUrl ? (
+              <motion.div
+                layout
+                className="canvas-ph canvas-ph--meet canvas-ph--meet-cta"
+                transition={PHC_SIDEBAR_TWEEN}
+              >
+                <div className="phc-meet-cta-card">
+                  <span className="phc-meet-cta-ico" aria-hidden>
+                    📹
+                  </span>
+                  <p className="phc-meet-cta-title">Buổi học trên Google Meet</p>
+                  <p className="phc-meet-cta-hint">Mở tab mới để bật camera và micro.</p>
+                  <a
+                    href={canvasMeetJoinUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="phc-meet-cta-btn"
+                  >
+                    Vào học trên Google Meet
+                  </a>
+                </div>
+              </motion.div>
+            ) : meetingRoomUrl && !isDailyRoomUrl(meetingRoomUrl) ? (
               <motion.div
                 layout
                 className="canvas-ph canvas-ph--meet"
                 transition={PHC_SIDEBAR_TWEEN}
               >
-                {isDailyRoomUrl(meetingRoomUrl) ? (
-                  <div ref={dailyMeetContainerRef} className="daily-meet-frame-root" />
-                ) : (
-                  <iframe
-                    src={meetingRoomUrl}
-                    title="Phòng họp — meeting_room"
-                    allow="camera; microphone; fullscreen; display-capture; autoplay"
-                    allowFullScreen
-                  />
-                )}
+                <iframe
+                  src={meetingRoomUrl}
+                  title="Phòng họp — meeting_room"
+                  allow="camera; microphone; fullscreen; display-capture; autoplay"
+                  allowFullScreen
+                />
+              </motion.div>
+            ) : meetingRoomUrl && isDailyRoomUrl(meetingRoomUrl) ? (
+              <motion.div
+                layout
+                className="canvas-ph canvas-ph--meet"
+                transition={PHC_SIDEBAR_TWEEN}
+              >
+                <div ref={dailyMeetContainerRef} className="daily-meet-frame-root" />
               </motion.div>
             ) : (
               <motion.div layout className="canvas-ph" transition={PHC_SIDEBAR_TWEEN}>
                 <span className="ico">🎨</span>
                 <p>Phòng học trực tuyến</p>
                 <small>
-                  Chưa có liên kết phòng họp trên hệ thống. Admin cập nhật cột{" "}
-                  <code>ql_lop_hoc.meeting_room</code> (URL Meet / Daily / …).
+                  Chưa có liên kết phòng họp. Admin/GV cập nhật <code>meeting_room</code> (Daily.co) hoặc lưu Google Meet
+                  ở bảng điều khiển — khi có Meet trong ngày, khung chính ưu tiên nút Meet.
                 </small>
               </motion.div>
             )}
@@ -2593,7 +2738,10 @@ export default function ClassroomClient({
                             ? d.staff_avatar_url
                             : chatClassTeacherAvatarUrl
                           : null;
-                        const hasPhoto = Boolean(m.photo?.trim());
+                        const albumUrls = (m.photos?.length ? m.photos : []).filter(
+                          (u) => u.trim().length > 0
+                        );
+                        const hasPhotos = albumUrls.length > 0;
                         return (
                           <div key={m.id} className={cx("cmsg", isMe && "me")}>
                             <div className={cx("cbub", isMe ? "me" : "them")}>
@@ -2620,22 +2768,35 @@ export default function ClassroomClient({
                                 <span className="csender-name">{senderName}</span>
                                 {isGV ? <span className="gv-tag">GV</span> : null}
                               </div>
-                              {hasPhoto ? (
+                              {hasPhotos ? (
                                 <div
                                   className={cx(
                                     "chat-photo-wrap",
+                                    albumUrls.length > 1 && "chat-photo-wrap--album",
                                     m.id < 0 && "chat-photo-wrap--pending"
                                   )}
                                 >
-                                  <button
-                                    type="button"
-                                    className="chat-photo-btn"
-                                    onClick={() => setChatFullImg(m.photo!.trim())}
-                                    aria-label="Phóng to ảnh"
+                                  <div
+                                    className={cx(
+                                      "chat-photo-grid",
+                                      albumUrls.length === 1 && "chat-photo-grid--one",
+                                      albumUrls.length === 2 && "chat-photo-grid--two",
+                                      albumUrls.length >= 3 && "chat-photo-grid--many"
+                                    )}
                                   >
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={m.photo!.trim()} alt="" className="chat-cphoto" />
-                                  </button>
+                                    {albumUrls.map((src, ix) => (
+                                      <button
+                                        key={`${m.id}-${ix}-${src.slice(0, 64)}`}
+                                        type="button"
+                                        className="chat-photo-btn"
+                                        onClick={() => setChatFullImg(src.trim())}
+                                        aria-label="Phóng to ảnh"
+                                      >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={src.trim()} alt="" className="chat-cphoto" />
+                                      </button>
+                                    ))}
+                                  </div>
                                   {m.id < 0 ? (
                                     <p className="chat-upload-pending" aria-live="polite">
                                       Đang tải ảnh lên…
@@ -2659,7 +2820,9 @@ export default function ClassroomClient({
                                       title={
                                         teacherChatSaved[m.id]
                                           ? "Đã lưu vào bài học viên (chờ xác nhận)"
-                                          : "Lưu vào bài học viên (chờ xác nhận)"
+                                          : albumUrls.length > 1
+                                            ? "Lưu ảnh đầu tiên vào bài học viên (chờ xác nhận)"
+                                            : "Lưu vào bài học viên (chờ xác nhận)"
                                       }
                                       onClick={(ev) => {
                                         ev.stopPropagation();
@@ -2734,23 +2897,27 @@ export default function ClassroomClient({
                     })
                   )}
                 </div>
-                {liveChatEnabled && chatPreviewUrl ? (
+                {liveChatEnabled && chatPendingImages.length > 0 ? (
                   <div className="chat-preview-row">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={chatPreviewUrl} alt="" className="chat-preview-thumb" />
-                    <button
-                      type="button"
-                      className="chat-preview-x"
-                      onClick={() => {
-                        setChatSelectedFile(null);
-                        if (chatPreviewUrl) URL.revokeObjectURL(chatPreviewUrl);
-                        setChatPreviewUrl(null);
-                        if (chatFileInputRef.current) chatFileInputRef.current.value = "";
-                      }}
-                      aria-label="Bỏ ảnh"
-                    >
-                      ×
-                    </button>
+                    <div className="chat-preview-strip" role="list">
+                      {chatPendingImages.map((p) => (
+                        <span key={p.key} className="chat-preview-item" role="listitem">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={p.previewUrl} alt="" className="chat-preview-thumb" />
+                          <button
+                            type="button"
+                            className="chat-preview-x"
+                            onClick={() => removeChatPendingImage(p.key)}
+                            aria-label="Bỏ ảnh đính kèm"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    {chatPendingImages.length >= HV_CHAT_MAX_IMAGES ? (
+                      <span className="chat-preview-cap-hint">Đã đạt tối đa {HV_CHAT_MAX_IMAGES} ảnh</span>
+                    ) : null}
                   </div>
                 ) : null}
                 {liveChatEnabled && hvChatErr ? (
@@ -2763,23 +2930,23 @@ export default function ClassroomClient({
                     ref={chatFileInputRef}
                     type="file"
                     accept="image/*"
+                    multiple
                     className="phc-sr-only"
                     id="phc-chat-file"
                     onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (!f) return;
-                      setChatSelectedFile(f);
-                      setChatPreviewUrl((prev) => {
-                        if (prev) URL.revokeObjectURL(prev);
-                        return URL.createObjectURL(f);
-                      });
+                      const list = e.target.files;
+                      if (!list?.length) return;
+                      appendChatImageFiles(Array.from(list));
+                      e.target.value = "";
                     }}
                   />
                   <label
                     htmlFor={liveChatEnabled ? "phc-chat-file" : undefined}
                     className={cx("chat-img-lbl", !liveChatEnabled && "chat-img-lbl--off")}
                     title={
-                      liveChatEnabled ? "Đính kèm ảnh" : "Đăng nhập lớp để gửi ảnh và tin thật"
+                      liveChatEnabled
+                        ? "Đính kèm ảnh (nhiều ảnh, hoặc Ctrl+V dán ảnh)"
+                        : "Đăng nhập lớp để gửi ảnh và tin thật"
                     }
                   >
                     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -2797,6 +2964,22 @@ export default function ClassroomClient({
                     }
                     value={chatDraft}
                     onChange={(e) => setChatDraft(e.target.value)}
+                    onPaste={(e) => {
+                      if (!liveChatEnabled) return;
+                      const items = e.clipboardData?.items;
+                      if (!items?.length) return;
+                      const files: File[] = [];
+                      for (let i = 0; i < items.length; i++) {
+                        const it = items[i];
+                        if (it?.kind === "file" && it.type.startsWith("image/")) {
+                          const f = it.getAsFile();
+                          if (f) files.push(f);
+                        }
+                      }
+                      if (files.length === 0) return;
+                      e.preventDefault();
+                      appendChatImageFiles(files);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -2808,7 +2991,9 @@ export default function ClassroomClient({
                     type="button"
                     className="chat-send-btn"
                     onClick={() => void sendChat()}
-                    disabled={hvChatSending || (!chatDraft.trim() && !chatSelectedFile)}
+                    disabled={
+                      hvChatSending || (!chatDraft.trim() && chatPendingImages.length === 0)
+                    }
                     aria-label="Gửi"
                   >
                     {hvChatSending ? (

@@ -13,7 +13,10 @@ export type HvChatboxRow = {
   id: number;
   created_at: string;
   content: string | null;
+  /** URL ảnh đầu — giữ tương thích; trùng `photos[0]` khi có album. */
   photo: string | null;
+  /** Album ảnh (CF URLs); rỗng nếu chỉ chữ. */
+  photos: string[];
   usertype: HvChatboxUserType;
   name: number | null;
 };
@@ -67,17 +70,31 @@ function baiSoOrder(baiSo: number | null): number {
   return baiSo;
 }
 
+function parsePhotosFromRaw(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((x) => String(x).trim()).filter(Boolean);
+  }
+  return [];
+}
+
 /** Map một dòng DB / payload Realtime → `HvChatboxRow`. */
 export function mapChatboxRow(raw: Record<string, unknown>): HvChatboxRow {
   const ut = raw.usertype === "Teacher" ? "Teacher" : "Student";
   const nameRaw = raw.name;
   const name =
     nameRaw != null && nameRaw !== "" && Number.isFinite(Number(nameRaw)) ? Number(nameRaw) : null;
+  const fromArr = parsePhotosFromRaw(raw.photos);
+  const legacy =
+    raw.photo != null && String(raw.photo).trim() !== "" ? String(raw.photo).trim() : null;
+  const photos = fromArr.length > 0 ? fromArr : legacy ? [legacy] : [];
+  const photo = photos[0] ?? null;
   return {
     id: Number(raw.id),
     created_at: String(raw.created_at ?? ""),
     content: raw.content != null ? String(raw.content) : null,
-    photo: raw.photo != null ? String(raw.photo) : null,
+    photo,
+    photos,
     usertype: ut,
     name,
   };
@@ -109,13 +126,16 @@ export async function insertHvChatboxMessage(
     name: number | null;
     content: string | null;
     photo: string | null;
+    photos: string[];
   }
 ): Promise<HvChatboxRow[]> {
+  const urls = payload.photos.length > 0 ? payload.photos : payload.photo ? [payload.photo] : [];
   const { message } = await hvChatboxInsert(supabase, payload.lop_hoc, {
     usertype: payload.usertype,
     name: payload.name,
     content: payload.content,
-    photo: payload.photo,
+    photo: urls[0] ?? null,
+    photos: urls,
   });
   return [mapChatboxRow(message as Record<string, unknown>)];
 }
@@ -143,8 +163,8 @@ async function chatApiJson<T>(path: string, init?: RequestInit): Promise<T> {
 /** Đọc tin (server — service role, bỏ qua RLS). Dùng khi không có Supabase browser (ít gặp). */
 export async function apiFetchHvChatboxMessages(lopHocId: number): Promise<HvChatboxRow[]> {
   const u = `/api/phong-hoc/hv-chatbox?lopHocId=${encodeURIComponent(String(lopHocId))}`;
-  const j = await chatApiJson<{ messages: HvChatboxRow[] }>(u);
-  return j.messages ?? [];
+  const j = await chatApiJson<{ messages: Record<string, unknown>[] }>(u);
+  return (j.messages ?? []).map((m) => mapChatboxRow(m));
 }
 
 /** Gửi tin (server — service role). */
@@ -154,6 +174,7 @@ export async function apiInsertHvChatboxMessage(params: {
   name: number | null;
   content: string | null;
   photo: string | null;
+  photos?: string[];
 }): Promise<HvChatboxRow> {
   const j = await chatApiJson<{ message: HvChatboxRow }>("/api/phong-hoc/hv-chatbox", {
     method: "POST",
@@ -164,10 +185,11 @@ export async function apiInsertHvChatboxMessage(params: {
       name: params.name,
       content: params.content,
       photo: params.photo,
+      photos: params.photos ?? (params.photo ? [params.photo] : []),
     }),
   });
   if (!j.message) throw new Error("Không nhận được tin sau khi gửi.");
-  return j.message;
+  return mapChatboxRow(j.message as unknown as Record<string, unknown>);
 }
 
 /** Học viên trong lớp theo `ql_quan_ly_hoc_vien.id` (trùng cột `hv_chatbox.name`). */

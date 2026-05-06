@@ -79,14 +79,30 @@ export async function POST(req: Request): Promise<NextResponse> {
       : body.content == null
         ? null
         : String(body.content).trim() || null;
-  const photo =
+  const photoLegacy =
     typeof body.photo === "string"
       ? body.photo.trim() || null
       : body.photo == null
         ? null
         : String(body.photo).trim() || null;
 
-  if (!content && !photo) {
+  let photoUrls: string[] = [];
+  if (Array.isArray(body.photos)) {
+    for (const item of body.photos) {
+      const u =
+        typeof item === "string"
+          ? item.trim()
+          : item == null
+            ? ""
+            : String(item).trim();
+      if (u) photoUrls.push(u);
+    }
+  }
+  if (photoUrls.length === 0 && photoLegacy) photoUrls = [photoLegacy];
+
+  const photo = photoUrls[0] ?? null;
+
+  if (!content && photoUrls.length === 0) {
     return NextResponse.json(
       { error: "Cần nội dung chữ hoặc ảnh.", code: "EMPTY_BODY" },
       { status: 400 }
@@ -98,12 +114,13 @@ export async function POST(req: Request): Promise<NextResponse> {
     name,
     content,
     photo,
+    photos: photoUrls,
   };
 
   try {
     const { message } = await hvChatboxInsert(sb, lopHocId, base);
 
-    if (ut === "Student" && photo && name != null && Number.isFinite(name)) {
+    if (ut === "Student" && photoUrls.length > 0 && name != null && Number.isFinite(name)) {
       const { data: en } = await sb
         .from("ql_quan_ly_hoc_vien")
         .select("hoc_vien_id")

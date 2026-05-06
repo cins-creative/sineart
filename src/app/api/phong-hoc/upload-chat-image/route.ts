@@ -1,20 +1,19 @@
+import { postFormDataToCfWorker } from "@/lib/admin/cf-image-upload";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const DEFAULT_WORKER = "https://sine-art-api.nguyenthanhtu-nkl.workers.dev";
-
 /**
  * Proxy upload ảnh chat → Worker `POST /upload-cf-images` (header `x-api-secret`).
+ * Dùng chung `postFormDataToCfWorker` với admin để parse phản hồi text/HTML (502) an toàn.
  *
  * Vercel / server:
- * - `SINE_ART_WORKER_SECRET` = **cùng giá trị** với secret Worker (`env.API_SECRET` trong code Worker / Wrangler `API_SECRET`).
- * - `SINE_ART_WORKER_URL` (tuỳ chọn) = origin Worker, mặc định DEFAULT_WORKER.
+ * - `SINE_ART_WORKER_SECRET` = **cùng giá trị** với secret Worker (`API_SECRET` Wrangler).
+ * - `SINE_ART_WORKER_URL` (tuỳ chọn) = origin Worker (mặc định trong `postFormDataToCfWorker`).
  */
 export async function POST(req: Request): Promise<NextResponse> {
   const secret =
     process.env.SINE_ART_WORKER_SECRET?.trim() || process.env.WORKER_API_SECRET?.trim();
-  const base = process.env.SINE_ART_WORKER_URL?.trim() || DEFAULT_WORKER;
   if (!secret) {
     return NextResponse.json(
       {
@@ -41,30 +40,15 @@ export async function POST(req: Request): Promise<NextResponse> {
   const out = new FormData();
   out.append("file", file, "chat.jpg");
 
-  const url = `${base.replace(/\/$/, "")}/upload-cf-images`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "x-api-secret": secret },
-    body: out,
-  });
-
-  const json: unknown = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg =
-      typeof json === "object" && json !== null && "error" in json
-        ? String((json as { error?: unknown }).error ?? res.statusText)
-        : res.statusText;
-    return NextResponse.json({ error: msg, ok: false }, { status: 502 });
+  const result = await postFormDataToCfWorker(out);
+  if (!result.ok) {
+    const status =
+      result.error.includes("Chưa cấu hình SINE_ART_WORKER_SECRET") ||
+      result.error.includes("SINE_ART_WORKER_SECRET")
+        ? 503
+        : 502;
+    return NextResponse.json({ ok: false, error: result.error }, { status });
   }
 
-  if (
-    typeof json === "object" &&
-    json !== null &&
-    (json as { success?: boolean }).success === true &&
-    typeof (json as { url?: unknown }).url === "string"
-  ) {
-    return NextResponse.json({ ok: true, url: (json as { url: string }).url });
-  }
-
-  return NextResponse.json({ error: "Phản hồi worker không hợp lệ.", ok: false }, { status: 502 });
+  return NextResponse.json({ ok: true, url: result.url });
 }

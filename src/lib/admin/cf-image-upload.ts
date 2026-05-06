@@ -51,7 +51,11 @@ export async function postFormDataToCfWorker(form: FormData): Promise<CfWorkerPo
       msg =
         `Upload nhận text Worker Agent — SINE_ART_WORKER_URL đang trỏ Worker Messenger (api-meta). Đặt origin của Worker sine-art-api (upload-cf-images). Đang gọi: ${url}`;
     } else {
-      msg = `Phản hồi worker không phải JSON (${res.status}). Body: ${preview || "(rỗng)"}`;
+      msg = `Phản hồi worker không phải JSON (HTTP ${res.status}). Body: ${preview || "(rỗng)"}`;
+      if (res.status === 502 || res.status === 503 || res.status === 524) {
+        msg +=
+          " — Thường do Worker / Cloudflare Images tạm lỗi hoặc origin sai. Kiểm tra Cloudflare Dashboard (Workers → Logs, Images quota), đảm bảo Worker deploy route POST /upload-cf-images, và Vercel có SINE_ART_WORKER_SECRET trùng API_SECRET trên Worker.";
+      }
     }
 
     return { ok: false, error: msg };

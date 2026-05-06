@@ -60,7 +60,17 @@ function classifyPhongTen(tenPhongRaw: string): PhongRule {
   if (!p) return "unknown";
   if (p.includes("graphic")) return "graphic_design";
   if (p.includes("dao tao") || p.includes("daotao")) return "dao_tao_phong";
-  if (p.includes("van hanh") || p.includes("vanhanh")) return "van_hanh";
+  /** Ban Vận hành / Điều hành — cùng nhóm menu Điều hành + quyền sửa trạng thái tư vấn HV. */
+  if (
+    p.includes("van hanh") ||
+    p.includes("vanhanh") ||
+    p.includes("dieu hanh") ||
+    p.includes("dieuhanh") ||
+    p.includes("van-hanh") ||
+    p.includes("dieu-hanh")
+  ) {
+    return "van_hanh";
+  }
   if (p.includes("tu van") || p.includes("tuvan")) return "tu_van";
   if (p.includes("ke toan") || p.includes("ke-toan") || p.includes("ketoan")) return "ke_toan";
   if (p.includes("nhan su") || p.includes("nhan-su")) return "nhan_su_phong";

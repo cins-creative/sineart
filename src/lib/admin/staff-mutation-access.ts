@@ -70,7 +70,10 @@ export function adminStaffCanAccessAgentPage(vaiTro: string | null | undefined):
   return v === "admin" || v === "quan_ly" || v === "tu_van";
 }
 
-/** Chỉnh `ql_thong_tin_hoc_vien.trang_thai_tu_van` — admin hoặc nhân sự Ban Vận Hành (theo phòng). */
+/**
+ * Chỉnh `ql_thong_tin_hoc_vien.trang_thai_tu_van` — `admin`, hoặc nhân sự thuộc phòng **Vận hành / Điều hành**
+ * (`hr_phong.ten_phong`: khớp vận hành, điều hành — xem `staffBelongsToVanHanhPhong`).
+ */
 export function adminStaffCanEditTrangThaiTuVan(staff: {
   vai_tro?: string | null;
   phongTenPhongs: readonly string[];

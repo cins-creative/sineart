@@ -167,12 +167,14 @@ type HvRow = {
   avatar?: unknown;
 };
 
-/** Cột thực tế `ql_quan_ly_hoc_vien` (không có `hoc_vien`, `status`, `trang_thai`) */
+/** Cột `ql_quan_ly_hoc_vien` — schema: `status`, `trang_thai`. */
 type QlhvRow = {
   id: unknown;
   hoc_vien_id: unknown;
   lop_hoc: unknown;
   tien_do_hoc?: unknown;
+  status?: unknown;
+  trang_thai?: unknown;
 };
 
 function normalizeEnrollment(row: QlhvRow): {
@@ -180,18 +182,24 @@ function normalizeEnrollment(row: QlhvRow): {
   lopHocId: number;
   tienDoHoc: number | null;
   hocVienPk: string;
+  status: string | null;
+  trangThai: string | null;
 } | null {
   const enrollmentId = Number(row.id);
   const lopHocId = Number(row.lop_hoc);
   if (!Number.isFinite(enrollmentId) || !Number.isFinite(lopHocId)) return null;
   const hocVienPk = asHvPk(row.hoc_vien_id);
   if (!hocVienPk) return null;
+  const statusRaw = row.status != null ? String(row.status).trim() : "";
+  const trangRaw = row.trang_thai != null ? String(row.trang_thai).trim() : "";
   return {
     enrollmentId,
     lopHocId,
     tienDoHoc:
       row.tien_do_hoc != null && row.tien_do_hoc !== "" ? Number(row.tien_do_hoc) : null,
     hocVienPk,
+    status: statusRaw !== "" ? statusRaw : null,
+    trangThai: trangRaw !== "" ? trangRaw : null,
   };
 }
 
@@ -325,9 +333,6 @@ async function classroomStudentDataForEnrollment(
     .limit(1);
 
   const cls = clsRows?.[0];
-  if (!cls) return null;
-
-  const teacher_name = await teacherNamesFromLopTeacherColumn(supabase, cls.teacher);
 
   let ngayKetThuc: string | null = null;
   try {
@@ -356,6 +361,45 @@ async function classroomStudentDataForEnrollment(
   const hvFacebook = String(s.facebook ?? "").trim();
   const hvSex = String(s.sex ?? "").trim();
   const tienDoLabel = await fetchTienDoBaiTapLabel(supabase, en.tienDoHoc);
+
+  if (!cls) {
+    return {
+      id: Number(s.id),
+      full_name: String(s.full_name ?? ""),
+      email: (() => {
+        const fromRow = String(s.email ?? "").trim();
+        if (fromRow !== "") return fromRow;
+        return emailFallback.trim() !== "" ? emailFallback : null;
+      })(),
+      nam_thi: s.nam_thi != null ? Number(s.nam_thi) : null,
+      ...(hvAvatar !== "" ? { hv_avatar: hvAvatar } : {}),
+      hv_sdt: hvSdt !== "" ? hvSdt : null,
+      hv_facebook: hvFacebook !== "" ? hvFacebook : null,
+      hv_sex: hvSex !== "" ? hvSex : null,
+      hv_ngay_bat_dau: sliceIsoDate(s.ngay_bat_dau),
+      hv_ngay_ket_thuc: sliceIsoDate(s.ngay_ket_thuc),
+      tien_do_bai_label: tienDoLabel,
+      lop_hoc_id: en.lopHocId,
+      qlhv_id: en.enrollmentId,
+      class_name: `Lớp #${en.lopHocId}`,
+      class_full_name: "Dữ liệu lớp chưa đồng bộ — liên hệ Sine Art nếu cần",
+      url_class: null,
+      class_avatar: "",
+      lich_hoc: "",
+      meeting_room: null,
+      teacher_name: "—",
+      days_remaining,
+      ngay_ket_thuc: ngayKetThuc,
+      truong_dai_hoc: truong,
+      nganh_dao_tao: nganh,
+      ...(truongNganhPairs.length ? { truong_nganh_pairs: truongNganhPairs } : {}),
+      status: en.status,
+      trang_thai: en.trangThai,
+      tien_do_hoc: en.tienDoHoc,
+    };
+  }
+
+  const teacher_name = await teacherNamesFromLopTeacherColumn(supabase, cls.teacher);
 
   const lopId = Number((cls as { id?: unknown }).id);
   const lopHocId = Number.isFinite(lopId) ? lopId : en.lopHocId;
@@ -402,7 +446,8 @@ async function classroomStudentDataForEnrollment(
     truong_dai_hoc: truong,
     nganh_dao_tao: nganh,
     ...(truongNganhPairs.length ? { truong_nganh_pairs: truongNganhPairs } : {}),
-    status: null,
+    status: en.status,
+    trang_thai: en.trangThai,
     tien_do_hoc: en.tienDoHoc,
   };
 }
@@ -435,7 +480,7 @@ export async function fetchAllClassSessionsForStudentHv(
 
   const { data: enrollmentRows } = await supabase
     .from("ql_quan_ly_hoc_vien")
-    .select("id,hoc_vien_id,lop_hoc,tien_do_hoc")
+    .select("id,hoc_vien_id,lop_hoc,tien_do_hoc,status,trang_thai")
     .eq("hoc_vien_id", pk);
 
   const enrollments = mergeEnrollmentsFromRows((enrollmentRows ?? []) as QlhvRow[]);
@@ -537,7 +582,7 @@ export async function lookupClassroomByEmail(
     } else {
       const { data: enrollmentRows } = await supabase
         .from("ql_quan_ly_hoc_vien")
-        .select("id,hoc_vien_id,lop_hoc,tien_do_hoc")
+        .select("id,hoc_vien_id,lop_hoc,tien_do_hoc,status,trang_thai")
         .in("hoc_vien_id", hvPks);
 
       const enrollments = mergeEnrollmentsFromRows((enrollmentRows ?? []) as QlhvRow[]);

@@ -237,6 +237,10 @@
   transform: scale(0.99);
 }
 
+.cso-card--blocked {
+  cursor: default;
+}
+
 .cso-thumb {
   width: 80px;
   height: 80px;
@@ -339,6 +343,24 @@
 
 .cso-link-dhp:hover {
   filter: brightness(1.05);
+}
+
+.cso-link-enter {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #fff;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border: none;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.cso-link-enter:hover {
+  filter: brightness(1.06);
 }
 
 .cso-center {

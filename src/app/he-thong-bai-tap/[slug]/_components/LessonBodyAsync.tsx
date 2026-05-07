@@ -18,21 +18,30 @@ export default async function LessonBodyAsync({ bai }: { bai: BaiTap }) {
   const access = await getHeThongBaiTapAccess(bai.mon_hoc.id, siblingsSorted);
 
   const currentAscIndex = exerciseIndexInSortedAsc(siblingsSorted, bai.id);
-  const canViewBaiTap = access.viewer === "hv" || access.viewer === "gv";
+  /** Môn thuộc loại «Luyện thi» = giáo trình khóa «Luyện thi tại lớp» — mở xem không cần đăng nhập Phòng học. */
+  const isLuyenThiTaiLopMon = (bai.mon_hoc.loai_khoa_hoc ?? "").trim() === "Luyện thi";
+  const accessOpen = (() => {
+    if (!isLuyenThiTaiLopMon) return access;
+    if (access.viewer === "hv" || access.viewer === "gv") return access;
+    const last = siblingsSorted.length - 1;
+    return { viewer: "hv" as const, maxAccessibleIndex: last >= 0 ? last : -1 };
+  })();
+
+  const canViewBaiTap = accessOpen.viewer === "hv" || accessOpen.viewer === "gv";
   const blocked =
-    access.viewer === "hv" &&
+    accessOpen.viewer === "hv" &&
     currentAscIndex >= 0 &&
-    currentAscIndex > access.maxAccessibleIndex;
+    currentAscIndex > accessOpen.maxAccessibleIndex;
   const maxBaiSoLabel =
-    access.maxAccessibleIndex >= 0 && siblingsSorted[access.maxAccessibleIndex]
-      ? `Bài ${siblingsSorted[access.maxAccessibleIndex].bai_so}`
+    accessOpen.maxAccessibleIndex >= 0 && siblingsSorted[accessOpen.maxAccessibleIndex]
+      ? `Bài ${siblingsSorted[accessOpen.maxAccessibleIndex].bai_so}`
       : null;
 
   if (!canViewBaiTap) {
     return (
       <HeThongBaiTapStudentOnlyGate
         bai={bai}
-        variant={access.viewer === "anon" ? "sign_in" : "not_student"}
+        variant={accessOpen.viewer === "anon" ? "sign_in" : "not_student"}
       />
     );
   }
@@ -42,6 +51,6 @@ export default async function LessonBodyAsync({ bai }: { bai: BaiTap }) {
   }
 
   return (
-    <HeThongBaiTapView bai={bai} siblingsSorted={siblingsSorted} access={access} />
+    <HeThongBaiTapView bai={bai} siblingsSorted={siblingsSorted} access={accessOpen} />
   );
 }

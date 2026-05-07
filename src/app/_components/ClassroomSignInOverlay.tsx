@@ -35,16 +35,42 @@ const iVariants = {
   },
 };
 
-function daysColor(d: number | null): string {
+/** Vào phòng học chỉ khi còn ≥ 3 ngày trong kỳ (và ghi danh còn hiệu lực). */
+const MIN_DAYS_TO_ENTER_CLASS = 3;
+
+function enrollmentLooksInactive(data: ClassroomStudentSessionData): boolean {
+  const pack = `${data.status ?? ""} ${data.trang_thai ?? ""}`.toLowerCase();
+  if (!pack.trim()) return false;
+  return (
+    /\bnghỉ\b/.test(pack) ||
+    /\bnghi\b/.test(pack) ||
+    /\bthôi\s*học\b/.test(pack) ||
+    /\bđình\s*chỉ\b/.test(pack)
+  );
+}
+
+function studentCanEnterPhongHoc(data: ClassroomStudentSessionData): boolean {
+  if (enrollmentLooksInactive(data)) return false;
+  const d = data.days_remaining;
+  if (d === null || d <= 0) return false;
+  if (d < MIN_DAYS_TO_ENTER_CLASS) return false;
+  return true;
+}
+
+function daysColor(d: number | null, data: ClassroomStudentSessionData): string {
+  if (enrollmentLooksInactive(data)) return "#ee5ca2";
   if (d === null) return "#aaa";
   if (d < 0) return "#ee5ca2";
+  if (d < MIN_DAYS_TO_ENTER_CLASS) return "#f8a568";
   if (d <= 5) return "#f8a568";
   return "#4caf50";
 }
 
-function daysLabel(d: number | null): string {
+function daysLabel(d: number | null, data: ClassroomStudentSessionData): string {
+  if (enrollmentLooksInactive(data)) return "Hết hạn ngày học";
   if (d === null) return "Chưa có kỳ học";
   if (d < 0) return `Nợ ${Math.abs(d)} ngày`;
+  if (d < MIN_DAYS_TO_ENTER_CLASS) return `Sắp hết hạn — còn ${d} ngày`;
   return `Còn lại: ${d} ngày`;
 }
 
@@ -166,25 +192,13 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
           if (!isCancelled()) setLoading(false);
           return;
         }
-        const accessible = found.filter((r) => {
-          if (r.userType === "Teacher") return true;
-          const d = r.data.days_remaining;
-          return d !== null && d > 0;
-        });
-        if (accessible.length === 0) {
-          if (!isCancelled()) {
-            setMessage("Tài khoản đã hết hạn truy cập. Vui lòng liên hệ Sine Art.");
-            setLoading(false);
-          }
-          return;
-        }
         const name =
-          accessible[0].userType === "Teacher"
-            ? `Xin chào ${accessible[0].data.full_name || "Giáo viên"}`
-            : `Chào mừng học viên ${accessible[0].data.full_name || "Học viên"}`;
+          found[0].userType === "Teacher"
+            ? `Xin chào ${found[0].data.full_name || "Giáo viên"}`
+            : `Chào mừng học viên ${found[0].data.full_name || "Học viên"}`;
         if (!isCancelled()) {
           setMessage(name);
-          setRecords(accessible);
+          setRecords(found);
         }
       } catch (err) {
         if (!isCancelled()) {
@@ -254,16 +268,31 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
     : "/donghocphi";
 
   const handleAction = (item: ClassroomSessionRecord) => {
-    if (item.userType === "Student") {
-      const d = item.data.days_remaining;
-      if (d === null || d <= 0) {
-        window.alert(
-          d === null
-            ? "Chưa có kỳ học phí hoặc chưa ghi nhận ngày. Vui lòng liên hệ Sine Art."
-            : "Chỉ vào được phòng học khi còn ngày học trong kỳ. Vui lòng đóng học phí tại trang Đóng học phí."
-        );
-        return;
+    if (item.userType === "Teacher") {
+      enterClass(item);
+      return;
+    }
+    const data = item.data;
+    if (!studentCanEnterPhongHoc(data)) {
+      let msg =
+        "Chỉ vào được phòng học khi còn ít nhất 3 ngày trong kỳ và ghi danh còn hiệu lực. Vui lòng đóng học phí tại trang Đóng học phí.";
+      if (enrollmentLooksInactive(data)) {
+        msg =
+          "Ghi danh đã kết thúc hoặc trạng thái nghỉ — không thể vào phòng học. Liên hệ Sine Art nếu cần hỗ trợ.";
+      } else if (
+        data.days_remaining != null &&
+        data.days_remaining > 0 &&
+        data.days_remaining < MIN_DAYS_TO_ENTER_CLASS
+      ) {
+        msg = `Kỳ học sắp hết (còn ${data.days_remaining} ngày). Gia hạn tại Đóng học phí trước khi vào lớp.`;
+      } else if (data.days_remaining === null || data.days_remaining <= 0) {
+        msg =
+          data.days_remaining === null
+            ? "Chưa có kỳ học phí hoặc chưa ghi nhận ngày. Vui lòng đóng học phí hoặc liên hệ Sine Art."
+            : "Đã hết ngày trong kỳ học phí. Vui lòng đóng học phí tại trang Đóng học phí.";
       }
+      window.alert(msg);
+      return;
     }
     enterClass(item);
   };
@@ -389,20 +418,28 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
                     {records.map((item, idx) => {
                       const isTeacher = item.userType === "Teacher";
                       const d = isTeacher ? null : item.data.days_remaining;
+                      const canEnter = isTeacher || studentCanEnterPhongHoc(item.data);
                       const borderColor = isTeacher ? "#bc8af9" : "#eaeaea";
                       const thumb = item.data.class_avatar || "";
                       return (
                         <motion.div
                           key={`${item.userType}-${idx}-${item.data.lop_hoc_id}`}
-                          className="cso-card"
+                          className={`cso-card${!isTeacher && !canEnter ? " cso-card--blocked" : ""}`}
                           style={{ borderColor }}
                           variants={iVariants}
-                          whileHover={{ scale: 1.02, backgroundColor: "#f9f9fb", zIndex: 1 }}
-                          whileTap={{ scale: 0.98 }}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleAction(item)}
+                          whileHover={
+                            canEnter
+                              ? { scale: 1.02, backgroundColor: "#f9f9fb", zIndex: 1 }
+                              : { scale: 1, backgroundColor: "#f5f5f7" }
+                          }
+                          whileTap={canEnter ? { scale: 0.98 } : { scale: 1 }}
+                          role={canEnter ? "button" : undefined}
+                          tabIndex={canEnter ? 0 : -1}
+                          onClick={() => {
+                            if (canEnter) handleAction(item);
+                          }}
                           onKeyDown={(e) => {
+                            if (!canEnter) return;
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
                               handleAction(item);
@@ -433,18 +470,31 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
                               <div className="cso-row-foot">
                                 <span
                                   className="cso-days"
-                                  style={{ color: daysColor(d) }}
+                                  style={{ color: daysColor(d, item.data) }}
                                   title="Theo kỳ học phí đã thanh toán — chưa cộng buổi từ gói đang chọn ở bước Đóng học phí (chưa thanh toán)."
                                 >
-                                  {daysLabel(d)}
+                                  {daysLabel(d, item.data)}
                                 </span>
-                                <Link
-                                  href="/donghocphi"
-                                  className="cso-link-dhp"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  Đóng học phí
-                                </Link>
+                                {canEnter ? (
+                                  <button
+                                    type="button"
+                                    className="cso-link-enter"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAction(item);
+                                    }}
+                                  >
+                                    Vào lớp
+                                  </button>
+                                ) : (
+                                  <Link
+                                    href="/donghocphi"
+                                    className="cso-link-dhp"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    Đóng học phí
+                                  </Link>
+                                )}
                               </div>
                             ) : null}
                           </div>

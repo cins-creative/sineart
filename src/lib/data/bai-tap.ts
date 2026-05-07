@@ -17,7 +17,7 @@ const BAI_TAP_SELECT = `
   is_visible,
   so_buoi,
   muc_do_quan_trong,
-  mon_hoc ( id, ten_mon_hoc )
+  mon_hoc ( id, ten_mon_hoc, loai_khoa_hoc )
 `;
 
 function extractStringArr(raw: unknown): string[] {
@@ -45,17 +45,19 @@ function normalizeMucDo(raw: unknown): MucDoQuanTrong {
 
 function extractMonHoc(
   raw: unknown
-): { id: number; ten_mon_hoc: string } {
-  if (raw == null) return { id: 0, ten_mon_hoc: "Môn học" };
+): { id: number; ten_mon_hoc: string; loai_khoa_hoc: string | null } {
+  if (raw == null) return { id: 0, ten_mon_hoc: "Môn học", loai_khoa_hoc: null };
   const o = Array.isArray(raw) ? raw[0] : raw;
   if (o && typeof o === "object" && "id" in o) {
-    const row = o as { id?: unknown; ten_mon_hoc?: unknown };
+    const row = o as { id?: unknown; ten_mon_hoc?: unknown; loai_khoa_hoc?: unknown };
+    const loai = row.loai_khoa_hoc != null ? String(row.loai_khoa_hoc).trim() : "";
     return {
       id: Number(row.id) || 0,
       ten_mon_hoc: String(row.ten_mon_hoc ?? "").trim() || "Môn học",
+      loai_khoa_hoc: loai !== "" ? loai : null,
     };
   }
-  return { id: 0, ten_mon_hoc: "Môn học" };
+  return { id: 0, ten_mon_hoc: "Môn học", loai_khoa_hoc: null };
 }
 
 function mapRow(row: Record<string, unknown>): BaiTap {
@@ -102,7 +104,7 @@ async function getBaiTapListForMonFallback(
 ): Promise<BaiTap[]> {
   const { data, error } = await supabase
     .from("hv_he_thong_bai_tap")
-    .select("id, ten_bai_tap, bai_so, thumbnail, mon_hoc ( id, ten_mon_hoc )")
+    .select("id, ten_bai_tap, bai_so, thumbnail, mon_hoc ( id, ten_mon_hoc, loai_khoa_hoc )")
     .eq("mon_hoc", monId)
     .order("bai_so", { ascending: true });
 

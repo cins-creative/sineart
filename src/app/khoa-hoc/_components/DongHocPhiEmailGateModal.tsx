@@ -7,12 +7,19 @@ import { hocVienProfileHref } from "@/lib/hoc-vien/profile-url";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { lookupClassroomByEmail } from "@/lib/phong-hoc/lookup-by-email";
 import {
+  buildProfileOnlyStudentSession,
   saveClassroomSession,
   type ClassroomSessionRecord,
 } from "@/lib/phong-hoc/classroom-session";
 import { isValidStudentEmail, STUDENT_EMAIL_REQUIREMENT_VI } from "@/lib/donghocphi/profile-step1";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+
+function sliceIsoDateCol(v: unknown): string | undefined {
+  if (v == null) return undefined;
+  const s = String(v).trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined;
+}
 
 function NavChooseIcon({ kind }: { kind: "renew" | "profile" | "classroom" }) {
   const common = { className: "kd-dhp-nav-choose-ico", width: 18, height: 18, "aria-hidden": true as const };
@@ -197,11 +204,43 @@ export default function DongHocPhiEmailGateModal({
     try {
       const { records } = await lookupClassroomByEmail(sb, t);
       const students = records.filter((r) => r.userType === "Student");
-      if (!students.length) {
-        setError("Không tìm thấy lớp học cho email này — vui lòng dùng «Gia hạn học phí» hoặc liên hệ Sine Art.");
+      if (students.length > 0) {
+        goProfileAfterSession(students[0]!, t);
         return;
       }
-      goProfileAfterSession(students[0]!, t);
+      const { data: hvRow, error: hvErr } = await sb
+        .from("ql_thong_tin_hoc_vien")
+        .select("id,full_name,email,nam_thi,ngay_bat_dau,ngay_ket_thuc,facebook,sdt,avatar,sex")
+        .ilike("email", t)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (hvErr || hvRow == null) {
+        setError(
+          "Không tìm thấy hồ sơ hoặc lớp học cho email này — vui lòng dùng «Gia hạn học phí» hoặc liên hệ Sine Art.",
+        );
+        return;
+      }
+      const av = String((hvRow as { avatar?: unknown }).avatar ?? "").trim();
+      const record = buildProfileOnlyStudentSession({
+        id: Number((hvRow as { id: unknown }).id),
+        full_name: String((hvRow as { full_name?: unknown }).full_name ?? ""),
+        email:
+          String((hvRow as { email?: unknown }).email ?? "").trim() !== ""
+            ? String((hvRow as { email?: unknown }).email).trim()
+            : t,
+        nam_thi:
+          (hvRow as { nam_thi?: unknown }).nam_thi != null && (hvRow as { nam_thi?: unknown }).nam_thi !== ""
+            ? Number((hvRow as { nam_thi?: unknown }).nam_thi)
+            : null,
+        ...(av !== "" ? { hv_avatar: av } : {}),
+        hv_sdt: String((hvRow as { sdt?: unknown }).sdt ?? "").trim() || null,
+        hv_facebook: String((hvRow as { facebook?: unknown }).facebook ?? "").trim() || null,
+        hv_sex: String((hvRow as { sex?: unknown }).sex ?? "").trim() || null,
+        hv_ngay_bat_dau: sliceIsoDateCol((hvRow as { ngay_bat_dau?: unknown }).ngay_bat_dau),
+        hv_ngay_ket_thuc: sliceIsoDateCol((hvRow as { ngay_ket_thuc?: unknown }).ngay_ket_thuc),
+      });
+      goProfileAfterSession(record, t);
     } catch {
       setError("Lỗi kết nối dữ liệu. Vui lòng thử lại.");
     } finally {

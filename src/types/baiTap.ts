@@ -17,5 +17,6 @@ export type BaiTap = {
   is_visible: boolean;
   so_buoi: number;
   muc_do_quan_trong: MucDoQuanTrong;
-  mon_hoc: { id: number; ten_mon_hoc: string };
+  /** `ql_mon_hoc.loai_khoa_hoc` — vd «Luyện thi» cho khóa «Luyện thi tại lớp». */
+  mon_hoc: { id: number; ten_mon_hoc: string; loai_khoa_hoc?: string | null };
 };

@@ -55,6 +55,7 @@ export const NAV_MARKETING: { label: string; href: string; disabled?: boolean }[
   { label: "Quản lý media", href: "/admin/dashboard/quan-ly-media" },
   { label: "Quản lý bài học viên", href: "/admin/dashboard/quan-ly-bai-hoc-vien" },
   { label: "Quản lý Blogs", href: "/admin/dashboard/quan-ly-blog" },
+  { label: "Quản lý đề thi", href: "/admin/dashboard/quan-ly-de-thi" },
   { label: "Quản lý Ebook", href: "/admin/dashboard/quan-ly-ebook" },
   { label: "Tra cứu thông tin", href: "/admin/dashboard/quan-ly-tra-cuu" },
   { label: "Bình luận", href: "/admin/dashboard/binh-luan" },

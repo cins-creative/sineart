@@ -277,14 +277,18 @@ table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
 }
 
 @media (max-width: 720px) {
+  /*
+   * Dock mobile (.nav-bottom-fixed z-index 102) + nút «Vào học» cao hơn dock —
+   * banner z-index 80 nên phải đặt bottom đủ lớn (dock ~72px + margin + home indicator).
+   */
   .sa-adbanner {
     left: 12px;
     right: 12px;
-    bottom: calc(12px + env(safe-area-inset-bottom, 0));
+    bottom: calc(118px + env(safe-area-inset-bottom, 0px));
     width: auto;
   }
   .sa-adbanner-pill-wrap {
     left: 12px;
-    bottom: calc(12px + env(safe-area-inset-bottom, 0));
+    bottom: calc(118px + env(safe-area-inset-bottom, 0px));
   }
 }

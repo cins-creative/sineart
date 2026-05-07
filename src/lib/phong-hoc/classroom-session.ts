@@ -74,7 +74,10 @@ export type ClassroomStudentSessionData = {
   nganh_dao_tao: string;
   /** Mọi dòng `ql_hv_truong_nganh` — nhiều trường / ngành. */
   truong_nganh_pairs?: { truong: string; nganh: string }[];
+  /** `ql_quan_ly_hoc_vien.status` */
   status: string | null;
+  /** `ql_quan_ly_hoc_vien.trang_thai` — optional cho session JSON cũ trong localStorage */
+  trang_thai?: string | null;
   tien_do_hoc: number | null;
   /** Nhãn từ `hv_he_thong_bai_tap` theo `tien_do_hoc` (ghi danh). */
   tien_do_bai_label?: string | null;
@@ -83,6 +86,57 @@ export type ClassroomStudentSessionData = {
 export type ClassroomSessionRecord =
   | { userType: "Teacher"; data: ClassroomTeacherSessionData }
   | { userType: "Student"; data: ClassroomStudentSessionData };
+
+/**
+ * Session tối thiểu khi học viên có hồ sơ `ql_thong_tin_hoc_vien` nhưng chưa có (hoặc chưa đồng bộ)
+ * ghi danh `ql_quan_ly_hoc_vien` — đủ để mở trang cá nhân (email khớp) sau khi lưu localStorage.
+ */
+export function buildProfileOnlyStudentSession(
+  hv: {
+    id: number;
+    full_name: string;
+    email: string | null;
+    nam_thi: number | null;
+    hv_avatar?: string;
+    hv_sdt?: string | null;
+    hv_facebook?: string | null;
+    hv_sex?: string | null;
+    hv_ngay_bat_dau?: string | null;
+    hv_ngay_ket_thuc?: string | null;
+  },
+): ClassroomSessionRecord {
+  return {
+    userType: "Student",
+    data: {
+      id: hv.id,
+      full_name: hv.full_name,
+      email: hv.email,
+      nam_thi: hv.nam_thi,
+      lop_hoc_id: 0,
+      qlhv_id: 0,
+      class_name: "",
+      class_full_name: null,
+      url_class: null,
+      class_avatar: "",
+      lich_hoc: "",
+      meeting_room: null,
+      teacher_name: "",
+      days_remaining: null,
+      ngay_ket_thuc: null,
+      truong_dai_hoc: "",
+      nganh_dao_tao: "",
+      status: null,
+      trang_thai: null,
+      tien_do_hoc: null,
+      ...(hv.hv_avatar ? { hv_avatar: hv.hv_avatar } : {}),
+      hv_sdt: hv.hv_sdt ?? null,
+      hv_facebook: hv.hv_facebook ?? null,
+      hv_sex: hv.hv_sex ?? null,
+      ...(hv.hv_ngay_bat_dau ? { hv_ngay_bat_dau: hv.hv_ngay_bat_dau } : {}),
+      ...(hv.hv_ngay_ket_thuc ? { hv_ngay_ket_thuc: hv.hv_ngay_ket_thuc } : {}),
+    },
+  };
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;

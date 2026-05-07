@@ -18,27 +18,20 @@ export type LopCurriculumExercise = {
 };
 
 /**
- * Lấy toàn bộ bài tập của môn học của lớp (junction + cột `mon_hoc` legacy).
- * Sắp xếp: `bai_so` tăng dần (null xếp sau), tie-break `id`.
+ * Lấy toàn bộ bài tập của một `ql_mon_hoc.id` (junction + cột `mon_hoc` legacy).
+ * Dùng khi không có `ql_lop_hoc` hoặc cần mở full chương trình Luyện thi theo môn.
  */
-export async function fetchLopCurriculumExercises(
+export async function fetchCurriculumExercisesForMonHocId(
   supabase: SupabaseClient,
-  lopHocId: number
+  monId: number
 ): Promise<{
   exercises: LopCurriculumExercise[];
   subjectName: string | null;
   monHocId: number | null;
 }> {
-  const { data: lop, error: e1 } = await supabase
-    .from("ql_lop_hoc")
-    .select("mon_hoc")
-    .eq("id", lopHocId)
-    .maybeSingle();
-
-  if (e1 || !lop) return { exercises: [], subjectName: null, monHocId: null };
-
-  const monId = Number((lop as { mon_hoc?: unknown }).mon_hoc);
-  if (!Number.isFinite(monId)) return { exercises: [], subjectName: null, monHocId: null };
+  if (!Number.isFinite(monId) || monId <= 0) {
+    return { exercises: [], subjectName: null, monHocId: null };
+  }
 
   const { data: mh } = await supabase
     .from("ql_mon_hoc")
@@ -129,6 +122,32 @@ export async function fetchLopCurriculumExercises(
   });
 
   return { exercises, subjectName, monHocId: monId };
+}
+
+/**
+ * Lấy toàn bộ bài tập của môn học của lớp (junction + cột `mon_hoc` legacy).
+ * Sắp xếp: `bai_so` tăng dần (null xếp sau), tie-break `id`.
+ */
+export async function fetchLopCurriculumExercises(
+  supabase: SupabaseClient,
+  lopHocId: number
+): Promise<{
+  exercises: LopCurriculumExercise[];
+  subjectName: string | null;
+  monHocId: number | null;
+}> {
+  const { data: lop, error: e1 } = await supabase
+    .from("ql_lop_hoc")
+    .select("mon_hoc")
+    .eq("id", lopHocId)
+    .maybeSingle();
+
+  if (e1 || !lop) return { exercises: [], subjectName: null, monHocId: null };
+
+  const monId = Number((lop as { mon_hoc?: unknown }).mon_hoc);
+  if (!Number.isFinite(monId)) return { exercises: [], subjectName: null, monHocId: null };
+
+  return fetchCurriculumExercisesForMonHocId(supabase, monId);
 }
 
 /**

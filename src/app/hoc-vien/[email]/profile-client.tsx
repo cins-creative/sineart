@@ -38,6 +38,7 @@ import {
 import { lopClassNameIndicatesTaiLop } from "@/lib/data/htbt-tai-lop-class-name";
 import {
   curriculumProgressIndex,
+  fetchCurriculumExercisesForMonHocId,
   fetchLopCurriculumExercises,
   formatLessonLabel,
   type LopCurriculumExercise,
@@ -556,6 +557,60 @@ export default function HocVienProfileClient({
           /* bỏ qua lớp lỗi tải chương trình */
         }
       }
+
+      /* Khóa «Luyện thi»: mở full toàn bộ môn `ql_mon_hoc.loai_khoa_hoc = Luyện thi` chưa có từ ghi danh (vd. chưa có qlhv / lớp). */
+      const { data: hvLoai } = await sb
+        .from("ql_thong_tin_hoc_vien")
+        .select("loai_khoa_hoc")
+        .eq("id", hvId)
+        .maybeSingle();
+      if (cancelled) return;
+      const loaiKhoa = String(
+        (hvLoai as { loai_khoa_hoc?: unknown } | null)?.loai_khoa_hoc ?? ""
+      ).trim();
+      if (loaiKhoa === "Luyện thi") {
+        const coveredMon = new Set(
+          blocks
+            .map((b) => b.monHocId)
+            .filter((m): m is number => m != null && Number.isFinite(m) && m > 0)
+        );
+        const { data: monRows } = await sb
+          .from("ql_mon_hoc")
+          .select("id")
+          .eq("loai_khoa_hoc", "Luyện thi")
+          .order("thu_tu_hien_thi", { ascending: true });
+        if (cancelled) return;
+        for (const mr of monRows ?? []) {
+          const mid = Number((mr as { id?: unknown }).id);
+          if (!Number.isFinite(mid) || mid <= 0 || coveredMon.has(mid)) continue;
+          try {
+            const { exercises, subjectName, monHocId } = await fetchCurriculumExercisesForMonHocId(sb, mid);
+            if (exercises.length === 0) continue;
+            coveredMon.add(mid);
+            const progressIdx = exercises.length - 1;
+            const syntheticRows: HvpAssignmentExerciseRow[] = exercises.map((ex, i) => ({
+              exercise: ex,
+              listIndex: i,
+              unlocked: true,
+            }));
+            const titleBase = subjectName?.trim() || "Môn";
+            blocks.push({
+              qlhvId: selfStudent.qlhv_id,
+              lopHocId: 0,
+              classTitle: `${titleBase} — Luyện thi tại lớp`,
+              subjectName,
+              monHocId: monHocId != null && Number.isFinite(monHocId) ? monHocId : null,
+              progressIdx,
+              capTocUnlockAll: capToc,
+              taiLopUnlockByClassName: true,
+              rows: syntheticRows,
+            });
+          } catch {
+            /* bỏ qua môn lỗi */
+          }
+        }
+      }
+
       if (!cancelled) setAssignmentsBlocks(blocks);
     })();
     return () => {

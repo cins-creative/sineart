@@ -278,17 +278,20 @@ table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
 
 @media (max-width: 720px) {
   /*
-   * Dock mobile (.nav-bottom-fixed z-index 102) + nút «Vào học» cao hơn dock —
-   * banner z-index 80 nên phải đặt bottom đủ lớn (dock ~72px + margin + home indicator).
+   * Dock `.nav-bottom-fixed` z-index 102; banner mặc định z-index 80 → bị nav vẽ đè
+   * khi vùng chồng nhau. Nâng z-index (103) + bottom lớn để toàn khối ảnh nằm phía trên
+   * thanh dock (cf. nav-cta ~80px + safe + khoảng hở).
    */
   .sa-adbanner {
     left: 12px;
     right: 12px;
-    bottom: calc(118px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(156px + env(safe-area-inset-bottom, 0px));
     width: auto;
+    z-index: 103;
   }
   .sa-adbanner-pill-wrap {
     left: 12px;
-    bottom: calc(118px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(156px + env(safe-area-inset-bottom, 0px));
+    z-index: 103;
   }
 }

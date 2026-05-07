@@ -1603,6 +1603,17 @@
   width: 100%;
 }
 
+/* HV mới (< 7 ngày từ ngày ghi danh lớp) — GV dễ nhận biết */
+.phc .o-ex.o-ex--new {
+  color: #b45309;
+  font-weight: 700;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border-radius: 6px;
+  background: rgba(248, 165, 104, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(248, 165, 104, 0.35);
+}
+
 .phc .o-dot {
   width: 8px;
   height: 8px;
@@ -1691,6 +1702,18 @@
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: 800;
+}
+
+.phc .csender .chat-new-tag {
+  flex-shrink: 0;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-weight: 900;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(234, 88, 12, 0.35);
 }
 
 .phc .ctime {
@@ -3724,6 +3747,11 @@
 
 .phc.phc--dark .csender .gv-tag {
   background: linear-gradient(135deg, #4a4a52, #35353c);
+}
+
+.phc.phc--dark .csender .chat-new-tag {
+  background: linear-gradient(135deg, #d97706, #c2410c);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(251, 191, 36, 0.45);
 }
 
 .phc.phc--dark .chat-in:focus {

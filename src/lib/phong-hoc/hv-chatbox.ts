@@ -26,6 +26,8 @@ export type ChatStudentMapEntry = {
   hocVienId: number;
   name: string;
   exId: number | null;
+  /** `ql_quan_ly_hoc_vien.created_at` của ghi danh lớp này — tag NEW khi < 7 ngày. */
+  enrollmentCreatedAt: string | null;
 };
 
 export type ChatExerciseEntry = {
@@ -199,7 +201,7 @@ export async function fetchChatStudentMapByQlhv(
 ): Promise<Record<number, ChatStudentMapEntry>> {
   const { data: enrollments, error } = await supabase
     .from("ql_quan_ly_hoc_vien")
-    .select("id, hoc_vien_id, tien_do_hoc")
+    .select("id, hoc_vien_id, tien_do_hoc, created_at")
     .eq("lop_hoc", lopHocId);
 
   if (error || !enrollments?.length) return {};
@@ -208,6 +210,7 @@ export async function fetchChatStudentMapByQlhv(
     id: unknown;
     hoc_vien_id: unknown;
     tien_do_hoc: unknown;
+    created_at?: unknown;
   }[];
 
   const byHv = new Map<number, (typeof rows)[0]>();
@@ -245,7 +248,10 @@ export async function fetchChatStudentMapByQlhv(
     const exRaw = r.tien_do_hoc;
     const exId =
       exRaw != null && exRaw !== "" && Number.isFinite(Number(exRaw)) ? Number(exRaw) : null;
-    out[qlhvId] = { qlhvId, hocVienId: hvId, name, exId };
+    const cr = r.created_at;
+    const enrollmentCreatedAt =
+      cr != null && String(cr).trim() !== "" ? String(cr) : null;
+    out[qlhvId] = { qlhvId, hocVienId: hvId, name, exId, enrollmentCreatedAt };
   }
   return out;
 }

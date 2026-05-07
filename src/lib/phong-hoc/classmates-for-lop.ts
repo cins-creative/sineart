@@ -4,6 +4,9 @@ import { qlhvConNgayHocFromKyMap } from "@/lib/phong-hoc/enrollment-con-ngay-hoc
 import { vnCalendarDateString } from "@/lib/phong-hoc/diem-danh";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/** GV: học viên ghi danh trong vòng vài ngày — nổi bật ở sidebar «Online trong lớp». */
+export const ENROLLMENT_NEW_HIGHLIGHT_MAX_DAYS = 7;
+
 /** Một dòng học viên trong lớp — dùng tab Lớp / Qlý (ClassroomClient). */
 export type ClassmateListRow = {
   /** `ql_quan_ly_hoc_vien.id` — khớp `hv_chatbox.name` khi HV gửi chat. */
@@ -21,6 +24,8 @@ export type ClassmateListRow = {
   exTitle: string | null;
   /** Tên môn (dự phòng khi không có tên bài). */
   exMon: string | null;
+  /** ISO `ql_quan_ly_hoc_vien.created_at` — mốc đăng ký lớp (hiển thị thời gian học). */
+  enrollmentCreatedAt: string | null;
 };
 
 const AVATAR_COLORS = [
@@ -69,13 +74,72 @@ export function formatClassmateProgressLine(s: ClassmateListRow): string {
   return label || "Chưa có bài";
 }
 
-/** Sidebar «Online trong lớp» (GV): trạng thái nộp **trong ngày hôm nay** (VN) cho `tien_do_hoc`. */
-export function formatClassmateSubmissionStatus(s: ClassmateListRow): string {
-  if (!s.ex && !s.exTitle) return "Chưa có bài";
-  return s.sub ? "Đã nộp bài" : "Chưa nộp bài";
+function parseLocalYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
-type QlhvRow = { id: unknown; hoc_vien_id: unknown; tien_do_hoc: unknown };
+/** Số ngày lịch (VN) từ ngày ghi danh đến hôm nay; cùng ngày → 0. */
+export function enrollmentCalendarDaysSince(isoCreatedAt: string | null | undefined): number | null {
+  if (isoCreatedAt == null || String(isoCreatedAt).trim() === "") return null;
+  const startYmd = vnCalendarDateString(new Date(isoCreatedAt));
+  const todayYmd = vnCalendarDateString();
+  const a = parseLocalYmd(startYmd);
+  const b = parseLocalYmd(todayYmd);
+  const ua = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const ub = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((ub - ua) / 86400000);
+}
+
+function calendarAgeParts(start: Date, end: Date): { years: number; months: number; days: number } {
+  let years = end.getFullYear() - start.getFullYear();
+  let months = end.getMonth() - start.getMonth();
+  let days = end.getDate() - start.getDate();
+  if (days < 0) {
+    months--;
+    const lastPrev = new Date(end.getFullYear(), end.getMonth(), 0);
+    days += lastPrev.getDate();
+  }
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  return { years, months, days };
+}
+
+/** «Đã học 1 năm, 2 tháng, 12 ngày» — mốc `ql_quan_ly_hoc_vien.created_at`, lịch VN. */
+export function formatEnrollmentStudyDurationLabel(enrollmentIso: string | null | undefined): string {
+  if (enrollmentIso == null || String(enrollmentIso).trim() === "") return "—";
+  const enrollYmd = vnCalendarDateString(new Date(enrollmentIso));
+  const todayYmd = vnCalendarDateString();
+  const start = parseLocalYmd(enrollYmd);
+  const end = parseLocalYmd(todayYmd);
+  if (start > end) return "—";
+  if (enrollYmd === todayYmd) return "Đã học hôm nay";
+  const { years, months, days } = calendarAgeParts(start, end);
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} năm`);
+  if (months > 0) parts.push(`${months} tháng`);
+  if (days > 0 || parts.length === 0) parts.push(`${days} ngày`);
+  return `Đã học ${parts.join(", ")}`;
+}
+
+/** Sidebar GV «Online trong lớp»: một dòng mô tả dưới tên HV. */
+export function formatClassmateEnrollmentStudyLine(s: ClassmateListRow): string {
+  return formatEnrollmentStudyDurationLabel(s.enrollmentCreatedAt);
+}
+
+/** Chat / badge — HV «mới» khi ghi danh lớp chưa đủ 7 ngày (lịch VN). */
+export function enrollmentHighlightNewFromIso(iso: string | null | undefined): boolean {
+  const n = enrollmentCalendarDaysSince(iso);
+  return n !== null && n >= 0 && n < ENROLLMENT_NEW_HIGHLIGHT_MAX_DAYS;
+}
+
+export function classmateEnrollmentShouldHighlightNew(s: ClassmateListRow): boolean {
+  return enrollmentHighlightNewFromIso(s.enrollmentCreatedAt);
+}
+
+type QlhvRow = { id: unknown; hoc_vien_id: unknown; tien_do_hoc: unknown; created_at?: unknown };
 
 /**
  * Học viên ghi danh `lop_hoc` + tên + tiến độ (`tien_do_hoc` → hv_he_thong_bai_tap + ql_mon_hoc).
@@ -87,7 +151,7 @@ export async function fetchClassmatesForLop(
 ): Promise<ClassmateListRow[]> {
   const { data: enrollments, error } = await supabase
     .from("ql_quan_ly_hoc_vien")
-    .select("id, hoc_vien_id, tien_do_hoc")
+    .select("id, hoc_vien_id, tien_do_hoc, created_at")
     .eq("lop_hoc", lopHocId);
 
   if (error || !enrollments?.length) return [];
@@ -241,6 +305,9 @@ export async function fetchClassmatesForLop(
       }
     }
     const sub = td != null && Number.isFinite(td) && submittedKey.has(`${hvId}:${td}`);
+    const createdRaw = (r as QlhvRow).created_at;
+    const enrollmentCreatedAt =
+      createdRaw != null && String(createdRaw).trim() !== "" ? String(createdRaw) : null;
     out.push({
       enrollmentId: Number.isFinite(enrollmentId) && enrollmentId > 0 ? enrollmentId : 0,
       hvId,
@@ -252,6 +319,7 @@ export async function fetchClassmatesForLop(
       ex,
       exTitle,
       exMon,
+      enrollmentCreatedAt,
     });
   }
 

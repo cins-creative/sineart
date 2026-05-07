@@ -15,8 +15,10 @@ import {
   vnCalendarDateString,
 } from "@/lib/phong-hoc/diem-danh";
 import {
+  classmateEnrollmentShouldHighlightNew,
+  enrollmentHighlightNewFromIso,
   fetchClassmatesForLop,
-  formatClassmateSubmissionStatus,
+  formatClassmateEnrollmentStudyLine,
   type ClassmateListRow,
 } from "@/lib/phong-hoc/classmates-for-lop";
 import {
@@ -337,68 +339,76 @@ const SESSIONS = {
   },
 };
 
-const STUDENTS_MOCK: StudentRow[] = [
-  {
-    enrollmentId: 800001,
-    hvId: 900001,
-    n: "Minh Anh",
-    i: "M",
-    c: "#4f8ef7",
-    st: true,
-    sub: true,
-    ex: "Bài 3.2",
-    exTitle: "Thực hành tông màu",
-    exMon: "Trang trí màu",
-  },
-  {
-    enrollmentId: 800002,
-    hvId: 900002,
-    n: "Hà Linh",
-    i: "H",
-    c: "#f6ad55",
-    st: true,
-    sub: true,
-    ex: "Bài 2.5",
-    exTitle: "Phối cảnh không gian",
-    exMon: "Hình họa",
-  },
-  {
-    enrollmentId: 800003,
-    hvId: 900003,
-    n: "Tuấn Kiệt",
-    i: "T",
-    c: "#48bb78",
-    st: "late",
-    sub: false,
-    ex: "Bài 1.8",
-    exTitle: "Bài tập chân dung",
-    exMon: "Trang trí màu",
-  },
-  {
-    enrollmentId: 800004,
-    hvId: 900004,
-    n: "Phương Vy",
-    i: "P",
-    c: "#f87171",
-    st: true,
-    sub: true,
-    ex: "Bài 3.1",
-    exTitle: "Hoàn thiện đề tài",
-    exMon: "Trang trí màu",
-  },
-  {
-    enrollmentId: 800005,
-    hvId: 900005,
-    n: "Khải Minh",
-    i: "K",
-    c: "#a78bfa",
-    st: false,
-    sub: false,
-    ex: null,
-    exTitle: null,
-    exMon: null,
-  },
-];
+const STUDENTS_MOCK: StudentRow[] = (() => {
+  const isoDaysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+  return [
+    {
+      enrollmentId: 800001,
+      hvId: 900001,
+      n: "Minh Anh",
+      i: "M",
+      c: "#4f8ef7",
+      st: true,
+      sub: true,
+      ex: "Bài 3.2",
+      exTitle: "Thực hành tông màu",
+      exMon: "Trang trí màu",
+      enrollmentCreatedAt: isoDaysAgo(3),
+    },
+    {
+      enrollmentId: 800002,
+      hvId: 900002,
+      n: "Hà Linh",
+      i: "H",
+      c: "#f6ad55",
+      st: true,
+      sub: true,
+      ex: "Bài 2.5",
+      exTitle: "Phối cảnh không gian",
+      exMon: "Hình họa",
+      enrollmentCreatedAt: isoDaysAgo(400),
+    },
+    {
+      enrollmentId: 800003,
+      hvId: 900003,
+      n: "Tuấn Kiệt",
+      i: "T",
+      c: "#48bb78",
+      st: "late",
+      sub: false,
+      ex: "Bài 1.8",
+      exTitle: "Bài tập chân dung",
+      exMon: "Trang trí màu",
+      enrollmentCreatedAt: isoDaysAgo(14),
+    },
+    {
+      enrollmentId: 800004,
+      hvId: 900004,
+      n: "Phương Vy",
+      i: "P",
+      c: "#f87171",
+      st: true,
+      sub: true,
+      ex: "Bài 3.1",
+      exTitle: "Hoàn thiện đề tài",
+      exMon: "Trang trí màu",
+      enrollmentCreatedAt: isoDaysAgo(90),
+    },
+    {
+      enrollmentId: 800005,
+      hvId: 900005,
+      n: "Khải Minh",
+      i: "K",
+      c: "#a78bfa",
+      st: false,
+      sub: false,
+      ex: null,
+      exTitle: null,
+      exMon: null,
+      enrollmentCreatedAt: null,
+    },
+  ];
+})();
 
 const CHAT_SEED: ChatMsg[] = [
   {
@@ -2595,7 +2605,15 @@ export default function ClassroomClient({
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div className={cx("o-name", nameCls)}>{s.n}</div>
-                                <div className="o-ex">{formatClassmateSubmissionStatus(s)}</div>
+                                <div
+                                  className={cx(
+                                    "o-ex",
+                                    classmateEnrollmentShouldHighlightNew(s) && "o-ex--new"
+                                  )}
+                                  title="Thời gian học tính từ ngày đăng ký lớp (ghi nhận trên hệ thống)."
+                                >
+                                  {formatClassmateEnrollmentStudyLine(s)}
+                                </div>
                               </div>
                               <div className={cx("o-dot", dot)} />
                             </div>
@@ -2767,6 +2785,12 @@ export default function ClassroomClient({
                                 )}
                                 <span className="csender-name">{senderName}</span>
                                 {isGV ? <span className="gv-tag">GV</span> : null}
+                                {!isGV &&
+                                enrollmentHighlightNewFromIso(stuData?.enrollmentCreatedAt ?? null) ? (
+                                  <span className="chat-new-tag" title="Ghi danh lớp dưới 7 ngày">
+                                    NEW
+                                  </span>
+                                ) : null}
                               </div>
                               {hasPhotos ? (
                                 <div

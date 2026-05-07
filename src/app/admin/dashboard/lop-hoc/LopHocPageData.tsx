@@ -27,7 +27,10 @@ export default async function LopHocPageData({ searchParams }: Props) {
   const [lopPage, monRes, nsRes, cnRes, banRes, totalAll, allLopIds] = await Promise.all([
     fetchLopHocPage(supabase, page, filters),
     supabase.from("ql_mon_hoc").select("id, ten_mon_hoc").order("ten_mon_hoc", { ascending: true }),
-    supabase.from("hr_nhan_su").select("id, full_name, avatar, ban, portfolio").order("full_name", { ascending: true }),
+    supabase
+      .from("hr_nhan_su")
+      .select("id, full_name, avatar, ban, portfolio, email")
+      .order("full_name", { ascending: true }),
     supabase.from("ql_chi_nhanh").select("id, ten").order("id", { ascending: true }),
     supabase.from("hr_ban").select("id, ten_ban"),
     fetchTotalLopCountUnfiltered(supabase),
@@ -81,6 +84,7 @@ export default async function LopHocPageData({ searchParams }: Props) {
     avatar?: unknown;
     ban?: unknown;
     portfolio?: unknown;
+    email?: unknown;
   }[];
   const nhanSuListFull = nsRows
     .map((r) => ({
@@ -89,21 +93,29 @@ export default async function LopHocPageData({ searchParams }: Props) {
       avatar: r.avatar != null ? String(r.avatar).trim() || null : null,
       banId: r.ban != null && Number.isFinite(Number(r.ban)) ? Number(r.ban) : null,
       portfolio: normalizePortfolioToUrls(r.portfolio),
+      email: r.email != null ? String(r.email).trim() || null : null,
     }))
     .filter((n) => Number.isFinite(n.id) && n.id > 0);
 
-  const nhanSuList = nhanSuListFull.map(({ id, full_name, avatar, portfolio }) => ({
+  const nhanSuList = nhanSuListFull.map(({ id, full_name, avatar, portfolio, email }) => ({
     id,
     full_name,
     avatar,
     portfolio,
+    email,
   }));
 
   const pickerNhanSuList =
     daotaoBanId != null
       ? nhanSuListFull
           .filter((n) => n.banId === daotaoBanId)
-          .map(({ id, full_name, avatar, portfolio }) => ({ id, full_name, avatar, portfolio }))
+          .map(({ id, full_name, avatar, portfolio, email }) => ({
+            id,
+            full_name,
+            avatar,
+            portfolio,
+            email,
+          }))
       : nhanSuList;
 
   const cnRows = !cnRes.error ? ((cnRes.data ?? []) as { id?: unknown; ten?: unknown }[]) : [];

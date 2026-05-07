@@ -32,7 +32,13 @@ const DEVICE_CFG: Record<string, { bg: string; text: string }> = {
 export type { AdminLopRow };
 
 type MonOpt = { id: number; ten_mon_hoc: string | null };
-type NsOpt = { id: number; full_name: string; avatar: string | null; portfolio: string[] };
+type NsOpt = {
+  id: number;
+  full_name: string;
+  avatar: string | null;
+  portfolio: string[];
+  email: string | null;
+};
 type ChiOpt = { id: number; ten: string };
 
 type Props = {
@@ -1264,13 +1270,25 @@ function LopDetailPanel({
               ) : null}
               <div className="flex items-start justify-between gap-2 border-b border-[#f0f0f0] py-1">
                 <dt className="shrink-0 text-[10px] font-bold uppercase text-[#AAA]">Giáo viên</dt>
-                <dd className="m-0 flex flex-col items-end gap-1">
+                <dd className="m-0 flex flex-col items-end gap-2">
                   {gvList.length > 0 ? (
                     gvList.map((gv) => (
-                      <span key={gv.id} className="flex items-center gap-2">
-                        <NsAvatar name={gv.full_name} src={gv.avatar} size={28} />
-                        <span className="font-bold text-pink-500">{gv.full_name}</span>
-                      </span>
+                      <div key={gv.id} className="flex max-w-[min(100%,240px)] flex-col items-end gap-0.5 text-right">
+                        <span className="flex items-center gap-2">
+                          <NsAvatar name={gv.full_name} src={gv.avatar} size={28} />
+                          <span className="font-bold text-pink-500">{gv.full_name}</span>
+                        </span>
+                        {gv.email?.trim() ? (
+                          <a
+                            href={`mailto:${gv.email.trim()}`}
+                            className="break-all text-[11px] font-medium leading-snug text-[#64748b] underline-offset-2 hover:text-[#BC8AF9] hover:underline"
+                          >
+                            {gv.email.trim()}
+                          </a>
+                        ) : (
+                          <span className="text-[11px] text-[#CCCCCC]">—</span>
+                        )}
+                      </div>
                     ))
                   ) : (
                     <span className="text-gray-300">—</span>

@@ -39,6 +39,7 @@ export default async function AdminStaffShellLayout({
       <AdminShell
         staffName={session.name}
         staffEmail={session.email}
+        staffId={session.staffId}
         staffRole={staffRole}
         staffAvatarUrl={staffAvatar}
         dashboardNav={dashboardNav}

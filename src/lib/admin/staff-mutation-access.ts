@@ -74,6 +74,17 @@ export function adminStaffCanAccessAgentPage(vaiTro: string | null | undefined):
   return v === "admin" || v === "quan_ly" || v === "tu_van";
 }
 
+/** Xem dashboard hồ sơ `/admin/dashboard/ho-so-ca-nhan/[id]` — bản thân hoặc admin/quản lý. */
+export function adminStaffCanViewStaffPersonalDashboard(
+  vaiTro: string | null | undefined,
+  viewerStaffId: number,
+  targetStaffId: number,
+): boolean {
+  if (Number(viewerStaffId) === Number(targetStaffId)) return true;
+  const v = normalizeStaffVaiTro(vaiTro);
+  return v === "admin" || v === "quan_ly";
+}
+
 /**
  * Chỉnh `ql_thong_tin_hoc_vien.trang_thai_tu_van` — admin; hoặc phòng «Tư vấn»; hoặc phòng tên Vận hành/Điều hành;
  * hoặc ban «Vận hành»/«Điều hành» (qua `hr_nhan_su.ban` / phòng → `hr_ban.ten_ban`).

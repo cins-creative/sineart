@@ -4,6 +4,8 @@ import type { LucideIcon } from "lucide-react";
 import { MessageCircle } from "lucide-react";
 
 export const DASHBOARD_OVERVIEW_HREF = "/admin/dashboard/overview";
+/** Hồ sơ nhân sự (mỗi người một trang; route đầy đủ: `${HREF}/[staffId]`). */
+export const STAFF_PERSONAL_DASHBOARD_HREF = "/admin/dashboard/ho-so-ca-nhan";
 export const ORDER_MEDIA_HREF = "/admin/dashboard/order-media";
 /** BCTC tự động (học phí + thu chi khác + họa cụ) — chỉ menu cho vai trò `admin`. */
 export const BCTC_TU_DONG_HREF = "/admin/dashboard/bctc-tu-dong";
@@ -42,6 +44,7 @@ export const NAV_MAIN: NavMainItem[] = [
 ];
 
 export const NAV_HR: { label: string; href: string; disabled?: boolean }[] = [
+  { label: "Hồ sơ nhân sự", href: STAFF_PERSONAL_DASHBOARD_HREF },
   { label: "Nhân sự", href: "/admin/dashboard/quan-ly-nhan-su" },
   { label: "Báo cáo tài chính", href: "/admin/dashboard/bao-cao-tai-chinh" },
   { label: "Giá trị tài sản", href: "/admin/dashboard/gia-tri-tai-san" },

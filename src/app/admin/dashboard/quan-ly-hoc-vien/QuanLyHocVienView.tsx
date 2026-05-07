@@ -87,8 +87,17 @@ const TT_COLOR: Record<string, { bg: string; text: string }> = {
 
 type LopOpt = { id: number; name: string; mon_hoc: number | null; special: boolean };
 
-/** Lọc theo `ql_thong_tin_hoc_vien.trang_thai_tu_van` (tư vấn). */
-type QuanLyHvTuVanFilter = "all" | QlhvTrangThaiTuVan;
+/**
+ * Lọc tư vấn / HP:
+ * - `het_hp_can_tu_van` — tình trạng kỳ HP tổng = «Nghỉ» nhưng TT tư vấn vẫn «Đang học» (cần xử lý).
+ * - `dang_hoc` | `nghi` — khớp trực tiếp `ql_thong_tin_hoc_vien.trang_thai_tu_van`.
+ */
+type QuanLyHvTuVanFilter = "all" | "het_hp_can_tu_van" | QlhvTrangThaiTuVan;
+
+/** Hết HP (theo kỳ) nhưng cột tư vấn chưa chuyển «Nghỉ». */
+function isHetHpCanTuVanCase(khs: AdminQlhvEnrollment[], trangThaiTuVan: QlhvTrangThaiTuVan): boolean {
+  return isAllKhoaHetHanTheoKy(khs) && trangThaiTuVan === "dang_hoc";
+}
 
 /** Lọc theo số khoá đang còn hạn (`deriveEnrollmentStatus === "Đang học"`) hoặc chưa có ghi danh. */
 type QuanLyHvDangKhoaBucket = null | "1" | "2" | "3+" | "chua_ghi_danh";
@@ -1861,8 +1870,8 @@ export default function QuanLyHocVienView({
       list = list.filter((hv) => !hv.is_hoc_vien_mau);
     }
     if (filterTuVan !== "all") {
-      if (filterTuVan === "nghi") {
-        list = list.filter((hv) => isAllKhoaHetHanTheoKy(byHv.get(hv.id) ?? []));
+      if (filterTuVan === "het_hp_can_tu_van") {
+        list = list.filter((hv) => isHetHpCanTuVanCase(byHv.get(hv.id) ?? [], hv.trang_thai_tu_van));
       } else {
         list = list.filter((hv) => hv.trang_thai_tu_van === filterTuVan);
       }
@@ -1891,7 +1900,7 @@ export default function QuanLyHocVienView({
       );
     }
     list = [...list].sort((a, b) => {
-      if (filterTuVan === "nghi") {
+      if (filterTuVan === "het_hp_can_tu_van") {
         const ma = maxNgayCuoiKy(byHv.get(a.id) ?? []);
         const mb = maxNgayCuoiKy(byHv.get(b.id) ?? []);
         if (ma !== mb) {
@@ -1980,12 +1989,14 @@ export default function QuanLyHocVienView({
   }, [filtered, hvPage]);
 
   const countsTuVan = useMemo(() => {
-    let nghi = 0;
+    let hetHpCanTuVan = 0;
+    let ttTuVanNghi = 0;
     for (const hv of students) {
       if (hv.is_hoc_vien_mau) continue;
-      if (isAllKhoaHetHanTheoKy(byHv.get(hv.id) ?? [])) nghi++;
+      if (isHetHpCanTuVanCase(byHv.get(hv.id) ?? [], hv.trang_thai_tu_van)) hetHpCanTuVan++;
+      if (hv.trang_thai_tu_van === "nghi") ttTuVanNghi++;
     }
-    return { nghi };
+    return { hetHpCanTuVan, ttTuVanNghi };
   }, [students, byHv]);
 
   const mauCount = useMemo(() => students.filter((h) => h.is_hoc_vien_mau).length, [students]);
@@ -1996,7 +2007,8 @@ export default function QuanLyHocVienView({
     if (filterDangKhoaBucket === "3+") return "bucket_3p";
     if (filterDangKhoaBucket === "chua_ghi_danh") return "bucket_chua_gd";
     if (filterMau) return "mau";
-    if (filterTuVan === "nghi") return "tv_nghi";
+    if (filterTuVan === "het_hp_can_tu_van") return "tv_nghi";
+    if (filterTuVan === "nghi") return "tv_tt_nghi";
     return "all";
   }, [filterDangKhoaBucket, filterMau, filterTuVan]);
 
@@ -2025,7 +2037,11 @@ export default function QuanLyHocVienView({
       setFilterDangKhoaBucket("chua_ghi_danh");
       return;
     }
-    if (v === "tv_nghi") setFilterTuVan("nghi");
+    if (v === "tv_nghi") {
+      setFilterTuVan("het_hp_can_tu_van");
+      return;
+    }
+    if (v === "tv_tt_nghi") setFilterTuVan("nghi");
   }, []);
 
   const extractRow = useCallback(
@@ -2210,12 +2226,13 @@ export default function QuanLyHocVienView({
               onChange={(e) => onBulkFilterSelect(e.target.value)}
             >
               <option value="all">{`Tất cả học viên (${nonMauStudentCount})`}</option>
-              <option value="tv_nghi">{`🔴Hết HP cần Tư vấn (${countsTuVan.nghi})`}</option>
+              <option value="tv_nghi">{`🔴Hết HP cần Tư vấn (${countsTuVan.hetHpCanTuVan})`}</option>
               <option value="bucket_chua_gd">{`🔴Tư vấn HV mới (${hvChuaGhiDanhCount})`}</option>
               <option value="bucket_1">{`Một lớp còn hạn (${hvDangHocLopBuckets.oneLop})`}</option>
               <option value="bucket_2">{`Hai lớp còn hạn (${hvDangHocLopBuckets.twoLop})`}</option>
               <option value="bucket_3p">{`Ba lớp trở lên (${hvDangHocLopBuckets.threePlusLop})`}</option>
               <option value="mau">{`Học viên mẫu (${mauCount})`}</option>
+              <option value="tv_tt_nghi">{`TT tư vấn: Nghỉ (${countsTuVan.ttTuVanNghi})`}</option>
             </select>
             <select
               className={cn(QLHV_HDR_SELECT, "sm:max-w-[min(100%,24rem)] sm:flex-1")}

@@ -110,6 +110,26 @@ const SELECT_NO_BHXH =
 /** Dùng sau `insert` khi `SELECT_FULL` có thể lỗi cột. */
 export const HR_NHAN_SU_SELECT_MIN = "id, full_name, sdt, email, avatar";
 
+/** Một nhân sự theo `id` — cùng fallback select như danh sách. */
+export async function fetchSingleHrNhanSuRow(
+  supabase: SupabaseClient,
+  staffId: number
+): Promise<AdminNhanSuRow | null> {
+  const pk = Number(staffId);
+  if (!Number.isFinite(pk) || pk <= 0) return null;
+  const attempts = [SELECT_FULL, SELECT_NO_BHXH, HR_NHAN_SU_SELECT_MIN];
+  for (const select of attempts) {
+    const { data, error } = await supabase.from("hr_nhan_su").select(select).eq("id", pk).maybeSingle();
+    if (error) {
+      const msg = error.message ?? "";
+      if (isMissingColumnError(msg)) continue;
+      return null;
+    }
+    if (data) return mapHrNhanSuRow(data as unknown as Record<string, unknown>);
+  }
+  return null;
+}
+
 async function fetchStaffRows(
   supabase: SupabaseClient
 ): Promise<{ rows: AdminNhanSuRow[]; usedMinimalSelect: boolean; error: string | null }> {
@@ -456,7 +476,7 @@ function normNamLich(n: unknown): string {
   return String(n).trim();
 }
 
-async function fetchBangTinhLuongByStaffId(
+export async function fetchBangTinhLuongByStaffId(
   supabase: SupabaseClient,
   staffIds: number[]
 ): Promise<Record<number, AdminBangTinhLuongListItem[]>> {

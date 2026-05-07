@@ -14,6 +14,7 @@ import {
   NAV_HR,
   NAV_MARKETING,
   ORDER_MEDIA_HREF,
+  STAFF_PERSONAL_DASHBOARD_HREF,
   type NavMainItem,
 } from "@/lib/admin/dashboard-nav-config";
 import type { DashboardNavAccess } from "@/lib/admin/dashboard-nav-visibility";
@@ -23,6 +24,8 @@ import { cn } from "@/lib/utils";
 type Props = {
   staffName: string;
   staffEmail: string;
+  /** `hr_nhan_su.id` — link «Hồ sơ nhân sự» trên sidebar. */
+  staffId: number;
   /** `hr_nhan_su.vai_tro` (null nếu trống hoặc không đọc được). */
   staffRole: string | null;
   /** `hr_nhan_su.avatar` — hiển thị ảnh đại diện; nếu trống thì dùng chữ cái + gradient. */
@@ -103,6 +106,7 @@ function AdminDashboardNavPanel({
   staffName,
   staffRole,
   staffAvatarUrl,
+  staffProfileHref,
   pathname,
   searchParams,
   showOrderMedia,
@@ -115,6 +119,8 @@ function AdminDashboardNavPanel({
   staffName: string;
   staffRole: string | null;
   staffAvatarUrl?: string | null;
+  /** Đích «Hồ sơ nhân sự» — null thì khối đầu không phải link. */
+  staffProfileHref: string | null;
   pathname: string | null;
   searchParams: URLSearchParams;
   showOrderMedia: boolean;
@@ -124,33 +130,50 @@ function AdminDashboardNavPanel({
   onNavigate?: () => void;
   profileTrailing?: ReactNode;
 }) {
+  const profileBlock = (
+    <>
+      <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-black/[0.06] bg-black/[0.04]">
+        {staffAvatarUrl?.trim() ? (
+          <img
+            src={staffAvatarUrl.trim()}
+            alt={staffName.trim() ? `Ảnh đại diện ${staffName.trim()}` : "Ảnh đại diện"}
+            width={36}
+            height={36}
+            className="h-full w-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div
+            className="flex h-full w-full items-center justify-center text-sm font-bold text-white"
+            style={{ background: "linear-gradient(135deg, #f8a668, #ee5b9f)" }}
+            aria-hidden
+          >
+            {staffInitial(staffName)}
+          </div>
+        )}
+      </div>
+      <div className="min-w-0 flex-1 leading-tight">
+        <div className="truncate text-sm font-semibold">{staffName || "—"}</div>
+        <div className="truncate text-[11px] text-black/45">{staffRole ?? "—"}</div>
+      </div>
+    </>
+  );
+
   return (
     <>
       <div className="flex h-14 min-w-0 items-center gap-2 border-b border-black/[0.06] px-5">
-        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-black/[0.06] bg-black/[0.04]">
-          {staffAvatarUrl?.trim() ? (
-            <img
-              src={staffAvatarUrl.trim()}
-              alt={staffName.trim() ? `Ảnh đại diện ${staffName.trim()}` : "Ảnh đại diện"}
-              width={36}
-              height={36}
-              className="h-full w-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div
-              className="flex h-full w-full items-center justify-center text-sm font-bold text-white"
-              style={{ background: "linear-gradient(135deg, #f8a668, #ee5b9f)" }}
-              aria-hidden
-            >
-              {staffInitial(staffName)}
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1 leading-tight">
-          <div className="truncate text-sm font-semibold">{staffName || "—"}</div>
-          <div className="truncate text-[11px] text-black/45">{staffRole ?? "—"}</div>
-        </div>
+        {staffProfileHref ? (
+          <Link
+            href={staffProfileHref}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-0 outline-none ring-[#f8a668] transition hover:bg-black/[0.03] focus-visible:ring-2"
+            aria-label="Mở hồ sơ nhân sự"
+            onClick={onNavigate}
+          >
+            {profileBlock}
+          </Link>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-2">{profileBlock}</div>
+        )}
         {profileTrailing ? <div className="flex shrink-0 items-center">{profileTrailing}</div> : null}
       </div>
       <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-4 text-[13px]">
@@ -250,6 +273,7 @@ function AdminDashboardNavPanel({
 export default function AdminShell({
   staffName,
   staffEmail,
+  staffId,
   staffRole,
   staffAvatarUrl,
   dashboardNav,
@@ -293,15 +317,19 @@ export default function AdminShell({
   /** Mọi nhân sự đăng nhập dashboard đều xem/tạo order media — không giới hạn theo phòng. */
   const showOrderMedia = true;
 
+  const staffProfileHref =
+    Number.isFinite(staffId) && staffId > 0 ? `${STAFF_PERSONAL_DASHBOARD_HREF}/${staffId}` : null;
+
   const prefetchTargets = useMemo(() => {
     const out: string[] = [DASHBOARD_OVERVIEW_HREF];
+    if (staffProfileHref) out.push(staffProfileHref);
     if (showOrderMedia) out.push(ORDER_MEDIA_HREF);
     if ((staffRole ?? "").trim().toLowerCase() === "admin") out.push(BCTC_TU_DONG_HREF);
     for (const i of navMainVisible) out.push(i.href);
     for (const i of navHrVisible) out.push(i.href);
     for (const i of navMarketingVisible) out.push(i.href);
     return [...new Set(out)];
-  }, [showOrderMedia, navMainVisible, navHrVisible, navMarketingVisible, staffRole]);
+  }, [showOrderMedia, navMainVisible, navHrVisible, navMarketingVisible, staffRole, staffProfileHref]);
 
   useEffect(() => {
     for (const href of prefetchTargets) {
@@ -346,6 +374,7 @@ export default function AdminShell({
     staffName,
     staffRole,
     staffAvatarUrl,
+    staffProfileHref,
     pathname,
     searchParams,
     showOrderMedia,
@@ -457,7 +486,7 @@ export default function AdminShell({
           </div>
         </header>
         <main className="relative flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col p-4 md:p-6">
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <AdminDashboardAbilitiesProvider staffRole={staffRole}>{children}</AdminDashboardAbilitiesProvider>
           </div>
         </main>

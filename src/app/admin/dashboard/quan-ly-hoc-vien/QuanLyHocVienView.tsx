@@ -869,7 +869,12 @@ function CreateStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved
           </label>
           <label className={lbl}>
             Email
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className={inp} />
+            <input
+              value={email}
+              onChange={(e) => setEmail(normalizeHocVienEmail(e.target.value))}
+              type="email"
+              className={inp}
+            />
           </label>
           <label className={lbl}>
             SĐT
@@ -1347,7 +1352,9 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
   const soThangTaiSine = thangHocTaiSineArt(student.created_at, enrollments);
 
   const [full_name, setFullName] = useState(student.full_name);
-  const [email, setEmail] = useState(student.email ?? "");
+  const [email, setEmail] = useState(
+    student.email ? normalizeHocVienEmail(student.email) : ""
+  );
   const [sdt, setSdt] = useState(student.sdt ?? "");
   const [facebook, setFacebook] = useState(student.facebook ?? "");
   const [sex, setSex] = useState(student.sex ?? "");
@@ -1361,7 +1368,7 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
   useEffect(() => {
     queueMicrotask(() => {
       setFullName(student.full_name);
-      setEmail(student.email ?? "");
+      setEmail(student.email ? normalizeHocVienEmail(student.email) : "");
       setSdt(student.sdt ?? "");
       setFacebook(student.facebook ?? "");
       setSex(student.sex ?? "");
@@ -1374,7 +1381,7 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
 
   const resetDraftFromStudent = useCallback(() => {
     setFullName(student.full_name);
-    setEmail(student.email ?? "");
+    setEmail(student.email ? normalizeHocVienEmail(student.email) : "");
     setSdt(student.sdt ?? "");
     setFacebook(student.facebook ?? "");
     setSex(student.sex ?? "");
@@ -1514,7 +1521,7 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
                 type="email"
                 value={email}
                 disabled={saveBusy}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(normalizeHocVienEmail(e.target.value))}
                 className={inpProfile}
               />
             </label>

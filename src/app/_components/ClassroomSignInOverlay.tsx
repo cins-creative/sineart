@@ -38,8 +38,8 @@ const iVariants = {
   },
 };
 
-/** Vào phòng học chỉ khi còn ≥ 3 ngày trong kỳ (và ghi danh còn hiệu lực). */
-const MIN_DAYS_TO_ENTER_CLASS = 3;
+/** Vào phòng học khi còn ≥ 1 ngày trong kỳ; 0 ngày → không vào. Chỉ hiển thị UI cảnh báo (không chặn vào). */
+const DAYS_LOW_KY_WARNING = 3;
 
 function enrollmentLooksInactive(data: ClassroomStudentSessionData): boolean {
   const pack = `${data.status ?? ""} ${data.trang_thai ?? ""}`.toLowerCase();
@@ -56,7 +56,6 @@ function studentCanEnterPhongHoc(data: ClassroomStudentSessionData): boolean {
   if (enrollmentLooksInactive(data)) return false;
   const d = data.days_remaining;
   if (d === null || d <= 0) return false;
-  if (d < MIN_DAYS_TO_ENTER_CLASS) return false;
   return true;
 }
 
@@ -64,7 +63,7 @@ function daysColor(d: number | null, data: ClassroomStudentSessionData): string 
   if (enrollmentLooksInactive(data)) return "#ee5ca2";
   if (d === null) return "#aaa";
   if (d < 0) return "#ee5ca2";
-  if (d < MIN_DAYS_TO_ENTER_CLASS) return "#f8a568";
+  if (d < DAYS_LOW_KY_WARNING) return "#f8a568";
   if (d <= 5) return "#f8a568";
   return "#4caf50";
 }
@@ -73,7 +72,7 @@ function daysLabel(d: number | null, data: ClassroomStudentSessionData): string 
   if (enrollmentLooksInactive(data)) return "Hết hạn ngày học";
   if (d === null) return "Chưa có kỳ học";
   if (d < 0) return `Nợ ${Math.abs(d)} ngày`;
-  if (d < MIN_DAYS_TO_ENTER_CLASS) return `Sắp hết hạn — còn ${d} ngày`;
+  if (d < DAYS_LOW_KY_WARNING) return `Sắp hết hạn — còn ${d} ngày`;
   return `Còn lại: ${d} ngày`;
 }
 
@@ -293,22 +292,17 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
     }
     const data = item.data;
     if (!studentCanEnterPhongHoc(data)) {
-      let msg =
-        "Chỉ vào được phòng học khi còn ít nhất 3 ngày trong kỳ và ghi danh còn hiệu lực. Vui lòng đóng học phí tại trang Đóng học phí.";
+      let msg: string;
       if (enrollmentLooksInactive(data)) {
         msg =
           "Ghi danh đã kết thúc hoặc trạng thái nghỉ — không thể vào phòng học. Liên hệ Sine Art nếu cần hỗ trợ.";
-      } else if (
-        data.days_remaining != null &&
-        data.days_remaining > 0 &&
-        data.days_remaining < MIN_DAYS_TO_ENTER_CLASS
-      ) {
-        msg = `Kỳ học sắp hết (còn ${data.days_remaining} ngày). Gia hạn tại Đóng học phí trước khi vào lớp.`;
-      } else if (data.days_remaining === null || data.days_remaining <= 0) {
+      } else if (data.days_remaining === null) {
         msg =
-          data.days_remaining === null
-            ? "Chưa có kỳ học phí hoặc chưa ghi nhận ngày. Vui lòng đóng học phí hoặc liên hệ Sine Art."
-            : "Đã hết ngày trong kỳ học phí. Vui lòng đóng học phí tại trang Đóng học phí.";
+          "Chưa có kỳ học phí hoặc chưa ghi nhận ngày. Vui lòng đóng học phí hoặc liên hệ Sine Art.";
+      } else if (data.days_remaining <= 0) {
+        msg = "Đã hết ngày trong kỳ học phí. Vui lòng đóng học phí tại trang Đóng học phí.";
+      } else {
+        msg = "Không thể vào phòng học. Vui lòng liên hệ Sine Art.";
       }
       window.alert(msg);
       return;
@@ -447,13 +441,12 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
                               : { scale: 1, backgroundColor: "#f5f5f7" }
                           }
                           whileTap={canEnter ? { scale: 0.98 } : { scale: 1 }}
-                          role={canEnter ? "button" : undefined}
-                          tabIndex={canEnter ? 0 : -1}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => {
-                            if (canEnter) handleAction(item);
+                            handleAction(item);
                           }}
                           onKeyDown={(e) => {
-                            if (!canEnter) return;
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
                               handleAction(item);

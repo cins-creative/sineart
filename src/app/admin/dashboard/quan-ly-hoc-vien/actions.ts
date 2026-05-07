@@ -8,8 +8,11 @@ import { staffBelongsToTuVanPhong } from "@/lib/admin/dashboard-nav-visibility";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { adminStaffCanEditTrangThaiTuVan } from "@/lib/admin/staff-mutation-access";
 import {
+  emailContainsLatinUppercase,
   isValidStudentEmail,
   normalizeHocVienEmail,
+  STUDENT_EMAIL_DUPLICATE_VI,
+  STUDENT_EMAIL_LOWERCASE_VI,
   STUDENT_EMAIL_REQUIREMENT_VI,
 } from "@/lib/donghocphi/profile-step1";
 import { firstApplicableComboDiscountDong } from "@/lib/donghocphi/combo-discount";
@@ -216,6 +219,10 @@ export type HocVienProfilePayload = {
   nam_thi: number | null;
 };
 
+function isPostgresUniqueViolation(err: { code?: string } | null): boolean {
+  return err?.code === "23505";
+}
+
 function hocVienProfileRow(payload: HocVienProfilePayload): Record<string, string | number | null> {
   const full_name = String(payload.full_name ?? "").trim();
   const nam_thi = payload.nam_thi != null && Number.isFinite(payload.nam_thi) ? Math.trunc(payload.nam_thi) : null;
@@ -246,6 +253,9 @@ export async function createHocVien(payload: HocVienProfilePayload): Promise<{ o
   if (!full_name) return { ok: false, error: "Nhập họ tên." };
 
   const emCreate = String(payload.email ?? "").trim();
+  if (emCreate !== "" && emailContainsLatinUppercase(emCreate)) {
+    return { ok: false, error: STUDENT_EMAIL_LOWERCASE_VI };
+  }
   if (emCreate !== "" && !isValidStudentEmail(emCreate)) {
     return { ok: false, error: STUDENT_EMAIL_REQUIREMENT_VI };
   }
@@ -255,8 +265,25 @@ export async function createHocVien(payload: HocVienProfilePayload): Promise<{ o
 
   const body = hocVienProfileRow(payload);
 
+  const emailNorm = body.email != null ? String(body.email).trim() : "";
+  if (emailNorm !== "") {
+    const { data: existed, error: dupErr } = await supabase
+      .from("ql_thong_tin_hoc_vien")
+      .select("id")
+      .eq("email", emailNorm)
+      .limit(1)
+      .maybeSingle();
+    if (dupErr) return { ok: false, error: dupErr.message || "Không kiểm tra được email." };
+    if (existed != null) return { ok: false, error: STUDENT_EMAIL_DUPLICATE_VI };
+  }
+
   const ins = await supabase.from("ql_thong_tin_hoc_vien").insert(body).select("id").single();
-  if (ins.error) return { ok: false, error: ins.error.message || "Không tạo được học viên." };
+  if (ins.error) {
+    if (isPostgresUniqueViolation(ins.error)) {
+      return { ok: false, error: STUDENT_EMAIL_DUPLICATE_VI };
+    }
+    return { ok: false, error: ins.error.message || "Không tạo được học viên." };
+  }
   const rawId = ins.data?.id;
   const id = typeof rawId === "bigint" ? Number(rawId) : Number(rawId);
   if (!Number.isFinite(id) || id <= 0) return { ok: false, error: "Không đọc được ID học viên mới." };
@@ -273,6 +300,9 @@ export async function updateHocVienProfile(studentId: number, payload: HocVienPr
   if (!full_name) return { ok: false, error: "Nhập họ tên." };
 
   const emUp = String(payload.email ?? "").trim();
+  if (emUp !== "" && emailContainsLatinUppercase(emUp)) {
+    return { ok: false, error: STUDENT_EMAIL_LOWERCASE_VI };
+  }
   if (emUp !== "" && !isValidStudentEmail(emUp)) {
     return { ok: false, error: STUDENT_EMAIL_REQUIREMENT_VI };
   }
@@ -282,8 +312,26 @@ export async function updateHocVienProfile(studentId: number, payload: HocVienPr
 
   const body = hocVienProfileRow(payload);
 
+  const emailNorm = body.email != null ? String(body.email).trim() : "";
+  if (emailNorm !== "") {
+    const { data: other, error: dupErr } = await supabase
+      .from("ql_thong_tin_hoc_vien")
+      .select("id")
+      .eq("email", emailNorm)
+      .neq("id", studentId)
+      .limit(1)
+      .maybeSingle();
+    if (dupErr) return { ok: false, error: dupErr.message || "Không kiểm tra được email." };
+    if (other != null) return { ok: false, error: STUDENT_EMAIL_DUPLICATE_VI };
+  }
+
   const { error } = await supabase.from("ql_thong_tin_hoc_vien").update(body).eq("id", studentId);
-  if (error) return { ok: false, error: error.message || "Không lưu được hồ sơ." };
+  if (error) {
+    if (isPostgresUniqueViolation(error)) {
+      return { ok: false, error: STUDENT_EMAIL_DUPLICATE_VI };
+    }
+    return { ok: false, error: error.message || "Không lưu được hồ sơ." };
+  }
   revalidate();
   return { ok: true, message: "Đã lưu." };
 }

@@ -1,4 +1,9 @@
-import { isValidStudentEmail, normalizeHocVienEmail } from "@/lib/donghocphi/profile-step1";
+import {
+  emailContainsLatinUppercase,
+  isValidStudentEmail,
+  normalizeHocVienEmail,
+  STUDENT_EMAIL_LOWERCASE_VI,
+} from "@/lib/donghocphi/profile-step1";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import {
   firstApplicableComboDiscountDong,
@@ -193,6 +198,10 @@ export async function createDongHocPhiOrder(
 ): Promise<DhpCreateOrderResult> {
   const name = student.full_name?.trim() ?? "";
   const sdt = student.sdt?.trim() ?? "";
+  const rawEmailIn = String(student.email ?? "").trim();
+  if (rawEmailIn !== "" && emailContainsLatinUppercase(rawEmailIn)) {
+    return { ok: false, error: STUDENT_EMAIL_LOWERCASE_VI, code: "EMAIL_CASE" };
+  }
   const email = normalizeHocVienEmail(student.email);
   const fb = student.facebook?.trim() ?? "";
   if (name.length < 2 || sdt.length < 8 || !isValidStudentEmail(email)) {
@@ -480,8 +489,9 @@ export async function createDongHocPhiOrder(
       for (const v of validated) {
         const khoaHocVienId = qlIdsByLop.get(v.lopId);
         if (khoaHocVienId == null) throw new Error("Thiếu ql_quan_ly_hoc_vien.");
+        /** N buổi ≈ N ngày lịch [đầu, cuối] — khớp `aggregateKyFromChiTietRows` (`totalBuoi - 1`). */
         const ngayCuoi =
-          v.soBuoi > 0 ? addDaysIso(ngayDau, v.soBuoi) : ngayDau;
+          v.soBuoi > 0 ? addDaysIso(ngayDau, v.soBuoi - 1) : ngayDau;
         /**
          * Kỳ học (`ngay_dau_ky` / `ngay_cuoi_ky`) được ghi **ngay khi tạo đơn**, cùng lúc `status` = «Chờ thanh toán».
          * SePay (hoặc đồng bộ tay) đổi đơn + dòng chi tiết sang «Đã thanh toán».

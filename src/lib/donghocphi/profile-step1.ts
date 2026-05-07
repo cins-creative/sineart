@@ -24,6 +24,19 @@ const STUDENT_EMAIL_ALLOWED_DOMAINS = new Set([
 export const STUDENT_EMAIL_REQUIREMENT_VI =
   "Vui lòng dùng email Gmail (ví dụ: tenban@gmail.com). Các nhà cung cấp khác hiện không được hỗ trợ.";
 
+/** API / DB: không chấp nhận chữ HOA trong chuỗi email gửi lên (lưu chỉ chữ thường). */
+export const STUDENT_EMAIL_LOWERCASE_VI =
+  "Email chỉ được nhập chữ thường (a-z), không dùng chữ HOA. Gmail không phân biệt hoa thường.";
+
+/** Một email Gmail chỉ gắn một hồ sơ `ql_thong_tin_hoc_vien` (unique index). */
+export const STUDENT_EMAIL_DUPLICATE_VI =
+  "Email này đã được dùng cho học viên khác. Mỗi email chỉ gắn một hồ sơ.";
+
+/** Phát hiện chữ Latin HOA — dùng trước khi normalize. */
+export function emailContainsLatinUppercase(raw: string): boolean {
+  return /[A-Z]/.test(String(raw));
+}
+
 export function isValidStudentEmail(s: string): boolean {
   const t = s.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return false;

@@ -67,6 +67,15 @@ function addDaysIso(start: string, days: number): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Gói N buổi ≈ N ngày lịch inclusive — khớp `create-order` / `hp-thu-hp-chi-tiet-ky`. */
+function ngayCuoiFromDauVaBuoi(ngayDau: string, buoi: number): string {
+  const n = Math.max(0, Math.round(buoi));
+  if (n <= 0) return ngayDau.slice(0, 10);
+  return addDaysIso(ngayDau.slice(0, 10), n - 1);
+}
+
+const DEFAULT_SO_BUOI_FALLBACK = 30;
+
 type LineState = {
   key: string;
   qlhvId: string;
@@ -82,7 +91,7 @@ function mkLine(defaultQlhv: string): LineState {
     qlhvId: defaultQlhv,
     goiId: "",
     ngayDau: t0,
-    ngayCuoi: addDaysIso(t0, 30),
+    ngayCuoi: ngayCuoiFromDauVaBuoi(t0, DEFAULT_SO_BUOI_FALLBACK),
   };
 }
 
@@ -91,11 +100,16 @@ function recomputeKyDatesForLine(
   goi: AdminDhpGoiOption | undefined
 ): { ngayDau: string; ngayCuoi: string } {
   const ngayDau = todayIso();
-  if (!goi) return { ngayDau, ngayCuoi: addDaysIso(ngayDau, 30) };
+  if (!goi) {
+    return { ngayDau, ngayCuoi: ngayCuoiFromDauVaBuoi(ngayDau, DEFAULT_SO_BUOI_FALLBACK) };
+  }
   const themBuoi =
     goi.so_buoi != null && Number.isFinite(goi.so_buoi) ? Math.max(0, Math.round(Number(goi.so_buoi))) : 0;
   const computed = computeNgayCuoiKyFromRenewal(kh?.ngay_cuoi_ky ?? null, themBuoi);
-  return { ngayDau, ngayCuoi: computed ?? addDaysIso(ngayDau, 30) };
+  return {
+    ngayDau,
+    ngayCuoi: computed ?? ngayCuoiFromDauVaBuoi(ngayDau, themBuoi > 0 ? themBuoi : DEFAULT_SO_BUOI_FALLBACK),
+  };
 }
 
 function lopDisplayName(kh: AdminQlhvEnrollment): string {
@@ -561,7 +575,7 @@ export default function AdminDongHocPhiModal({
                                     qlhvId: v,
                                     goiId: "",
                                     ngayDau: t0,
-                                    ngayCuoi: addDaysIso(t0, 30),
+                                    ngayCuoi: ngayCuoiFromDauVaBuoi(t0, DEFAULT_SO_BUOI_FALLBACK),
                                   });
                                 }
                               }}

@@ -3,6 +3,7 @@ import {
   type DhpDhCatalog,
   type DhpInitialNguyenVongRow,
 } from "@/lib/donghocphi/dh-catalog";
+import { fetchLatestQlThongTinHocVienByEmail } from "@/lib/donghocphi/fetch-hv-by-email";
 import {
   dbRowToStep1Fields,
   isValidStudentEmail,
@@ -102,24 +103,10 @@ export async function DongHocPhiPaymentSection({
     const em = normalizeHocVienEmail(effectiveEmail);
     const hvSel =
       "id, full_name, sdt, email, sex, nam_thi, loai_khoa_hoc, facebook, avatar";
-    let { data: hvRow, error: hvErr } = await supabase
-      .from("ql_thong_tin_hoc_vien")
-      .select(hvSel)
-      .eq("email", em)
-      .order("id", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!hvErr && !hvRow) {
-      const ilikeRes = await supabase
-        .from("ql_thong_tin_hoc_vien")
-        .select(hvSel)
-        .ilike("email", em)
-        .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      hvRow = ilikeRes.data;
-      hvErr = ilikeRes.error;
-    }
+    const {
+      data: hvRow,
+      error: hvErr,
+    } = await fetchLatestQlThongTinHocVienByEmail(supabase, em, hvSel);
     if (!hvErr && hvRow) {
       const hvId = Number((hvRow as { id: unknown }).id);
       if (Number.isFinite(hvId) && hvId > 0) {

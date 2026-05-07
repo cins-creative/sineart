@@ -639,7 +639,9 @@ export default function DongHocPhiClient({
   const [step, setStep] = useState<Step>(() => (skipStep1Boot ? 2 : 1));
   const [fullName, setFullName] = useState(() => skipStep1Boot?.fullName ?? existingHocVien?.full_name ?? "");
   const [phone, setPhone] = useState(() => skipStep1Boot?.phone ?? existingHocVien?.sdt ?? "");
-  const [email, setEmail] = useState(() => skipStep1Boot?.email ?? existingHocVien?.email ?? initialEmail ?? "");
+  const [email, setEmail] = useState(() =>
+    normalizeHocVienEmail(skipStep1Boot?.email ?? existingHocVien?.email ?? initialEmail ?? "")
+  );
   const [sex, setSex] = useState<string>(() => skipStep1Boot?.sex ?? existingHocVien?.sex ?? SEX_OPTIONS[0]);
   const [namThi, setNamThi] = useState<string>(
     () => skipStep1Boot?.namThi ?? (existingHocVien?.nam_thi ? String(existingHocVien.nam_thi) : String(new Date().getFullYear()))
@@ -1858,7 +1860,10 @@ export default function DongHocPhiClient({
                   aria-required="true"
                   placeholder="vd. tenban@gmail.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    if (emailLocked) return;
+                    setEmail(normalizeHocVienEmail(e.target.value));
+                  }}
                   readOnly={emailLocked}
                   className={
                     emailLocked
@@ -2034,8 +2039,9 @@ export default function DongHocPhiClient({
             </section>
 
             <p className="dhp-step1-email-hint">
-              Đã có hồ sơ học viên? Nhập đúng email — dùng nút «Tiếp theo» trên thanh phía trên để tra cứu
-              và vào bước chọn lớp (cần hồ sơ đủ: họ tên, SĐT, Facebook trong hệ thống).
+              Email Gmail chỉ nhập chữ thường (không chữ HOA). Đã có hồ sơ học viên? Nhập đúng email —
+              dùng nút «Tiếp theo» trên thanh phía trên để tra cứu và vào bước chọn lớp (cần hồ sơ đủ: họ
+              tên, SĐT, Facebook trong hệ thống).
             </p>
             {step1LookupError ? (
               <p className="dhp-step1-lookup-err" role="alert">

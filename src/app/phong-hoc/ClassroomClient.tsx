@@ -1431,7 +1431,7 @@ export default function ClassroomClient({
     if (!googleMeetUrl?.trim() || !Number.isFinite(lopHocIdForDb)) return;
     if (
       !window.confirm(
-        "Xóa link Google Meet của lớp này? Học viên và giáo viên sẽ dùng phòng Daily.co (meeting_room) khi vào học."
+        "Gỡ link Google Meet của lớp này? Sau đó mọi người sẽ học trong phòng học Sine Art (video trên trang)."
       )
     ) {
       return;
@@ -1454,7 +1454,10 @@ export default function ClassroomClient({
         const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
         ok = res.ok && j.ok === true;
         if (!ok) {
-          window.alert(j.error ?? "Không xóa được link Meet. Kiểm tra quyền chủ nhiệm lớp.");
+          window.alert(
+            j.error ??
+              "Không chuyển được sang phòng học Sine Art. Kiểm tra quyền chủ nhiệm lớp."
+          );
         }
       } else {
         const sb = createBrowserSupabaseClient();
@@ -1484,7 +1487,7 @@ export default function ClassroomClient({
       }
     } catch {
       setGmeetSaving(false);
-      window.alert("Lỗi mạng khi xóa link Meet.");
+      window.alert("Lỗi mạng khi chuyển sang phòng học Sine Art.");
     }
   }, [
     googleMeetUrl,
@@ -3423,7 +3426,7 @@ export default function ClassroomClient({
                           disabled={gmeetSaving}
                           onClick={() => void clearGoogleMeetUrl()}
                         >
-                          {gmeetSaving ? "Đang xóa…" : "Xóa link Meet đã lưu (dùng Daily.co)"}
+                          {gmeetSaving ? "Đang chuyển…" : "Học trong phòng học Sine Art"}
                         </button>
                       ) : null}
                     </>
@@ -3446,7 +3449,7 @@ export default function ClassroomClient({
                           disabled={gmeetSaving}
                           onClick={() => void clearGoogleMeetUrl()}
                         >
-                          {gmeetSaving ? "Đang xóa…" : "Xóa link Meet — dùng Daily.co"}
+                          {gmeetSaving ? "Đang chuyển…" : "Học trong phòng học Sine Art"}
                         </button>
                       ) : null}
                     </>

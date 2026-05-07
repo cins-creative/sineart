@@ -64,6 +64,19 @@ export async function fetchLopHocMeetRow(
   };
 }
 
+/** `postgres_changes` payload.new trên `ql_lop_hoc` — tránh gọi lại HTTP/API sau Realtime. */
+export function lopMeetRowFromRealtimeNewRow(newRow: Record<string, unknown>): LopHocMeetRow {
+  const setAtRaw = newRow.url_google_meet_set_at;
+  const setAt =
+    setAtRaw != null && String(setAtRaw).trim() !== "" ? String(setAtRaw).trim() : null;
+  return {
+    meeting_room: trimOrNull(newRow.meeting_room),
+    url_google_meet: trimOrNull(newRow.url_google_meet),
+    url_google_meet_set_at: setAt,
+    device: trimOrNull(newRow.device),
+  };
+}
+
 export async function patchLopHocGoogleMeetUrl(
   supabase: SupabaseClient,
   lopHocId: number,

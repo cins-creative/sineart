@@ -1,10 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** GV: coi HV không còn trong phòng nếu không có heartbeat trong khoảng này (ms). */
-export const HV_DIEM_DANH_PRESENCE_STALE_MS = 90_000;
+export const HV_DIEM_DANH_PRESENCE_STALE_MS = 150_000;
 
-/** HV gửi POST record để làm mới `last_seen_at` (tab đang hiển thị). */
-export const HV_DIEM_DANH_HEARTBEAT_INTERVAL_MS = 25_000;
+/** HV gửi POST record để làm mới `last_seen_at` — giữ ~2× nhịp heartbeat để giảm tải API. */
+export const HV_DIEM_DANH_HEARTBEAT_INTERVAL_MS = 75_000;
+
+/** GV poll GET `/api/phong-hoc/diem-danh` — không cần realtime; giảm request server. */
+export const GV_DIEM_DANH_POLL_INTERVAL_MS = 45_000;
 
 export function parseIsoToUtcMs(iso: string | null | undefined): number | null {
   if (iso == null || typeof iso !== "string" || !iso.trim()) return null;

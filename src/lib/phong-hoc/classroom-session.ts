@@ -175,9 +175,14 @@ export function saveClassroomSession(record: ClassroomSessionRecord): void {
   }
 }
 
+/** Tránh spam POST `/api/phong-hoc/sync-hv-session` khi nhiều chỗ gọi `syncPhongHocCookiesWithStorage` liên tiếp. */
+let lastHvCookieSyncAtByKey: Record<string, number> = {};
+const HV_COOKIE_SYNC_MIN_INTERVAL_MS = 5 * 60 * 1000;
+
 export function clearClassroomSession(): void {
   if (typeof window === "undefined") return;
   try {
+    lastHvCookieSyncAtByKey = {};
     localStorage.removeItem(CLASSROOM_SESSION_STORAGE_KEY);
     emitClassroomSessionChanged();
     clearDhpClassPickStorage();
@@ -205,12 +210,19 @@ export async function syncPhongHocCookiesWithStorage(): Promise<void> {
       const qlhv_id = s.data.qlhv_id;
       const lop_hoc_id = s.data.lop_hoc_id;
       if (Number.isFinite(qlhv_id) && Number.isFinite(lop_hoc_id)) {
+        const key = `${qlhv_id}:${lop_hoc_id}`;
+        const now = Date.now();
+        const prev = lastHvCookieSyncAtByKey[key] ?? 0;
+        if (now - prev < HV_COOKIE_SYNC_MIN_INTERVAL_MS) {
+          return;
+        }
         await fetch("/api/phong-hoc/sync-hv-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ qlhv_id, lop_hoc_id }),
           credentials: "include",
         });
+        lastHvCookieSyncAtByKey[key] = now;
         return;
       }
     }

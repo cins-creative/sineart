@@ -9,6 +9,7 @@ import {
   type ClassroomSessionRecord,
 } from "@/lib/phong-hoc/classroom-session";
 import {
+  GV_DIEM_DANH_POLL_INTERVAL_MS,
   HV_DIEM_DANH_HEARTBEAT_INTERVAL_MS,
   hvPresenceIsLive,
   parseIsoToUtcMs,
@@ -44,6 +45,7 @@ import {
 } from "@/lib/phong-hoc/hv-chatbox";
 import {
   fetchLopHocMeetRow,
+  lopMeetRowFromRealtimeNewRow,
   patchLopHocGoogleMeetUrl,
   studentVisibleGoogleMeetUrl,
   type LopHocMeetRow,
@@ -976,33 +978,46 @@ export default function ClassroomClient({
     return NaN;
   }, [storedSession, d.lop_hoc_id]);
 
-  /** Meet + Daily: ưu tiên API (cookie HV/GV + service role); fallback Supabase anon (RLS). */
+  /** Cập nhật state Meet / Daily + session localstorage khi có row `ql_lop_hoc`. */
+  const applyClassMeetRow = useCallback((row: LopHocMeetRow) => {
+    setMeetingRoomRefreshed(row.meeting_room);
+    setGoogleMeetUrl(row.url_google_meet);
+    setGoogleMeetSetAt(row.url_google_meet_set_at);
+    setLopDevice(row.device);
+    setGmeetRowReady(true);
+    setStoredSession((prev) => {
+      if (!prev) return prev;
+      const v = row.meeting_room;
+      const cur =
+        prev.data.meeting_room != null && String(prev.data.meeting_room).trim() !== ""
+          ? String(prev.data.meeting_room).trim()
+          : null;
+      if (cur === v) return prev;
+      const next: ClassroomSessionRecord =
+        prev.userType === "Teacher"
+          ? { userType: "Teacher", data: { ...prev.data, meeting_room: v } }
+          : { userType: "Student", data: { ...prev.data, meeting_room: v } };
+      saveClassroomSession(next);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Meet + Daily: đọc **trực tiếp** `ql_lop_hoc` qua Supabase browser (anon + RLS) — không qua Vercel.
+   * Chỉ gọi `/api/phong-hoc/class-meet-row` khi không đọc được row (kẹt RLS / thiếu client).
+   * Realtime `UPDATE` áp `payload.new` qua `lopMeetRowFromRealtimeNewRow` — không poll 5s nữa.
+   */
   const refreshClassMeetRow = useCallback(async () => {
     if (!Number.isFinite(lopHocIdForDb)) return;
     const id = lopHocIdForDb;
 
-    const applyRow = (row: LopHocMeetRow) => {
-      setMeetingRoomRefreshed(row.meeting_room);
-      setGoogleMeetUrl(row.url_google_meet);
-      setGoogleMeetSetAt(row.url_google_meet_set_at);
-      setLopDevice(row.device);
-      setGmeetRowReady(true);
-      setStoredSession((prev) => {
-        if (!prev) return prev;
-        const v = row.meeting_room;
-        const cur =
-          prev.data.meeting_room != null && String(prev.data.meeting_room).trim() !== ""
-            ? String(prev.data.meeting_room).trim()
-            : null;
-        if (cur === v) return prev;
-        const next: ClassroomSessionRecord =
-          prev.userType === "Teacher"
-            ? { userType: "Teacher", data: { ...prev.data, meeting_room: v } }
-            : { userType: "Student", data: { ...prev.data, meeting_room: v } };
-        saveClassroomSession(next);
-        return next;
-      });
-    };
+    if (browserSb) {
+      const direct = await fetchLopHocMeetRow(browserSb, id);
+      if (direct) {
+        applyClassMeetRow(direct);
+        return;
+      }
+    }
 
     try {
       const res = await fetch(
@@ -1011,11 +1026,11 @@ export default function ClassroomClient({
       );
       if (res.ok) {
         const j = (await res.json()) as LopHocMeetRow;
-        applyRow(j);
+        applyClassMeetRow(j);
         return;
       }
     } catch {
-      /* fallback Supabase */
+      /* API lỗi mạng — xử lý dưới */
     }
 
     const supabase = createBrowserSupabaseClient();
@@ -1032,8 +1047,8 @@ export default function ClassroomClient({
       setGmeetRowReady(true);
       return;
     }
-    applyRow(row);
-  }, [lopHocIdForDb]);
+    applyClassMeetRow(row);
+  }, [lopHocIdForDb, browserSb, applyClassMeetRow]);
 
   /**
    * Điểm danh «đã vào phòng» + làm mới `last_seen_at` (heartbeat).
@@ -1043,7 +1058,6 @@ export default function ClassroomClient({
     if (storedSession?.userType !== "Student") return;
     if (!hasRoomAccess) return;
     if (!Number.isFinite(lopHocIdForDb)) return;
-    await syncPhongHocCookiesWithStorage();
     try {
       const res = await fetch("/api/phong-hoc/diem-danh/record", {
         method: "POST",
@@ -1065,7 +1079,7 @@ export default function ClassroomClient({
     void recordDiemDanhWhenStudentInRoom();
   }, [mounted, recordDiemDanhWhenStudentInRoom]);
 
-  /** HV: heartbeat — đóng tab hết timer → ~90s sau GV thấy xám (trình duyệt có thể giảm tần suất tab nền). */
+  /** HV: heartbeat — hết timer → sau ~`HV_DIEM_DANH_PRESENCE_STALE_MS` GV thấy xám (tab nền có thể chậm hơn). */
   useEffect(() => {
     if (!mounted || storedSession?.userType !== "Student" || !hasRoomAccess || !Number.isFinite(lopHocIdForDb)) {
       return;
@@ -1300,14 +1314,6 @@ export default function ClassroomClient({
     void refreshClassMeetRow();
   }, [lopHocIdForDb, refreshClassMeetRow]);
 
-  /** Poll dự phòng (HV hay bị RLS; cookie + API đã xử lý trong `refreshClassMeetRow`). */
-  useEffect(() => {
-    if (!storedSession || !Number.isFinite(lopHocIdForDb)) return;
-    void refreshClassMeetRow();
-    const id = window.setInterval(() => void refreshClassMeetRow(), 5000);
-    return () => window.clearInterval(id);
-  }, [storedSession, lopHocIdForDb, refreshClassMeetRow]);
-
   /** HV: khi quay lại tab — tải lại Meet / Daily ngay. */
   useEffect(() => {
     if (storedSession?.userType !== "Student") return;
@@ -1324,8 +1330,8 @@ export default function ClassroomClient({
   }, [storedSession?.userType, lopHocIdForDb, refreshClassMeetRow]);
 
   /**
-   * GV lưu Meet → HV nhận ngay qua Realtime (không chờ poll).
-   * Trên Supabase: Database → Publications → bật `ql_lop_hoc` cho `supabase_realtime` (nếu chưa).
+   * GV lưu Meet → cập nhật UI từ payload Realtime (không gọi thêm HTTP `/class-meet-row`).
+   * Supabase: Database → Publications → bật `ql_lop_hoc` cho `supabase_realtime` (nếu chưa).
    */
   useEffect(() => {
     if (!browserSb || !Number.isFinite(lopHocIdForDb)) return;
@@ -1343,8 +1349,10 @@ export default function ClassroomClient({
           table: "ql_lop_hoc",
           filter: `id=eq.${lopHocIdForDb}`,
         },
-        () => {
-          void refreshClassMeetRow();
+        (payload) => {
+          const n = payload.new as Record<string, unknown> | null;
+          if (!n || typeof n !== "object") return;
+          applyClassMeetRow(lopMeetRowFromRealtimeNewRow(n));
         }
       )
       .subscribe();
@@ -1355,7 +1363,7 @@ export default function ClassroomClient({
         lopMeetRealtimeChannelRef.current = null;
       }
     };
-  }, [browserSb, lopHocIdForDb, refreshClassMeetRow]);
+  }, [browserSb, lopHocIdForDb, applyClassMeetRow]);
 
   const saveGoogleMeetUrl = useCallback(async () => {
     const url = gmeetInput.trim();
@@ -1664,10 +1672,7 @@ export default function ClassroomClient({
 
   useEffect(() => {
     if (!teacherPresenceSidebar) return;
-    const id = window.setInterval(
-      () => setPresenceUiTick((n) => n + 1),
-      10_000
-    );
+    const id = window.setInterval(() => setPresenceUiTick((n) => n + 1), 20_000);
     return () => clearInterval(id);
   }, [teacherPresenceSidebar]);
 
@@ -1715,7 +1720,7 @@ export default function ClassroomClient({
       }
     };
     void tick();
-    const id = window.setInterval(tick, 12_000);
+    const id = window.setInterval(tick, GV_DIEM_DANH_POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(id);
@@ -1730,20 +1735,6 @@ export default function ClassroomClient({
     } else {
       myQlhvIdRef.current = null;
     }
-  }, [storedSession]);
-
-  /** Cookie httpOnly: SSR `/he-thong-bai-tap/*` nhận HV (Phòng học không dùng Supabase Auth). */
-  useEffect(() => {
-    if (storedSession?.userType !== "Student") return;
-    const qlhv_id = storedSession.data.qlhv_id;
-    const lop_hoc_id = storedSession.data.lop_hoc_id;
-    if (!Number.isFinite(qlhv_id) || !Number.isFinite(lop_hoc_id)) return;
-    void fetch("/api/phong-hoc/sync-hv-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ qlhv_id, lop_hoc_id }),
-      credentials: "include",
-    }).catch(() => {});
   }, [storedSession]);
 
   useEffect(() => {

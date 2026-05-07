@@ -149,7 +149,23 @@ async function fetchTienDoBaiTapLabel(
 /** Chuẩn hoá PK bigint từ PostgREST (number | string) */
 function asHvPk(v: unknown): string {
   if (v === null || v === undefined) return "";
-  return String(v);
+  return String(v).trim();
+}
+
+/**
+ * `.in("hoc_vien_id", …)` với cột bigint: PostgREST khớp ổn định hơn khi truyền `number[]`
+ * cho id vừa JavaScript safe integer (tránh lệch so với so khớp chuỗi).
+ */
+function supabaseInHocVienIds(ids: readonly string[]): number[] | string[] {
+  const nums: number[] = [];
+  for (const raw of ids) {
+    const s = String(raw).trim();
+    if (!/^\d+$/.test(s)) return [...ids];
+    const n = Number(s);
+    if (!Number.isSafeInteger(n) || n <= 0) return [...ids];
+    nums.push(n);
+  }
+  return nums.length ? nums : [...ids];
 }
 
 type HvRow = {
@@ -167,7 +183,7 @@ type HvRow = {
   avatar?: unknown;
 };
 
-/** Cột `ql_quan_ly_hoc_vien` — schema: `status`, `trang_thai`. */
+/** Cột `ql_quan_ly_hoc_vien` — một số DB không có `status` / `trang_thai`; chỉ select tối thiểu để tránh lỗi 42703. */
 type QlhvRow = {
   id: unknown;
   hoc_vien_id: unknown;
@@ -176,6 +192,9 @@ type QlhvRow = {
   status?: unknown;
   trang_thai?: unknown;
 };
+
+/** Chỉ các cột chắc chắn có — không gộp status/trang_thai (schema khác nhau giữa môi trường). */
+const QLHV_SELECT_LOOKUP = "id,hoc_vien_id,lop_hoc,tien_do_hoc" as const;
 
 function normalizeEnrollment(row: QlhvRow): {
   enrollmentId: number;
@@ -480,7 +499,7 @@ export async function fetchAllClassSessionsForStudentHv(
 
   const { data: enrollmentRows } = await supabase
     .from("ql_quan_ly_hoc_vien")
-    .select("id,hoc_vien_id,lop_hoc,tien_do_hoc,status,trang_thai")
+    .select(QLHV_SELECT_LOOKUP)
     .eq("hoc_vien_id", pk);
 
   const enrollments = mergeEnrollmentsFromRows((enrollmentRows ?? []) as QlhvRow[]);
@@ -582,8 +601,8 @@ export async function lookupClassroomByEmail(
     } else {
       const { data: enrollmentRows } = await supabase
         .from("ql_quan_ly_hoc_vien")
-        .select("id,hoc_vien_id,lop_hoc,tien_do_hoc,status,trang_thai")
-        .in("hoc_vien_id", hvPks);
+        .select(QLHV_SELECT_LOOKUP)
+        .in("hoc_vien_id", supabaseInHocVienIds(hvPks));
 
       const enrollments = mergeEnrollmentsFromRows((enrollmentRows ?? []) as QlhvRow[]);
 
@@ -598,7 +617,13 @@ export async function lookupClassroomByEmail(
           : new Map<number, HpResolvedKy>();
 
       for (const en of enrollments) {
-        const s = studentByHvId.get(en.hocVienPk);
+        let s = studentByHvId.get(en.hocVienPk);
+        if (!s) {
+          const n = Number(en.hocVienPk);
+          if (Number.isSafeInteger(n) && n > 0) {
+            s = studentByHvId.get(String(n));
+          }
+        }
         if (!s) continue;
 
         const data = await classroomStudentDataForEnrollment(supabase, s, en, clean, kyMapLookup);

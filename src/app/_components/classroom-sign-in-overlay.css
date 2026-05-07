@@ -23,6 +23,7 @@
 .cso-backdrop {
   position: absolute;
   inset: 0;
+  z-index: 0;
   cursor: pointer;
   background: rgba(0, 0, 0, 0.9);
   backdrop-filter: blur(12px);
@@ -32,12 +33,13 @@
 }
 
 .cso-modal {
+  position: relative;
+  z-index: 1;
   background: #fff;
   width: 100%;
   max-width: 400px;
   border-radius: 24px;
   padding: 48px 24px 32px;
-  position: relative;
   pointer-events: auto;
   touch-action: manipulation;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);

@@ -11,7 +11,10 @@ import {
   normalizePhongHocPathSlug,
   phongHocSlugFromClassName,
 } from "@/lib/phong-hoc/classroom-url";
-import { lookupClassroomByEmail } from "@/lib/phong-hoc/lookup-by-email";
+import {
+  lookupClassroomByEmail,
+  type LookupClassroomOutcome,
+} from "@/lib/phong-hoc/lookup-by-email";
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -171,8 +174,24 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
         setMessage("Đang tải danh sách lớp…");
       }
       try {
-        const { records: found, studentProfileWithoutEnrollment, teacherWithoutClass } =
-          await lookupClassroomByEmail(supabase, trimmed);
+        let outcome: LookupClassroomOutcome | null = null;
+        try {
+          const apiRes = await fetch("/api/phong-hoc/lookup-classroom-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: trimmed }),
+          });
+          if (apiRes.ok) {
+            outcome = (await apiRes.json()) as LookupClassroomOutcome;
+          }
+        } catch {
+          /* mạng / API — fallback Supabase trình duyệt */
+        }
+        if (!outcome) {
+          outcome = await lookupClassroomByEmail(supabase, trimmed);
+        }
+
+        const { records: found, studentProfileWithoutEnrollment, teacherWithoutClass } = outcome;
         if (isCancelled()) return;
         if (found.length === 0) {
           if (studentProfileWithoutEnrollment) {
@@ -309,11 +328,6 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <div
-            className="cso-backdrop"
-            aria-hidden
-            onClick={closeOverlay}
-          />
           <motion.div
             layout
             className="cso-modal"
@@ -517,6 +531,11 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
               ) : null}
             </AnimatePresence>
           </motion.div>
+          <div
+            className="cso-backdrop"
+            aria-hidden
+            onClick={closeOverlay}
+          />
         </motion.div>
       ) : null}
     </AnimatePresence>,

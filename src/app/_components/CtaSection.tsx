@@ -130,7 +130,9 @@ export default function CtaSection() {
               <li>
                 <IconMap className="sf-icon" />
                 <span>
-                  67 Đ. Tân Sơn Nhì, Phường 14, Tân Phú, Thành phố Hồ Chí Minh
+                  CS1: 67 Tân Sơn Nhì, P.14, Tân Phú, TP.HCM
+                  <br />
+                  CS2: 131 Nơ Trang Long, Bình Thạnh, TP.HCM
                 </span>
               </li>
               <li>

@@ -3,6 +3,7 @@ import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { parseNhomSearchParam } from "@/lib/khoa-hoc-course-filters";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 import KhoaHocBento from "./_components/KhoaHocBento";
+import KhoaHocCatalogJsonLd from "./_components/KhoaHocCatalogJsonLd";
 
 export async function KhoaHocPageContent({
   searchParams,
@@ -16,6 +17,7 @@ export async function KhoaHocPageContent({
 
   return (
     <>
+      <KhoaHocCatalogJsonLd courses={courses} />
       <NavBar khoaHocGroups={khoaHocGroups} />
       <KhoaHocBento courses={courses} initialFilter={nhom ?? "all"} />
     </>

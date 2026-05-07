@@ -52,6 +52,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: description || ebook.title,
       url: `https://sineart.vn/ebook/${ebook.slug}`,
       images: ebook.thumbnail ? [ebook.thumbnail] : undefined,
+      locale: "vi_VN",
+      siteName: "Sine Art",
     },
   };
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { getKhoaHocDetailBySlug } from "@/lib/data/courses-page";
+import { getHocPhiBlockData, getKhoaHocDetailBySlug } from "@/lib/data/courses-page";
+import { buildKhoaHocDetailJsonLd } from "@/lib/seo/khoa-hoc-detail-jsonld";
 import { stripHtmlToPlain } from "@/lib/seo/plain-text";
 import "../khoa-hoc.css";
 import "../khoa-hoc-detail.css";
@@ -51,25 +52,6 @@ export async function generateMetadata({
   };
 }
 
-function courseJsonLd(detail: NonNullable<Awaited<ReturnType<typeof getKhoaHocDetailBySlug>>>, slug: string) {
-  const descPlain =
-    stripHtmlToPlain(detail.gioiThieuMonHocHtml, 5000) ||
-    detail.tinhChat?.trim() ||
-    detail.tenMonHoc;
-  return {
-    "@context": "https://schema.org",
-    "@type": "Course",
-    name: detail.tenMonHoc,
-    description: descPlain,
-    url: `https://sineart.vn/khoa-hoc/${encodeURIComponent(slug)}`,
-    provider: {
-      "@type": "Organization",
-      name: "Sine Art",
-      url: "https://sineart.vn",
-    },
-  };
-}
-
 export default async function KhoaHocSlugPage({
   params,
 }: {
@@ -77,7 +59,8 @@ export default async function KhoaHocSlugPage({
 }) {
   const { slug } = await params;
   const detail = await getKhoaHocDetailBySlug(slug);
-  const jsonLd = detail ? courseJsonLd(detail, slug) : null;
+  const hocPhiBlock = detail != null ? await getHocPhiBlockData(detail.id) : null;
+  const jsonLd = detail ? buildKhoaHocDetailJsonLd(detail, slug, hocPhiBlock) : null;
 
   return (
     <>

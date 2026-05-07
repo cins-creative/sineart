@@ -11,6 +11,15 @@ export const metadata: Metadata = {
   description:
     "Danh sách khóa học mỹ thuật — theo dữ liệu môn học, lớp mở và ghi danh.",
   alternates: { canonical: "https://sineart.vn/khoa-hoc" },
+  openGraph: {
+    title: "Các khóa học vẽ mỹ thuật tại Sine Art",
+    description:
+      "Danh sách khóa học mỹ thuật — theo dữ liệu môn học, lớp mở và ghi danh tại TP.HCM.",
+    url: "https://sineart.vn/khoa-hoc",
+    type: "website",
+    locale: "vi_VN",
+    siteName: "Sine Art",
+  },
 };
 
 export default function KhoaHocPage({

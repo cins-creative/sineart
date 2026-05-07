@@ -17,6 +17,7 @@ import {
   formatDateVi,
   monAccent,
 } from "@/lib/data/de-thi";
+import { buildTongHopDeThiDetailJsonLd } from "@/lib/seo/tong-hop-de-thi-jsonld";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { getTopLuyenThiStudentWorks } from "@/lib/data/hv-bai-hoc-vien-gallery";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
@@ -41,6 +42,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title,
       description: plain,
       images: post.thumbnail_url ? [{ url: post.thumbnail_url }] : [],
+      url: `https://sineart.vn/tong-hop-de-thi/${slug}`,
+      type: "article",
+      locale: "vi_VN",
+      siteName: "Sine Art",
     },
   };
 }
@@ -85,28 +90,8 @@ export default async function DeThiDetailPage({ params }: Props) {
     : "";
 
   const dateStr = formatDateVi(post.updated_at ?? post.created_at);
-  const publishedIso = post.created_at || new Date().toISOString();
-  const modifiedIso = post.updated_at ?? post.created_at ?? publishedIso;
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: post.ten ?? "Đề thi",
-    image: post.thumbnail_url ? [post.thumbnail_url] : undefined,
-    datePublished: publishedIso,
-    dateModified: modifiedIso,
-    author: { "@type": "Organization", name: "Sine Art" },
-    publisher: {
-      "@type": "Organization",
-      name: "Sine Art",
-      logo: {
-        "@type": "ImageObject",
-        url: "https://sineart.vn/brand/logo.png",
-      },
-    },
-    mainEntityOfPage: `https://sineart.vn/tong-hop-de-thi/${slug}`,
-    description: post.excerpt ?? undefined,
-  };
+  const jsonLd = buildTongHopDeThiDetailJsonLd(post);
 
   return (
     <div className="sa-root bd">
@@ -314,12 +299,13 @@ export default async function DeThiDetailPage({ params }: Props) {
         </div>
       </div>
 
-      {/* JSON-LD Article */}
-      <script
-        type="application/ld+json"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      ) : null}
     </div>
   );
 }

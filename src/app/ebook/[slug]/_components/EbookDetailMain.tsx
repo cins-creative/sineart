@@ -9,6 +9,7 @@ import { EbookDetailReadCTA } from "../EbookDetailReadCTA";
 import { EbookDetailPrevNext } from "./EbookDetailPrevNext";
 import { EbookDetailRelatedAside } from "./EbookDetailRelatedAside";
 import { ebookCatColor, ebookGradFor, fetchEbookBySlug } from "@/lib/data/ebook";
+import { buildEbookDetailJsonLd } from "@/lib/seo/ebook-jsonld";
 import { EbookFlipbook } from "../EbookFlipbook";
 
 /** Strip `<script>` / `<iframe>` — nội dung admin nhưng vẫn filter an toàn. */
@@ -57,8 +58,17 @@ export async function EbookDetailMain({ slug }: { slug: string }) {
   const hasEmbed = !!ebook.html_embed?.trim();
   const hasPages = ebook.img_src_link.length > 0;
 
+  const jsonLd = buildEbookDetailJsonLd(ebook);
+
   return (
     <div className="ebd-shell">
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      ) : null}
       <div className="ebd-body">
         <main className="ebd-main">
           {/* Breadcrumb */}

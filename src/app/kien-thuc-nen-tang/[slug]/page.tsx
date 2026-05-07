@@ -10,6 +10,7 @@ import {
   fetchAllLyThuyetSlugs,
   fetchLyThuyetBySlug,
 } from "@/lib/data/ly-thuyet";
+import { buildKienThucNenTangArticleJsonLd } from "@/lib/seo/kien-thuc-nen-tang-article-jsonld";
 import { GROUP_ACCENT } from "@/types/ly-thuyet";
 
 import HeroFocusToggle from "../_components/HeroFocusToggle";
@@ -135,68 +136,14 @@ export default async function LyThuyetDetailPage({ params }: Props) {
   const heroSplit = splitHeroTitle(current.ten);
   const accent = GROUP_ACCENT[current.nhom ?? ""] ?? "#ee5b9f";
 
-  /* JSON-LD Article + BreadcrumbList */
-  const jsonLdArticle = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: current.ten,
-    description: current.short_content ?? undefined,
-    author: { "@type": "Organization", name: "Sine Art" },
-    publisher: {
-      "@type": "Organization",
-      name: "Sine Art",
-      logo: { "@type": "ImageObject", url: "https://sineart.vn/logo.png" },
-    },
-    datePublished: current.created_at,
-    dateModified: current.created_at,
-    image: current.thumbnail ?? undefined,
-    articleSection: current.nhom ?? undefined,
-    inLanguage: "vi-VN",
-    mainEntityOfPage: `https://sineart.vn${buildLyThuyetHref(current.slug)}`,
-    keywords: current.tagList.join(", "),
-  };
-
-  const jsonLdBreadcrumb = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "Thư viện",
-        item: "https://sineart.vn/kien-thuc-nen-tang",
-      },
-      ...(current.nhom
-        ? [
-            {
-              "@type": "ListItem",
-              position: 2,
-              name: current.nhom,
-              item: `https://sineart.vn/kien-thuc-nen-tang#${encodeURIComponent(
-                current.nhom
-              )}`,
-            },
-          ]
-        : []),
-      {
-        "@type": "ListItem",
-        position: current.nhom ? 3 : 2,
-        name: current.ten,
-      },
-    ],
-  };
+  const jsonLd = buildKienThucNenTangArticleJsonLd(current);
 
   return (
     <>
       <Script
-        id="ktn-detail-jsonld-article"
+        id="ktn-detail-jsonld"
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdArticle) }}
-      />
-      <Script
-        id="ktn-detail-jsonld-breadcrumb"
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdBreadcrumb) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div className="sa-root kien-thuc-nen-tang-root">
         {/* Suspense #1: NavBar (cần fetch courses) — stream độc lập, không

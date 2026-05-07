@@ -16,6 +16,7 @@ import { sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { buildBlogDetailJsonLd } from "@/lib/seo/blog-jsonld";
 import NavBar from "../../_components/NavBar";
 import { BlogToc } from "./BlogToc";
 import { BlogDetailStyles } from "./BlogDetailStyles";
@@ -43,6 +44,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: description || undefined,
       url: `https://sineart.vn${canonicalPath}`,
       type: "article",
+      locale: "vi_VN",
+      siteName: "Sine Art",
+      images: post.thumbnail ? [{ url: post.thumbnail }] : [],
     },
     twitter: {
       card: "summary_large_image",
@@ -95,8 +99,17 @@ export default async function BlogDetailPage({ params }: Props) {
     ? cfImageForThumbnail(post.thumbnail) ?? post.thumbnail
     : null;
 
+  const jsonLd = buildBlogDetailJsonLd(post, { readMin });
+
   return (
     <div className="sa-root bd">
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      ) : null}
       <BlogDetailStyles />
       <NavBar khoaHocGroups={khoaHocGroups} />
 

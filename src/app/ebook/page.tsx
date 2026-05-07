@@ -14,6 +14,15 @@ export const metadata: Metadata = {
   description:
     "Thư viện ebook mỹ thuật miễn phí: lịch sử mỹ thuật, giải phẫu, phối cảnh, trang trí, hoạt hình… tuyển chọn & biên soạn bởi Sine Art.",
   alternates: { canonical: "https://sineart.vn/ebook" },
+  openGraph: {
+    title: "Free ebook mỹ thuật — Sine Art Library",
+    description:
+      "Thư viện ebook mỹ thuật miễn phí — lịch sử mỹ thuật, giải phẫu, phối cảnh, trang trí, hoạt hình…",
+    url: "https://sineart.vn/ebook",
+    type: "website",
+    locale: "vi_VN",
+    siteName: "Sine Art",
+  },
 };
 
 export default function EbookListPage() {

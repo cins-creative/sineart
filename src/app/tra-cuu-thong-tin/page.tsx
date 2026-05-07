@@ -5,6 +5,7 @@ import NavBar from "../_components/NavBar";
 import TraCuuListClient from "./TraCuuListClient";
 import { TraCuuStyles } from "./TraCuuStyles";
 import { fetchAllTraCuu, fetchTruongLookup } from "@/lib/data/tra-cuu";
+import { buildTraCuuCatalogJsonLd } from "@/lib/seo/tra-cuu-jsonld";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 
@@ -15,6 +16,15 @@ export const metadata: Metadata = {
   description:
     "Điểm chuẩn, phương thức xét tuyển, cách tính điểm, chương trình học và kinh nghiệm thi từ các trường đại học đối tác — cập nhật thường xuyên bởi Sine Art.",
   alternates: { canonical: "https://sineart.vn/tra-cuu-thong-tin" },
+  openGraph: {
+    title: "Tra cứu thông tin thi đại học mỹ thuật | Sine Art",
+    description:
+      "Điểm chuẩn, xét tuyển, cách tính điểm và kinh nghiệm thi từ các trường đại học — Sine Art.",
+    url: "https://sineart.vn/tra-cuu-thong-tin",
+    type: "website",
+    locale: "vi_VN",
+    siteName: "Sine Art",
+  },
 };
 
 export default async function TraCuuListPage() {
@@ -28,8 +38,15 @@ export default async function TraCuuListPage() {
   const totalTruong = new Set(items.flatMap((it) => it.truong_ids)).size;
   const totalTypes = new Set(items.flatMap((it) => it.type)).size;
 
+  const catalogJsonLd = buildTraCuuCatalogJsonLd(items);
+
   return (
     <div className="sa-root sa-tracuu">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(catalogJsonLd) }}
+      />
       <NavBar khoaHocGroups={khoaHocGroups} />
 
       {/* HERO */}

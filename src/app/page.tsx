@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import HomePageJsonLd from "./_components/HomePageJsonLd";
 import CtaBandSection from "./_components/CtaBandSection";
 import LuuBaiHocVienFab from "./_components/LuuBaiHocVienFab";
 import { HomeCareerSection } from "./_components/home/HomeCareerSection";
@@ -31,6 +32,7 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <div className="sa-root">
+      <HomePageJsonLd />
       <Suspense fallback={<HomeNavSectionSkeleton />}>
         <HomeNavSection />
       </Suspense>

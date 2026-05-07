@@ -24,6 +24,7 @@ import {
   injectHeadingIds,
   traCuuTypeLabel,
 } from "@/lib/data/tra-cuu";
+import { buildTraCuuDetailJsonLd } from "@/lib/seo/tra-cuu-jsonld";
 
 export const revalidate = 600;
 
@@ -44,6 +45,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: post.title ?? "Tra cứu thông tin — Sine Art",
       description: plain,
       images: post.thumbnail_url ? [{ url: post.thumbnail_url }] : [],
+      url: `https://sineart.vn/tra-cuu-thong-tin/${slug}`,
+      type: "article",
+      locale: "vi_VN",
+      siteName: "Sine Art",
     },
   };
 }
@@ -88,6 +93,8 @@ export default async function TraCuuDetailPage({ params }: Props) {
   const readMin = estimateReadMinutes(post.body_html ?? post.excerpt ?? "");
   const dateStr = formatDateVi(post.published_at);
 
+  const jsonLd = buildTraCuuDetailJsonLd(post, { readMin, truongNames });
+
   // Author display: ưu tiên trường đầu tiên, fallback "Sine Art"
   const authorLabel = truongNames[0] ?? "Sine Art";
   const authorInitials = authorLabel
@@ -98,6 +105,13 @@ export default async function TraCuuDetailPage({ params }: Props) {
 
   return (
     <div className="sa-root bd">
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      ) : null}
       <BlogDetailStyles />
       <TraCuuDetailStyles />
       <NavBar khoaHocGroups={khoaHocGroups} />

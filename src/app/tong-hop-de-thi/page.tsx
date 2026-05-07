@@ -5,6 +5,7 @@ import NavBar from "../_components/NavBar";
 import DeThiListClient from "./DeThiListClient";
 import { DeThiStyles } from "./DeThiStyles";
 import { fetchAllDeThi, fetchTruongLookup } from "@/lib/data/de-thi";
+import { buildTongHopDeThiCatalogJsonLd } from "@/lib/seo/tong-hop-de-thi-jsonld";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 
@@ -15,6 +16,15 @@ export const metadata: Metadata = {
   description:
     "Thư viện đề luyện thi Bố cục màu, Trang trí màu — biên soạn bởi giáo viên Sine Art, cập nhật hàng năm. Có lời giải, OCR đề gốc, filter theo môn · năm · loại mẫu.",
   alternates: { canonical: "https://sineart.vn/tong-hop-de-thi" },
+  openGraph: {
+    title: "Tổng hợp đề thi mỹ thuật — Sine Art",
+    description:
+      "Thư viện đề luyện thi Bố cục màu, Trang trí màu — biên soạn bởi giáo viên Sine Art, cập nhật hàng năm.",
+    url: "https://sineart.vn/tong-hop-de-thi",
+    type: "website",
+    locale: "vi_VN",
+    siteName: "Sine Art",
+  },
 };
 
 export default async function TongHopDeThiPage() {
@@ -41,8 +51,15 @@ export default async function TongHopDeThiPage() {
   const monOptions = Array.from(monSet).sort();
   const mauOptions = Array.from(mauSet).sort();
 
+  const catalogJsonLd = buildTongHopDeThiCatalogJsonLd(items);
+
   return (
     <div className="sa-root sa-dethi">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(catalogJsonLd) }}
+      />
       <NavBar khoaHocGroups={khoaHocGroups} />
 
       {/* HERO */}

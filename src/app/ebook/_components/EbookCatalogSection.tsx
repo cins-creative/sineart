@@ -1,13 +1,20 @@
 import EbookListClient from "../EbookListClient";
 import { extractEbookCategories, fetchAllEbooks } from "@/lib/data/ebook";
+import { buildEbookCatalogJsonLd } from "@/lib/seo/ebook-jsonld";
 
 export async function EbookCatalogSection() {
   const items = await fetchAllEbooks();
   const categories = extractEbookCategories(items);
   const featuredCount = items.filter((i) => i.featured).length;
+  const catalogJsonLd = buildEbookCatalogJsonLd(items);
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(catalogJsonLd) }}
+      />
       {/* HERO */}
       <section className="page-hero">
         <div className="page-hero-bg" />

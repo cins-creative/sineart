@@ -15,6 +15,7 @@ import {
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { buildBlogCatalogJsonLd } from "@/lib/seo/blog-jsonld";
 import NavBar from "../_components/NavBar";
 import { BlogSearchBar } from "./BlogSearchBar";
 import { BlogStyles } from "./BlogStyles";
@@ -27,6 +28,15 @@ export const metadata: Metadata = {
   description:
     "Bài viết về kỹ thuật vẽ, kinh nghiệm luyện thi mỹ thuật và hành trình học viên tại Sine Art.",
   alternates: { canonical: "https://sineart.vn/blogs" },
+  openGraph: {
+    title: "Blog mỹ thuật – Kiến thức học vẽ | Sine Art",
+    description:
+      "Bài viết về kỹ thuật vẽ, kinh nghiệm luyện thi mỹ thuật và hành trình học viên tại Sine Art.",
+    url: "https://sineart.vn/blogs",
+    type: "website",
+    locale: "vi_VN",
+    siteName: "Sine Art",
+  },
 };
 
 const PER_PAGE = 9;
@@ -89,6 +99,8 @@ export default async function BlogPage({ searchParams }: PageProps) {
   ]);
   const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 
+  const catalogJsonLd = buildBlogCatalogJsonLd(posts, { page, search });
+
   const featuredSlug = featured ? buildBlogSlug(featured.id, featured.title) : null;
   const featuredReadMin = featured
     ? estimateReadMinutes(featured.opening)
@@ -115,6 +127,11 @@ export default async function BlogPage({ searchParams }: PageProps) {
 
   return (
     <div className="sa-root sa-blog">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(catalogJsonLd) }}
+      />
       <NavBar khoaHocGroups={khoaHocGroups} />
 
       {/* ─── HERO ─── */}

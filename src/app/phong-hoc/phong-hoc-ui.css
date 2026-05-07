@@ -922,6 +922,35 @@
   background: var(--phc-surface2);
 }
 
+.phc .meet-clear-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--phc-r-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--phc-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.phc .meet-clear-link:hover:not(:disabled) {
+  color: #c2410c;
+}
+
+.phc .meet-clear-link:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .phc .phc-btn-block {
   width: 100%;
   display: flex;

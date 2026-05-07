@@ -1427,6 +1427,72 @@ export default function ClassroomClient({
     }
   }, [gmeetInput, lopHocIdForDb, storedSession?.userType, teacherHrIdForDb]);
 
+  const clearGoogleMeetUrl = useCallback(async () => {
+    if (!googleMeetUrl?.trim() || !Number.isFinite(lopHocIdForDb)) return;
+    if (
+      !window.confirm(
+        "Xóa link Google Meet của lớp này? Học viên và giáo viên sẽ dùng phòng Daily.co (meeting_room) khi vào học."
+      )
+    ) {
+      return;
+    }
+    setGmeetSaving(true);
+    try {
+      let ok = false;
+      if (storedSession?.userType === "Teacher" && Number.isFinite(teacherHrIdForDb)) {
+        const res = await fetch("/api/phong-hoc/save-google-meet-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            lopHocId: lopHocIdForDb,
+            teacherHrId: teacherHrIdForDb,
+            url: "",
+            clear: true,
+          }),
+        });
+        const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        ok = res.ok && j.ok === true;
+        if (!ok) {
+          window.alert(j.error ?? "Không xóa được link Meet. Kiểm tra quyền chủ nhiệm lớp.");
+        }
+      } else {
+        const sb = createBrowserSupabaseClient();
+        if (!sb) {
+          window.alert("Chưa cấu hình kết nối Supabase.");
+          setGmeetSaving(false);
+          return;
+        }
+        ok = await patchLopHocGoogleMeetUrl(sb, lopHocIdForDb, null);
+        if (!ok) {
+          window.alert(
+            "Không ghi được vào CSDL (thường do quyền). Đăng nhập lại Phòng học bằng tài khoản giáo viên hoặc liên hệ quản trị."
+          );
+        }
+      }
+
+      setGmeetSaving(false);
+      if (!ok) return;
+      setGoogleMeetUrl(null);
+      setGoogleMeetSetAt(null);
+      setGmeetFormOpen(false);
+      setGmeetInput("");
+      setGmeetJustSaved(false);
+      if (gmeetSavedTimerRef.current) {
+        clearTimeout(gmeetSavedTimerRef.current);
+        gmeetSavedTimerRef.current = null;
+      }
+    } catch {
+      setGmeetSaving(false);
+      window.alert("Lỗi mạng khi xóa link Meet.");
+    }
+  }, [
+    googleMeetUrl,
+    lopHocIdForDb,
+    storedSession?.userType,
+    teacherHrIdForDb,
+  ]);
+
   useEffect(() => {
     return () => {
       if (gmeetSavedTimerRef.current) clearTimeout(gmeetSavedTimerRef.current);
@@ -3350,18 +3416,40 @@ export default function ClassroomClient({
                       >
                         Huỷ
                       </button>
+                      {googleMeetUrl?.trim() ? (
+                        <button
+                          type="button"
+                          className="meet-clear-link"
+                          disabled={gmeetSaving}
+                          onClick={() => void clearGoogleMeetUrl()}
+                        >
+                          {gmeetSaving ? "Đang xóa…" : "Xóa link Meet đã lưu (dùng Daily.co)"}
+                        </button>
+                      ) : null}
                     </>
                   ) : (
-                    <button
-                      type="button"
-                      className="dhp-btn phc-btn-block"
-                      onClick={() => {
-                        window.open("https://meet.new", "_blank", "noopener,noreferrer");
-                        setGmeetFormOpen(true);
-                      }}
-                    >
-                      {gmeetJustSaved ? "✓ Đã lưu link!" : "📹 Tạo Google Meet"}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="dhp-btn phc-btn-block"
+                        onClick={() => {
+                          window.open("https://meet.new", "_blank", "noopener,noreferrer");
+                          setGmeetFormOpen(true);
+                        }}
+                      >
+                        {gmeetJustSaved ? "✓ Đã lưu link!" : "📹 Tạo Google Meet"}
+                      </button>
+                      {googleMeetUrl?.trim() ? (
+                        <button
+                          type="button"
+                          className="meet-clear-link"
+                          disabled={gmeetSaving}
+                          onClick={() => void clearGoogleMeetUrl()}
+                        >
+                          {gmeetSaving ? "Đang xóa…" : "Xóa link Meet — dùng Daily.co"}
+                        </button>
+                      ) : null}
+                    </>
                   )}
                 </>
               ) : studentSidebarMeetUrl ? (

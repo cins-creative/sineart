@@ -80,23 +80,33 @@ export function lopMeetRowFromRealtimeNewRow(newRow: Record<string, unknown>): L
 export async function patchLopHocGoogleMeetUrl(
   supabase: SupabaseClient,
   lopHocId: number,
-  url: string
+  url: string | null
 ): Promise<boolean> {
+  const clearing = url == null || String(url).trim() === "";
   const nowIso = new Date().toISOString();
-  let { error } = await supabase
-    .from("ql_lop_hoc")
-    .update({
-      url_google_meet: url,
-      url_google_meet_set_at: nowIso,
-    })
-    .eq("id", lopHocId);
+  const patch = clearing
+    ? {
+        url_google_meet: null as string | null,
+        url_google_meet_set_at: null as string | null,
+      }
+    : {
+        url_google_meet: String(url).trim(),
+        url_google_meet_set_at: nowIso,
+      };
+
+  let { error } = await supabase.from("ql_lop_hoc").update(patch).eq("id", lopHocId);
 
   const missingCol =
     error &&
     (String(error.message).toLowerCase().includes("url_google_meet_set_at") ||
       (error as { code?: string }).code === "42703");
   if (missingCol) {
-    const retry = await supabase.from("ql_lop_hoc").update({ url_google_meet: url }).eq("id", lopHocId);
+    const retry = await supabase
+      .from("ql_lop_hoc")
+      .update(
+        clearing ? { url_google_meet: null as string | null } : { url_google_meet: String(url).trim() }
+      )
+      .eq("id", lopHocId);
     error = retry.error;
   }
 

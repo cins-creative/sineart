@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClassroomSessionRecord, ClassroomStudentSessionData } from "./classroom-session";
 
 const LO_SELECT_TEACHER =
-  "id,class_name,class_full_name,avatar,url_class,teacher,mon_hoc,lich_hoc,meeting_room";
+  "id,class_name,class_full_name,avatar,url_class,teacher,mon_hoc,lich_hoc,meeting_room,group_chat_messenger";
 
 /** Lọc danh sách lớp đã fetch theo `teacherId` (cột `teacher` đa dạng kiểu). */
 function lopHocRowsForTeacher(
@@ -347,7 +347,7 @@ async function classroomStudentDataForEnrollment(
 ): Promise<ClassroomStudentSessionData | null> {
   const { data: clsRows } = await supabase
     .from("ql_lop_hoc")
-    .select("id,class_name,class_full_name,avatar,url_class,teacher,mon_hoc,lich_hoc,meeting_room")
+    .select("id,class_name,class_full_name,avatar,url_class,teacher,mon_hoc,lich_hoc,meeting_room,group_chat_messenger")
     .eq("id", en.lopHocId)
     .limit(1);
 
@@ -406,6 +406,7 @@ async function classroomStudentDataForEnrollment(
       class_avatar: "",
       lich_hoc: "",
       meeting_room: null,
+      group_chat_messenger: null,
       teacher_name: "—",
       days_remaining,
       ngay_ket_thuc: ngayKetThuc,
@@ -458,6 +459,11 @@ async function classroomStudentDataForEnrollment(
       (cls as { meeting_room?: unknown }).meeting_room != null &&
       String((cls as { meeting_room: unknown }).meeting_room).trim() !== ""
         ? String((cls as { meeting_room: unknown }).meeting_room).trim()
+        : null,
+    group_chat_messenger:
+      (cls as { group_chat_messenger?: unknown }).group_chat_messenger != null &&
+      String((cls as { group_chat_messenger: unknown }).group_chat_messenger).trim() !== ""
+        ? String((cls as { group_chat_messenger: unknown }).group_chat_messenger).trim()
         : null,
     teacher_name,
     days_remaining,

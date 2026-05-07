@@ -11,6 +11,8 @@ export type AdminLopRow = {
   lich_hoc: string | null;
   url_class: string | null;
   url_google_meet: string | null;
+  /** URL nhóm chat Messenger — `ql_lop_hoc.group_chat_messenger`. */
+  group_chat_messenger: string | null;
   device: string | null;
   /** Lớp cấp tốc — theo cột `special`. */
   special: boolean;

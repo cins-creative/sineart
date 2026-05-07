@@ -7,9 +7,9 @@ import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 export const LOP_LIST_PAGE_SIZE = 6;
 
 const LOP_SELECT_FULL =
-  "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, url_google_meet, device, special, tinh_trang, level_hinh_hoa";
+  "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, url_google_meet, group_chat_messenger, device, special, tinh_trang, level_hinh_hoa";
 const LOP_SELECT_MIN =
-  "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, device, special, tinh_trang";
+  "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, group_chat_messenger, device, special, tinh_trang";
 
 export type LopHocListFilters = {
   q: string;
@@ -37,6 +37,10 @@ function mapRawToAdminLopRow(raw: Record<string, unknown>): AdminLopRow {
     lich_hoc: raw.lich_hoc != null ? String(raw.lich_hoc).trim() || null : null,
     url_class: raw.url_class != null ? String(raw.url_class).trim() || null : null,
     url_google_meet: raw.url_google_meet != null ? String(raw.url_google_meet).trim() || null : null,
+    group_chat_messenger:
+      raw.group_chat_messenger != null && String(raw.group_chat_messenger).trim() !== ""
+        ? String(raw.group_chat_messenger).trim()
+        : null,
     device: raw.device != null ? String(raw.device).trim() || null : null,
     special: raw.special != null && String(raw.special).trim() !== "",
     tinh_trang: raw.tinh_trang !== false,

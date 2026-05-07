@@ -887,6 +887,8 @@ type DetailForm = {
   device: string;
   lich_hoc: string;
   avatar: string;
+  /** URL nhóm Messenger — `ql_lop_hoc.group_chat_messenger`. */
+  group_chat_messenger: string;
   special: boolean;
   tinh_trang: boolean;
   /** Form string — rỗng hoặc một trong `LEVEL_HINH_HOA_VALUES`. */
@@ -903,6 +905,7 @@ function rowToForm(r: AdminLopRow): DetailForm {
     device: r.device ?? "",
     lich_hoc: r.lich_hoc ?? "",
     avatar: r.avatar ?? "",
+    group_chat_messenger: r.group_chat_messenger ?? "",
     special: r.special,
     tinh_trang: r.tinh_trang,
     level_hinh_hoa: r.level_hinh_hoa ?? "",
@@ -974,6 +977,7 @@ function LopDetailPanel({
     fd.set("device", form.device);
     fd.set("lich_hoc", form.lich_hoc);
     fd.set("avatar", form.avatar);
+    fd.set("group_chat_messenger", form.group_chat_messenger);
     fd.set("special", form.special ? "1" : "");
     fd.set("tinh_trang", form.tinh_trang ? "1" : "");
     fd.set("level_hinh_hoa", showLevelHinhHoaField ? form.level_hinh_hoa : "");
@@ -1210,6 +1214,21 @@ function LopDetailPanel({
                   placeholder="T2, T4, T6 — 8:00"
                 />
               </div>
+              <div>
+                <div className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
+                  <img src="/brand/messenger-group-chat.png" alt="" width={18} height={18} className="shrink-0 rounded-full" />
+                  Group messenger
+                </div>
+                <input
+                  className={inpClass()}
+                  value={form.group_chat_messenger}
+                  onChange={(e) => setK("group_chat_messenger", e.target.value)}
+                  placeholder="https://m.me/j/…"
+                  inputMode="url"
+                  autoComplete="off"
+                />
+              </div>
               {/* Toggles */}
               <div className="flex gap-2.5">
                 <button
@@ -1302,6 +1321,27 @@ function LopDetailPanel({
               <div className="flex justify-between gap-2 py-1">
                 <dt className="text-[10px] font-bold uppercase text-[#AAA]">Lịch học</dt>
                 <dd className="m-0 font-semibold text-gray-700">{item.lich_hoc ?? "—"}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-2 border-b border-[#f0f0f0] py-1">
+                <dt className="flex shrink-0 items-center gap-1.5 text-[10px] font-bold uppercase text-[#AAA]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/brand/messenger-group-chat.png" alt="" width={16} height={16} className="rounded-full" />
+                  Group messenger
+                </dt>
+                <dd className="m-0 min-w-0 break-all text-right text-[12px] font-semibold text-gray-800">
+                  {item.group_chat_messenger?.trim() ? (
+                    <a
+                      href={item.group_chat_messenger.trim()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#2563eb] underline-offset-2 hover:underline"
+                    >
+                      {item.group_chat_messenger.trim()}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
               </div>
               <div className="flex justify-between gap-2 border-t border-[#f0f0f0] py-1">
                 <dt className="text-[10px] font-bold uppercase text-[#AAA]">Cấp tốc</dt>
@@ -1556,6 +1596,14 @@ function CreateLopModal({
                 <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Lịch học</div>
                 <input name="lich_hoc" className={inpClass()} placeholder="T2, T4, T6 — 8:00" />
               </div>
+            </div>
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/messenger-group-chat.png" alt="" width={18} height={18} className="shrink-0 rounded-full" />
+                Group messenger
+              </div>
+              <input name="group_chat_messenger" className={inpClass()} placeholder="https://m.me/j/…" inputMode="url" autoComplete="off" />
             </div>
             <AdminCfImageInput label="Ảnh lớp" name="avatar" defaultValue="" />
             {/* Toggles */}

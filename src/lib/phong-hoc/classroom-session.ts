@@ -66,6 +66,8 @@ export type ClassroomStudentSessionData = {
   lich_hoc?: string;
   /** `ql_lop_hoc.meeting_room` — URL phòng họp chung */
   meeting_room?: string | null;
+  /** `ql_lop_hoc.group_chat_messenger` — URL nhóm Messenger */
+  group_chat_messenger?: string | null;
   teacher_name: string;
   days_remaining: number | null;
   ngay_ket_thuc: string | null;
@@ -120,6 +122,7 @@ export function buildProfileOnlyStudentSession(
       class_avatar: "",
       lich_hoc: "",
       meeting_room: null,
+      group_chat_messenger: null,
       teacher_name: "",
       days_remaining: null,
       ngay_ket_thuc: null,

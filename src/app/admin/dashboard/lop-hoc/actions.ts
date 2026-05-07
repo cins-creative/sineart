@@ -75,6 +75,8 @@ type LopPayload = {
   tinh_trang: boolean;
   /** `ql_lop_hoc.level_hinh_hoa` — chỉ dùng khi môn Hình họa. */
   level_hinh_hoa: string | null;
+  /** URL nhóm Messenger — `ql_lop_hoc.group_chat_messenger`. */
+  group_chat_messenger: string | null;
 };
 
 /** Gửi mảng GV lên DB — trả về mảng (bigint[]) hoặc null nếu rỗng. */
@@ -107,6 +109,7 @@ function readLopPayload(fd: FormData): { ok: true; data: LopPayload } | { ok: fa
       special: String(fd.get("special") ?? "") === "1",
       tinh_trang: String(fd.get("tinh_trang") ?? "") !== "0" && String(fd.get("tinh_trang") ?? "") !== "",
       level_hinh_hoa,
+      group_chat_messenger: optionalText(fd, "group_chat_messenger"),
     },
   };
 }

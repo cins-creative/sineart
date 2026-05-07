@@ -414,6 +414,9 @@ export default function NavBar({
   const thiThuReplacesEnterCta = thiThuLichChamUrl !== undefined;
   const thiThuShowLichImg = thiThuLichTrimmed.length > 0;
 
+  /** Trang cá nhân học viên: không hiện CTA/ảnh quảng cáo góc màn hình. */
+  const hideNavFloatingCta = pathname.startsWith("/hoc-vien");
+
   const sheetTransition = prefersReducedMotion
     ? { duration: 0.2, ease: "easeOut" as const }
     : {
@@ -504,72 +507,73 @@ export default function NavBar({
         </div>
       </div>
 
-      {thiThuReplacesEnterCta ? (
-        thiThuShowLichImg ? (
-          <div className="nav-cta-fixed">
-            <div className="nav-cta-lich-stack">
-              {!thiThuLichOpen ? (
-                <button
-                  type="button"
-                  className="nav-cta-lich-toggle"
-                  aria-expanded={false}
-                  aria-controls="nav-cta-lich-panel"
-                  id="nav-cta-lich-toggle"
-                  aria-label="Mở lịch chấm thi thử"
-                  onClick={() => setThiThuLichOpen(true)}
-                >
-                  <span>Lịch chấm thi thử</span>
-                </button>
-              ) : null}
-              {thiThuLichOpen ? (
-                <div
-                  className="nav-cta-lich-wrap"
-                  id="nav-cta-lich-panel"
-                  role="region"
-                  aria-label="Ảnh lịch chấm thi thử"
-                >
+      {!hideNavFloatingCta &&
+        (thiThuReplacesEnterCta ? (
+          thiThuShowLichImg ? (
+            <div className="nav-cta-fixed">
+              <div className="nav-cta-lich-stack">
+                {!thiThuLichOpen ? (
                   <button
                     type="button"
-                    className="nav-cta-lich-pin"
-                    aria-expanded={true}
+                    className="nav-cta-lich-toggle"
+                    aria-expanded={false}
                     aria-controls="nav-cta-lich-panel"
                     id="nav-cta-lich-toggle"
-                    aria-label="Thu gọn lịch chấm"
-                    onClick={() => setThiThuLichOpen(false)}
+                    aria-label="Mở lịch chấm thi thử"
+                    onClick={() => setThiThuLichOpen(true)}
                   >
-                    <LichThuNhoIcon />
+                    <span>Lịch chấm thi thử</span>
                   </button>
-                  <Image
-                    src={thiThuLichTrimmed}
-                    alt="Lịch chấm bài"
-                    className="nav-cta-lich-img"
-                    width={1200}
-                    height={336}
-                    loading="lazy"
-                    decoding="async"
-                    unoptimized={nextImageShouldUnoptimize(thiThuLichTrimmed)}
-                  />
-                </div>
-              ) : null}
+                ) : null}
+                {thiThuLichOpen ? (
+                  <div
+                    className="nav-cta-lich-wrap"
+                    id="nav-cta-lich-panel"
+                    role="region"
+                    aria-label="Ảnh lịch chấm thi thử"
+                  >
+                    <button
+                      type="button"
+                      className="nav-cta-lich-pin"
+                      aria-expanded={true}
+                      aria-controls="nav-cta-lich-panel"
+                      id="nav-cta-lich-toggle"
+                      aria-label="Thu gọn lịch chấm"
+                      onClick={() => setThiThuLichOpen(false)}
+                    >
+                      <LichThuNhoIcon />
+                    </button>
+                    <Image
+                      src={thiThuLichTrimmed}
+                      alt="Lịch chấm bài"
+                      className="nav-cta-lich-img"
+                      width={1200}
+                      height={336}
+                      loading="lazy"
+                      decoding="async"
+                      unoptimized={nextImageShouldUnoptimize(thiThuLichTrimmed)}
+                    />
+                  </div>
+                ) : null}
+              </div>
             </div>
+          ) : null
+        ) : (
+          <div className="nav-cta-fixed">
+            <button
+              type="button"
+              className="nav-cta-btn"
+              aria-label="Vào học"
+              onClick={() => {
+                setClassroomOverlayEmail(undefined);
+                setClassroomSignInOpen(true);
+              }}
+            >
+              <PlayIcon />
+              <span>Vào học</span>
+            </button>
           </div>
-        ) : null
-      ) : (
-        <div className="nav-cta-fixed">
-          <button
-            type="button"
-            className="nav-cta-btn"
-            aria-label="Vào học"
-            onClick={() => {
-              setClassroomOverlayEmail(undefined);
-              setClassroomSignInOpen(true);
-            }}
-          >
-            <PlayIcon />
-            <span>Vào học</span>
-          </button>
-        </div>
-      )}
+        ))}
 
       <ClassroomSignInOverlay
         open={classroomSignInOpen}

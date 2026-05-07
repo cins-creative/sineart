@@ -7,6 +7,7 @@ import LuuBaiHocVienFab from "@/app/_components/LuuBaiHocVienFab";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { BookOpen, CalendarDays, Clock, GraduationCap, Palette, User } from "lucide-react";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   hocVienProfileHref,
@@ -274,6 +275,99 @@ function invoiceTitleFromDon(don: PaidInvoiceDetailPayload["don"]): string {
 const HVP_DAYS_REMAINING_PAID_ONLY_TITLE =
   "Theo các đơn học phí đã thanh toán (cộng dồn buổi). Ở bước thanh toán trên trang Đóng học phí, số buổi có thể cộng thêm gói bạn đang chọn nhưng chưa thanh toán.";
 
+const HVP_MESSENGER_SNOOZE_PREFIX = "sineart_hvp_messenger_snooze_";
+
+function messengerInviteEntries(sessions: ClassroomStudentSessionData[] | null) {
+  if (!sessions?.length) return [];
+  const seen = new Set<number>();
+  const out: { key: number; classTitle: string; url: string }[] = [];
+  for (const r of sessions) {
+    const url = r.group_chat_messenger?.trim();
+    if (!url) continue;
+    const lid = r.lop_hoc_id;
+    if (!Number.isFinite(lid) || lid <= 0 || seen.has(lid)) continue;
+    seen.add(lid);
+    const classTitle = r.class_full_name?.trim() || r.class_name?.trim() || "lớp học";
+    out.push({ key: lid, classTitle, url });
+  }
+  return out;
+}
+
+function HvpMessengerInviteBar({
+  sessions,
+  emailKey,
+}: {
+  sessions: ClassroomStudentSessionData[] | null;
+  emailKey: string;
+}) {
+  const entries = useMemo(() => messengerInviteEntries(sessions), [sessions]);
+  const storageKey = `${HVP_MESSENGER_SNOOZE_PREFIX}${emailKey}`;
+
+  const [snoozed, setSnoozed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return;
+      const until = Number(raw);
+      if (Number.isFinite(until) && Date.now() < until) setSnoozed(true);
+    } catch {
+      /* ignore */
+    }
+  }, [storageKey]);
+
+  const snooze = useCallback(() => {
+    const until = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    try {
+      localStorage.setItem(storageKey, String(until));
+    } catch {
+      /* ignore */
+    }
+    setSnoozed(true);
+  }, [storageKey]);
+
+  if (!entries.length || snoozed) return null;
+
+  return (
+    <div className="hvp-messenger-invite" role="region" aria-label="Nhóm chat Messenger">
+      <div className="hvp-messenger-invite-inner">
+        <div className="hvp-messenger-invite-top">
+          <div className="hvp-messenger-invite-brand">
+            <Image
+              src="/brand/messenger-group-chat.png"
+              alt=""
+              width={28}
+              height={28}
+              className="hvp-messenger-invite-logo"
+            />
+            <span className="hvp-messenger-invite-kicker">Messenger</span>
+          </div>
+          <button type="button" className="hvp-messenger-invite-dismiss" onClick={snooze} aria-label="Ẩn 7 ngày">
+            ×
+          </button>
+        </div>
+        <ul className="hvp-messenger-invite-list">
+          {entries.map((e) => (
+            <li key={e.key} className="hvp-messenger-invite-item">
+              <p className="hvp-messenger-invite-copy">
+                Tham gia group chat của lớp <strong>{e.classTitle}</strong> để nhận thông báo của Sine Art.
+              </p>
+              <a
+                href={e.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hvp-messenger-invite-cta"
+              >
+                Mở Messenger
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 /** Badge «Còn N ngày» cùng token với `dhp-oc-badge` (bước chọn lớp đóng học phí). */
 function daysRemainingDhpBadge(days: number | null): { className: string; label: string } {
   if (days === null) {
@@ -446,7 +540,10 @@ export default function HocVienProfileClient({
   }, [section, selfStudent?.id, selfStudent?.email]);
 
   useEffect(() => {
-    if (section !== "lop-hoc" || !selfStudent) return;
+    if (!selfStudent) {
+      setAllClassRows(null);
+      return;
+    }
     let cancelled = false;
     const hvSnapshot = selfStudent;
     setAllClassRows(null);
@@ -468,7 +565,7 @@ export default function HocVienProfileClient({
     return () => {
       cancelled = true;
     };
-  }, [section, selfStudent?.id]);
+  }, [selfStudent?.id, selfStudent?.qlhv_id]);
 
   useEffect(() => {
     if (section !== "bai-ve" || !selfStudent) return;
@@ -934,6 +1031,7 @@ export default function HocVienProfileClient({
 
   return (
     <div className="hvp-profile">
+      <HvpMessengerInviteBar sessions={allClassRows} emailKey={pathEmail} />
       <div className="hvp-profile-inner">
         <section className="hvp-card" aria-label="Hồ sơ học viên">
           <div className="hvp-card-layout">

@@ -2889,6 +2889,15 @@
   border-color: #bce5c8;
 }
 
+/* Chip thông tin chỉ-đọc trong tab «Bài mẫu» — không bấm được, dùng tone cam-nhẹ. */
+.phc .gtag.gtag-readonly {
+  cursor: default;
+  background: #fff5ed;
+  color: #d96a1f;
+  border-color: #f7c9a4;
+  user-select: none;
+}
+
 .phc .gallery-cls-filter {
   flex: 1;
   min-width: 100px;
@@ -2905,6 +2914,406 @@
 
 .phc .gallery-cls-filter:focus {
   border-color: #f39b62;
+}
+
+.phc .gallery-add-mau-btn {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: #fff;
+  background: linear-gradient(135deg, #f8a668, #ee5ca2);
+  box-shadow: 0 2px 8px rgba(238, 92, 162, 0.35);
+  transition: filter 0.15s, transform 0.12s;
+  white-space: nowrap;
+}
+
+/* Sub-tabs trong gallery — phân loại Bài học viên / Bài mẫu */
+.phc .gallery-kind-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--phc-line);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.phc .gallery-kind-tab {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #88899a;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.phc .gallery-kind-tab:hover {
+  color: var(--phc-ink);
+}
+
+.phc .gallery-kind-tab.active {
+  background: #fff5ed;
+  color: #d96a1f;
+  border-color: #f7c9a4;
+}
+
+.phc .gallery-add-mau-btn:hover {
+  filter: brightness(1.05);
+}
+
+.phc .gallery-add-mau-btn:active {
+  transform: scale(0.98);
+}
+
+/* Modal GV — thêm bài mẫu (gallery) */
+.phc .phc-bai-mau-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10060;
+  background: rgba(26, 26, 46, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  backdrop-filter: blur(6px);
+}
+
+.phc .phc-bai-mau-panel {
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(92vh, 720px);
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.22);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.phc .phc-bai-mau-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--phc-line);
+}
+
+.phc .phc-bai-mau-head-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8a668, #ee5ca2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.phc .phc-bai-mau-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.phc .phc-bai-mau-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--phc-ink);
+  line-height: 1.25;
+}
+
+.phc .phc-bai-mau-sub {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--phc-muted);
+}
+
+.phc .phc-bai-mau-x {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 999px;
+  background: #f3f3f5;
+  color: #555;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.phc .phc-bai-mau-preview-wrap {
+  margin: 12px 14px 0;
+  border-radius: 14px;
+  background: #f5f7f7;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.phc .phc-bai-mau-preview-stage {
+  position: relative;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 1 auto;
+}
+
+.phc .phc-bai-mau-upload-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(26, 26, 46, 0.72);
+}
+
+.phc .phc-bai-mau-preview-img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  display: block;
+}
+
+.phc .phc-bai-mau-preview-ph {
+  padding: 20px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.phc .phc-bai-mau-preview-line {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--phc-muted);
+  line-height: 1.35;
+}
+
+.phc .phc-bai-mau-preview-toolbar {
+  flex-shrink: 0;
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fafafa;
+}
+
+.phc .phc-bai-mau-progress {
+  margin-bottom: 10px;
+}
+
+.phc .phc-bai-mau-progress-track {
+  height: 5px;
+  border-radius: 999px;
+  background: #e4e4ea;
+  overflow: hidden;
+}
+
+.phc .phc-bai-mau-progress-indeterminate {
+  height: 100%;
+  width: 42%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f8a668, #ee5ca2);
+  animation: phc-bai-mau-progress-slide 1.05s ease-in-out infinite;
+}
+
+@keyframes phc-bai-mau-progress-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.phc .phc-bai-mau-progress-label {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #88899a;
+}
+
+.phc .phc-bai-mau-preview-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phc .phc-bai-mau-preview-toolbar .phc-bai-mau-err {
+  margin: 8px 0 0;
+}
+
+.phc .phc-bai-mau-link-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--phc-line2);
+  background: #fff;
+  font-family: inherit;
+  color: var(--phc-ink);
+  box-sizing: border-box;
+}
+
+.phc .phc-bai-mau-link-input:focus {
+  outline: none;
+  border-color: #f39b62;
+}
+
+.phc .phc-bai-mau-link-input:disabled {
+  opacity: 0.55;
+}
+
+.phc .phc-bai-mau-fields {
+  padding: 12px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.phc .phc-bai-mau-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.phc .phc-bai-mau-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phc .phc-bai-mau-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9a9aaa;
+}
+
+.phc .phc-bai-mau-readonly {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--phc-ink);
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--phc-line2);
+  background: #fafafa;
+}
+
+.phc .phc-bai-mau-select {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--phc-ink);
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--phc-line2);
+  background: #fff;
+  font-family: inherit;
+  outline: none;
+}
+
+.phc .phc-bai-mau-select:focus {
+  border-color: #f39b62;
+}
+
+.phc .phc-bai-mau-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--phc-ink);
+}
+
+.phc .phc-bai-mau-check--disabled input {
+  accent-color: #ee5ca2;
+}
+
+.phc .phc-bai-mau-file-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--phc-line2);
+  background: #fff;
+  color: var(--phc-ink);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.phc .phc-bai-mau-file-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.phc .phc-bai-mau-err {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ee5b9f;
+  line-height: 1.4;
+}
+
+.phc .phc-bai-mau-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--phc-line);
+  background: #fff;
+}
+
+.phc .phc-bai-mau-btn-cancel {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--phc-line2);
+  background: #f5f5f7;
+  color: #444;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.phc .phc-bai-mau-btn-save {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: #fff;
+  background: linear-gradient(135deg, #f8a668, #ee5ca2);
+  box-shadow: 0 4px 14px rgba(238, 92, 162, 0.35);
+}
+
+.phc .phc-bai-mau-btn-save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* Masonry: multi-column — chỉ còn ảnh, không viền / nền / bo góc thẻ */
@@ -2986,6 +3395,38 @@
   max-height: min(72vh, 720px);
   object-fit: contain;
   object-position: center center;
+}
+
+/* Sentinel + nút «Tải thêm bài mẫu» — chiếm full width trong layout column. */
+.phc .gallery-load-more {
+  column-span: all;
+  display: flex;
+  justify-content: center;
+  padding: 8px 4px 12px;
+}
+
+.phc .gallery-load-more-btn {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--phc-line2);
+  background: #fff;
+  color: var(--phc-ink);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.phc .gallery-load-more-btn:hover:not(:disabled) {
+  background: #fff5ed;
+  border-color: #f7c9a4;
+  color: #d96a1f;
+}
+
+.phc .gallery-load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 .phc .gallery-grid-loading,

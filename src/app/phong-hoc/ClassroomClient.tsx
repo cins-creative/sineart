@@ -70,7 +70,13 @@ import {
 import { buildHeThongBaiTapHref } from "@/lib/he-thong-bai-tap/slug";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { postUploadChatImage } from "@/lib/chat-image-upload-client";
-import { classroomGalleryEmoji, fetchClassroomGalleryForLop } from "@/lib/phong-hoc/classroom-gallery";
+import {
+  ALL_SAMPLES_PAGE_SIZE,
+  classroomGalleryEmoji,
+  fetchAllSampleWorks,
+  fetchClassroomGalleryForLop,
+  type StudentProfileGalleryRow,
+} from "@/lib/phong-hoc/classroom-gallery";
 import ClassroomSignInOverlay from "@/app/_components/ClassroomSignInOverlay";
 import StudentAvatarMenu from "@/components/StudentAvatarMenu";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -87,6 +93,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type CSSProperties,
 } from "react";
 import "../donghocphi/donghocphi.css";
@@ -680,7 +687,8 @@ export default function ClassroomClient({
   const [gmeetJustSaved, setGmeetJustSaved] = useState(false);
   /** Quảng cáo: banner → thu gọn nút «Quảng cáo» → ẩn hẳn (reload trang = về banner). */
   const [adDismissal, setAdDismissal] = useState<"banner" | "pill" | "none">("banner");
-  const [lightbox, setLightbox] = useState<number | null>(null);
+  /** Lightbox lưu trực tiếp `Artwork` (không lưu index) — vì source có thể đổi giữa `artworks` và `globalSamples`. */
+  const [lightbox, setLightbox] = useState<Artwork | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>(CHAT_SEED);
   /** Tin nhắn thật từ `hv_chatbox` (mới nhất đầu mảng — khớp `column-reverse` trong CSS). */
   const [hvChatRows, setHvChatRows] = useState<HvChatboxRow[]>([]);
@@ -707,9 +715,17 @@ export default function ClassroomClient({
   const [teacherSaveChatNotice, setTeacherSaveChatNotice] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
   const [gFilter, setGFilter] = useState<"mine" | "class">("class");
+  /** Lọc theo loại tranh — "hv" = bài học viên, "mau" = bài mẫu (`bai_mau`). Default = mau. */
+  const [gWorkKind, setGWorkKind] = useState<"hv" | "mau">("mau");
   const [gExerciseFilter, setGExerciseFilter] = useState<string>("all");
   const [artworks, setArtworks] = useState<Artwork[]>(ARTWORKS_SEED);
   const [galleryLoading, setGalleryLoading] = useState(false);
+  /** Toàn bộ bài mẫu (`bai_mau = true`) trên hệ thống — lazy-load + pagination khi vào tab «Bài mẫu». */
+  const [globalSamples, setGlobalSamples] = useState<Artwork[]>([]);
+  const [globalSamplesLoading, setGlobalSamplesLoading] = useState(false);
+  const [globalSamplesLoaded, setGlobalSamplesLoaded] = useState(false);
+  const [globalSamplesLoadingMore, setGlobalSamplesLoadingMore] = useState(false);
+  const [globalSamplesHasMore, setGlobalSamplesHasMore] = useState(false);
   const [dark, setDark] = useState(false);
   /** `undefined` = chưa fetch; sau đó là giá trị từ `ql_lop_hoc` (cập nhật session cũ thiếu `meeting_room`). */
   const [meetingRoomRefreshed, setMeetingRoomRefreshed] = useState<string | null | undefined>(
@@ -735,6 +751,16 @@ export default function ClassroomClient({
   const [stuCurrErr, setStuCurrErr] = useState<string | null>(null);
   const [stuCurrTienDo, setStuCurrTienDo] = useState<number | null>(null);
   const [taskDetailOpenId, setTaskDetailOpenId] = useState<number | null>(null);
+  /** GV: thêm bài mẫu vào gallery lớp (paste URL hoặc upload → Cloudflare). */
+  const [baiMauModalOpen, setBaiMauModalOpen] = useState(false);
+  const [baiMauExercises, setBaiMauExercises] = useState<LopCurriculumExercise[]>([]);
+  const [baiMauExercisesLoading, setBaiMauExercisesLoading] = useState(false);
+  const [baiMauExerciseId, setBaiMauExerciseId] = useState("");
+  const [baiMauPhotoUrl, setBaiMauPhotoUrl] = useState("");
+  const [baiMauPreviewUrl, setBaiMauPreviewUrl] = useState<string | null>(null);
+  const [baiMauSaving, setBaiMauSaving] = useState(false);
+  const [baiMauErr, setBaiMauErr] = useState<string | null>(null);
+  const [baiMauUploading, setBaiMauUploading] = useState(false);
 
   const gmeetSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dailyMeetContainerRef = useRef<HTMLDivElement>(null);
@@ -745,6 +771,9 @@ export default function ClassroomClient({
   const hvLatestCreatedAtRef = useRef<string>("");
   const myQlhvIdRef = useRef<number | null>(null);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
+  const baiMauFileInputRef = useRef<HTMLInputElement>(null);
+  /** Sentinel «Tải thêm» cho gallery samples — IntersectionObserver tự kích hoạt khi cuộn xuống. */
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   /** Realtime `hv_chatbox` — gỡ bằng `supabase.removeChannel` khi unmount / đổi lớp. */
   const hvChatRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
   /** Realtime `ql_lop_hoc` — Meet / meeting_room cập nhật ngay khi GV lưu. */
@@ -978,6 +1007,153 @@ export default function ClassroomClient({
     return NaN;
   }, [storedSession, d.lop_hoc_id]);
 
+  const reloadGalleryFromDb = useCallback(async () => {
+    if (!browserSb || !Number.isFinite(lopHocIdForDb)) return;
+    setGalleryLoading(true);
+    try {
+      const rows = await fetchClassroomGalleryForLop(browserSb, lopHocIdForDb);
+      const cls = (d.class_name ?? "").trim() || "—";
+      const mapped: Artwork[] = rows.map((r) => ({
+        hvId: r.hvId,
+        ownerStudentId: r.studentId,
+        n: r.studentName,
+        cls,
+        mau: r.mau,
+        e: classroomGalleryEmoji(r.studentName),
+        score: r.score,
+        photo: r.photo,
+        exerciseId: r.exerciseId,
+        exerciseLabel: r.exerciseLabel,
+        exerciseOrder: r.exerciseOrder,
+        exerciseTitle: r.exerciseTitle,
+        monHocId: r.monHocId,
+        tenMonHoc: r.tenMonHoc,
+      }));
+      setArtworks(mapped);
+    } catch {
+      setArtworks([]);
+    } finally {
+      setGalleryLoading(false);
+    }
+  }, [browserSb, lopHocIdForDb, d.class_name]);
+
+  /** Map 1 row sample (`StudentProfileGalleryRow`) → `Artwork`. Tách ra để dùng chung trang đầu + tải thêm. */
+  const mapSampleRowToArtwork = useCallback((r: StudentProfileGalleryRow): Artwork => {
+    return {
+      hvId: r.hvId,
+      ownerStudentId: r.studentId,
+      n: r.studentName,
+      cls: r.classLabel || "—",
+      mau: true,
+      e: classroomGalleryEmoji(r.studentName),
+      score: r.score,
+      photo: r.photo,
+      exerciseId: r.exerciseId,
+      exerciseLabel: r.exerciseLabel,
+      exerciseOrder: r.exerciseOrder,
+      exerciseTitle: r.exerciseTitle,
+      monHocId: r.monHocId,
+      tenMonHoc: r.tenMonHoc,
+    };
+  }, []);
+
+  /**
+   * Tab «Bài mẫu» fetch toàn hệ thống (mọi lớp, mọi level) để GV duyệt làm tư liệu giao bài.
+   * Trang đầu (no cursor). Sau đó dùng `loadMoreGlobalSamples` để tải thêm.
+   */
+  const reloadGlobalSamples = useCallback(async () => {
+    if (!browserSb) return;
+    setGlobalSamplesLoading(true);
+    try {
+      const rows = await fetchAllSampleWorks(browserSb, { limit: ALL_SAMPLES_PAGE_SIZE });
+      setGlobalSamples(rows.map(mapSampleRowToArtwork));
+      setGlobalSamplesHasMore(rows.length >= ALL_SAMPLES_PAGE_SIZE);
+      setGlobalSamplesLoaded(true);
+    } catch {
+      setGlobalSamples([]);
+      setGlobalSamplesHasMore(false);
+      setGlobalSamplesLoaded(true);
+    } finally {
+      setGlobalSamplesLoading(false);
+    }
+  }, [browserSb, mapSampleRowToArtwork]);
+
+  /** Tải trang kế tiếp với cursor `id < lastHvId`. Stop khi server trả < `PAGE_SIZE` row. */
+  const loadMoreGlobalSamples = useCallback(async () => {
+    if (!browserSb) return;
+    if (globalSamplesLoading || globalSamplesLoadingMore || !globalSamplesHasMore) return;
+    const lastHvId = globalSamples[globalSamples.length - 1]?.hvId ?? 0;
+    if (!Number.isFinite(lastHvId) || lastHvId <= 0) {
+      setGlobalSamplesHasMore(false);
+      return;
+    }
+    setGlobalSamplesLoadingMore(true);
+    try {
+      const rows = await fetchAllSampleWorks(browserSb, {
+        beforeId: lastHvId,
+        limit: ALL_SAMPLES_PAGE_SIZE,
+      });
+      const mapped = rows.map(mapSampleRowToArtwork);
+      setGlobalSamples((prev) => {
+        if (mapped.length === 0) return prev;
+        const seen = new Set(prev.map((a) => a.hvId));
+        const dedup = mapped.filter((a) => a.hvId > 0 && !seen.has(a.hvId));
+        return dedup.length ? [...prev, ...dedup] : prev;
+      });
+      setGlobalSamplesHasMore(rows.length >= ALL_SAMPLES_PAGE_SIZE);
+    } catch {
+      setGlobalSamplesHasMore(false);
+    } finally {
+      setGlobalSamplesLoadingMore(false);
+    }
+  }, [
+    browserSb,
+    globalSamples,
+    globalSamplesHasMore,
+    globalSamplesLoading,
+    globalSamplesLoadingMore,
+    mapSampleRowToArtwork,
+  ]);
+
+  useEffect(() => {
+    if (gWorkKind !== "mau") return;
+    if (globalSamplesLoaded || globalSamplesLoading) return;
+    void reloadGlobalSamples();
+  }, [gWorkKind, globalSamplesLoaded, globalSamplesLoading, reloadGlobalSamples]);
+
+  /**
+   * HV không có quyền duyệt thư viện bài mẫu toàn hệ thống — luôn chốt về tab «Bài học viên».
+   * Default `useState("mau")` vẫn giữ để GV (case phổ biến) thấy bài mẫu ngay khi vào.
+   */
+  useEffect(() => {
+    if (!isTeacher && gWorkKind !== "hv") setGWorkKind("hv");
+  }, [isTeacher, gWorkKind]);
+
+  /**
+   * Tự kích hoạt «Tải thêm bài mẫu» khi sentinel lọt vào viewport (root = `gallery-grid` cuộn dọc).
+   * Disconnect khi đổi tab / hết trang để khỏi giữ observer thừa.
+   */
+  useEffect(() => {
+    if (gWorkKind !== "mau") return;
+    if (!globalSamplesHasMore) return;
+    const node = loadMoreSentinelRef.current;
+    if (!node) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            void loadMoreGlobalSamples();
+            break;
+          }
+        }
+      },
+      { root: node.parentElement ?? null, rootMargin: "200px 0px", threshold: 0 },
+    );
+    obs.observe(node);
+    return () => obs.disconnect();
+  }, [gWorkKind, globalSamplesHasMore, loadMoreGlobalSamples, globalSamples.length]);
+
   /** Cập nhật state Meet / Daily + session localstorage khi có row `ql_lop_hoc`. */
   const applyClassMeetRow = useCallback((row: LopHocMeetRow) => {
     setMeetingRoomRefreshed(row.meeting_room);
@@ -1100,6 +1276,164 @@ export default function ClassroomClient({
     return NaN;
   }, [storedSession]);
 
+  const openBaiMauModal = useCallback(() => {
+    setBaiMauErr(null);
+    setBaiMauPhotoUrl("");
+    setBaiMauExerciseId("");
+    setBaiMauPreviewUrl((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setGWorkKind("mau");
+    setBaiMauModalOpen(true);
+  }, []);
+
+  const closeBaiMauModal = useCallback(() => {
+    setBaiMauPreviewUrl((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setBaiMauModalOpen(false);
+    setBaiMauErr(null);
+    setBaiMauUploading(false);
+    setBaiMauSaving(false);
+  }, []);
+
+  const uploadBaiMauImageFile = useCallback(async (f: File) => {
+    if (!f.type.startsWith("image/")) {
+      setBaiMauErr("Chỉ dùng được file ảnh.");
+      return;
+    }
+    setBaiMauErr(null);
+    setBaiMauUploading(true);
+    setBaiMauPreviewUrl((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(f);
+    });
+    try {
+      const res = await postUploadChatImage(f);
+      if (!res.ok) {
+        setBaiMauErr(res.error);
+        setBaiMauPhotoUrl("");
+        return;
+      }
+      setBaiMauPhotoUrl(res.url);
+    } finally {
+      setBaiMauUploading(false);
+    }
+  }, []);
+
+  const onBaiMauPickFile = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0];
+      e.target.value = "";
+      if (!f) return;
+      void uploadBaiMauImageFile(f);
+    },
+    [uploadBaiMauImageFile]
+  );
+
+  /** Ctrl+V dán ảnh từ clipboard khi popup mở (trừ khi đang gõ link trong ô input/textarea). */
+  useEffect(() => {
+    if (!baiMauModalOpen) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName ?? "";
+      if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
+      const items = e.clipboardData?.items;
+      if (!items?.length) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const f = item.getAsFile();
+          if (f) {
+            e.preventDefault();
+            void uploadBaiMauImageFile(f);
+          }
+          return;
+        }
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [baiMauModalOpen, uploadBaiMauImageFile]);
+
+  const submitBaiMau = useCallback(async () => {
+    if (!Number.isFinite(teacherHrIdForDb)) {
+      setBaiMauErr("Không xác định tài khoản giáo viên.");
+      return;
+    }
+    const photo = baiMauPhotoUrl.trim();
+    if (!/^https:\/\//i.test(photo)) {
+      setBaiMauErr("Thêm ảnh: nút chọn file, Ctrl+V trong ô xem trước, hoặc dán link ảnh.");
+      return;
+    }
+    const ex = Number(baiMauExerciseId);
+    if (!Number.isFinite(ex) || ex <= 0) {
+      setBaiMauErr("Chọn bài tập.");
+      return;
+    }
+    setBaiMauSaving(true);
+    setBaiMauErr(null);
+    try {
+      const res = await fetch("/api/phong-hoc/teacher-add-bai-mau", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lopHocId: lopHocIdForDb,
+          teacherHrId: teacherHrIdForDb,
+          thuocBaiTap: ex,
+          photo,
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setBaiMauErr(typeof data.error === "string" ? data.error : "Không lưu được.");
+        return;
+      }
+      setBaiMauPreviewUrl((prev) => {
+        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setBaiMauModalOpen(false);
+      setBaiMauPhotoUrl("");
+      setBaiMauExerciseId("");
+      await reloadGalleryFromDb();
+      setGlobalSamplesLoaded(false);
+      void reloadGlobalSamples();
+    } catch (err) {
+      setBaiMauErr(err instanceof Error ? err.message : "Lỗi mạng.");
+    } finally {
+      setBaiMauSaving(false);
+    }
+  }, [
+    teacherHrIdForDb,
+    baiMauPhotoUrl,
+    baiMauExerciseId,
+    lopHocIdForDb,
+    reloadGalleryFromDb,
+    reloadGlobalSamples,
+  ]);
+
+  const baiMauCanSave = useMemo(() => {
+    if (!Number.isFinite(teacherHrIdForDb) || teacherHrIdForDb <= 0) return false;
+    if (baiMauSaving || baiMauUploading || baiMauExercisesLoading) return false;
+    const photo = baiMauPhotoUrl.trim();
+    if (!/^https:\/\//i.test(photo)) return false;
+    const ex = Number(baiMauExerciseId);
+    if (!Number.isFinite(ex) || ex <= 0) return false;
+    if (baiMauExercises.length === 0) return false;
+    return true;
+  }, [
+    teacherHrIdForDb,
+    baiMauSaving,
+    baiMauUploading,
+    baiMauExercisesLoading,
+    baiMauPhotoUrl,
+    baiMauExerciseId,
+    baiMauExercises.length,
+  ]);
+
   useEffect(() => {
     if (storedSession?.userType !== "Student") {
       setHvPkResolvedForDaily(null);
@@ -1144,40 +1478,29 @@ export default function ClassroomClient({
       return;
     }
     if (!browserSb || !Number.isFinite(lopHocIdForDb)) return;
+    void reloadGalleryFromDb();
+  }, [mounted, storedSession, browserSb, lopHocIdForDb, reloadGalleryFromDb]);
+
+  useEffect(() => {
+    if (!baiMauModalOpen || !browserSb || !Number.isFinite(lopHocIdForDb)) return;
     let cancelled = false;
-    setGalleryLoading(true);
-    void (async () => {
-      try {
-        const rows = await fetchClassroomGalleryForLop(browserSb, lopHocIdForDb);
+    setBaiMauExercisesLoading(true);
+    void fetchLopCurriculumExercises(browserSb, lopHocIdForDb)
+      .then(({ exercises }) => {
         if (cancelled) return;
-        const cls = (d.class_name ?? "").trim() || "—";
-        const mapped: Artwork[] = rows.map((r) => ({
-          hvId: r.hvId,
-          ownerStudentId: r.studentId,
-          n: r.studentName,
-          cls,
-          mau: r.mau,
-          e: classroomGalleryEmoji(r.studentName),
-          score: r.score,
-          photo: r.photo,
-          exerciseId: r.exerciseId,
-          exerciseLabel: r.exerciseLabel,
-          exerciseOrder: r.exerciseOrder,
-          exerciseTitle: r.exerciseTitle,
-          monHocId: r.monHocId,
-          tenMonHoc: r.tenMonHoc,
-        }));
-        setArtworks(mapped);
-      } catch {
-        if (!cancelled) setArtworks([]);
-      } finally {
-        if (!cancelled) setGalleryLoading(false);
-      }
-    })();
+        setBaiMauExercises(exercises);
+        setBaiMauExercisesLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBaiMauExercises([]);
+          setBaiMauExercisesLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [mounted, storedSession, browserSb, lopHocIdForDb, d.class_name]);
+  }, [baiMauModalOpen, browserSb, lopHocIdForDb]);
 
   useEffect(() => {
     if (!isTeacher) return;
@@ -2235,29 +2558,45 @@ export default function ClassroomClient({
         : hvPkResolvedForDaily
       : null;
 
-  const classFilterLabel = useMemo(() => {
+  const classCodeShort = useMemo(() => {
     const raw = (d.class_name ?? "").trim();
-    if (!raw) return "Bài học viên lớp";
-    const pretty = raw.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
-    return `Bài học viên lớp ${pretty}`;
+    if (!raw) return "";
+    return raw.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
   }, [d.class_name]);
 
+  const classFilterLabel = useMemo(
+    () => (classCodeShort ? `Bài học viên lớp ${classCodeShort}` : "Bài học viên lớp"),
+    [classCodeShort],
+  );
+
+  const galleryHvTabLabel = useMemo(
+    () => (classCodeShort ? `Bài HV lớp ${classCodeShort}` : "Bài học viên"),
+    [classCodeShort],
+  );
+
   const filteredGallery = useMemo(() => {
-    const source =
-      gFilter === "mine"
-        ? myStudentId == null
-          ? []
-          : artworks.filter((a) => a.ownerStudentId != null && a.ownerStudentId === myStudentId)
-        : artworks;
+    let source: Artwork[];
+    if (gWorkKind === "mau") {
+      source = globalSamples;
+    } else {
+      source =
+        gFilter === "mine"
+          ? myStudentId == null
+            ? []
+            : artworks.filter((a) => a.ownerStudentId != null && a.ownerStudentId === myStudentId)
+          : artworks;
+      source = source.filter((a) => !a.mau);
+    }
     if (gExerciseFilter === "all") return source;
     const exId = Number(gExerciseFilter);
     if (!Number.isFinite(exId) || exId <= 0) return source;
     return source.filter((a) => a.exerciseId != null && a.exerciseId === exId);
-  }, [artworks, gFilter, myStudentId, gExerciseFilter]);
+  }, [artworks, globalSamples, gFilter, gWorkKind, myStudentId, gExerciseFilter]);
 
   const galleryExerciseOptions = useMemo(() => {
+    const source = gWorkKind === "mau" ? globalSamples : artworks;
     const m = new Map<number, { id: number; order: number | null; label: string }>();
-    for (const a of artworks) {
+    for (const a of source) {
       if (a.exerciseId == null || a.exerciseId <= 0) continue;
       if (m.has(a.exerciseId)) continue;
       const order = a.exerciseOrder;
@@ -2276,7 +2615,7 @@ export default function ClassroomClient({
       if (oa !== ob) return oa - ob;
       return a.id - b.id;
     });
-  }, [artworks]);
+  }, [artworks, globalSamples, gWorkKind]);
 
   useEffect(() => {
     if (gExerciseFilter === "all") return;
@@ -3302,22 +3641,33 @@ export default function ClassroomClient({
             <div className={cx("tc", tab === "gallery" && "active")} role="tabpanel">
               <div className="gallery-panel">
                 <div className="gallery-toolbar">
-                  {!isTeacher ? (
-                    <button
-                      type="button"
-                      className={cx("gtag", gFilter === "mine" && "active")}
-                      onClick={() => setGFilter("mine")}
-                    >
-                      Bài của bạn
+                  {gWorkKind === "mau" ? (
+                    <span className="gtag gtag-readonly">Tất cả bài mẫu (mọi lớp)</span>
+                  ) : (
+                    <>
+                      {!isTeacher ? (
+                        <button
+                          type="button"
+                          className={cx("gtag", gFilter === "mine" && "active")}
+                          onClick={() => setGFilter("mine")}
+                        >
+                          Bài của bạn
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={cx("gtag", gFilter === "class" && "active")}
+                        onClick={() => setGFilter("class")}
+                      >
+                        {classFilterLabel}
+                      </button>
+                    </>
+                  )}
+                  {isTeacher ? (
+                    <button type="button" className="gallery-add-mau-btn" onClick={openBaiMauModal}>
+                      Thêm bài mẫu
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    className={cx("gtag", gFilter === "class" && "active")}
-                    onClick={() => setGFilter("class")}
-                  >
-                    {classFilterLabel}
-                  </button>
                   {isTeacher ? (
                     <select
                       className="gallery-cls-filter"
@@ -3334,50 +3684,91 @@ export default function ClassroomClient({
                     </select>
                   ) : null}
                 </div>
+                {isTeacher ? (
+                  <div className="gallery-kind-tabs" role="tablist" aria-label="Loại tranh">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={gWorkKind === "hv"}
+                      className={cx("gallery-kind-tab", gWorkKind === "hv" && "active")}
+                      onClick={() => setGWorkKind("hv")}
+                    >
+                      {galleryHvTabLabel}
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={gWorkKind === "mau"}
+                      className={cx("gallery-kind-tab", gWorkKind === "mau" && "active")}
+                      onClick={() => setGWorkKind("mau")}
+                    >
+                      Bài mẫu
+                    </button>
+                  </div>
+                ) : null}
                 <div className="gallery-grid">
-                  {galleryLoading ? (
-                    <div className="gallery-grid-loading">Đang tải tác phẩm…</div>
+                  {(gWorkKind === "mau" ? globalSamplesLoading : galleryLoading) ? (
+                    <div className="gallery-grid-loading">
+                      {gWorkKind === "mau" ? "Đang tải bài mẫu…" : "Đang tải tác phẩm…"}
+                    </div>
                   ) : filteredGallery.length === 0 ? (
                     <div className="gallery-grid-empty">
-                      {gFilter === "mine"
-                        ? "Bạn chưa có bài hoàn thiện trong lớp này."
-                        : gExerciseFilter !== "all"
-                          ? "Chưa có bài hoàn thiện cho mục bài đã chọn."
-                          : "Chưa có bài hoàn thiện trong lớp này."}
+                      {gWorkKind === "mau"
+                        ? gExerciseFilter !== "all"
+                          ? "Chưa có bài mẫu cho mục bài đã chọn."
+                          : "Chưa có bài mẫu nào trong hệ thống."
+                        : gFilter === "mine"
+                          ? "Bạn chưa có bài hoàn thiện trong lớp này."
+                          : gExerciseFilter !== "all"
+                            ? "Chưa có bài hoàn thiện cho mục bài đã chọn."
+                            : "Chưa có bài hoàn thiện trong lớp này."}
                     </div>
                   ) : (
-                  filteredGallery.map((a, i) => {
-                    const globalIdx = artworks.indexOf(a);
-                    const thumb =
-                      a.photo?.trim() != null && a.photo.trim() !== ""
-                        ? cfImageForThumbnail(a.photo.trim()) ?? a.photo.trim()
-                        : null;
-                    return (
-                      <div
-                        key={a.hvId > 0 ? `hv-${a.hvId}` : `demo-${a.n}-${i}`}
-                        role="button"
-                        tabIndex={0}
-                        className="gcard"
-                        onClick={() => setLightbox(globalIdx)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setLightbox(globalIdx);
-                          }
-                        }}
-                      >
-                        {a.mau ? <div className="gmau-tag">✦ MẪU</div> : null}
-                        <div className="gimg">
-                          {thumb ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img src={thumb} alt={a.n} className="gimg-thumb" />
-                          ) : (
-                            a.e
-                          )}
+                  <>
+                    {filteredGallery.map((a, i) => {
+                      const thumb =
+                        a.photo?.trim() != null && a.photo.trim() !== ""
+                          ? cfImageForThumbnail(a.photo.trim()) ?? a.photo.trim()
+                          : null;
+                      return (
+                        <div
+                          key={a.hvId > 0 ? `hv-${a.hvId}` : `demo-${a.n}-${i}`}
+                          role="button"
+                          tabIndex={0}
+                          className="gcard"
+                          onClick={() => setLightbox(a)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setLightbox(a);
+                            }
+                          }}
+                        >
+                          {a.mau ? <div className="gmau-tag">✦ MẪU</div> : null}
+                          <div className="gimg">
+                            {thumb ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img src={thumb} alt={a.n} className="gimg-thumb" />
+                            ) : (
+                              a.e
+                            )}
+                          </div>
                         </div>
+                      );
+                    })}
+                    {gWorkKind === "mau" && globalSamplesHasMore ? (
+                      <div ref={loadMoreSentinelRef} className="gallery-load-more">
+                        <button
+                          type="button"
+                          className="gallery-load-more-btn"
+                          onClick={() => void loadMoreGlobalSamples()}
+                          disabled={globalSamplesLoadingMore}
+                        >
+                          {globalSamplesLoadingMore ? "Đang tải thêm…" : "Tải thêm bài mẫu"}
+                        </button>
                       </div>
-                    );
-                  })
+                    ) : null}
+                  </>
                   )}
                 </div>
               </div>
@@ -3517,6 +3908,150 @@ export default function ClassroomClient({
         </div>
       ) : null}
 
+      {baiMauModalOpen ? (
+        <div
+          className="phc-bai-mau-overlay"
+          role="dialog"
+          aria-modal
+          aria-labelledby="phc-bai-mau-title"
+          onClick={(e) => e.target === e.currentTarget && closeBaiMauModal()}
+        >
+          <div className="phc-bai-mau-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="phc-bai-mau-head">
+              <div className="phc-bai-mau-head-icon" aria-hidden>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M17 21v-8h-10v8M7 3v5h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className="phc-bai-mau-head-text">
+                <div id="phc-bai-mau-title" className="phc-bai-mau-title">
+                  Lưu bài học viên
+                </div>
+                <div className="phc-bai-mau-sub">Phòng học Sine Art · Bài mẫu (Ẩn Danh)</div>
+              </div>
+              <button
+                type="button"
+                className="phc-bai-mau-x"
+                onClick={closeBaiMauModal}
+                aria-label="Đóng"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="phc-bai-mau-preview-wrap">
+              <div className="phc-bai-mau-preview-stage">
+                {baiMauPreviewUrl || /^https:\/\//i.test(baiMauPhotoUrl.trim()) ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={(baiMauPreviewUrl ?? baiMauPhotoUrl.trim()) || ""}
+                    alt=""
+                    className="phc-bai-mau-preview-img"
+                  />
+                ) : (
+                  <div className="phc-bai-mau-preview-ph">
+                    <span className="phc-bai-mau-preview-line">Chọn ảnh hoặc dán link</span>
+                    <span className="phc-bai-mau-preview-line">Hoặc Ctrl+V để dán ảnh</span>
+                  </div>
+                )}
+              </div>
+              <div className="phc-bai-mau-preview-toolbar">
+                {baiMauUploading ? (
+                  <div
+                    className="phc-bai-mau-progress"
+                    role="progressbar"
+                    aria-busy="true"
+                    aria-valuetext="Đang tải ảnh"
+                  >
+                    <div className="phc-bai-mau-progress-track">
+                      <div className="phc-bai-mau-progress-indeterminate" />
+                    </div>
+                    <span className="phc-bai-mau-progress-label">Đang tải ảnh…</span>
+                  </div>
+                ) : null}
+                <div className="phc-bai-mau-preview-toolbar-row">
+                  <button
+                    type="button"
+                    className="phc-bai-mau-file-btn"
+                    disabled={baiMauUploading || baiMauSaving}
+                    onClick={() => baiMauFileInputRef.current?.click()}
+                  >
+                    {baiMauUploading ? "Đang tải…" : "Chọn ảnh"}
+                  </button>
+                  <input
+                    type="text"
+                    className="phc-bai-mau-link-input"
+                    value={baiMauPhotoUrl}
+                    onChange={(e) => setBaiMauPhotoUrl(e.target.value)}
+                    placeholder="Hoặc dán link ảnh…"
+                    disabled={baiMauUploading || baiMauSaving}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                </div>
+                {baiMauErr ? (
+                  <p className="phc-bai-mau-err" role="alert">
+                    {baiMauErr}
+                  </p>
+                ) : null}
+              </div>
+              <input
+                ref={baiMauFileInputRef}
+                type="file"
+                accept="image/*"
+                className="phc-sr-only"
+                aria-hidden
+                onChange={onBaiMauPickFile}
+              />
+            </div>
+
+            <div className="phc-bai-mau-fields">
+              <label className="phc-bai-mau-field">
+                <span className="phc-bai-mau-label">Bài tập</span>
+                <select
+                  className="phc-bai-mau-select"
+                  value={baiMauExerciseId}
+                  onChange={(e) => setBaiMauExerciseId(e.target.value)}
+                  disabled={baiMauExercisesLoading || baiMauExercises.length === 0}
+                >
+                  <option value="">— Chọn bài tập —</option>
+                  {baiMauExercises.map((ex, i) => (
+                    <option key={ex.id} value={String(ex.id)}>
+                      {formatLessonLabel(ex, i)} · {ex.ten_bai_tap}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="phc-bai-mau-check phc-bai-mau-check--disabled">
+                <input type="checkbox" checked readOnly disabled />
+                <span>✦ Bài mẫu</span>
+              </label>
+            </div>
+
+            <div className="phc-bai-mau-footer">
+              <button type="button" className="phc-bai-mau-btn-cancel" onClick={closeBaiMauModal}>
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="phc-bai-mau-btn-save"
+                disabled={!baiMauCanSave}
+                onClick={() => void submitBaiMau()}
+              >
+                {baiMauSaving ? "Đang lưu…" : "Lưu bài"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {chatFullImg ? (
         <div
           className="chat-fullimg-overlay"
@@ -3538,7 +4073,7 @@ export default function ClassroomClient({
         </div>
       ) : null}
 
-      {lightbox != null && artworks[lightbox] ? (
+      {lightbox != null ? (
         <div
           className="lightbox"
           role="dialog"
@@ -3553,32 +4088,29 @@ export default function ClassroomClient({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={
-                artworks[lightbox]!.photo?.trim()
-                  ? (cfImageForLightbox(artworks[lightbox]!.photo!.trim()) ??
-                    artworks[lightbox]!.photo!.trim())
-                  : `https://placehold.co/600x450/FFF0EC/EE5CA2?text=${encodeURIComponent(artworks[lightbox]!.n)}`
+                lightbox.photo?.trim()
+                  ? (cfImageForLightbox(lightbox.photo.trim()) ?? lightbox.photo.trim())
+                  : `https://placehold.co/600x450/FFF0EC/EE5CA2?text=${encodeURIComponent(lightbox.n)}`
               }
-              alt={artworks[lightbox]!.n}
+              alt={lightbox.n}
             />
             <div className="lb-meta">
-              <span className="lb-name">{artworks[lightbox]!.n}</span>
-              {artworks[lightbox]!.exerciseTitle || artworks[lightbox]!.tenMonHoc || artworks[lightbox]!.exerciseLabel ? (
+              <span className="lb-name">{lightbox.n}</span>
+              {lightbox.exerciseTitle || lightbox.tenMonHoc || lightbox.exerciseLabel ? (
                 <div className="lb-detail">
-                  {artworks[lightbox]!.exerciseTitle ? (
-                    <span className="lb-ex">{artworks[lightbox]!.exerciseTitle}</span>
+                  {lightbox.exerciseTitle ? (
+                    <span className="lb-ex">{lightbox.exerciseTitle}</span>
                   ) : null}
-                  {artworks[lightbox]!.exerciseLabel || artworks[lightbox]!.tenMonHoc ? (
+                  {lightbox.exerciseLabel || lightbox.tenMonHoc ? (
                     <span className="lb-sub">
-                      {[artworks[lightbox]!.exerciseLabel, artworks[lightbox]!.tenMonHoc].filter(Boolean).join(" · ")}
+                      {[lightbox.exerciseLabel, lightbox.tenMonHoc].filter(Boolean).join(" · ")}
                     </span>
                   ) : null}
                 </div>
               ) : null}
-              <span className="lb-chip">{artworks[lightbox]!.cls}</span>
-              {artworks[lightbox]!.mau ? <span className="lb-mau">✦ Bài mẫu</span> : null}
-              {artworks[lightbox]!.score != null ? (
-                <span className="lb-score">★ {artworks[lightbox]!.score}</span>
-              ) : null}
+              <span className="lb-chip">{lightbox.cls}</span>
+              {lightbox.mau ? <span className="lb-mau">✦ Bài mẫu</span> : null}
+              {lightbox.score != null ? <span className="lb-score">★ {lightbox.score}</span> : null}
             </div>
           </div>
         </div>

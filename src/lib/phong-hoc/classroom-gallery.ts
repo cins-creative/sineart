@@ -232,6 +232,63 @@ export function classroomGalleryEmoji(name: string): string {
   return fallbackEmoji(name);
 }
 
+/** Trang mặc định cho infinite-scroll bài mẫu — đủ vừa 2 cột × ~12 hàng trên màn hình thường. */
+export const ALL_SAMPLES_PAGE_SIZE = 24;
+
+export type FetchAllSamplesOptions = {
+  /** Cursor: chỉ lấy `id < beforeId`. Để trống = trang đầu. */
+  beforeId?: number;
+  /** Số bản ghi tối đa cho 1 lần fetch (default `ALL_SAMPLES_PAGE_SIZE`). */
+  limit?: number;
+};
+
+/**
+ * Mọi bài mẫu (`bai_mau = true`, `status = Hoàn thiện`) trên toàn hệ thống.
+ * Dùng cho tab «Bài mẫu» trong Phòng học để GV duyệt mọi level — không lọc theo lớp.
+ * Trả thêm `classLabel` để hiển thị bối cảnh lớp gốc cho mỗi mẫu.
+ *
+ * Pagination kiểu cursor (`id < beforeId`, sort desc) — ổn định hơn `range()` khi có row mới chèn vào.
+ */
+export async function fetchAllSampleWorks(
+  sb: SupabaseClient,
+  opts: FetchAllSamplesOptions = {}
+): Promise<StudentProfileGalleryRow[]> {
+  const limit = opts.limit && opts.limit > 0 ? Math.floor(opts.limit) : ALL_SAMPLES_PAGE_SIZE;
+  const before = opts.beforeId && opts.beforeId > 0 ? Math.floor(opts.beforeId) : null;
+
+  const run = (sel: string) => {
+    let q = sb
+      .from("hv_bai_hoc_vien")
+      .select(sel)
+      .eq("status", "Hoàn thiện")
+      .eq("bai_mau", true)
+      .order("id", { ascending: false })
+      .limit(limit);
+    if (before != null) q = q.lt("id", before);
+    return q;
+  };
+
+  let { data, error } = await run(HV_SELECT_LOP_A);
+  if (error) {
+    ({ data, error } = await run(HV_SELECT_LOP_B));
+  }
+  if (error) {
+    ({ data, error } = await run(HV_SELECT));
+  }
+  if (error) throw error;
+
+  const rawRows = (data ?? []) as unknown as HvGalleryRawRow[];
+  const lopIds = rawRows.map((r) => lopIdFromHvRow(r)).filter((x): x is number => x != null);
+  const labelByLop = await fetchLopClassLabels(sb, lopIds);
+
+  return rawRows.map((row) => {
+    const base = mapHvRowToClassroomGalleryRow(row);
+    const lid = lopIdFromHvRow(row);
+    const classLabel = lid != null ? labelByLop.get(lid) ?? "—" : "—";
+    return { ...base, classLabel };
+  });
+}
+
 export type EnrolledMonOption = { id: number; ten_mon_hoc: string };
 
 /**

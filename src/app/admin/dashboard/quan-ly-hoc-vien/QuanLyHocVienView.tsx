@@ -1042,10 +1042,12 @@ const inpProfile =
 
 function TruongNganhRowEditor({
   nv,
+  nvStats,
   profileEditing,
   onSaved,
 }: {
   nv: AdminQlhvTruongNganhItem;
+  nvStats: QlhvNvStats;
   profileEditing: boolean;
   onSaved: () => void;
 }) {
@@ -1079,6 +1081,7 @@ function TruongNganhRowEditor({
         <p className="m-0 mt-0.5 text-slate-600">{nv.ten_nganh}</p>
         {nv.nam_thi != null ? <p className="m-0 mt-1 text-[10px] font-semibold text-slate-500">Năm thi: {nv.nam_thi}</p> : null}
         {nv.ghi_chu ? <p className="m-0 mt-1 text-[10px] text-amber-800">📝 {nv.ghi_chu}</p> : null}
+        <NvSineArtCountBadges nv={nv} stats={nvStats} />
       </li>
     );
   }
@@ -1177,17 +1180,140 @@ function qlhvNvPairsSigFromNvList(nvList: AdminQlhvTruongNganhItem[]): string {
 }
 
 /**
+ * Số liệu thống kê nguyện vọng dự thi của TOÀN HỆ THỐNG học viên Sine Art.
+ * - `truongTotal[truongId]` — số HV distinct đã đăng ký thi 1 trường (mọi năm, mọi ngành).
+ * - `truongByYear["truongId__year"]` — như trên nhưng theo từng năm thi.
+ * - `pairTotal["truongId__nganhId"]` — số HV distinct đã đăng ký 1 cặp (trường, ngành).
+ * - `pairByYear["truongId__nganhId__year"]` — như trên nhưng theo từng năm.
+ *
+ * Build 1 lần ở `QuanLyHocVienView` (memoized) rồi truyền xuống chi tiết HV.
+ */
+type QlhvNvStats = {
+  truongTotal: Record<string, number>;
+  truongByYear: Record<string, number>;
+  pairTotal: Record<string, number>;
+  pairByYear: Record<string, number>;
+};
+
+function computeQlhvNvStats(
+  byHvId: Record<string, AdminQlhvTruongNganhItem[]>,
+): QlhvNvStats {
+  const trAll = new Map<number, Set<number>>();
+  const trYear = new Map<string, Set<number>>();
+  const pairAll = new Map<string, Set<number>>();
+  const pairYear = new Map<string, Set<number>>();
+
+  for (const [hvIdStr, list] of Object.entries(byHvId)) {
+    const hvId = Number(hvIdStr);
+    if (!Number.isFinite(hvId) || hvId <= 0) continue;
+    for (const nv of list) {
+      const tr = nv.truong_dai_hoc;
+      if (tr == null || tr <= 0) continue;
+      const ng = nv.nganh_dao_tao;
+      const yr = nv.nam_thi;
+
+      if (!trAll.has(tr)) trAll.set(tr, new Set());
+      trAll.get(tr)!.add(hvId);
+
+      if (yr != null) {
+        const k = `${tr}__${yr}`;
+        if (!trYear.has(k)) trYear.set(k, new Set());
+        trYear.get(k)!.add(hvId);
+      }
+
+      if (ng != null && ng > 0) {
+        const pk = `${tr}__${ng}`;
+        if (!pairAll.has(pk)) pairAll.set(pk, new Set());
+        pairAll.get(pk)!.add(hvId);
+
+        if (yr != null) {
+          const pyk = `${tr}__${ng}__${yr}`;
+          if (!pairYear.has(pyk)) pairYear.set(pyk, new Set());
+          pairYear.get(pyk)!.add(hvId);
+        }
+      }
+    }
+  }
+
+  const truongTotal: Record<string, number> = {};
+  for (const [k, v] of trAll) truongTotal[String(k)] = v.size;
+  const truongByYear: Record<string, number> = {};
+  for (const [k, v] of trYear) truongByYear[k] = v.size;
+  const pairTotal: Record<string, number> = {};
+  for (const [k, v] of pairAll) pairTotal[k] = v.size;
+  const pairByYear: Record<string, number> = {};
+  for (const [k, v] of pairYear) pairByYear[k] = v.size;
+
+  return { truongTotal, truongByYear, pairTotal, pairByYear };
+}
+
+/**
+ * Hai chip nhỏ hiển thị: số HV Sine Art thi cùng TRƯỜNG, số HV Sine Art thi cùng
+ * (trường, ngành). Nếu dòng có `nam_thi`, thêm phần đếm phụ «cùng năm».
+ */
+function NvSineArtCountBadges({
+  nv,
+  stats,
+}: {
+  nv: AdminQlhvTruongNganhItem;
+  stats: QlhvNvStats;
+}) {
+  const tr = nv.truong_dai_hoc;
+  if (tr == null || tr <= 0) return null;
+  const yr = nv.nam_thi;
+  const ng = nv.nganh_dao_tao;
+
+  const truongTotal = stats.truongTotal[String(tr)] ?? 0;
+  const truongYear = yr != null ? stats.truongByYear[`${tr}__${yr}`] ?? 0 : null;
+
+  const pairKey = ng != null && ng > 0 ? `${tr}__${ng}` : null;
+  const pairTotal = pairKey ? stats.pairTotal[pairKey] ?? 0 : null;
+  const pairYear = pairKey && yr != null ? stats.pairByYear[`${tr}__${ng}__${yr}`] ?? 0 : null;
+
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      <span
+        className="inline-flex items-center gap-1 rounded-md bg-[#BC8AF9]/12 px-1.5 py-0.5 text-[10px] font-bold text-[#6b3fbf]"
+        title="Số học viên Sine Art đã đăng ký thi trường này"
+      >
+        Trường: {truongTotal} HV
+        {truongYear != null && yr != null ? (
+          <span className="font-semibold text-[#6b3fbf]/75">
+            · {truongYear}/{yr}
+          </span>
+        ) : null}
+      </span>
+      {pairTotal != null ? (
+        <span
+          className="inline-flex items-center gap-1 rounded-md bg-[#F8A568]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#c2410c]"
+          title="Số học viên Sine Art đã đăng ký đúng (trường, ngành) này"
+        >
+          Ngành: {pairTotal} HV
+          {pairYear != null && yr != null ? (
+            <span className="font-semibold text-[#c2410c]/75">
+              · {pairYear}/{yr}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * Khối «trường & ngành» cho học viên Luyện thi — chọn cặp theo `dh_truong_nganh`; lưu tự động sau khi chỉnh (debounce).
  */
 function QlhvNguyenVongAdminBlock({
   studentId,
   nvList,
+  nvStats,
   dhCatalog,
   profileEditing,
   onSaved,
 }: {
   studentId: number;
   nvList: AdminQlhvTruongNganhItem[];
+  nvStats: QlhvNvStats;
   dhCatalog: DhpDhCatalog;
   profileEditing: boolean;
   onSaved: () => void;
@@ -1274,6 +1400,7 @@ function QlhvNguyenVongAdminBlock({
                   <p className="m-0 mt-1 text-[10px] font-semibold text-slate-500">Năm thi: {nv.nam_thi}</p>
                 ) : null}
                 {nv.ghi_chu ? <p className="m-0 mt-1 text-[10px] text-amber-800">📝 {nv.ghi_chu}</p> : null}
+                <NvSineArtCountBadges nv={nv} stats={nvStats} />
               </li>
             ))}
           </ul>
@@ -1391,6 +1518,7 @@ type StudentDetailBodyProps = {
   student: AdminQlhvStudent;
   enrollments: AdminQlhvEnrollment[];
   nvList: AdminQlhvTruongNganhItem[];
+  nvStats: QlhvNvStats;
   khoaCount: number;
   onAddKhoa: () => void;
   childrenEnrollments: ReactNode;
@@ -1413,6 +1541,7 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
     student,
     enrollments,
     nvList,
+    nvStats,
     khoaCount,
     onAddKhoa,
     childrenEnrollments,
@@ -1680,6 +1809,7 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
           <QlhvNguyenVongAdminBlock
             studentId={student.id}
             nvList={nvList}
+            nvStats={nvStats}
             dhCatalog={dhCatalog}
             profileEditing={profileEditing}
             onSaved={onProfileSaved}
@@ -1692,6 +1822,7 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
               <TruongNganhRowEditor
                 key={nv.id}
                 nv={nv}
+                nvStats={nvStats}
                 profileEditing={profileEditing}
                 onSaved={onProfileSaved}
               />
@@ -1867,6 +1998,12 @@ export default function QuanLyHocVienView({
   useEffect(() => {
     if (filterTuVan === "dang_hoc") setFilterTuVan("all");
   }, [filterTuVan]);
+
+  /**
+   * Số HV Sine Art đã đăng ký mỗi trường / mỗi (trường, ngành) — dùng cho badge
+   * trong khối nguyện vọng ở chi tiết HV. Tính 1 lần từ `truongNganhByHvId`.
+   */
+  const nvStats = useMemo(() => computeQlhvNvStats(truongNganhByHvId), [truongNganhByHvId]);
 
   useEffect(() => {
     setHtbtCapToc(initialHtbtCapToc);
@@ -2808,6 +2945,7 @@ export default function QuanLyHocVienView({
                   student={selected}
                   enrollments={byHv.get(selected.id) ?? []}
                   nvList={truongNganhByHvId[String(selected.id)] ?? []}
+                  nvStats={nvStats}
                   khoaCount={(byHv.get(selected.id) ?? []).length}
                   onAddKhoa={() => setShowAdd(true)}
                   childrenEnrollments={enrollmentListNode}
@@ -2932,6 +3070,7 @@ export default function QuanLyHocVienView({
               student={selected}
               enrollments={byHv.get(selected.id) ?? []}
               nvList={truongNganhByHvId[String(selected.id)] ?? []}
+              nvStats={nvStats}
               khoaCount={(byHv.get(selected.id) ?? []).length}
               onAddKhoa={() => setShowAdd(true)}
               childrenEnrollments={enrollmentListNode}

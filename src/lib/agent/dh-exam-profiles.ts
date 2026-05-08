@@ -12,6 +12,10 @@ export const DH_MON_THI_HOP_LE = [
   "Bố cục màu",
 ] as const;
 
+/** Giới hạn khi lưu / hiển thị admin — môn tùy chỉnh được phép ngoài danh sách gợi ý. */
+export const DH_MON_THI_ITEM_MAX_LEN = 80;
+export const DH_MON_THI_ARRAY_MAX_COUNT = 40;
+
 const ALLOWED_MON = new Set<string>(DH_MON_THI_HOP_LE as unknown as string[]);
 
 export type DhExamProfileRow = {

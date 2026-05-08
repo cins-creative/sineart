@@ -13,6 +13,11 @@ const inputClass = cn(
   "outline-none focus:border-[#bc89f8] focus:ring-2 focus:ring-[#bc89f8]/25",
 );
 
+const stkTextareaClass = cn(
+  inputClass,
+  "min-h-[4.5rem] resize-y py-2 leading-snug",
+);
+
 function isoFromStaffNgaySinh(raw: string | null | undefined): string {
   if (!raw?.trim()) return "";
   const s = raw.trim().slice(0, 10);
@@ -123,20 +128,20 @@ export default function StaffPersonalSelfBasicForm({
             className={inputClass}
           />
         </label>
-        <label className="block min-w-0">
+        <label className="block min-w-0 sm:col-span-2">
           <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/40">
             <Landmark className="h-3.5 w-3.5 text-[#c2417c]" strokeWidth={2} aria-hidden />
             STK ngân hàng (nhận lương)
           </span>
-          <input
-            type="text"
+          <textarea
             name="stk_nhan_luong"
-            inputMode="numeric"
             autoComplete="off"
-            placeholder="Số tài khoản"
+            rows={3}
+            spellCheck={false}
+            placeholder="Ngân hàng, số tài khoản, chủ TK…"
             value={stk}
             onChange={(e) => setStk(e.target.value)}
-            className={inputClass}
+            className={stkTextareaClass}
           />
         </label>
       </div>

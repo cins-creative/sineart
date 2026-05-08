@@ -432,7 +432,7 @@ export default function AdminShell({
 
       <div
         className={cn(
-          "flex min-h-screen min-w-0 max-w-full flex-col pl-0 transition-[padding-left] duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)]",
+          "flex min-h-screen w-full min-w-0 max-w-full flex-col items-stretch justify-start pl-0 transition-[padding-left] duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)]",
           !sidebarCollapsed && "md:pl-[260px]",
         )}
       >
@@ -485,8 +485,8 @@ export default function AdminShell({
             </button>
           </div>
         </header>
-        <main className="relative flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col p-4 md:p-6">
-          <div className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col">
+        <main className="relative flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col items-stretch justify-start p-4 md:p-6">
+          <div className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col items-stretch">
             <AdminDashboardAbilitiesProvider staffRole={staffRole}>{children}</AdminDashboardAbilitiesProvider>
           </div>
         </main>

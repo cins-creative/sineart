@@ -134,22 +134,32 @@ export default function StaffPersonalDashboardView({
   const recentKy = bangLuong[0] ? kyLabel(bangLuong[0]) : null;
 
   return (
-    <div className="box-border flex min-h-full w-full min-w-0 max-w-full flex-1 flex-col overflow-x-hidden bg-[#F5F4F2] pb-12 pt-4">
-      <div className="w-full min-w-0 max-w-full flex-1 pb-8">
-        <header className="w-full max-w-full min-w-0 overflow-hidden rounded-3xl border border-black/[0.06] bg-white p-4 shadow-sm ring-1 ring-black/[0.03] md:p-5">
-          <div className="flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
-            <div className="flex w-full min-w-0 gap-4">
-              <StaffPersonalHeaderAvatar
-                isSelf={isSelf}
-                displayName={displayName}
-                initialUrl={avatarUrl}
-              />
-              <div className="min-w-0 flex-1 pt-0.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl font-bold tracking-tight text-[#1a1a1a] md:text-2xl">{displayName}</h1>
+    <div className="box-border flex min-h-full w-full min-w-0 max-w-full flex-1 flex-col self-stretch overflow-x-hidden bg-[#F5F4F2] pb-12 pt-4">
+      {/* Căn giữa khối nội dung — nền xám vẫn full width */}
+      <div className="mx-auto w-full min-w-0 max-w-[1200px] flex-1 self-stretch px-3 pb-8 sm:px-4 md:px-5">
+        <header className="w-full max-w-full min-w-0 overflow-hidden rounded-3xl border border-black/[0.06] bg-white shadow-sm ring-1 ring-black/[0.03]">
+          <div
+            className="h-1 w-full bg-gradient-to-r from-[#f8a668] via-[#f090a8] to-[#ee5ca2]"
+            aria-hidden
+          />
+          <div className="p-5 md:p-6">
+            <div className="flex w-full min-w-0 flex-col items-stretch gap-5 md:flex-row md:gap-8 md:items-start">
+              <div className="flex shrink-0 justify-center md:justify-start md:pt-0.5">
+                <StaffPersonalHeaderAvatar
+                  isSelf={isSelf}
+                  displayName={displayName}
+                  initialUrl={avatarUrl}
+                />
+              </div>
+
+              <div className="min-w-0 flex-1 space-y-3">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
+                  <h1 className="text-balance text-2xl font-bold tracking-tight text-[#1a1a1a] md:text-[1.65rem] md:leading-snug">
+                    {displayName}
+                  </h1>
                   <span
                     className={cn(
-                      "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide",
+                      "inline-flex w-fit shrink-0 items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide",
                       isSelf
                         ? "border-[#bc89f8]/40 bg-[#f5f0ff] text-[#6b21a8]"
                         : "border-black/[0.08] bg-black/[0.04] text-black/60",
@@ -158,23 +168,22 @@ export default function StaffPersonalDashboardView({
                     {isSelf ? "Hồ sơ của bạn" : "Xem hồ sơ"}
                   </span>
                 </div>
-                <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-black/55">
-                  <span className="inline-flex items-center gap-1.5 font-medium text-[#1a1a1a]/85">
-                    <Briefcase className="h-3.5 w-3.5 text-[#c2417c]" strokeWidth={2} aria-hidden />
-                    {staff.vai_tro?.trim() || "—"}
+
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-black/[0.06] pt-3">
+                  <span className="inline-flex items-center gap-1.5 text-sm font-medium text-black/85">
+                    <Briefcase className="h-4 w-4 shrink-0 text-[#c2417c]" strokeWidth={2} aria-hidden />
+                    <span className="min-w-0">{staff.vai_tro?.trim() || "—"}</span>
                   </span>
-                  <span className="text-black/25" aria-hidden>
-                    ·
-                  </span>
+                  <span className="hidden h-4 w-px shrink-0 bg-black/12 sm:block" aria-hidden />
                   <span
                     className={cn(
-                      "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                      "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold",
                       statusPillClass(statusLabel),
                     )}
                   >
                     {statusLabel}
                   </span>
-                </p>
+                </div>
               </div>
             </div>
           </div>

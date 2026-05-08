@@ -63,6 +63,7 @@ function daysColor(d: number | null, data: ClassroomStudentSessionData): string 
   if (enrollmentLooksInactive(data)) return "#ee5ca2";
   if (d === null) return "#aaa";
   if (d < 0) return "#ee5ca2";
+  if (d === 0) return "#d32f2f";
   if (d < DAYS_LOW_KY_WARNING) return "#f8a568";
   if (d <= 5) return "#f8a568";
   return "#4caf50";
@@ -72,8 +73,16 @@ function daysLabel(d: number | null, data: ClassroomStudentSessionData): string 
   if (enrollmentLooksInactive(data)) return "Hết hạn ngày học";
   if (d === null) return "Chưa có kỳ học";
   if (d < 0) return `Nợ ${Math.abs(d)} ngày`;
+  if (d === 0) return "Hết hạn";
   if (d < DAYS_LOW_KY_WARNING) return `Sắp hết hạn — còn ${d} ngày`;
   return `Còn lại: ${d} ngày`;
+}
+
+/** Học viên còn 1–3 ngày: ưu tiên CTA đóng học phí thay vì vào lớp. */
+function studentShowPaymentInsteadOfEnter(data: ClassroomStudentSessionData): boolean {
+  const d = data.days_remaining;
+  if (d === null) return false;
+  return d > 0 && d <= DAYS_LOW_KY_WARNING;
 }
 
 /** Tránh hiển thị " | " khi không có trường/ngành; ưu tiên lịch học từ `ql_lop_hoc.lich_hoc`. */
@@ -281,9 +290,11 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
     void lookupWithEmail(email, () => false);
   };
 
-  const createAccountHref = email.trim()
+  const paymentHref = email.trim()
     ? `/donghocphi?email=${encodeURIComponent(email.trim())}`
     : "/donghocphi";
+
+  const createAccountHref = paymentHref;
 
   const handleAction = (item: ClassroomSessionRecord) => {
     if (item.userType === "Teacher") {
@@ -291,6 +302,12 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
       return;
     }
     const data = item.data;
+    if (studentShowPaymentInsteadOfEnter(data)) {
+      router.push(paymentHref);
+      onClose();
+      setTimeout(resetFormState, 320);
+      return;
+    }
     if (!studentCanEnterPhongHoc(data)) {
       let msg: string;
       if (enrollmentLooksInactive(data)) {
@@ -426,6 +443,8 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
                     {records.map((item, idx) => {
                       const isTeacher = item.userType === "Teacher";
                       const d = isTeacher ? null : item.data.days_remaining;
+                      const paySoon =
+                        !isTeacher && studentShowPaymentInsteadOfEnter(item.data);
                       const canEnter = isTeacher || studentCanEnterPhongHoc(item.data);
                       const borderColor = isTeacher ? "#bc8af9" : "#eaeaea";
                       const thumb = item.data.class_avatar || "";
@@ -482,7 +501,15 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
                                 >
                                   {daysLabel(d, item.data)}
                                 </span>
-                                {canEnter ? (
+                                {paySoon ? (
+                                  <Link
+                                    href={paymentHref}
+                                    className="cso-link-dhp"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    Đóng học phí
+                                  </Link>
+                                ) : canEnter ? (
                                   <button
                                     type="button"
                                     className="cso-link-enter"
@@ -495,7 +522,7 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
                                   </button>
                                 ) : (
                                   <Link
-                                    href="/donghocphi"
+                                    href={paymentHref}
                                     className="cso-link-dhp"
                                     onClick={(e) => e.stopPropagation()}
                                   >

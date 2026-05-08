@@ -195,6 +195,83 @@ function todayIsoDate(): string {
   return `${y}-${m}-${da}`;
 }
 
+type QlhvStatsPeriodPreset = "week" | "month" | "quarter" | "year" | "custom";
+
+function ymdFromLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const da = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${da}`;
+}
+
+/** Tuần bắt đầu thứ Hai (ISO). */
+function startOfIsoWeekMonday(ref: Date): Date {
+  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+function dateInInclusiveRange(ymd: string | null, start: string, end: string): boolean {
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false;
+  return ymd >= start && ymd <= end;
+}
+
+function getQlhvStatsPeriodRange(
+  preset: QlhvStatsPeriodPreset,
+  customFrom: string,
+  customTo: string,
+  ref: Date = new Date(),
+): { start: string; end: string; label: string; ok: boolean } {
+  const today = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  if (preset === "custom") {
+    const a = customFrom.trim().slice(0, 10);
+    const b = customTo.trim().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(a) && /^\d{4}-\d{2}-\d{2}$/.test(b)) {
+      const [start, end] = a <= b ? [a, b] : [b, a];
+      return { start, end, label: `${start} → ${end}`, ok: true };
+    }
+    return { start: "", end: "", label: "Chọn đủ «Từ ngày» và «Đến ngày»", ok: false };
+  }
+  if (preset === "week") {
+    const mon = startOfIsoWeekMonday(today);
+    const sun = new Date(mon);
+    sun.setDate(sun.getDate() + 6);
+    const start = ymdFromLocalDate(mon);
+    const end = ymdFromLocalDate(sun);
+    return { start, end, label: `Tuần ${start} – ${end}`, ok: true };
+  }
+  if (preset === "month") {
+    const y = today.getFullYear();
+    const mo = today.getMonth();
+    const start = ymdFromLocalDate(new Date(y, mo, 1));
+    const end = ymdFromLocalDate(new Date(y, mo + 1, 0));
+    return { start, end, label: `Tháng ${mo + 1}/${y}`, ok: true };
+  }
+  if (preset === "quarter") {
+    const y = today.getFullYear();
+    const mo = today.getMonth();
+    const q = Math.floor(mo / 3);
+    const m0 = q * 3;
+    const start = ymdFromLocalDate(new Date(y, m0, 1));
+    const end = ymdFromLocalDate(new Date(y, m0 + 3, 0));
+    return { start, end, label: `Quý ${q + 1}/${y}`, ok: true };
+  }
+  const y = today.getFullYear();
+  return { start: `${y}-01-01`, end: `${y}-12-31`, label: `Năm ${y}`, ok: true };
+}
+
+/** Ngày gán «nghỉ» cho thống kê: ngày kết thúc hồ sơ (nếu có) → ngày cuối kỳ khi đã nghỉ theo HP. */
+function quitStatsReferenceYmd(hv: AdminQlhvStudent, khs: AdminQlhvEnrollment[]): string | null {
+  if (hv.trang_thai_tu_van !== "nghi") return null;
+  const fromProfile = isoDateFromCreatedAt(hv.ngay_ket_thuc);
+  if (fromProfile) return fromProfile;
+  const k = ngayKetThucHienThi(khs);
+  if (k) return k;
+  return maxNgayCuoiKy(khs);
+}
+
 /** Ngày cuối kỳ muộn nhất trong các lớp (chuỗi so sánh được). */
 function maxNgayCuoiKy(khs: AdminQlhvEnrollment[]): string | null {
   let maxD: string | null = null;
@@ -1782,6 +1859,9 @@ export default function QuanLyHocVienView({
   const [capTocBusy, setCapTocBusy] = useState(false);
   const [tvBusy, setTvBusy] = useState(false);
   const [tvToast, setTvToast] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [statsPeriodPreset, setStatsPeriodPreset] = useState<QlhvStatsPeriodPreset>("month");
+  const [statsCustomFrom, setStatsCustomFrom] = useState("");
+  const [statsCustomTo, setStatsCustomTo] = useState("");
 
   /** Bộ lọc «Đang học — tư vấn» đã bỏ khỏi menu — gỡ trạng thái lọc legacy. */
   useEffect(() => {
@@ -2007,6 +2087,27 @@ export default function QuanLyHocVienView({
   }, [students, byHv]);
 
   const mauCount = useMemo(() => students.filter((h) => h.is_hoc_vien_mau).length, [students]);
+
+  const statsPeriod = useMemo(
+    () => getQlhvStatsPeriodRange(statsPeriodPreset, statsCustomFrom, statsCustomTo),
+    [statsPeriodPreset, statsCustomFrom, statsCustomTo],
+  );
+
+  const statsNewAndQuit = useMemo(() => {
+    if (!statsPeriod.ok) return { newCount: 0, quitCount: 0 };
+    const { start, end } = statsPeriod;
+    let newCount = 0;
+    let quitCount = 0;
+    for (const hv of students) {
+      if (hv.is_hoc_vien_mau) continue;
+      const created = isoDateFromCreatedAt(hv.created_at);
+      if (dateInInclusiveRange(created, start, end)) newCount++;
+      const khs = byHv.get(hv.id) ?? [];
+      const quitD = quitStatsReferenceYmd(hv, khs);
+      if (dateInInclusiveRange(quitD, start, end)) quitCount++;
+    }
+    return { newCount, quitCount };
+  }, [students, byHv, statsPeriod]);
 
   const bulkFilterSelectValue = useMemo(() => {
     if (filterDangKhoaBucket === "1") return "bucket_1";
@@ -2261,6 +2362,71 @@ export default function QuanLyHocVienView({
               Ghi danh còn hạn:{" "}
               <span className="ml-0.5 tabular-nums text-[12px] font-extrabold">{activeLopEnrollmentCount}</span>
             </div>
+          </div>
+          <div
+            className="flex flex-col gap-2 rounded-xl border border-[#E8EAEC] bg-[#FAFBFC] px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1.5"
+            title="Không tính học viên mẫu. «Nghỉ»: TT tư vấn «Nghỉ» và có ngày tham chiếu (ngày kết thúc hồ sơ nếu có, không thì ngày cuối kỳ HP)."
+          >
+            <span className="shrink-0 text-[9px] font-extrabold uppercase tracking-wide text-slate-500">
+              Thống kê theo thời gian
+            </span>
+            <select
+              className={cn(QLHV_HDR_SELECT, "h-8 min-h-8 w-full sm:w-[min(100%,11rem)]")}
+              aria-label="Chọn khoảng thời gian thống kê"
+              value={statsPeriodPreset}
+              onChange={(e) => setStatsPeriodPreset(e.target.value as QlhvStatsPeriodPreset)}
+            >
+              <option value="week">Tuần (T2 → CN)</option>
+              <option value="month">Tháng này</option>
+              <option value="quarter">Quý này</option>
+              <option value="year">Năm nay</option>
+              <option value="custom">Từ ngày — đến ngày</option>
+            </select>
+            {statsPeriodPreset === "custom" ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <label className="flex min-w-0 flex-1 items-center gap-1.5 text-[10px] text-slate-600 sm:flex-initial">
+                  <span className="shrink-0 text-slate-500">Từ</span>
+                  <input
+                    type="date"
+                    value={statsCustomFrom.slice(0, 10)}
+                    onChange={(e) => setStatsCustomFrom(e.target.value)}
+                    className="h-8 min-h-8 min-w-0 flex-1 rounded-lg border border-[#EAEAEA] bg-white px-2 text-[11px] font-semibold text-[#323232] shadow-sm outline-none focus:border-[#BC8AF9] focus:ring-2 focus:ring-[#BC8AF9]/20 sm:w-[9.5rem] sm:flex-initial"
+                  />
+                </label>
+                <label className="flex min-w-0 flex-1 items-center gap-1.5 text-[10px] text-slate-600 sm:flex-initial">
+                  <span className="shrink-0 text-slate-500">Đến</span>
+                  <input
+                    type="date"
+                    value={statsCustomTo.slice(0, 10)}
+                    onChange={(e) => setStatsCustomTo(e.target.value)}
+                    className="h-8 min-h-8 min-w-0 flex-1 rounded-lg border border-[#EAEAEA] bg-white px-2 text-[11px] font-semibold text-[#323232] shadow-sm outline-none focus:border-[#BC8AF9] focus:ring-2 focus:ring-[#BC8AF9]/20 sm:w-[9.5rem] sm:flex-initial"
+                  />
+                </label>
+              </div>
+            ) : null}
+            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-700">
+              <span
+                className="tabular-nums"
+                title="Ngày tạo tài khoản (`created_at`) nằm trong khoảng đã chọn."
+              >
+                HV mới:{" "}
+                <strong className="text-emerald-700">{statsNewAndQuit.newCount}</strong>
+              </span>
+              <span
+                className="tabular-nums"
+                title="TT tư vấn «Nghỉ» và ngày tham chiếu trong khoảng (xem chú thích khối)."
+              >
+                HV nghỉ:{" "}
+                <strong className="text-red-700">{statsNewAndQuit.quitCount}</strong>
+              </span>
+            </div>
+            <p className="m-0 w-full min-w-0 text-[10px] leading-snug sm:w-auto sm:flex-1">
+              {statsPeriod.ok ? (
+                <span className="font-semibold text-slate-600">{statsPeriod.label}</span>
+              ) : (
+                <span className="font-semibold text-amber-800">{statsPeriod.label}</span>
+              )}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 overflow-visible pt-0.5">
             <div className="relative min-h-[36px] min-w-0 flex-1 basis-[min(100%,18rem)]">

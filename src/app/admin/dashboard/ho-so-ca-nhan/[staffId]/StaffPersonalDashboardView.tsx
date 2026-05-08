@@ -18,13 +18,9 @@ import type { AdminStaffPersonalDashboardData } from "@/lib/data/admin-staff-per
 import { normalizeHrStaffStatusDisplayLabel } from "@/lib/admin/staff-employment-status";
 import StaffPersonalPayrollSection from "@/app/admin/dashboard/ho-so-ca-nhan/[staffId]/StaffPersonalPayrollSection";
 import { Field, SectionTitle } from "@/app/admin/dashboard/ho-so-ca-nhan/[staffId]/StaffPersonalDashboardShared";
+import StaffPersonalSelfBasicForm from "@/app/admin/dashboard/ho-so-ca-nhan/[staffId]/StaffPersonalSelfBasicForm";
+import StaffPersonalHeaderAvatar from "@/app/admin/dashboard/ho-so-ca-nhan/[staffId]/StaffPersonalHeaderAvatar";
 import { cn } from "@/lib/utils";
-
-function staffInitial(name: string): string {
-  const t = name.trim();
-  if (!t) return "?";
-  return t.charAt(0).toUpperCase();
-}
 
 function fmtDateVi(ymd: string | null | undefined): string {
   if (!ymd?.trim()) return "—";
@@ -138,30 +134,17 @@ export default function StaffPersonalDashboardView({
   const recentKy = bangLuong[0] ? kyLabel(bangLuong[0]) : null;
 
   return (
-    <div className="min-h-full w-full min-w-0 max-w-full overflow-x-hidden bg-[#F5F4F2] pb-12 pt-4">
-      <div className="mx-auto w-full min-w-0 max-w-6xl px-4 pb-8 md:px-6">
-        <header className="max-w-full min-w-0 overflow-hidden rounded-3xl border border-black/[0.06] bg-white p-4 shadow-sm ring-1 ring-black/[0.03] md:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex gap-4">
-              <div className="relative h-[88px] w-[88px] shrink-0 overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-sm md:h-[96px] md:w-[96px]">
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div
-                    className="flex h-full w-full items-center justify-center text-2xl font-bold text-white md:text-3xl"
-                    style={{ background: "linear-gradient(135deg, #f8a668, #ee5ca2)" }}
-                    aria-hidden
-                  >
-                    {staffInitial(displayName)}
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0 pt-0.5">
+    <div className="box-border flex min-h-full w-full min-w-0 max-w-full flex-1 flex-col overflow-x-hidden bg-[#F5F4F2] pb-12 pt-4">
+      <div className="w-full min-w-0 max-w-full flex-1 pb-8">
+        <header className="w-full max-w-full min-w-0 overflow-hidden rounded-3xl border border-black/[0.06] bg-white p-4 shadow-sm ring-1 ring-black/[0.03] md:p-5">
+          <div className="flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex w-full min-w-0 gap-4">
+              <StaffPersonalHeaderAvatar
+                isSelf={isSelf}
+                displayName={displayName}
+                initialUrl={avatarUrl}
+              />
+              <div className="min-w-0 flex-1 pt-0.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-xl font-bold tracking-tight text-[#1a1a1a] md:text-2xl">{displayName}</h1>
                   <span
@@ -192,19 +175,13 @@ export default function StaffPersonalDashboardView({
                     {statusLabel}
                   </span>
                 </p>
-                <p className="mt-3 max-w-xl text-xs leading-relaxed text-black/45">
-                  Thông tin nhân sự, thời gian tại Sine Art và các kỳ trả lương.
-                </p>
               </div>
             </div>
-            <p className="shrink-0 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-black/35 sm:pt-1">
-              Hồ sơ nhân sự
-            </p>
           </div>
         </header>
 
         {/* Quick stats */}
-        <div className="mt-5 grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-3">
+        <div className="mt-5 grid w-full min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-3">
           <StatTile
             icon={CalendarClock}
             label="Thời gian tại Sine Art"
@@ -225,7 +202,13 @@ export default function StaffPersonalDashboardView({
           />
         </div>
 
-        <div className="mt-6 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)] lg:items-start lg:gap-5">
+        {isSelf ? (
+          <div className="mt-5 w-full min-w-0">
+            <StaffPersonalSelfBasicForm staff={staff} />
+          </div>
+        ) : null}
+
+        <div className="mt-6 grid w-full min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)] lg:items-start lg:gap-5">
           <div className="min-w-0 space-y-4">
             {/* Contact & org */}
             <section className="max-w-full min-w-0 overflow-hidden rounded-3xl border border-black/[0.06] bg-white p-4 shadow-[0_4px_24px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.03] md:p-5">
@@ -235,12 +218,16 @@ export default function StaffPersonalDashboardView({
                 description="Thông tin làm việc và phòng ban."
               />
               <div className="grid gap-2.5 sm:grid-cols-2">
-                <Field icon={Mail} label="Email">
-                  {staff.email?.trim() || "—"}
-                </Field>
-                <Field icon={Phone} label="Điện thoại">
-                  {staff.sdt?.trim() || "—"}
-                </Field>
+                {!isSelf ? (
+                  <Field icon={Mail} label="Email">
+                    {staff.email?.trim() || "—"}
+                  </Field>
+                ) : null}
+                {!isSelf ? (
+                  <Field icon={Phone} label="Điện thoại">
+                    {staff.sdt?.trim() || "—"}
+                  </Field>
+                ) : null}
                 <Field icon={MapPin} label="Chi nhánh">
                   {chiNhanhTen ?? "—"}
                 </Field>
@@ -264,9 +251,11 @@ export default function StaffPersonalDashboardView({
                 <Field icon={Banknote} label="Hình thức tính lương">
                   {staff.hinh_thuc_tinh_luong?.trim() || "—"}
                 </Field>
-                <Field icon={CalendarClock} label="Ngày sinh">
-                  {fmtDateVi(staff.ngay_sinh)}
-                </Field>
+                {!isSelf ? (
+                  <Field icon={CalendarClock} label="Ngày sinh">
+                    {fmtDateVi(staff.ngay_sinh)}
+                  </Field>
+                ) : null}
                 <Field icon={Wallet} label="Lương cơ bản">
                   {fmtVnd(staff.luong_co_ban)}
                 </Field>
@@ -276,9 +265,15 @@ export default function StaffPersonalDashboardView({
                 <Field icon={Landmark} label="BHXH (mức)">
                   {fmtVnd(staff.bhxh)}
                 </Field>
-                <Field icon={Landmark} label="STK / Ngân hàng">
-                  {[staff.stk_nhan_luong ?? staff.bank_stk, staff.bank_name].filter(Boolean).join(" · ") || "—"}
-                </Field>
+                {!isSelf ? (
+                  <Field icon={Landmark} label="STK / Ngân hàng">
+                    {[staff.stk_nhan_luong ?? staff.bank_stk, staff.bank_name].filter(Boolean).join(" · ") || "—"}
+                  </Field>
+                ) : staff.bank_name?.trim() ? (
+                  <Field icon={Landmark} label="Tên ngân hàng (ghi nhận HR)">
+                    {staff.bank_name.trim()}
+                  </Field>
+                ) : null}
               </div>
             </section>
 

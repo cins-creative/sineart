@@ -486,7 +486,7 @@ export default function AdminShell({
           </div>
         </header>
         <main className="relative flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col p-4 md:p-6">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col">
             <AdminDashboardAbilitiesProvider staffRole={staffRole}>{children}</AdminDashboardAbilitiesProvider>
           </div>
         </main>

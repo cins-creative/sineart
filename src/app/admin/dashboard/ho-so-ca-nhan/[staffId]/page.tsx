@@ -73,7 +73,7 @@ export default async function HoSoCaNhanStaffPage({
   const isSelf = session.staffId === targetId;
 
   return (
-    <div className="-m-4 flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden md:-m-6">
+    <div className="-m-4 box-border flex w-full min-h-0 min-w-0 max-w-full flex-1 flex-col self-stretch overflow-x-hidden md:-m-6">
       <StaffPersonalDashboardView payload={data} isSelf={isSelf} />
     </div>
   );

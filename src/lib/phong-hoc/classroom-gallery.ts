@@ -1,10 +1,15 @@
 import { isWrongLopFkColumnError } from "@/app/api/phong-hoc/hv-chatbox/lop-column";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/**
+ * `!mon_hoc` disambiguates: PostgREST có hơn 1 mối quan hệ giữa
+ * `hv_he_thong_bai_tap` và `ql_mon_hoc` (do view/FK phụ); thiếu hint sẽ throw
+ * "Could not embed because more than one relationship was found" → 0 row.
+ */
 const HV_SELECT = `
   id, photo, score, bai_mau, thuoc_bai_tap,
   ten_hoc_vien:ql_thong_tin_hoc_vien(id, full_name, email_prefix),
-  bai_tap:hv_he_thong_bai_tap(ten_bai_tap, bai_so, mon_hoc:ql_mon_hoc(id, ten_mon_hoc))
+  bai_tap:hv_he_thong_bai_tap(ten_bai_tap, bai_so, mon_hoc:ql_mon_hoc!mon_hoc(id, ten_mon_hoc))
 `;
 
 /** Cùng embed + cột lớp (một trong hai có thể không tồn tại tùy schema). */

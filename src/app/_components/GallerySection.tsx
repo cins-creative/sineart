@@ -136,7 +136,7 @@ type Props = {
   galleryWrapId?: string;
   /** Trang chủ: nút «Xem thêm» (placeholder). Trang gallery: ẩn. */
   showFooterCta?: boolean;
-  /** Trang chủ / gallery: tab theo môn. Trang bài tập: Bài mẫu / Bài tham khảo (`baiMau`). */
+  /** Trang chủ / gallery: tab theo môn. Trang bài tập: Bài mẫu / Bài HV Sine Art (`baiMau`). */
   tabMode?: GalleryTabMode;
   /** Ẩn tiêu đề `.sec-label` (khi đã có tiêu đề khối ngoài, vd. «Mở rộng»). */
   showSectionTitle?: boolean;
@@ -268,7 +268,7 @@ export default function GallerySection({
                     className={`gtab${workKind === "tham_khao" ? " active" : ""}`}
                     onClick={() => setWorkKind("tham_khao")}
                   >
-                    Bài tham khảo
+                    Bài HV Sine Art
                   </button>
                 ) : null}
               </>
@@ -364,8 +364,9 @@ export default function GallerySection({
                 <Image
                   src={cfImageForLightbox(lightbox.photo) || lightbox.photo}
                   alt=""
-                  width={1200}
-                  height={900}
+                  width={2400}
+                  height={1800}
+                  sizes="100vw"
                   className="gallery-lightbox-img"
                   decoding="async"
                   priority

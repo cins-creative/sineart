@@ -2,14 +2,21 @@ import { createStaticClient } from "@/lib/supabase/static";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BaiHocVien, GalleryDisplayItem } from "@/types/homepage";
 
-/** Cùng câu `select` như `getHomePageData` — embed đủ để `tenMonHoc` + nhãn bài tập */
+/**
+ * Cùng câu `select` như `getHomePageData` — embed đủ để `tenMonHoc` + nhãn bài tập.
+ *
+ * `!mon_hoc` disambiguates: PostgREST đang thấy hơn 1 mối quan hệ giữa
+ * `hv_he_thong_bai_tap` và `ql_mon_hoc` (do view/FK phụ), nếu không hint cột FK
+ * thì cả câu select fail bằng lỗi "Could not embed because more than one
+ * relationship was found" → returns 0 rows.
+ */
 export const HV_BAI_HOC_VIEN_GALLERY_SELECT = `
   id, photo, score, bai_mau,
   ten_hoc_vien:ql_thong_tin_hoc_vien(full_name),
   lop_hoc:ql_lop_hoc(class_name),
   thuoc_bai_tap:hv_he_thong_bai_tap(
     ten_bai_tap,
-    mon_hoc:ql_mon_hoc(id, ten_mon_hoc)
+    mon_hoc:ql_mon_hoc!mon_hoc(id, ten_mon_hoc)
   )
 `;
 
@@ -149,7 +156,7 @@ async function fetchGalleryItemsByMonHocId(
   lop_hoc:ql_lop_hoc(class_name),
   thuoc_bai_tap:hv_he_thong_bai_tap!inner(
     ten_bai_tap,
-    mon_hoc:ql_mon_hoc(id, ten_mon_hoc)
+    mon_hoc:ql_mon_hoc!mon_hoc(id, ten_mon_hoc)
   )
 `;
   let q = supabase
@@ -185,7 +192,7 @@ async function fetchGalleryItemsByLoaiKhoaHoc(
     lop_hoc:ql_lop_hoc(class_name),
     thuoc_bai_tap:hv_he_thong_bai_tap!inner(
       ten_bai_tap,
-      mon_hoc:ql_mon_hoc!inner(id, ten_mon_hoc, loai_khoa_hoc)
+      mon_hoc:ql_mon_hoc!mon_hoc!inner(id, ten_mon_hoc, loai_khoa_hoc)
     )
   `;
   let q = supabase

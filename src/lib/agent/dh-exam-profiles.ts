@@ -16,7 +16,23 @@ export const DH_MON_THI_HOP_LE = [
 export const DH_MON_THI_ITEM_MAX_LEN = 80;
 export const DH_MON_THI_ARRAY_MAX_COUNT = 40;
 
-const ALLOWED_MON = new Set<string>(DH_MON_THI_HOP_LE as unknown as string[]);
+/** Giữ đúng chuỗi đã lưu trong DB (kể cả môn tùy chỉnh) — khớp admin Trường & ngành thi ĐH. */
+function parseMonThiArrayPermissive(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const x of raw) {
+    if (typeof x !== "string") continue;
+    let t = x.trim();
+    if (!t) continue;
+    if (t.length > DH_MON_THI_ITEM_MAX_LEN) t = t.slice(0, DH_MON_THI_ITEM_MAX_LEN);
+    if (seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+    if (out.length >= DH_MON_THI_ARRAY_MAX_COUNT) break;
+  }
+  return out;
+}
 
 export type DhExamProfileRow = {
   truong_id: number;
@@ -25,26 +41,14 @@ export type DhExamProfileRow = {
   truong_score: number | null;
   nganh_id: number;
   ten_nganh: string;
-  /** Các môn trong đề — chỉ các nhãn trong DH_MON_THI_HOP_LE được giữ khi đọc DB. */
+  /** Các môn trong đề — đúng như lưu trong `dh_truong_nganh.mon_thi` (gợi ý + tùy chỉnh). */
   mon_thi: string[];
   details: string | null;
 };
 
-function parseMonThiArray(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const out: string[] = [];
-  for (const x of raw) {
-    if (typeof x !== "string") continue;
-    const t = x.trim();
-    if (!t) continue;
-    if (ALLOWED_MON.has(t)) out.push(t);
-  }
-  return out;
-}
-
 /**
- * Đọc `dh_truong_nganh` (đã có cột mon_thi, details). Thiếu cột / lỗi → [].
- * Chỉ lấy dòng có ít nhất một môn hoặc có details.
+ * Đọc toàn bộ cặp `dh_truong_nganh` có join được trường & ngành (đồng bộ admin).
+ * `mon_thi` giữ mọi nhãn đã lưu (gợi ý + tùy chỉnh), không lọc chỉ danh sách cố định.
  */
 export async function fetchDhExamProfilesSafe(
   supabase: SupabaseClient,
@@ -80,9 +84,8 @@ export async function fetchDhExamProfilesSafe(
         if (Number.isFinite(n)) truongScore = n;
       }
 
-      const monThi = parseMonThiArray(raw.mon_thi);
+      const monThi = parseMonThiArrayPermissive(raw.mon_thi);
       const details = typeof raw.details === "string" ? raw.details : null;
-      if (monThi.length === 0 && !(details?.trim())) continue;
 
       rows.push({
         truong_id: tid,
@@ -122,6 +125,10 @@ export function formatDhExamProfilesForPrompt(rows: DhExamProfileRow[]): string 
     }
     if (r.mon_thi.length) {
       lines.push(`Môn thi / hình thức: ${r.mon_thi.join(", ")}`);
+    } else {
+      lines.push(
+        `Môn thi / hình thức: (chưa khai báo trong admin — không suy đoán; nhờ kiểm tra hoặc hỏi HV đề chính thức)`,
+      );
     }
     if (r.details?.trim()) {
       lines.push(`Chi tiết thêm: ${r.details.trim()}`);

@@ -7,6 +7,7 @@ import {
   buildDhMonThiSampleImageUrls,
   getPublicSiteBaseUrl,
 } from "@/lib/agent/dh-mon-thi-sample-images";
+import { fetchDhAgentUniversityCatalogForPrompt } from "@/lib/agent/dh-agent-university-catalog";
 import {
   fetchDhExamProfilesSafe,
   formatDhExamProfilesForPrompt,
@@ -38,7 +39,7 @@ KHI THIẾU THÔNG TIN TRONG KB HOẶC KHÔNG CHẮC KHÓA NÀO:
 NGUỒN DỮ LIỆU — theo thứ tự ưu tiên:
 1. Khối "DỮ LIỆU VẬN HÀNH" trong system prompt — đồng bộ admin Chi nhánh / Khóa học (ql_mon_hoc) / Lớp học (ql_lop_hoc) / Gói học phí (bảng học phí). Đây là nguồn chính cho giá, lịch lớp, chi nhánh, tên môn. Không bịa số tiền hay lịch nếu không có trong khối đó hoặc KB.
 2. Knowledge Base (inject bên dưới) — chỉ dùng mục khớp ĐÚNG khóa / đúng câu hỏi. Nếu KB chỉ có "Bố cục màu" mà học viên hỏi "Trang trí màu" → KHÔNG copy nội dung sang; nói để mình kiểm tra lại.
-3. Trường / ngành / môn thi đại học — CHỈ lấy từ khối "ĐỀ THI ĐẠI HỌC THEO TRƯỜNG VÀ NGÀNH" (đồng bộ bảng dh_truong_dai_hoc, dh_nganh_dao_tao, dh_truong_nganh). Không suy diễn thêm môn hoặc điểm. Khi học viên nói rõ trường và ngành (khớp tên trong khối đó), trả lời đúng môn thi và ghi chú đã inject. Môn thi chỉ các loại đã train: Xét duyệt, Hình họa khối cơ bản, Hình họa tĩnh vật, Hình họa tượng tròn, Hình họa chân dung, Hình họa toàn thân, Trang trí màu, Bố cục màu — không bịa thêm. Không có dòng cho cặp trường–ngành → để mình kiểm tra lại.
+3. Trường / ngành / môn thi đại học — CHỈ lấy từ các khối inject "ĐỀ THI ĐẠI HỌC THEO TRƯỜNG VÀ NGÀNH" (cặp dh_truong_nganh + môn/chi tiết), "DANH MỤC TRƯỜNG / NGÀNH & MỐC LỊCH" (bảng danh mục + mốc tuyển sinh). Không suy diễn điểm hay ngày không có trong khối. Khi học viên nói rõ trường và ngành (khớp tên hoặc id trong các khối đó), trả lời đúng môn thi đã khai báo; nếu admin ghi môn tùy chỉnh — vẫn trích đúng chữ đã inject. Ảnh mẫu môn cố định chỉ cho các nhãn chuẩn trong hệ thống ảnh (file /img/dh-mon-thi/). Không có dòng cặp trường–ngành cho nhu cầu đó → để mình kiểm tra lại.
 4. Ảnh môn thi ĐH: map cố định Bố cục màu, Trang trí màu, các Hình họa… → file PNG trong /img/dh-mon-thi/ (hệ thống gửi kèm tin khi đủ điều kiện ở trên — không tự gửi). Ảnh trong KB: chỉ mục FAQ có attachments. Không chèn URL ảnh trong chữ tin nhắn.
 5. Gọi tool query_courses — danh sách lớp đang hoạt động (ql_lop_hoc) đã đồng bộ; khi đề xuất lớp, khớp tên môn/chi nhánh/lịch trong data.
 6. Nếu không có data — hỏi lại hoặc để mình kiểm tra lại / escalate.
@@ -85,6 +86,7 @@ function buildSystemPromptWithExam(
   consultantExtra: string | null | undefined,
   examFormatted: string,
   operationalCatalog: string,
+  dhUniversityCatalog: string,
 ): string {
   let s = buildFullSystemPrompt(consultantExtra);
   const op = operationalCatalog.trim();
@@ -95,6 +97,10 @@ function buildSystemPromptWithExam(
   if (exam) {
     s = `${s}\n\n─── ĐỀ THI ĐẠI HỌC THEO TRƯỜNG VÀ NGÀNH (tra khi HV cho biết trường + ngành) ───\n${exam}`;
   }
+  const dhUni = dhUniversityCatalog.trim();
+  if (dhUni) {
+    s = `${s}\n\n─── DANH MỤC TRƯỜNG / NGÀNH & MỐC LỊCH (đồng bộ admin Trường & ngành thi ĐH) ───\n${dhUni}`;
+  }
   return s;
 }
 
@@ -102,7 +108,7 @@ function buildSystemPromptWithExam(
 export async function GET() {
   // KB + catalog vận hành (ql_chi_nhanh, ql_mon_hoc, ql_lop_hoc, hp gói học phí) + đề thi ĐH
   // `ag_agent_config` đọc riêng — nếu chưa migration thì không làm fail cả API.
-  const [{ data: kb }, consultant, examProfiles, operational] = await Promise.all([
+  const [{ data: kb }, consultant, examProfiles, operational, dhUniCatalog] = await Promise.all([
     supabase
       .from("ag_knowledge_base")
       .select("question, answer, category, priority, attachments")
@@ -112,6 +118,7 @@ export async function GET() {
     fetchConsultantInstructionsSafe(supabase),
     fetchDhExamProfilesSafe(supabase),
     fetchAgentOperationalCatalog(supabase),
+    fetchDhAgentUniversityCatalogForPrompt(supabase),
   ]);
 
   const consultantExtra = consultant.text.trim();
@@ -121,13 +128,20 @@ export async function GET() {
   return NextResponse.json(
     {
       updated: new Date().toISOString(),
-      system_prompt: buildSystemPromptWithExam(consultantExtra, examFormatted, operational.promptAppend),
+      system_prompt: buildSystemPromptWithExam(
+        consultantExtra,
+        examFormatted,
+        operational.promptAppend,
+        dhUniCatalog.promptAppend,
+      ),
       consultant_instructions: consultantExtra || null,
       dh_exam_profiles: examProfiles,
       dh_mon_thi_sample_image_urls: dhMonThiSampleImageUrls,
       faq: kb ?? [],
       available_classes: operational.available_classes,
       operational_load_warnings: operational.loadWarnings.length ? operational.loadWarnings : undefined,
+      dh_university_load_warnings:
+        dhUniCatalog.warnings.length > 0 ? dhUniCatalog.warnings : undefined,
     },
     {
       headers: {

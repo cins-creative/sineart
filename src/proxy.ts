@@ -32,6 +32,25 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
     }
   }
 
+  /**
+   * URL ngành cũ: `/dh-truong-nganh/[truong]/[nganh]` → `.../[truong]/nganh/[nganh]`.
+   * Không đụng `/[truong]/tuyen-sinh/[nam]` (độ dài path khác).
+   */
+  const dhParts = path.split("/").filter(Boolean);
+  if (
+    dhParts.length === 5 &&
+    dhParts[0] === "admin" &&
+    dhParts[1] === "dashboard" &&
+    dhParts[2] === "dh-truong-nganh"
+  ) {
+    const seg2 = dhParts[4];
+    if (seg2 !== "tuyen-sinh" && seg2 !== "nganh") {
+      const url = req.nextUrl.clone();
+      url.pathname = `/admin/dashboard/dh-truong-nganh/${dhParts[3]}/nganh/${seg2}`;
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (!path.startsWith("/admin")) return NextResponse.next();
 
   if (PUBLIC_ADMIN_PATHS.has(path)) {

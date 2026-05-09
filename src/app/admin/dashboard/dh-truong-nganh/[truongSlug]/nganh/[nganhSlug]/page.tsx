@@ -7,6 +7,6 @@ type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default function DhPairDetailPage({ params, searchParams }: Props) {
+export default function DhNganhDetailPage({ params, searchParams }: Props) {
   return <DhPairDetailSessionAndData params={params} searchParams={searchParams} />;
 }

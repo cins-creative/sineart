@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft, CalendarRange, GraduationCap } from "lucide-react";
+import { ArrowLeft, CalendarRange, GraduationCap, School } from "lucide-react";
 
 import type {
   AdminDhNganhMatched,
@@ -13,17 +13,16 @@ import type {
 } from "@/lib/data/admin-dh-truong-nganh";
 import { cn } from "@/lib/utils";
 
-import DhPagination from "../_shared/DhPagination";
-import DhStatsCards from "../_shared/DhStatsCards";
-import DhStudentsTable from "../_shared/DhStudentsTable";
+import DhPagination from "../../../_shared/DhPagination";
+import DhStatsCards from "../../../_shared/DhStatsCards";
+import DhStudentsTable from "../../../_shared/DhStudentsTable";
 
 type Props = {
   truongSlug: string;
+  nganhSlug: string;
   truong: AdminDhTruongMatched | null;
-  nganhList: AdminDhNganhMatched[];
+  nganh: AdminDhNganhMatched | null;
   availableYears: number[];
-  nganhSlugFilter: string | null;
-  nganhFilterId: number | null;
   namThiFilter: number | null;
   page: number;
   pageSize: number;
@@ -31,6 +30,8 @@ type Props = {
   stats: AdminDhOverviewStats | null;
   missingServiceRole?: boolean;
   loadError?: string | null;
+  catalog: { mon_thi: string[]; details: string | null };
+  monThiFilter: string | null;
 };
 
 function inp(): string {
@@ -40,12 +41,12 @@ function inp(): string {
   );
 }
 
-export default function DhTruongDetailView({
+export default function DhPairDetailView({
   truongSlug,
+  nganhSlug,
   truong,
-  nganhList,
+  nganh,
   availableYears,
-  nganhSlugFilter,
   namThiFilter,
   page,
   pageSize,
@@ -53,17 +54,19 @@ export default function DhTruongDetailView({
   stats,
   missingServiceRole,
   loadError,
+  catalog,
+  monThiFilter,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const truongHref = `/admin/dashboard/dh-truong-nganh/${truongSlug}`;
 
-  /** Bảo toàn search param còn lại; ghi đè key được truyền vào (null = xoá). */
   const buildHref = useCallback(
-    (overrides: { nganh?: string | null; nam?: string | null; page?: number | null }): string => {
+    (overrides: { nam?: string | null; page?: number | null; mon?: string | null }): string => {
       const params = new URLSearchParams();
-      if (nganhSlugFilter) params.set("nganh", nganhSlugFilter);
       if (namThiFilter != null) params.set("nam", String(namThiFilter));
       if (page > 1) params.set("page", String(page));
+      if (monThiFilter != null && monThiFilter !== "") params.set("mon", monThiFilter);
       for (const [k, v] of Object.entries(overrides)) {
         if (v == null || v === "") params.delete(k);
         else params.set(k, String(v));
@@ -71,46 +74,22 @@ export default function DhTruongDetailView({
       const qs = params.toString();
       return qs ? `${pathname}?${qs}` : pathname;
     },
-    [namThiFilter, nganhSlugFilter, page, pathname],
-  );
-
-  const onNganhChange = useCallback(
-    (slug: string) => {
-      // Đổi ngành → nếu chọn cụ thể, jump sang sub-subpage để đồng nhất URL.
-      if (!slug) {
-        router.push(buildHref({ nganh: null, page: null }));
-      } else {
-        const params = new URLSearchParams();
-        if (namThiFilter != null) params.set("nam", String(namThiFilter));
-        const qs = params.toString();
-        const base = `${pathname}/${slug}`;
-        router.push(qs ? `${base}?${qs}` : base);
-      }
-    },
-    [buildHref, namThiFilter, pathname, router],
+    [namThiFilter, page, pathname, monThiFilter],
   );
 
   const onNamChange = useCallback(
-    (value: string) => {
-      router.push(buildHref({ nam: value || null, page: null }));
+    (value: string) => router.push(buildHref({ nam: value || null, page: null })),
+    [buildHref, router],
+  );
+
+  const onMonChip = useCallback(
+    (mon: string | null) => {
+      router.push(buildHref({ mon: mon != null && mon !== "" ? mon : null, page: null }));
     },
     [buildHref, router],
   );
 
-  const hrefForNganh = useCallback(
-    (nganhId: number): string => {
-      const found = nganhList.find((n) => n.id === nganhId);
-      if (!found) return pathname;
-      const params = new URLSearchParams();
-      if (namThiFilter != null) params.set("nam", String(namThiFilter));
-      const qs = params.toString();
-      const base = `${pathname}/${found.slug}`;
-      return qs ? `${base}?${qs}` : base;
-    },
-    [namThiFilter, nganhList, pathname],
-  );
-
-  if (!truong) {
+  if (!truong || !nganh) {
     return (
       <div
         className={cn(
@@ -124,7 +103,7 @@ export default function DhTruongDetailView({
           <ArrowLeft className="h-3.5 w-3.5" /> Quay lại danh sách
         </Link>
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
-          Không tìm thấy trường với slug <code>{truongSlug}</code>.
+          Không tìm thấy ngành <code>{nganhSlug}</code> trong trường <code>{truongSlug}</code>.
         </div>
       </div>
     );
@@ -141,21 +120,23 @@ export default function DhTruongDetailView({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link
-            href="/admin/dashboard/dh-truong-nganh"
-            className="inline-flex items-center gap-1 text-[11px] font-bold text-[#EE5CA2] hover:underline"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Trường &amp; ngành thi ĐH
-          </Link>
+          <nav className="flex items-center gap-1 text-[11px] font-bold text-black/45">
+            <Link
+              href="/admin/dashboard/dh-truong-nganh"
+              className="hover:text-[#EE5CA2] hover:underline"
+            >
+              Trường ĐH
+            </Link>
+            <span className="text-black/25">/</span>
+            <Link href={truongHref} className="hover:text-[#EE5CA2] hover:underline">
+              <School className="mr-0.5 inline h-3 w-3" />
+              {truong.ten}
+            </Link>
+          </nav>
           <h1 className="m-0 mt-1 flex items-center gap-2 text-xl font-extrabold tracking-tight text-[#1a1a2e]">
             <GraduationCap className="h-6 w-6 text-[#EE5CA2]" aria-hidden />
-            {truong.ten}
+            {nganh.ten}
           </h1>
-          {truong.score != null ? (
-            <p className="m-0 mt-0.5 text-[11px] font-semibold text-black/45">
-              Score (ưu tiên): {truong.score}
-            </p>
-          ) : null}
         </div>
       </div>
 
@@ -173,29 +154,58 @@ export default function DhTruongDetailView({
 
       <DhStatsCards stats={stats} />
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-        <label className="flex min-w-0 flex-1 flex-col gap-1.5 sm:max-w-md">
-          <span className="text-[10px] font-extrabold uppercase tracking-wide text-black/45">
-            Lọc theo ngành đào tạo
-          </span>
-          <div className="relative">
-            <GraduationCap className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
-            <select
-              className={cn(inp(), "appearance-none pl-10 pr-9")}
-              value={nganhSlugFilter ?? ""}
-              onChange={(e) => onNganhChange(e.target.value)}
-              disabled={nganhList.length === 0}
+      <section className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm md:p-5">
+        <h2 className="m-0 text-[14px] font-extrabold text-[#1a1a2e]">Môn &amp; hình thức thi</h2>
+        {catalog.details ? (
+          <p className="m-0 mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-black/70">
+            {catalog.details}
+          </p>
+        ) : (
+          <p className="m-0 mt-2 text-[12px] font-medium text-black/40">
+            Chưa có mô tả chi tiết — chỉnh trong danh mục cặp trường–ngành (trang tổng hoặc SQL).
+          </p>
+        )}
+        {catalog.mon_thi.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onMonChip(null)}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-[11px] font-extrabold transition-colors",
+                monThiFilter == null
+                  ? "border-transparent bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] text-white shadow-sm"
+                  : "border-[#EAEAEA] bg-white text-black/55 hover:border-[#F8A568]/45",
+              )}
             >
-              <option value="">— Tất cả ngành —</option>
-              {nganhList.map((n) => (
-                <option key={n.id} value={n.slug}>
-                  {n.ten}
-                </option>
-              ))}
-            </select>
+              Tất cả môn
+            </button>
+            {catalog.mon_thi.map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => onMonChip(m)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-[11px] font-extrabold transition-colors",
+                  monThiFilter === m
+                    ? "border-transparent bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] text-white shadow-sm"
+                    : "border-[#EAEAEA] bg-white text-black/55 hover:border-[#BB89F8]/45",
+                )}
+              >
+                {m}
+              </button>
+            ))}
           </div>
-        </label>
+        ) : (
+          <p className="m-0 mt-3 text-[12px] font-semibold text-amber-800">
+            Chưa khai báo danh sách môn trong bảng <code className="rounded bg-amber-100 px-1">dh_truong_nganh</code>.
+          </p>
+        )}
+        <p className="m-0 mt-3 text-[11px] font-medium text-black/45">
+          Lọc theo môn chỉ hiển thị học viên đã gán «Môn / hình thức» trong bảng dưới (cột dropdown).
+        </p>
+      </section>
 
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
         <label className="flex min-w-0 flex-col gap-1.5 sm:w-44">
           <span className="text-[10px] font-extrabold uppercase tracking-wide text-black/45">
             Năm thi
@@ -221,11 +231,12 @@ export default function DhTruongDetailView({
 
       <DhStudentsTable
         rows={students?.rows ?? []}
-        showNganhColumn
-        hrefForNganh={hrefForNganh}
+        showNganhColumn={false}
+        showMonThiChonColumn
+        monThiOptions={catalog.mon_thi}
         emptyText={
           totalRows === 0
-            ? `Chưa có học viên nào thi trường này${namThiFilter != null ? ` vào năm ${namThiFilter}` : ""}.`
+            ? `Chưa có học viên nào${monThiFilter != null ? ` (môn «${monThiFilter}»)` : ""} thi ${nganh.ten} — ${truong.ten}${namThiFilter != null ? ` vào năm ${namThiFilter}` : ""}.`
             : "Trang này không còn bản ghi."
         }
       />

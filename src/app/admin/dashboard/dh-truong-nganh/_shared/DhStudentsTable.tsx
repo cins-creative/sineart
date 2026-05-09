@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Link2, Loader2, Mail, Pencil, Phone, X } from "lucide-react";
 
 import type { AdminDhStudentExamRow } from "@/lib/data/admin-dh-truong-nganh";
-import { updateQlHvTruongNganhScore } from "@/app/admin/dashboard/dh-truong-nganh/actions";
+import {
+  updateQlHvTruongNganhMonThiChon,
+  updateQlHvTruongNganhScore,
+} from "@/app/admin/dashboard/dh-truong-nganh/actions";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -16,6 +19,10 @@ type Props = {
    * ẩn (mọi dòng đều cùng ngành) — truyền `false` để giấu.
    */
   showNganhColumn?: boolean;
+  /** Trang cặp trường–ngành: cho phép gán `mon_thi_chon` (dropdown). */
+  showMonThiChonColumn?: boolean;
+  /** Nhãn môn từ catalog `dh_truong_nganh.mon_thi` + tuỳ chọn «Chưa gán». */
+  monThiOptions?: string[];
   /** Build link sang sub-subpage cho ngành; nếu không truyền → render text. */
   hrefForNganh?: (nganhId: number) => string;
   emptyText: string;
@@ -24,6 +31,8 @@ type Props = {
 export default function DhStudentsTable({
   rows,
   showNganhColumn = true,
+  showMonThiChonColumn = false,
+  monThiOptions = [],
   hrefForNganh,
   emptyText,
 }: Props) {
@@ -47,6 +56,9 @@ export default function DhStudentsTable({
               <th className="min-w-[160px] px-3 py-3 md:px-4">Liên hệ</th>
               {showNganhColumn ? (
                 <th className="min-w-[160px] px-3 py-3 md:px-4">Ngành đăng ký</th>
+              ) : null}
+              {showMonThiChonColumn ? (
+                <th className="min-w-[160px] px-3 py-3 md:px-4">Môn / hình thức</th>
               ) : null}
               <th className="whitespace-nowrap px-3 py-3 md:px-4">Năm thi</th>
               <th className="whitespace-nowrap px-3 py-3 md:px-4">Điểm thi</th>
@@ -110,6 +122,15 @@ export default function DhStudentsTable({
                     )}
                   </td>
                 ) : null}
+                {showMonThiChonColumn ? (
+                  <td className="align-top px-3 py-3 md:px-4">
+                    <MonThiChonCell
+                      rowId={s.id}
+                      initial={s.mon_thi_chon}
+                      options={monThiOptions}
+                    />
+                  </td>
+                ) : null}
                 <td className="align-top px-3 py-3 md:px-4">
                   {s.nam_thi != null ? (
                     <span className="inline-flex rounded-md bg-[#BB89F8]/15 px-2 py-0.5 text-[12px] font-bold text-[#6b3fbf]">
@@ -145,6 +166,74 @@ export default function DhStudentsTable({
  * sẽ gọi server action; Esc / nút huỷ sẽ rollback. Sau khi lưu thành công
  * `router.refresh()` để stats card và bảng cập nhật.
  */
+function MonThiChonCell({
+  rowId,
+  initial,
+  options,
+}: {
+  rowId: number;
+  initial: string | null;
+  options: string[];
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState<string>(initial ?? "");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setValue(initial ?? "");
+  }, [initial]);
+
+  const opts = useMemo(() => {
+    const base = [...options];
+    if (initial && initial.trim() !== "" && !base.includes(initial)) base.unshift(initial);
+    return base;
+  }, [initial, options]);
+
+  const submit = async (nextRaw: string) => {
+    const trimmed = nextRaw.trim();
+    const next = trimmed === "" ? null : trimmed;
+    setSaving(true);
+    setErr(null);
+    const res = await updateQlHvTruongNganhMonThiChon({
+      rowId,
+      monThiChon: next,
+    });
+    setSaving(false);
+    if (!res.ok) {
+      setErr(res.error);
+      return;
+    }
+    router.refresh();
+  };
+
+  return (
+    <div className="flex min-w-[140px] flex-col gap-1">
+      <select
+        disabled={saving}
+        className={cn(
+          "max-w-[220px] rounded-lg border-[1.5px] border-[#EAEAEA] bg-white px-2 py-1.5 text-[12px] font-semibold text-[#1a1a2e]",
+          "outline-none focus:border-[#F8A568] focus:ring-[2px] focus:ring-[#F8A568]/20 disabled:opacity-55",
+        )}
+        value={value}
+        onChange={(e) => {
+          const v = e.target.value;
+          setValue(v);
+          void submit(v);
+        }}
+      >
+        <option value="">— Chưa gán —</option>
+        {opts.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+      {err ? <p className="m-0 text-[10px] font-semibold text-red-700">{err}</p> : null}
+    </div>
+  );
+}
+
 function ScoreCell({
   rowId,
   initialScore,

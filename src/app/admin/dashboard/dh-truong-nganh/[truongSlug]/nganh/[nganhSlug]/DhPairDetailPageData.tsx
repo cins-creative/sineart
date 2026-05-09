@@ -5,6 +5,7 @@ import {
   fetchAdminDhAvailableNamThi,
   fetchAdminDhStudentsByTruongPaged,
   fetchAdminDhTruongOverviewStats,
+  fetchDhTruongNganhCatalogForPair,
   findDhNganhBySlugWithinTruong,
   findDhTruongBySlug,
 } from "@/lib/data/admin-dh-truong-nganh";
@@ -26,6 +27,12 @@ function parseYearQuery(raw: string | string[] | undefined): number | null {
   if (!Number.isFinite(n)) return null;
   const y = Math.trunc(n);
   return y >= 1900 && y <= 2200 ? y : null;
+}
+
+function parseMonQuery(raw: string | string[] | undefined): string | null {
+  if (Array.isArray(raw)) return null;
+  if (raw == null || String(raw).trim() === "") return null;
+  return String(raw).trim();
 }
 
 export default async function DhPairDetailPageData({
@@ -54,6 +61,8 @@ export default async function DhPairDetailPageData({
         students={null}
         stats={null}
         loadError={null}
+        catalog={{ mon_thi: [], details: null }}
+        monThiFilter={null}
       />
     );
   }
@@ -73,6 +82,8 @@ export default async function DhPairDetailPageData({
         students={null}
         stats={null}
         loadError={truongRes.error}
+        catalog={{ mon_thi: [], details: null }}
+        monThiFilter={null}
       />
     );
   }
@@ -94,6 +105,8 @@ export default async function DhPairDetailPageData({
         students={null}
         stats={null}
         loadError={nganhRes.error}
+        catalog={{ mon_thi: [], details: null }}
+        monThiFilter={null}
       />
     );
   }
@@ -102,34 +115,51 @@ export default async function DhPairDetailPageData({
 
   const page = parseIntQuery(sp.page) ?? 1;
   const namFilter = parseYearQuery(sp.nam);
+  const monRaw = parseMonQuery(sp.mon);
 
-  const [yearsRes, statsRes, pagedRes] = await Promise.all([
+  const [catalogRes, yearsRes, statsRes, pagedRes] = await Promise.all([
+    fetchDhTruongNganhCatalogForPair(supabase, truong.id, nganh.id),
     fetchAdminDhAvailableNamThi(supabase, truong.id),
     fetchAdminDhTruongOverviewStats(supabase, {
       truongId: truong.id,
       nganhId: nganh.id,
       namThi: namFilter,
+      monThiChon: monRaw,
     }),
     fetchAdminDhStudentsByTruongPaged(supabase, {
       truongId: truong.id,
       nganhId: nganh.id,
       namThi: namFilter,
+      monThiChon: monRaw,
       page,
       pageSize: DH_STUDENTS_PAGE_SIZE,
     }),
   ]);
 
+  const catalog = catalogRes.ok
+    ? { mon_thi: catalogRes.mon_thi, details: catalogRes.details }
+    : { mon_thi: [] as string[], details: null as string | null };
+
+  const monThiFilter =
+    monRaw != null &&
+    monRaw !== "" &&
+    (catalog.mon_thi.length === 0 || catalog.mon_thi.includes(monRaw))
+      ? monRaw
+      : null;
+
   const availableYears = yearsRes.ok ? yearsRes.years : [];
   const stats = statsRes.ok ? statsRes.stats : null;
   const students = pagedRes.ok ? pagedRes.result : null;
 
-  const loadError = !yearsRes.ok
-    ? yearsRes.error
-    : !statsRes.ok
-      ? statsRes.error
-      : !pagedRes.ok
-        ? pagedRes.error
-        : null;
+  const loadError = !catalogRes.ok
+    ? catalogRes.error
+    : !yearsRes.ok
+      ? yearsRes.error
+      : !statsRes.ok
+        ? statsRes.error
+        : !pagedRes.ok
+          ? pagedRes.error
+          : null;
 
   return (
     <DhPairDetailView
@@ -144,6 +174,8 @@ export default async function DhPairDetailPageData({
       students={students}
       stats={stats}
       loadError={loadError}
+      catalog={catalog}
+      monThiFilter={monThiFilter}
     />
   );
 }

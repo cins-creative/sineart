@@ -5,15 +5,11 @@ import { AdminDashboardTableSkeleton } from "@/components/skeletons";
 
 import DhTruongNganhPageData from "./DhTruongNganhPageData";
 
-export default async function DhTruongNganhSessionAndData({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function DhTruongNganhSessionAndData() {
   return (
     <AdminSessionGate>
       <Suspense fallback={<AdminDashboardTableSkeleton />}>
-        <DhTruongNganhPageData searchParams={searchParams} />
+        <DhTruongNganhPageData />
       </Suspense>
     </AdminSessionGate>
   );

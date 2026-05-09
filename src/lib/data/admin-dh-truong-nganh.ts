@@ -45,6 +45,21 @@ export type AdminDhStudentExamRow = {
   ghi_chu: string | null;
   /** `ql_hv_truong_nganh.score` — điểm thi tư vấn nhập sau khi có kết quả. */
   score: number | null;
+  /** `ql_hv_truong_nganh.mon_thi_chon` — môn/hình thức đăng thi (khớp catalog `dh_truong_nganh.mon_thi`). */
+  mon_thi_chon: string | null;
+};
+
+/** Một mốc trong `dh_moc_lich_tuyen_sinh`. */
+export type AdminDhMocLichRow = {
+  id: number;
+  truong_dai_hoc: number;
+  nam_tuyen_sinh: number;
+  ten_moc: string | null;
+  thoi_gian_mo_ta: string;
+  ghi_chu: string | null;
+  nguon_thong_bao: string | null;
+  thu_tu: number;
+  cap_nhat_luc: string | null;
 };
 
 /** Admin: giữ mọi nhãn hợp lệ (gợi ý + tùy chỉnh), giới hạn độ dài & số phần tử. */
@@ -196,6 +211,12 @@ function parseExamScore(v: unknown): number | null {
   return n;
 }
 
+function parseMonThiChon(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
 function coerceSdt(v: unknown): string | null {
   if (v == null) return null;
   if (typeof v === "boolean" || typeof v === "object") return null;
@@ -229,7 +250,7 @@ export async function fetchAdminDhStudentsByTruong(
 ): Promise<{ ok: true; rows: AdminDhStudentExamRow[] } | { ok: false; error: string }> {
   let q = supabase
     .from("ql_hv_truong_nganh")
-    .select("id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu, score")
+    .select("id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu, score, mon_thi_chon")
     .order("nam_thi", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false });
 
@@ -339,6 +360,7 @@ export async function fetchAdminDhStudentsByTruong(
       nam_thi: parseNamThi(raw.nam_thi),
       ghi_chu: typeof raw.ghi_chu === "string" && raw.ghi_chu.trim() ? raw.ghi_chu.trim() : null,
       score: parseExamScore(raw.score),
+      mon_thi_chon: parseMonThiChon(raw.mon_thi_chon),
     });
   }
 
@@ -431,7 +453,7 @@ export async function fetchAdminDhPairHvDistinctCounts(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Slug routing — `/admin/dashboard/dh-truong-nganh/[truongSlug]/[nganhSlug]` */
+/* Slug routing — trường: `/dh-truong-nganh/[truongSlug]`; năm: `.../tuyen-sinh/[nam]`; ngành: `.../nganh/[nganhSlug]` */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -564,6 +586,8 @@ export async function fetchAdminDhStudentsByTruongPaged(
     truongId: number;
     nganhId?: number | null;
     namThi?: number | null;
+    /** Lọc `mon_thi_chon` — khớp đúng chuỗi; `null`/bỏ qua = mọi môn. */
+    monThiChon?: string | null;
     page: number;
     pageSize?: number;
   },
@@ -574,7 +598,7 @@ export async function fetchAdminDhStudentsByTruongPaged(
 
   let q = supabase
     .from("ql_hv_truong_nganh")
-    .select("id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu, score", {
+    .select("id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu, score, mon_thi_chon", {
       count: "exact",
     })
     .eq("truong_dai_hoc", args.truongId)
@@ -587,6 +611,9 @@ export async function fetchAdminDhStudentsByTruongPaged(
   }
   if (args.namThi != null && Number.isFinite(args.namThi)) {
     q = q.eq("nam_thi", args.namThi);
+  }
+  if (args.monThiChon != null && String(args.monThiChon).trim() !== "") {
+    q = q.eq("mon_thi_chon", String(args.monThiChon).trim());
   }
 
   const { data, error, count } = await q;
@@ -672,6 +699,7 @@ export async function fetchAdminDhStudentsByTruongPaged(
       nam_thi: parseNamThi(raw.nam_thi),
       ghi_chu: typeof raw.ghi_chu === "string" && raw.ghi_chu.trim() ? raw.ghi_chu.trim() : null,
       score: parseExamScore(raw.score),
+      mon_thi_chon: parseMonThiChon(raw.mon_thi_chon),
     });
   }
 
@@ -705,6 +733,7 @@ export async function fetchAdminDhTruongOverviewStats(
     nganhId?: number | null;
     /** Lọc theo `nam_thi` — `null`/bỏ qua = mọi năm. */
     namThi?: number | null;
+    monThiChon?: string | null;
   },
 ): Promise<{ ok: true; stats: AdminDhOverviewStats } | { ok: false; error: string }> {
   let q = supabase
@@ -716,6 +745,9 @@ export async function fetchAdminDhTruongOverviewStats(
   }
   if (args.namThi != null && Number.isFinite(args.namThi)) {
     q = q.eq("nam_thi", args.namThi);
+  }
+  if (args.monThiChon != null && String(args.monThiChon).trim() !== "") {
+    q = q.eq("mon_thi_chon", String(args.monThiChon).trim());
   }
 
   const acc: Record<string, unknown>[] = [];
@@ -766,3 +798,334 @@ export async function fetchAdminDhTruongOverviewStats(
     },
   };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Lịch tuyển sinh (`dh_moc_lich_tuyen_sinh`) + catalog cặp trường–ngành       */
+/* -------------------------------------------------------------------------- */
+
+export const DH_MOC_TEXT_MAX = 4000;
+
+export function clampDhMocText(s: string, max: number): string {
+  const t = s.trim();
+  return t.length > max ? t.slice(0, max) : t;
+}
+
+/**
+ * Các năm tuyển sinh đã có mốc lịch cho trường + luôn có năm hiện tại / năm sau (để chọn khi tạo mới).
+ */
+export async function fetchDhMocNamTuyenSinhYears(
+  supabase: SupabaseClient,
+  truongId: number,
+): Promise<{ ok: true; years: number[] } | { ok: false; error: string }> {
+  const set = new Set<number>();
+  const yNow = new Date().getFullYear();
+  set.add(yNow);
+  set.add(yNow + 1);
+
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("dh_moc_lich_tuyen_sinh")
+      .select("nam_tuyen_sinh")
+      .eq("truong_dai_hoc", truongId)
+      .range(from, from + STUDENT_PAGE - 1);
+    if (error) return { ok: false, error: error.message };
+    const batch = (data ?? []) as Record<string, unknown>[];
+    if (!batch.length) break;
+    for (const r of batch) {
+      const y = parseNamThi(r.nam_tuyen_sinh);
+      if (y != null) set.add(y);
+    }
+    if (batch.length < STUDENT_PAGE) break;
+    from += STUDENT_PAGE;
+  }
+
+  const years = [...set].sort((a, b) => b - a);
+  return { ok: true, years };
+}
+
+export async function fetchDhMocLichTuyenSinh(
+  supabase: SupabaseClient,
+  truongId: number,
+  namTuyenSinh: number,
+): Promise<{ ok: true; rows: AdminDhMocLichRow[] } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from("dh_moc_lich_tuyen_sinh")
+    .select(
+      "id, truong_dai_hoc, nam_tuyen_sinh, ten_moc, thoi_gian_mo_ta, ghi_chu, nguon_thong_bao, thu_tu, cap_nhat_luc",
+    )
+    .eq("truong_dai_hoc", truongId)
+    .eq("nam_tuyen_sinh", namTuyenSinh)
+    .order("thu_tu", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (error) return { ok: false, error: error.message };
+
+  const rows: AdminDhMocLichRow[] = [];
+  for (const raw of (data ?? []) as Record<string, unknown>[]) {
+    const id = nIdLoose(raw.id);
+    const tid = nIdLoose(raw.truong_dai_hoc);
+    const nam = parseNamThi(raw.nam_tuyen_sinh);
+    if (id == null || tid == null || nam == null) continue;
+    rows.push({
+      id,
+      truong_dai_hoc: tid,
+      nam_tuyen_sinh: nam,
+      ten_moc: typeof raw.ten_moc === "string" && raw.ten_moc.trim() ? raw.ten_moc.trim() : null,
+      thoi_gian_mo_ta: clampDhMocText(String(raw.thoi_gian_mo_ta ?? ""), DH_MOC_TEXT_MAX) || "—",
+      ghi_chu: typeof raw.ghi_chu === "string" && raw.ghi_chu.trim() ? raw.ghi_chu.trim() : null,
+      nguon_thong_bao:
+        typeof raw.nguon_thong_bao === "string" && raw.nguon_thong_bao.trim()
+          ? raw.nguon_thong_bao.trim()
+          : null,
+      thu_tu: Number.isFinite(Number(raw.thu_tu)) ? Math.trunc(Number(raw.thu_tu)) : 0,
+      cap_nhat_luc:
+        raw.cap_nhat_luc != null ? String(raw.cap_nhat_luc) : null,
+    });
+  }
+
+  return { ok: true, rows };
+}
+
+export async function fetchDhTruongNganhCatalogForPair(
+  supabase: SupabaseClient,
+  truongId: number,
+  nganhId: number,
+): Promise<
+  { ok: true; mon_thi: string[]; details: string | null } | { ok: false; error: string }
+> {
+  const { data, error } = await supabase
+    .from("dh_truong_nganh")
+    .select("mon_thi, details")
+    .eq("truong_dai_hoc", truongId)
+    .eq("nganh_dao_tao", nganhId)
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  const r = data as Record<string, unknown> | null;
+  if (!r) return { ok: true, mon_thi: [], details: null };
+
+  return {
+    ok: true,
+    mon_thi: parseMonThiArray(r.mon_thi),
+    details: typeof r.details === "string" && r.details.trim() ? r.details.trim() : null,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Năm tuyển sinh — tổng hợp hub trường + chỉ tiêu / điểm chuẩn theo ngành-năm   */
+/* -------------------------------------------------------------------------- */
+
+export type AdminDhSchoolYearSummary = {
+  nam: number;
+  /** Số dòng mốc lịch (`dh_moc_lich_tuyen_sinh`). */
+  soMocLich: number;
+  /** Số ngành đã có bản ghi `dh_truong_nganh_theo_nam` cho năm đó. */
+  soNganhCoSoLieu: number;
+  /** Học viên distinct có `nam_thi` = năm này. */
+  hocVienDistinct: number;
+};
+
+export type AdminDhNganhNamMergedRow = {
+  nganh_id: number;
+  ten_nganh: string;
+  mon_thi: string[];
+  details: string | null;
+  nganh_slug: string;
+  metric_id: number | null;
+  chi_tieu: number | null;
+  diem_chuan: number | null;
+  metric_ghi_chu: string | null;
+};
+
+/**
+ * Hợp nhất danh sách ngành của trường (`dh_truong_nganh`) với số liệu
+ * `dh_truong_nganh_theo_nam` cho một năm.
+ */
+export async function fetchDhTruongNganhNamMerged(
+  supabase: SupabaseClient,
+  truongId: number,
+  namTuyenSinh: number,
+): Promise<{ ok: true; rows: AdminDhNganhNamMergedRow[] } | { ok: false; error: string }> {
+  const pairsRes = await fetchAdminDhTruongNganhRows(supabase, truongId);
+  if (!pairsRes.ok) return { ok: false, error: pairsRes.error };
+
+  const pairs = pairsRes.rows;
+  if (!pairs.length) return { ok: true, rows: [] };
+
+  const { data: metRaw, error: metErr } = await supabase
+    .from("dh_truong_nganh_theo_nam")
+    .select("id, nganh_dao_tao, chi_tieu, diem_chuan, ghi_chu")
+    .eq("truong_dai_hoc", truongId)
+    .eq("nam_tuyen_sinh", namTuyenSinh);
+
+  if (metErr) return { ok: false, error: metErr.message };
+
+  const metricByNganh = new Map<
+    number,
+    { id: number; chi_tieu: number | null; diem_chuan: number | null; ghi_chu: string | null }
+  >();
+  for (const raw of (metRaw ?? []) as Record<string, unknown>[]) {
+    const nid = nIdLoose(raw.nganh_dao_tao);
+    const id = nIdLoose(raw.id);
+    if (nid == null || id == null) continue;
+    const chi = raw.chi_tieu;
+    const chiTieu =
+      chi == null || chi === ""
+        ? null
+        : Number.isFinite(Number(chi))
+          ? Math.trunc(Number(chi))
+          : null;
+    const dc = raw.diem_chuan;
+    const diemChuan =
+      dc == null || dc === ""
+        ? null
+        : Number.isFinite(Number(dc))
+          ? Number(dc)
+          : null;
+    const gc =
+      typeof raw.ghi_chu === "string" && raw.ghi_chu.trim() ? raw.ghi_chu.trim() : null;
+    metricByNganh.set(nid, { id, chi_tieu: chiTieu, diem_chuan: diemChuan, ghi_chu: gc });
+  }
+
+  const nganhBases = pairs.map((p) => ({ id: p.nganh_id, ten: p.ten_nganh }));
+  const rows: AdminDhNganhNamMergedRow[] = [];
+  for (const p of pairs) {
+    const met = metricByNganh.get(p.nganh_id);
+    rows.push({
+      nganh_id: p.nganh_id,
+      ten_nganh: p.ten_nganh,
+      mon_thi: [...p.mon_thi],
+      details: p.details,
+      nganh_slug: buildDhNganhSlug(p.nganh_id, p.ten_nganh, nganhBases),
+      metric_id: met?.id ?? null,
+      chi_tieu: met?.chi_tieu ?? null,
+      diem_chuan: met?.diem_chuan ?? null,
+      metric_ghi_chu: met?.ghi_chu ?? null,
+    });
+  }
+
+  rows.sort((a, b) => a.ten_nganh.localeCompare(b.ten_nganh, "vi"));
+  return { ok: true, rows };
+}
+
+export async function fetchDhDistinctTuyenSinhYearsForTruong(
+  supabase: SupabaseClient,
+  truongId: number,
+): Promise<{ ok: true; years: number[] } | { ok: false; error: string }> {
+  const set = new Set<number>();
+  const yNow = new Date().getFullYear();
+  set.add(yNow);
+  set.add(yNow + 1);
+
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("dh_moc_lich_tuyen_sinh")
+      .select("nam_tuyen_sinh")
+      .eq("truong_dai_hoc", truongId)
+      .range(from, from + STUDENT_PAGE - 1);
+    if (error) return { ok: false, error: error.message };
+    const batch = (data ?? []) as Record<string, unknown>[];
+    if (!batch.length) break;
+    for (const r of batch) {
+      const y = parseNamThi(r.nam_tuyen_sinh);
+      if (y != null) set.add(y);
+    }
+    if (batch.length < STUDENT_PAGE) break;
+    from += STUDENT_PAGE;
+  }
+
+  from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("dh_truong_nganh_theo_nam")
+      .select("nam_tuyen_sinh")
+      .eq("truong_dai_hoc", truongId)
+      .range(from, from + STUDENT_PAGE - 1);
+    if (error) return { ok: false, error: error.message };
+    const batch = (data ?? []) as Record<string, unknown>[];
+    if (!batch.length) break;
+    for (const r of batch) {
+      const y = parseNamThi(r.nam_tuyen_sinh);
+      if (y != null) set.add(y);
+    }
+    if (batch.length < STUDENT_PAGE) break;
+    from += STUDENT_PAGE;
+  }
+
+  let qhv = supabase
+    .from("ql_hv_truong_nganh")
+    .select("nam_thi")
+    .eq("truong_dai_hoc", truongId);
+  from = 0;
+  for (;;) {
+    const { data, error } = await qhv.range(from, from + STUDENT_PAGE - 1);
+    if (error) return { ok: false, error: error.message };
+    const batch = (data ?? []) as Record<string, unknown>[];
+    if (!batch.length) break;
+    for (const r of batch) {
+      const y = parseNamThi(r.nam_thi);
+      if (y != null) set.add(y);
+    }
+    if (batch.length < STUDENT_PAGE) break;
+    from += STUDENT_PAGE;
+  }
+
+  const years = [...set].filter((y) => y >= 2000 && y <= 2100).sort((a, b) => b - a);
+  return { ok: true, years };
+}
+
+export async function fetchDhSchoolYearSummaries(
+  supabase: SupabaseClient,
+  truongId: number,
+  years: readonly number[],
+): Promise<{ ok: true; summaries: AdminDhSchoolYearSummary[] } | { ok: false; error: string }> {
+  const summaries: AdminDhSchoolYearSummary[] = [];
+
+  for (const nam of years) {
+    const { count: mocCnt, error: e1 } = await supabase
+      .from("dh_moc_lich_tuyen_sinh")
+      .select("id", { count: "exact", head: true })
+      .eq("truong_dai_hoc", truongId)
+      .eq("nam_tuyen_sinh", nam);
+    if (e1) return { ok: false, error: e1.message };
+
+    const { count: nganCnt, error: e2 } = await supabase
+      .from("dh_truong_nganh_theo_nam")
+      .select("id", { count: "exact", head: true })
+      .eq("truong_dai_hoc", truongId)
+      .eq("nam_tuyen_sinh", nam);
+    if (e2) return { ok: false, error: e2.message };
+
+    const hvSet = new Set<number>();
+    let hf = 0;
+    for (;;) {
+      const { data, error } = await supabase
+        .from("ql_hv_truong_nganh")
+        .select("hoc_vien")
+        .eq("truong_dai_hoc", truongId)
+        .eq("nam_thi", nam)
+        .range(hf, hf + STUDENT_PAGE - 1);
+      if (error) return { ok: false, error: error.message };
+      const batch = (data ?? []) as Record<string, unknown>[];
+      if (!batch.length) break;
+      for (const r of batch) {
+        const hv = nIdLoose(r.hoc_vien);
+        if (hv != null) hvSet.add(hv);
+      }
+      if (batch.length < STUDENT_PAGE) break;
+      hf += STUDENT_PAGE;
+    }
+
+    summaries.push({
+      nam,
+      soMocLich: typeof mocCnt === "number" ? mocCnt : 0,
+      soNganhCoSoLieu: typeof nganCnt === "number" ? nganCnt : 0,
+      hocVienDistinct: hvSet.size,
+    });
+  }
+
+  return { ok: true, summaries };
+}
+

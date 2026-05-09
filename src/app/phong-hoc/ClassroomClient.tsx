@@ -74,6 +74,7 @@ import {
   ALL_SAMPLES_PAGE_SIZE,
   classroomGalleryEmoji,
   fetchAllSampleWorks,
+  fetchBaiMauSamplesForExercise,
   fetchClassroomGalleryForLop,
   type StudentProfileGalleryRow,
 } from "@/lib/phong-hoc/classroom-gallery";
@@ -84,12 +85,10 @@ import Link from "next/link";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Be_Vietnam_Pro, Quicksand } from "next/font/google";
-import type { DailyCall } from "@daily-co/daily-js";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -246,16 +245,6 @@ function normalizeMeetingRoomUrl(raw: string | null | undefined): string | null 
   if (/^https?:\/\//i.test(t)) return t;
   if (/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}/i.test(t)) return `https://${t}`;
   return null;
-}
-
-/** Daily Prebuilt: dùng daily-js + join({ userName }) — iframe thuần không set tên được. */
-function isDailyRoomUrl(url: string): boolean {
-  try {
-    const h = new URL(url).hostname.toLowerCase();
-    return h === "daily.co" || h.endsWith(".daily.co");
-  } catch {
-    return false;
-  }
 }
 
 const fontBody = Be_Vietnam_Pro({
@@ -726,19 +715,25 @@ export default function ClassroomClient({
   const [globalSamplesLoaded, setGlobalSamplesLoaded] = useState(false);
   const [globalSamplesLoadingMore, setGlobalSamplesLoadingMore] = useState(false);
   const [globalSamplesHasMore, setGlobalSamplesHasMore] = useState(false);
+  /** `ql_mon_hoc.id` của lớp — lọc tab «Bài mẫu» theo môn lớp; null = lớp không gán môn → không lọc. */
+  const [lopMonHocIdForSamples, setLopMonHocIdForSamples] = useState<number | null>(null);
+  const [lopTenMonHocLabel, setLopTenMonHocLabel] = useState<string | null>(null);
+  /** Đã đọc `ql_lop_hoc.mon_hoc` (hoặc không có lớp) — tránh fetch bài mẫu trước khi biết có lọc môn hay không. */
+  const [lopSamplesMonReady, setLopSamplesMonReady] = useState(false);
+  /** GV + Bài mẫu + đã chọn đúng một bài: danh sách đầy đủ theo bài (đồng bộ tab «Bài mẫu» trên `/he-thong-bai-tap/[slug]`). */
+  const [mauExerciseSamples, setMauExerciseSamples] = useState<Artwork[] | null>(null);
+  const [mauExerciseLoading, setMauExerciseLoading] = useState(false);
+  /** GV — ô lọc gallery: toàn bộ bài thuộc môn lớp (`fetchLopCurriculumExercises`), không chỉ bài đã có tranh. */
+  const [galleryLopExercises, setGalleryLopExercises] = useState<LopCurriculumExercise[]>([]);
   const [dark, setDark] = useState(false);
-  /** `undefined` = chưa fetch; sau đó là giá trị từ `ql_lop_hoc` (cập nhật session cũ thiếu `meeting_room`). */
-  const [meetingRoomRefreshed, setMeetingRoomRefreshed] = useState<string | null | undefined>(
-    undefined
-  );
   /** `undefined` = chưa tải; có session GV thì sau fetch là danh sách `ql_quan_ly_hoc_vien` + hồ sơ. */
   const [classmatesReal, setClassmatesReal] = useState<ClassmateListRow[] | undefined>(undefined);
   /** GV poll: `hoc_vien_id` → `last_seen_at` (UTC ms). Chỉ coi «online» khi còn mới (heartbeat HV). */
   const [dbLastSeenMsByHvId, setDbLastSeenMsByHvId] = useState<Map<number, number>>(() => new Map());
   /** Làm UI GV cập nhật trạng thái xám khi hết cửa sổ hiệu lực presence (không cần chờ poll). */
   const [presenceUiTick, setPresenceUiTick] = useState(0);
-  /** Session cũ có thể thiếu `data.id` — tra `hoc_vien_id` qua `qlhv_id` để Daily `#HV…` khớp sidebar GV. */
-  const [hvPkResolvedForDaily, setHvPkResolvedForDaily] = useState<number | null>(null);
+  /** Session cũ có thể thiếu `data.id` — tra `hoc_vien_id` qua `qlhv_id` cho chat/gallery. */
+  const [hvStudentPkResolved, setHvStudentPkResolved] = useState<number | null>(null);
   const [studentManageOpen, setStudentManageOpen] = useState(false);
   const [chatProgressPicker, setChatProgressPicker] = useState<ChatProgressPickerState>(null);
   /** Màn «không vào được lớp»: mở lại bảng đăng nhập như nút «Vào học» trên NavBar. */
@@ -763,8 +758,6 @@ export default function ClassroomClient({
   const [baiMauUploading, setBaiMauUploading] = useState(false);
 
   const gmeetSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dailyMeetContainerRef = useRef<HTMLDivElement>(null);
-  const dailyCallFrameRef = useRef<DailyCall | null>(null);
   /** Timer id (DOM `window.setTimeout`). */
   const teacherSaveToastTimerRef = useRef<number | null>(null);
   const hvKnownIdsRef = useRef<Set<number>>(new Set());
@@ -776,7 +769,7 @@ export default function ClassroomClient({
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   /** Realtime `hv_chatbox` — gỡ bằng `supabase.removeChannel` khi unmount / đổi lớp. */
   const hvChatRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
-  /** Realtime `ql_lop_hoc` — Meet / meeting_room cập nhật ngay khi GV lưu. */
+  /** Realtime `ql_lop_hoc` — Google Meet cập nhật ngay khi GV lưu. */
   const lopMeetRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
   /** Tránh async fetch/subscribe cũ ghi đè sau khi đổi lớp / unmount. */
   const hvChatEffectGenerationRef = useRef(0);
@@ -1007,6 +1000,68 @@ export default function ClassroomClient({
     return NaN;
   }, [storedSession, d.lop_hoc_id]);
 
+  useEffect(() => {
+    if (!isTeacher || !browserSb || !Number.isFinite(lopHocIdForDb)) {
+      setGalleryLopExercises([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchLopCurriculumExercises(browserSb, lopHocIdForDb)
+      .then(({ exercises }) => {
+        if (!cancelled) setGalleryLopExercises(exercises);
+      })
+      .catch(() => {
+        if (!cancelled) setGalleryLopExercises([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isTeacher, browserSb, lopHocIdForDb]);
+
+  useEffect(() => {
+    if (!browserSb || !Number.isFinite(lopHocIdForDb)) {
+      setLopMonHocIdForSamples(null);
+      setLopTenMonHocLabel(null);
+      setLopSamplesMonReady(true);
+      return;
+    }
+    setLopSamplesMonReady(false);
+    let cancelled = false;
+    void browserSb
+      .from("ql_lop_hoc")
+      .select("mon_hoc ( id, ten_mon_hoc )")
+      .eq("id", lopHocIdForDb)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          setLopMonHocIdForSamples(null);
+          setLopTenMonHocLabel(null);
+          setLopSamplesMonReady(true);
+          return;
+        }
+        const emb = (data as { mon_hoc?: { id?: unknown; ten_mon_hoc?: unknown } | null }).mon_hoc;
+        const mid = emb != null && typeof emb === "object" ? Number((emb as { id?: unknown }).id) : NaN;
+        const t =
+          emb != null && typeof emb === "object"
+            ? String((emb as { ten_mon_hoc?: unknown }).ten_mon_hoc ?? "").trim()
+            : "";
+        setLopMonHocIdForSamples(Number.isFinite(mid) && mid > 0 ? mid : null);
+        setLopTenMonHocLabel(t.length > 0 ? t : null);
+        setLopSamplesMonReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [browserSb, lopHocIdForDb]);
+
+  useEffect(() => {
+    setGlobalSamplesLoaded(false);
+    setGlobalSamples([]);
+    setGlobalSamplesHasMore(false);
+    setMauExerciseSamples(null);
+  }, [lopHocIdForDb, lopMonHocIdForSamples]);
+
   const reloadGalleryFromDb = useCallback(async () => {
     if (!browserSb || !Number.isFinite(lopHocIdForDb)) return;
     setGalleryLoading(true);
@@ -1058,14 +1113,17 @@ export default function ClassroomClient({
   }, []);
 
   /**
-   * Tab «Bài mẫu» fetch toàn hệ thống (mọi lớp, mọi level) để GV duyệt làm tư liệu giao bài.
-   * Trang đầu (no cursor). Sau đó dùng `loadMoreGlobalSamples` để tải thêm.
+   * Tab «Bài mẫu»: chỉ môn của lớp (`ql_lop_hoc.mon_hoc` → `hv_he_thong_bai_tap.mon_hoc`).
+   * Nếu lớp không gán môn — giữ fetch toàn hệ thống như trước.
    */
   const reloadGlobalSamples = useCallback(async () => {
     if (!browserSb) return;
     setGlobalSamplesLoading(true);
     try {
-      const rows = await fetchAllSampleWorks(browserSb, { limit: ALL_SAMPLES_PAGE_SIZE });
+      const rows = await fetchAllSampleWorks(browserSb, {
+        limit: ALL_SAMPLES_PAGE_SIZE,
+        monHocId: lopMonHocIdForSamples,
+      });
       setGlobalSamples(rows.map(mapSampleRowToArtwork));
       setGlobalSamplesHasMore(rows.length >= ALL_SAMPLES_PAGE_SIZE);
       setGlobalSamplesLoaded(true);
@@ -1076,7 +1134,7 @@ export default function ClassroomClient({
     } finally {
       setGlobalSamplesLoading(false);
     }
-  }, [browserSb, mapSampleRowToArtwork]);
+  }, [browserSb, mapSampleRowToArtwork, lopMonHocIdForSamples]);
 
   /** Tải trang kế tiếp với cursor `id < lastHvId`. Stop khi server trả < `PAGE_SIZE` row. */
   const loadMoreGlobalSamples = useCallback(async () => {
@@ -1092,6 +1150,7 @@ export default function ClassroomClient({
       const rows = await fetchAllSampleWorks(browserSb, {
         beforeId: lastHvId,
         limit: ALL_SAMPLES_PAGE_SIZE,
+        monHocId: lopMonHocIdForSamples,
       });
       const mapped = rows.map(mapSampleRowToArtwork);
       setGlobalSamples((prev) => {
@@ -1113,13 +1172,57 @@ export default function ClassroomClient({
     globalSamplesLoading,
     globalSamplesLoadingMore,
     mapSampleRowToArtwork,
+    lopMonHocIdForSamples,
   ]);
+
+  /** Tab Bài mẫu + lọc theo bài: một query đủ (score DESC, cap 120) giống gallery `/he-thong-bai-tap/[slug]` tab «Bài mẫu». */
+  useEffect(() => {
+    if (!isTeacher || !browserSb || gWorkKind !== "mau") {
+      setMauExerciseSamples(null);
+      setMauExerciseLoading(false);
+      return;
+    }
+    if (gExerciseFilter === "all") {
+      setMauExerciseSamples(null);
+      setMauExerciseLoading(false);
+      return;
+    }
+    const exId = Number(gExerciseFilter);
+    if (!Number.isFinite(exId) || exId <= 0) {
+      setMauExerciseSamples(null);
+      setMauExerciseLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setMauExerciseLoading(true);
+    setMauExerciseSamples(null);
+    void fetchBaiMauSamplesForExercise(browserSb, exId)
+      .then((rows) => {
+        if (!cancelled) setMauExerciseSamples(rows.map(mapSampleRowToArtwork));
+      })
+      .catch(() => {
+        if (!cancelled) setMauExerciseSamples([]);
+      })
+      .finally(() => {
+        if (!cancelled) setMauExerciseLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isTeacher, browserSb, gWorkKind, gExerciseFilter, mapSampleRowToArtwork]);
 
   useEffect(() => {
     if (gWorkKind !== "mau") return;
+    if (!lopSamplesMonReady) return;
     if (globalSamplesLoaded || globalSamplesLoading) return;
     void reloadGlobalSamples();
-  }, [gWorkKind, globalSamplesLoaded, globalSamplesLoading, reloadGlobalSamples]);
+  }, [
+    gWorkKind,
+    globalSamplesLoaded,
+    globalSamplesLoading,
+    reloadGlobalSamples,
+    lopSamplesMonReady,
+  ]);
 
   /**
    * HV không có quyền duyệt thư viện bài mẫu toàn hệ thống — luôn chốt về tab «Bài học viên».
@@ -1135,6 +1238,7 @@ export default function ClassroomClient({
    */
   useEffect(() => {
     if (gWorkKind !== "mau") return;
+    if (gExerciseFilter !== "all") return;
     if (!globalSamplesHasMore) return;
     const node = loadMoreSentinelRef.current;
     if (!node) return;
@@ -1152,11 +1256,10 @@ export default function ClassroomClient({
     );
     obs.observe(node);
     return () => obs.disconnect();
-  }, [gWorkKind, globalSamplesHasMore, loadMoreGlobalSamples, globalSamples.length]);
+  }, [gWorkKind, gExerciseFilter, globalSamplesHasMore, loadMoreGlobalSamples, globalSamples.length]);
 
-  /** Cập nhật state Meet / Daily + session localstorage khi có row `ql_lop_hoc`. */
+  /** Cập nhật state Google Meet + session localStorage khi có row `ql_lop_hoc`. */
   const applyClassMeetRow = useCallback((row: LopHocMeetRow) => {
-    setMeetingRoomRefreshed(row.meeting_room);
     setGoogleMeetUrl(row.url_google_meet);
     setGoogleMeetSetAt(row.url_google_meet_set_at);
     setLopDevice(row.device);
@@ -1179,7 +1282,7 @@ export default function ClassroomClient({
   }, []);
 
   /**
-   * Meet + Daily: đọc **trực tiếp** `ql_lop_hoc` qua Supabase browser (anon + RLS) — không qua Vercel.
+   * Google Meet + row lớp: đọc **trực tiếp** `ql_lop_hoc` qua Supabase browser (anon + RLS) — không qua Vercel.
    * Chỉ gọi `/api/phong-hoc/class-meet-row` khi không đọc được row (kẹt RLS / thiếu client).
    * Realtime `UPDATE` áp `payload.new` qua `lopMeetRowFromRealtimeNewRow` — không poll 5s nữa.
    */
@@ -1216,7 +1319,6 @@ export default function ClassroomClient({
     }
     const row = await fetchLopHocMeetRow(supabase, id);
     if (!row) {
-      setMeetingRoomRefreshed(undefined);
       setGoogleMeetUrl(null);
       setGoogleMeetSetAt(null);
       setLopDevice(null);
@@ -1228,7 +1330,7 @@ export default function ClassroomClient({
 
   /**
    * Điểm danh «đã vào phòng» + làm mới `last_seen_at` (heartbeat).
-   * Gọi khi HV mở Phòng học, định kỳ khi tab đang hiển thị, và sau Daily `joined-meeting`.
+   * Gọi khi HV mở Phòng học và định kỳ khi tab đang hiển thị.
    */
   const recordDiemDanhWhenStudentInRoom = useCallback(async () => {
     if (storedSession?.userType !== "Student") return;
@@ -1436,17 +1538,17 @@ export default function ClassroomClient({
 
   useEffect(() => {
     if (storedSession?.userType !== "Student") {
-      setHvPkResolvedForDaily(null);
+      setHvStudentPkResolved(null);
       return;
     }
     const direct = storedSession.data.id;
     if (Number.isFinite(direct) && direct > 0) {
-      setHvPkResolvedForDaily(null);
+      setHvStudentPkResolved(null);
       return;
     }
     const qlhv = storedSession.data.qlhv_id;
     if (!browserSb || !Number.isFinite(qlhv) || qlhv <= 0) {
-      setHvPkResolvedForDaily(null);
+      setHvStudentPkResolved(null);
       return;
     }
     let cancelled = false;
@@ -1458,12 +1560,12 @@ export default function ClassroomClient({
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error || !data) {
-          setHvPkResolvedForDaily(null);
+          setHvStudentPkResolved(null);
           return;
         }
         const pk = Number((data as { hoc_vien_id?: unknown }).hoc_vien_id);
-        if (Number.isFinite(pk) && pk > 0) setHvPkResolvedForDaily(pk);
-        else setHvPkResolvedForDaily(null);
+        if (Number.isFinite(pk) && pk > 0) setHvStudentPkResolved(pk);
+        else setHvStudentPkResolved(null);
       });
     return () => {
       cancelled = true;
@@ -1627,7 +1729,6 @@ export default function ClassroomClient({
 
   useEffect(() => {
     if (!Number.isFinite(lopHocIdForDb)) {
-      setMeetingRoomRefreshed(undefined);
       setGoogleMeetUrl(null);
       setGoogleMeetSetAt(null);
       setLopDevice(null);
@@ -1637,7 +1738,7 @@ export default function ClassroomClient({
     void refreshClassMeetRow();
   }, [lopHocIdForDb, refreshClassMeetRow]);
 
-  /** HV: khi quay lại tab — tải lại Meet / Daily ngay. */
+  /** HV: khi quay lại tab — tải lại link Meet ngay. */
   useEffect(() => {
     if (storedSession?.userType !== "Student") return;
     if (!Number.isFinite(lopHocIdForDb)) return;
@@ -1832,17 +1933,8 @@ export default function ClassroomClient({
     return classmatesReal;
   }, [storedSession, classmatesReal]);
 
-  const meetingRoomEffective =
-    meetingRoomRefreshed !== undefined ? meetingRoomRefreshed : (d.meeting_room ?? null);
-
-  const meetingRoomUrl = useMemo(
-    () => normalizeMeetingRoomUrl(meetingRoomEffective),
-    [meetingRoomEffective]
-  );
-
   /**
-   * Sidebar học viên: chỉ Google Meet (`url_google_meet`), không dùng `meeting_room`
-   * (Daily.co nhúng khung chính — GV iPad không share màn được nên Meet tách riêng).
+   * Sidebar học viên: chỉ Google Meet (`url_google_meet`).
    * Link chỉ hiện trong **cùng ngày lịch VN** sau khi GV lưu (`url_google_meet_set_at`).
    */
   const studentSidebarMeetUrl = useMemo((): string | null => {
@@ -1853,8 +1945,7 @@ export default function ClassroomClient({
   }, [googleMeetUrl, googleMeetSetAt, storedSession?.userType]);
 
   /**
-   * Link Meet hiển thị khung chính: HV (theo ngày VN) / GV (URL đã lưu).
-   * Khi có URL → CTA Google Meet; **không** có thì fallback `meeting_room` (Daily / iframe).
+   * Khung chính chỉ CTA Google Meet (`url_google_meet`): HV (theo ngày VN) / GV (URL đã lưu).
    */
   const canvasMeetJoinUrl = useMemo((): string | null => {
     if (storedSession?.userType === "Student") return studentSidebarMeetUrl;
@@ -1865,108 +1956,6 @@ export default function ClassroomClient({
     }
     return null;
   }, [storedSession?.userType, studentSidebarMeetUrl, googleMeetUrl]);
-
-  /** Tên hiển thị trong Daily Prebuilt (`join.userName`). */
-  const participantDisplayName = useMemo(() => {
-    const n = d.full_name?.trim();
-    let base = n ? n : "";
-    if (!base) {
-      const e = d.email?.trim();
-      base = e ? e : "Thành viên";
-    }
-    if (storedSession?.userType !== "Student") return base;
-    const hvPk =
-      Number.isFinite(storedSession.data.id) && storedSession.data.id > 0
-        ? storedSession.data.id
-        : hvPkResolvedForDaily;
-    if (hvPk != null && Number.isFinite(hvPk) && hvPk > 0) {
-      return `${base} #HV${hvPk}`;
-    }
-    return base;
-  }, [
-    d.full_name,
-    d.email,
-    storedSession?.userType,
-    storedSession?.data.id,
-    hvPkResolvedForDaily,
-  ]);
-
-  /** Daily chỉ khi **không** ưu tiên Google Meet (`canvasMeetJoinUrl`). */
-  useLayoutEffect(() => {
-    if (canvasMeetJoinUrl || !meetingRoomUrl || !isDailyRoomUrl(meetingRoomUrl)) {
-      const prev = dailyCallFrameRef.current;
-      if (prev) {
-        void prev.destroy().finally(() => {
-          if (dailyCallFrameRef.current === prev) dailyCallFrameRef.current = null;
-        });
-      }
-      return;
-    }
-
-    const container = dailyMeetContainerRef.current;
-    if (!container) return;
-
-    let cancelled = false;
-    const forStudentRecord =
-      storedSession?.userType === "Student" && Number.isFinite(lopHocIdForDb);
-    const lopIdRecord = lopHocIdForDb;
-
-    void import("@daily-co/daily-js").then(({ default: DailyIframe }) => {
-      if (cancelled || !dailyMeetContainerRef.current) return;
-
-      void (async () => {
-        try {
-          await dailyCallFrameRef.current?.destroy();
-        } catch {
-          /* ignore */
-        }
-        dailyCallFrameRef.current = null;
-
-        if (!dailyMeetContainerRef.current || cancelled) return;
-
-        const frame = DailyIframe.createFrame(dailyMeetContainerRef.current, {
-          showLeaveButton: true,
-          iframeStyle: {
-            position: "absolute",
-            top: "0",
-            left: "0",
-            width: "100%",
-            height: "100%",
-            border: "0",
-          },
-        });
-        dailyCallFrameRef.current = frame;
-
-        frame.on("joined-meeting", () => {
-          if (!forStudentRecord || cancelled || !Number.isFinite(lopIdRecord)) return;
-          void recordDiemDanhWhenStudentInRoom();
-        });
-
-        try {
-          await frame.join({ url: meetingRoomUrl, userName: participantDisplayName });
-        } catch {
-          /* lỗi join Daily — thử tải lại trang */
-        }
-      })();
-    });
-
-    return () => {
-      cancelled = true;
-      const frame = dailyCallFrameRef.current;
-      if (frame) {
-        void frame.destroy().finally(() => {
-          if (dailyCallFrameRef.current === frame) dailyCallFrameRef.current = null;
-        });
-      }
-    };
-  }, [
-    canvasMeetJoinUrl,
-    meetingRoomUrl,
-    participantDisplayName,
-    storedSession?.userType,
-    lopHocIdForDb,
-    recordDiemDanhWhenStudentInRoom,
-  ]);
 
   /** Tiêu đề topbar — tên lớp (`class_name`), fallback tên đầy đủ / slug URL. */
   const topbarTitle = useMemo(() => {
@@ -2555,7 +2544,7 @@ export default function ClassroomClient({
     storedSession?.userType === "Student"
       ? Number.isFinite(storedSession.data.id) && storedSession.data.id > 0
         ? storedSession.data.id
-        : hvPkResolvedForDaily
+        : hvStudentPkResolved
       : null;
 
   const classCodeShort = useMemo(() => {
@@ -2577,7 +2566,11 @@ export default function ClassroomClient({
   const filteredGallery = useMemo(() => {
     let source: Artwork[];
     if (gWorkKind === "mau") {
-      source = globalSamples;
+      if (isTeacher && gExerciseFilter !== "all") {
+        source = mauExerciseSamples ?? [];
+      } else {
+        source = globalSamples;
+      }
     } else {
       source =
         gFilter === "mine"
@@ -2590,32 +2583,62 @@ export default function ClassroomClient({
     if (gExerciseFilter === "all") return source;
     const exId = Number(gExerciseFilter);
     if (!Number.isFinite(exId) || exId <= 0) return source;
+    if (gWorkKind === "mau" && isTeacher && mauExerciseSamples != null) return source;
     return source.filter((a) => a.exerciseId != null && a.exerciseId === exId);
-  }, [artworks, globalSamples, gFilter, gWorkKind, myStudentId, gExerciseFilter]);
+  }, [
+    artworks,
+    globalSamples,
+    gFilter,
+    gWorkKind,
+    myStudentId,
+    gExerciseFilter,
+    isTeacher,
+    mauExerciseSamples,
+  ]);
 
   const galleryExerciseOptions = useMemo(() => {
+    type Opt = { id: number; order: number | null; label: string };
+    const m = new Map<number, Opt>();
+
+    const rowLabel = (order: number | null, title: string, id: number): string => {
+      const t = title.trim();
+      const num = order != null && order > 0 ? `Bài ${order}` : null;
+      if (num && t) return `${num} — ${t}`;
+      if (num) return num;
+      if (t) return t;
+      return `Bài #${id}`;
+    };
+
+    for (const ex of galleryLopExercises) {
+      const order = ex.bai_so != null && Number.isFinite(ex.bai_so) ? ex.bai_so : null;
+      m.set(ex.id, {
+        id: ex.id,
+        order,
+        label: rowLabel(order, ex.ten_bai_tap ?? "", ex.id),
+      });
+    }
+
     const source = gWorkKind === "mau" ? globalSamples : artworks;
-    const m = new Map<number, { id: number; order: number | null; label: string }>();
     for (const a of source) {
       if (a.exerciseId == null || a.exerciseId <= 0) continue;
       if (m.has(a.exerciseId)) continue;
       const order = a.exerciseOrder;
       const title = a.exerciseTitle?.trim() ?? "";
-      const num = order != null && order > 0 ? `Bài ${order}` : null;
-      let label: string;
-      if (num && title) label = `${num} — ${title}`;
-      else if (num) label = num;
-      else if (title) label = title;
-      else label = `Bài #${a.exerciseId}`;
-      m.set(a.exerciseId, { id: a.exerciseId, order, label });
+      const ordForLabel = order != null && order > 0 ? order : null;
+      m.set(a.exerciseId, {
+        id: a.exerciseId,
+        order,
+        label: rowLabel(ordForLabel, title, a.exerciseId),
+      });
     }
+
     return [...m.values()].sort((a, b) => {
       const oa = a.order ?? Number.MAX_SAFE_INTEGER;
       const ob = b.order ?? Number.MAX_SAFE_INTEGER;
       if (oa !== ob) return oa - ob;
       return a.id - b.id;
     });
-  }, [artworks, globalSamples, gWorkKind]);
+  }, [galleryLopExercises, artworks, globalSamples, gWorkKind]);
 
   useEffect(() => {
     if (gExerciseFilter === "all") return;
@@ -2837,34 +2860,13 @@ export default function ClassroomClient({
                   </a>
                 </div>
               </motion.div>
-            ) : meetingRoomUrl && !isDailyRoomUrl(meetingRoomUrl) ? (
-              <motion.div
-                layout
-                className="canvas-ph canvas-ph--meet"
-                transition={PHC_SIDEBAR_TWEEN}
-              >
-                <iframe
-                  src={meetingRoomUrl}
-                  title="Phòng họp — meeting_room"
-                  allow="camera; microphone; fullscreen; display-capture; autoplay"
-                  allowFullScreen
-                />
-              </motion.div>
-            ) : meetingRoomUrl && isDailyRoomUrl(meetingRoomUrl) ? (
-              <motion.div
-                layout
-                className="canvas-ph canvas-ph--meet"
-                transition={PHC_SIDEBAR_TWEEN}
-              >
-                <div ref={dailyMeetContainerRef} className="daily-meet-frame-root" />
-              </motion.div>
             ) : (
               <motion.div layout className="canvas-ph" transition={PHC_SIDEBAR_TWEEN}>
                 <span className="ico">🎨</span>
                 <p>Phòng học trực tuyến</p>
                 <small>
-                  Chưa có liên kết phòng họp. Admin/GV cập nhật <code>meeting_room</code> (Daily.co) hoặc lưu Google Meet
-                  ở bảng điều khiển — khi có Meet trong ngày, khung chính ưu tiên nút Meet.
+                  Chưa có liên kết Google Meet cho hôm nay. Giáo viên lưu link Meet trong bảng điều khiển — link được cập
+                  nhật mỗi ngày như trước.
                 </small>
               </motion.div>
             )}
@@ -3707,7 +3709,9 @@ export default function ClassroomClient({
                   </div>
                 ) : null}
                 <div className="gallery-grid">
-                  {(gWorkKind === "mau" ? globalSamplesLoading : galleryLoading) ? (
+                  {(gWorkKind === "mau"
+                    ? globalSamplesLoading || (isTeacher && mauExerciseLoading)
+                    : galleryLoading) ? (
                     <div className="gallery-grid-loading">
                       {gWorkKind === "mau" ? "Đang tải bài mẫu…" : "Đang tải tác phẩm…"}
                     </div>
@@ -3716,7 +3720,11 @@ export default function ClassroomClient({
                       {gWorkKind === "mau"
                         ? gExerciseFilter !== "all"
                           ? "Chưa có bài mẫu cho mục bài đã chọn."
-                          : "Chưa có bài mẫu nào trong hệ thống."
+                          : lopTenMonHocLabel
+                            ? `Chưa có bài mẫu Hoàn thiện cho môn ${lopTenMonHocLabel}.`
+                            : lopMonHocIdForSamples != null
+                              ? "Chưa có bài mẫu Hoàn thiện cho môn của lớp này."
+                              : "Chưa có bài mẫu nào trong hệ thống."
                         : gFilter === "mine"
                           ? "Bạn chưa có bài hoàn thiện trong lớp này."
                           : gExerciseFilter !== "all"
@@ -3756,7 +3764,7 @@ export default function ClassroomClient({
                         </div>
                       );
                     })}
-                    {gWorkKind === "mau" && globalSamplesHasMore ? (
+                    {gWorkKind === "mau" && globalSamplesHasMore && gExerciseFilter === "all" ? (
                       <div ref={loadMoreSentinelRef} className="gallery-load-more">
                         <button
                           type="button"

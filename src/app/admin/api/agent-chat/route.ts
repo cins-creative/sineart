@@ -12,6 +12,7 @@ import {
   mergePickedFaqExtras,
   pickDhMonThiSampleImageAttachments,
 } from "@/lib/agent/dh-mon-thi-sample-images";
+import { formatBranchProximityHintForPrompt } from "@/lib/agent/branch-proximity";
 import {
   buildReplyPartsForChat,
   stripMarkdownBold,
@@ -114,7 +115,11 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
   const ctxData = (await ctxRes.json()) as AgentContextPayload;
-  const system = buildSystemPrompt(ctxData);
+  let system = buildSystemPrompt(ctxData);
+  const proximityHint = formatBranchProximityHintForPrompt(message);
+  if (proximityHint) {
+    system = `${system}\n\n${proximityHint}`;
+  }
 
   const turns = history.slice(-20);
   const anthropicMessages = [

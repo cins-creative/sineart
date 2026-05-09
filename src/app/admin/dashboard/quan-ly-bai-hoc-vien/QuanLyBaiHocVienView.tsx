@@ -28,6 +28,7 @@ import {
 } from "@/app/admin/dashboard/quan-ly-bai-hoc-vien/actions";
 import {
   ADMIN_BHV_STATUS_TABS,
+  adminBhvPathSegmentFromTab,
   adminBhvScoreSortFromSearch,
   type AdminBaiHocVienRow,
   type AdminBhvExerciseOpt,
@@ -51,13 +52,14 @@ type Props = {
 
 const BHV_LIST_BASE = "/admin/dashboard/quan-ly-bai-hoc-vien";
 
+/** Tab nằm trong path `/quan-ly-bai-hoc-vien/[tab]` — không dùng `?tab=` (redirect legacy). */
 function tabHref(tabId: AdminBhvStatusTab, sp: URLSearchParams): string {
+  const segment = adminBhvPathSegmentFromTab(tabId);
   const next = new URLSearchParams(sp.toString());
   next.set("page", "1");
-  if (tabId === "cho") next.delete("tab");
-  else next.set("tab", tabId);
+  next.delete("tab");
   const qs = next.toString();
-  return qs ? `${BHV_LIST_BASE}?${qs}` : BHV_LIST_BASE;
+  return qs ? `${BHV_LIST_BASE}/${segment}?${qs}` : `${BHV_LIST_BASE}/${segment}`;
 }
 
 function statusBadgeClass(s: string): string {
@@ -414,15 +416,17 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
   const searchParams = useSearchParams();
   const pushParams = useCallback(
     (patch: Record<string, string>) => {
+      const segment = adminBhvPathSegmentFromTab(bundle.tab);
       const next = new URLSearchParams(searchParams.toString());
       for (const [k, v] of Object.entries(patch)) {
         if (v === "") next.delete(k);
         else next.set(k, v);
       }
+      next.delete("tab");
       const qs = next.toString();
-      router.push(qs ? `${BHV_LIST_BASE}?${qs}` : BHV_LIST_BASE);
+      router.push(qs ? `${BHV_LIST_BASE}/${segment}?${qs}` : `${BHV_LIST_BASE}/${segment}`);
     },
-    [router, searchParams],
+    [router, searchParams, bundle.tab],
   );
   const [pending, startTransition] = useTransition();
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -433,6 +437,7 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
   const [uploadRowId, setUploadRowId] = useState<number | null>(null);
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<number>>(() => new Set());
   const filterMonHoc = searchParams.get("mon") ?? "";
+  const filterBaiTapRaw = searchParams.get("bai") ?? "";
   const scoreSort = adminBhvScoreSortFromSearch(searchParams.get("score") ?? undefined) as BhvScoreSort;
   const bulkAnchorIndexRef = useRef<number | null>(null);
   const bulkSelectedIdsRef = useRef(bulkSelectedIds);
@@ -475,6 +480,33 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
     }
     return [...s].sort((a, b) => a.localeCompare(b, "vi"));
   }, [bundle.exercises]);
+
+  /** Bài tập trong dropdown: khi đã chọn môn — chỉ bài thuộc môn đó; không chọn môn — toàn bộ (theo danh sách server). */
+  const exerciseFilterOptions = useMemo(() => {
+    const mon = filterMonHoc.trim();
+    let list = bundle.exercises.slice();
+    if (mon) {
+      list = list.filter((e) => (e.ten_mon_hoc ?? "").trim() === mon);
+    }
+    list.sort((a, b) => {
+      const ma = (a.ten_mon_hoc ?? "").localeCompare(b.ten_mon_hoc ?? "", "vi");
+      if (ma !== 0) return ma;
+      return (a.ten_bai_tap ?? "").localeCompare(b.ten_bai_tap ?? "", "vi");
+    });
+    return list;
+  }, [bundle.exercises, filterMonHoc]);
+
+  /** Giữ option đúng với `?bai=` khi URL không khớp danh sách đã lọc (đổi môn sau đó). */
+  const exerciseSelectOptions = useMemo(() => {
+    const n = parseInt(filterBaiTapRaw, 10);
+    const base = exerciseFilterOptions;
+    if (!Number.isFinite(n) || n <= 0 || base.some((e) => e.id === n)) return base;
+    const orphan = bundle.exercises.find((e) => e.id === n);
+    if (orphan) return [orphan, ...base];
+    return base;
+  }, [exerciseFilterOptions, filterBaiTapRaw, bundle.exercises]);
+
+  const hasActiveListFilter = filterMonHoc.trim().length > 0 || filterBaiTapRaw.trim().length > 0;
 
   const totalRows = bundle.totalCount;
   const totalPages = Math.max(1, Math.ceil(bundle.totalCount / bundle.pageSize));
@@ -520,7 +552,7 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
 
   useEffect(() => {
     clearBulkSelection();
-  }, [bundle.page, bundle.tab, layout, filterMonHoc, scoreSort, clearBulkSelection]);
+  }, [bundle.page, bundle.tab, layout, filterMonHoc, filterBaiTapRaw, scoreSort, clearBulkSelection]);
 
   useEffect(() => {
     if (layout !== "table") return;
@@ -692,8 +724,7 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-6 pt-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-6 pt-3">
           <div className="mx-auto flex min-h-0 w-full max-w-[1200px] flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
             <div className="shrink-0 space-y-2 border-b border-[#EAEAEA] bg-white px-6 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -770,7 +801,7 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
                     className="w-full rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-[12px] outline-none focus:border-[#BC8AF9]"
                     value={filterMonHoc}
                     onChange={(e) => {
-                      pushParams({ mon: e.target.value, page: "1" });
+                      pushParams({ mon: e.target.value, page: "1", bai: "" });
                     }}
                   >
                     <option value="">Tất cả môn</option>
@@ -781,10 +812,30 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
                     ))}
                   </select>
                 </div>
-                <p className="pb-1 text-[10px] text-black/40">
-                  Sắp xếp điểm: bấm tiêu đề cột <span className="font-semibold text-black/55">ĐIỂM</span> (cao → thấp →
-                  thấp → cao → mặc định).
-                </p>
+                <div className="min-w-0 flex-[2] basis-[min(100%,18rem)]">
+                  <label
+                    htmlFor="bhv-filter-bai"
+                    className="mb-0.5 block text-[9px] font-bold uppercase tracking-wide text-black/40"
+                  >
+                    Bài tập
+                  </label>
+                  <select
+                    id="bhv-filter-bai"
+                    className="w-full rounded-lg border border-[#EAEAEA] bg-white px-2 py-1.5 text-[12px] outline-none focus:border-[#BC8AF9]"
+                    value={filterBaiTapRaw}
+                    onChange={(e) => {
+                      pushParams({ bai: e.target.value, page: "1" });
+                    }}
+                  >
+                    <option value="">Tất cả bài</option>
+                    {exerciseSelectOptions.map((ex) => (
+                      <option key={ex.id} value={String(ex.id)}>
+                        {(ex.ten_bai_tap ?? "").trim() || `Bài #${ex.id}`}
+                        {(ex.ten_mon_hoc ?? "").trim() ? ` · ${(ex.ten_mon_hoc ?? "").trim()}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -860,13 +911,9 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
                     {bundle.rows.length === 0 ? (
                       <tr>
                         <td colSpan={9} className="px-6 py-12 text-center text-sm text-[#888]">
-                          Không có bản ghi trong tab này.
-                        </td>
-                      </tr>
-                    ) : totalRows === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="px-6 py-12 text-center text-sm text-[#888]">
-                          Không có bản ghi khớp môn đã chọn.
+                          {hasActiveListFilter
+                            ? "Không có bản ghi khớp tab và bộ lọc (môn / bài)."
+                            : "Không có bản ghi trong tab này."}
                         </td>
                       </tr>
                     ) : (
@@ -903,9 +950,11 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
             ) : (
               <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-2">
                 {bundle.rows.length === 0 ? (
-                  <div className="py-12 text-center text-sm text-[#888]">Không có bản ghi trong tab này.</div>
-                ) : totalRows === 0 ? (
-                  <div className="py-12 text-center text-sm text-[#888]">Không có bản ghi khớp môn đã chọn.</div>
+                  <div className="py-12 text-center text-sm text-[#888]">
+                    {hasActiveListFilter
+                      ? "Không có bản ghi khớp tab và bộ lọc (môn / bài)."
+                      : "Không có bản ghi trong tab này."}
+                  </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {bundle.rows.map((base) => (
@@ -969,7 +1018,6 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
               </div>
             ) : null}
           </div>
-        </div>
       </div>
 
       {toast ? (

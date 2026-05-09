@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   staffName: string;
   staffEmail: string;
-  /** `hr_nhan_su.id` — link «Hồ sơ nhân sự» trên sidebar. */
+  /** `hr_nhan_su.id` — link hồ sơ cá nhân trên đầu sidebar. */
   staffId: number;
   /** `hr_nhan_su.vai_tro` (null nếu trống hoặc không đọc được). */
   staffRole: string | null;
@@ -68,9 +68,6 @@ function navItemClass(href: string, pathname: string | null, searchParams: URLSe
   if (pathMatches && queryPart) {
     const want = new URLSearchParams(queryPart);
     queryMatches = [...want.entries()].every(([k, v]) => searchParams.get(k) === v);
-  } else if (pathMatches && !queryPart && pathPart === "/admin/dashboard/quan-ly-bai-hoc-vien") {
-    const tab = searchParams.get("tab");
-    queryMatches = tab == null || tab === "cho";
   }
 
   if (pathMatches && queryMatches) return `${base} bg-black/[0.06] font-medium text-black`;
@@ -119,7 +116,7 @@ function AdminDashboardNavPanel({
   staffName: string;
   staffRole: string | null;
   staffAvatarUrl?: string | null;
-  /** Đích «Hồ sơ nhân sự» — null thì khối đầu không phải link. */
+  /** Đích hồ sơ cá nhân (`/ho-so-ca-nhan/[id]`) — null thì khối đầu không phải link. */
   staffProfileHref: string | null;
   pathname: string | null;
   searchParams: URLSearchParams;
@@ -300,11 +297,11 @@ export default function AdminShell({
   const navHrVisible = useMemo(() => {
     let items = NAV_HR.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href));
     const isAdmin = (staffRole ?? "").trim().toLowerCase() === "admin";
-    if (isAdmin) {
+    if (isAdmin && items.length > 0) {
       items = [
-        ...items.slice(0, 2),
+        ...items.slice(0, 1),
         { label: "BCTC — nguồn tự động", href: BCTC_TU_DONG_HREF },
-        ...items.slice(2),
+        ...items.slice(1),
       ];
     }
     return items;

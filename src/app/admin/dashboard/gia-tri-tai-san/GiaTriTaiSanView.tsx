@@ -2,11 +2,12 @@
 
 import { ChevronDown, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { type ReactNode, useEffect, useMemo, useState, useTransition } from "react";
 
 import { addTaiSanAsset } from "@/app/admin/dashboard/gia-tri-tai-san/actions";
 import {
   computeTaiSanDepreciation,
+  depreciationExpenseForCalendarMonth,
   monthsElapsedSincePurchase,
   type TaiSanComputed,
   type TaiSanDbRow,
@@ -46,6 +47,97 @@ function fmtDate(d?: string | null): string {
   } catch {
     return d;
   }
+}
+
+function defaultMonthKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Hiển thị nhãn T5/2026 */
+function monthKeyLabelVi(mk: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(mk.trim());
+  if (!m) return mk;
+  const mo = parseInt(m[2], 10);
+  return mo >= 1 && mo <= 12 ? `T${mo}/${m[1]}` : mk;
+}
+
+function monthKeyToParts(mk: string): { y: number; m: number } | null {
+  const x = /^(\d{4})-(\d{2})$/.exec(mk.trim());
+  if (!x) return null;
+  const y = parseInt(x[1], 10);
+  const mo = parseInt(x[2], 10);
+  if (!Number.isFinite(y) || mo < 1 || mo > 12) return null;
+  return { y, m: mo };
+}
+
+const VI_THANG_OPTIONS = Array.from({ length: 12 }, (_, i) => {
+  const mm = String(i + 1).padStart(2, "0");
+  return { value: mm, label: `Tháng ${i + 1}` };
+});
+
+/** Chọn tháng/năm — nhãn tiếng Việt (không dùng `input type="month` của trình duyệt). */
+function KhThangGhiNhanVi({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (monthKey: string) => void;
+}) {
+  const fallback = monthKeyToParts(defaultMonthKey())!;
+  const parsed = monthKeyToParts(value) ?? fallback;
+  const yearNow = new Date().getFullYear();
+  const years: number[] = [];
+  for (let y = 2000; y <= yearNow + 1; y++) years.push(y);
+
+  const mm = String(parsed.m).padStart(2, "0");
+
+  const selectCls =
+    "h-8 max-w-[7.25rem] rounded-lg border border-[#E8EAED] bg-[#FAFBFC] py-1 pl-2 pr-8 text-[12px] font-semibold text-[#1a1a2e] shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100";
+
+  return (
+    <div className="inline-flex flex-wrap items-center gap-1.5" lang="vi">
+      <label htmlFor="kh-thang-ts" className="sr-only">
+        Tháng ghi nhận khấu hao
+      </label>
+      <select
+        id="kh-thang-ts"
+        value={mm}
+        title="Tháng — khớp BCTC tự động"
+        onChange={(e) => {
+          const nextMm = e.target.value;
+          onChange(`${parsed.y}-${nextMm}`);
+        }}
+        className={selectCls}
+      >
+        {VI_THANG_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <label htmlFor="kh-nam-ts" className="sr-only">
+        Năm ghi nhận khấu hao
+      </label>
+      <select
+        id="kh-nam-ts"
+        value={parsed.y}
+        title="Năm — khớp BCTC tự động"
+        onChange={(e) => {
+          const ny = Number(e.target.value);
+          if (!Number.isFinite(ny)) return;
+          onChange(`${ny}-${mm}`);
+        }}
+        className={`${selectCls} max-w-[5.5rem] tabular-nums`}
+      >
+        {years.map((y) => (
+          <option key={y} value={y}>
+            {y}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 const LOAI_BADGE: Record<string, { bg: string; text: string }> = {
@@ -93,12 +185,24 @@ export default function GiaTriTaiSanView({ rows, embedded = false }: Props) {
   const assets = useMemo(() => rows.map(computeTaiSanDepreciation), [rows]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [khFilterMonth, setKhFilterMonth] = useState(defaultMonthKey);
 
   const tongGiaTri = assets.reduce((s, a) => s + a.gia_tri_moi_mua, 0);
   const tongConLai = assets.reduce((s, a) => s + a.conLai, 0);
   const tongDaKhauHao = assets.reduce((s, a) => s + a.daKhauHao, 0);
   const tongKhauHaoThang = assets.reduce((s, a) => s + a.khauHaoThang, 0);
-  const countDangKhau = assets.filter((a) => a.khauHaoThang > 0).length;
+
+  /** Chi phí KH phát sinh trong tháng chọn — cùng công thức BCTC tự động. */
+  const { tongKhauHaoPhatSinh, countCoPhatSinhKh } = useMemo(() => {
+    let tong = 0;
+    let n = 0;
+    for (const r of rows) {
+      const v = depreciationExpenseForCalendarMonth(r, khFilterMonth);
+      tong += v;
+      if (v > 0) n += 1;
+    }
+    return { tongKhauHaoPhatSinh: tong, countCoPhatSinhKh: n };
+  }, [rows, khFilterMonth]);
 
   return (
     <div
@@ -134,12 +238,19 @@ export default function GiaTriTaiSanView({ rows, embedded = false }: Props) {
 
       <AddTaiSanModal open={addOpen} onClose={() => setAddOpen(false)} />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 px-[10px] pb-6 pt-3 md:px-6 md:pt-4">
-        <div className="flex flex-wrap gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 px-[10px] pb-6 pt-3 md:gap-3 md:px-6 md:pt-4">
+        <div className="flex flex-wrap gap-2 md:gap-3">
           <StatCard
-            title="Khấu hao tháng này"
-            value={`${fmtVNDShort(tongKhauHaoThang)} ₫`}
-            sub={`${countDangKhau} tài sản đang khấu hao`}
+            title="KH phát sinh"
+            headerRight={
+              <KhThangGhiNhanVi value={khFilterMonth} onChange={setKhFilterMonth} />
+            }
+            value={fmtVND(tongKhauHaoPhatSinh)}
+            sub={
+              countCoPhatSinhKh > 0
+                ? `${countCoPhatSinhKh} TS · danh nghĩa ${fmtVNDShort(tongKhauHaoThang)} ₫`
+                : `Không phát sinh · danh nghĩa ${fmtVNDShort(tongKhauHaoThang)} ₫`
+            }
             icon="📉"
             grad="linear-gradient(135deg, #fbbf24, #f59e0b)"
           />
@@ -190,7 +301,10 @@ export default function GiaTriTaiSanView({ rows, embedded = false }: Props) {
             <div className="min-w-[640px] border-t border-[#E5E7EB] bg-[#F8F9FA] px-4 py-2.5 text-[11px] md:px-5">
             <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-1">
               <span className="text-[#6B7280]">{assets.length} tài sản</span>
-              <span className="font-bold text-amber-600">KH/tháng: {fmtVNDShort(tongKhauHaoThang)} ₫</span>
+              <span className="font-bold text-amber-600">
+                KH phát sinh {monthKeyLabelVi(khFilterMonth)}: {fmtVND(tongKhauHaoPhatSinh)}
+              </span>
+              <span className="text-[#94a3b8]">Danh nghĩa/tháng: {fmtVNDShort(tongKhauHaoThang)} ₫</span>
               <span className="font-bold text-emerald-600">Còn lại: {fmtVNDShort(tongConLai)} ₫</span>
               <span className="font-bold text-[#BC8AF9]">Đã KH: {fmtVNDShort(tongDaKhauHao)} ₫</span>
             </div>
@@ -371,26 +485,35 @@ function StatCard({
   sub,
   icon,
   grad,
+  headerRight,
 }: {
   title: string;
   value: string;
   sub?: string;
   icon: string;
   grad: string;
+  headerRight?: ReactNode;
 }) {
   return (
-    <div className="flex min-w-[200px] flex-1 flex-col gap-2 rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
-      <div className="flex items-center gap-2.5">
-        <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[17px]"
-          style={{ background: grad }}
-        >
-          {icon}
+    <div className="flex min-w-[min(100%,180px)] flex-1 flex-col gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white p-3.5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
+      <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[15px]"
+            style={{ background: grad }}
+          >
+            {icon}
+          </div>
+          <span className="text-[10px] font-bold uppercase leading-tight tracking-[0.08em] text-[#9CA3AF]">
+            {title}
+          </span>
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#9CA3AF]">{title}</span>
+        {headerRight ? <div className="ml-auto shrink-0">{headerRight}</div> : null}
       </div>
-      <div className="text-[22px] font-extrabold leading-none tracking-tight text-[#1a1a2e]">{value}</div>
-      {sub ? <div className="text-[11px] text-[#9CA3AF]">{sub}</div> : null}
+      <div className="break-words text-[clamp(1rem,2.8vw,1.375rem)] font-extrabold leading-tight tracking-tight text-[#1a1a2e]">
+        {value}
+      </div>
+      {sub ? <div className="text-[10px] leading-snug text-[#9CA3AF]">{sub}</div> : null}
     </div>
   );
 }

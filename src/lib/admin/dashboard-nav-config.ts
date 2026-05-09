@@ -44,7 +44,6 @@ export const NAV_MAIN: NavMainItem[] = [
 ];
 
 export const NAV_HR: { label: string; href: string; disabled?: boolean }[] = [
-  { label: "Hồ sơ nhân sự", href: STAFF_PERSONAL_DASHBOARD_HREF },
   { label: "Nhân sự", href: "/admin/dashboard/quan-ly-nhan-su" },
   { label: "Báo cáo tài chính", href: "/admin/dashboard/bao-cao-tai-chinh" },
   { label: "Giá trị tài sản", href: "/admin/dashboard/gia-tri-tai-san" },
@@ -66,5 +65,6 @@ export const NAV_MARKETING: { label: string; href: string; disabled?: boolean }[
 ];
 
 export const HREFS_DIEU_HANH_ALL = NAV_MAIN.map((n) => n.href);
-export const HREFS_NHAN_SU_TC_ALL = NAV_HR.map((n) => n.href);
+/** Gồm cả base `/ho-so-ca-nhan` (không còn trong sidebar — vào qua avatar/header). */
+export const HREFS_NHAN_SU_TC_ALL = [...NAV_HR.map((n) => n.href), STAFF_PERSONAL_DASHBOARD_HREF];
 export const HREFS_MARKETING_ALL = NAV_MARKETING.map((n) => n.href);

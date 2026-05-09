@@ -3657,8 +3657,7 @@
     font-size: clamp(26px, 7vw, 40px);
   }
 
-  .phc .canvas-ph--meet iframe,
-  .phc .daily-meet-frame-root {
+  .phc .canvas-ph--meet iframe {
     min-height: 0;
   }
 }
@@ -4237,7 +4236,7 @@
   box-shadow: 0 3px 14px rgba(0, 0, 0, 0.5);
 }
 
-/* Meeting: ql_lop_hoc.meeting_room */
+/* Meet canvas (Google Meet CTA / legacy iframe rules) */
 .phc .canvas-ph--meet {
   flex: 1;
   min-height: 0;
@@ -4259,7 +4258,7 @@
   display: block;
 }
 
-/* Google Meet — khung chính: CTA thay cho Daily nhúng */
+/* Google Meet — khung chính: CTA */
 .phc .canvas-ph--meet-cta {
   align-items: center;
   justify-content: center;
@@ -4341,15 +4340,6 @@
 
 .phc.phc--dark .canvas-ph--meet-cta {
   background: linear-gradient(165deg, #101014 0%, #060608 100%);
-}
-
-.phc .daily-meet-frame-root {
-  position: relative;
-  flex: 1;
-  min-height: 240px;
-  min-width: 0;
-  width: 100%;
-  overflow: hidden;
 }
 
 .phc .canvas-ph code,

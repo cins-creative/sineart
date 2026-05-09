@@ -10,7 +10,6 @@ import {
   HREFS_MARKETING_ALL,
   HREFS_NHAN_SU_TC_ALL,
   ORDER_MEDIA_HREF,
-  STAFF_PERSONAL_DASHBOARD_HREF,
 } from "@/lib/admin/dashboard-nav-config";
 
 export type DashboardNavAccess = {
@@ -181,13 +180,6 @@ export function resolveDashboardNavAccess(
 }
 
 export function canAccessDashboardHref(allowedHrefs: Set<string> | null, href: string): boolean {
-  const pathOnly = href.split("?")[0] ?? href;
-  if (
-    pathOnly === STAFF_PERSONAL_DASHBOARD_HREF ||
-    pathOnly.startsWith(`${STAFF_PERSONAL_DASHBOARD_HREF}/`)
-  ) {
-    return true;
-  }
   if (allowedHrefs == null) return true;
   if (allowedHrefs.has(href)) return true;
   const path = href.split("?")[0] ?? href;

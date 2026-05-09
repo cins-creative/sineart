@@ -16,6 +16,17 @@ const HV_SELECT = `
 const HV_SELECT_LOP_A = `${HV_SELECT.trim()},\n  lop_hoc, class`;
 const HV_SELECT_LOP_B = `${HV_SELECT.trim()},\n  class`;
 
+/**
+ * Giống `HV_SELECT` nhưng `bai_tap!inner` để lọc `bai_tap.mon_hoc` = môn lớp (chỉ bài mẫu đúng chương trình môn).
+ */
+const HV_SELECT_MON = `
+  id, photo, score, bai_mau, thuoc_bai_tap,
+  ten_hoc_vien:ql_thong_tin_hoc_vien(id, full_name, email_prefix),
+  bai_tap:hv_he_thong_bai_tap!inner(ten_bai_tap, bai_so, mon_hoc:ql_mon_hoc!mon_hoc(id, ten_mon_hoc))
+`;
+const HV_SELECT_MON_LOP_A = `${HV_SELECT_MON.trim()},\n  lop_hoc, class`;
+const HV_SELECT_MON_LOP_B = `${HV_SELECT_MON.trim()},\n  class`;
+
 type HvGalleryRawRow = {
   id: unknown;
   photo: unknown;
@@ -217,9 +228,15 @@ export async function fetchClassroomGalleryForStudentHv(
   if (error) throw error;
 
   const rawRows = (data ?? []) as unknown as HvGalleryRawRow[];
+  return mapRawRowsToStudentProfileRows(sb, rawRows);
+}
+
+async function mapRawRowsToStudentProfileRows(
+  sb: SupabaseClient,
+  rawRows: HvGalleryRawRow[]
+): Promise<StudentProfileGalleryRow[]> {
   const lopIds = rawRows.map((r) => lopIdFromHvRow(r)).filter((x): x is number => x != null);
   const labelByLop = await fetchLopClassLabels(sb, lopIds);
-
   return rawRows.map((row) => {
     const base = mapHvRowToClassroomGalleryRow(row);
     const lid = lopIdFromHvRow(row);
@@ -240,11 +257,16 @@ export type FetchAllSamplesOptions = {
   beforeId?: number;
   /** Số bản ghi tối đa cho 1 lần fetch (default `ALL_SAMPLES_PAGE_SIZE`). */
   limit?: number;
+  /**
+   * Chỉ lấy mẫu có `hv_he_thong_bai_tap.mon_hoc` = `ql_mon_hoc.id` (môn của lớp trong Phòng học).
+   * Không truyền hoặc không hợp lệ → giữ hành vi cũ (mọi môn).
+   */
+  monHocId?: number | null;
 };
 
 /**
- * Mọi bài mẫu (`bai_mau = true`, `status = Hoàn thiện`) trên toàn hệ thống.
- * Dùng cho tab «Bài mẫu» trong Phòng học để GV duyệt mọi level — không lọc theo lớp.
+ * Bài mẫu (`bai_mau = true`, `status = Hoàn thiện`).
+ * Phòng học truyền `monHocId` để chỉ hiện mẫu đúng môn lớp (`ql_lop_hoc.mon_hoc`); không truyền = toàn hệ thống.
  * Trả thêm `classLabel` để hiển thị bối cảnh lớp gốc cho mỗi mẫu.
  *
  * Pagination kiểu cursor (`id < beforeId`, sort desc) — ổn định hơn `range()` khi có row mới chèn vào.
@@ -255,6 +277,10 @@ export async function fetchAllSampleWorks(
 ): Promise<StudentProfileGalleryRow[]> {
   const limit = opts.limit && opts.limit > 0 ? Math.floor(opts.limit) : ALL_SAMPLES_PAGE_SIZE;
   const before = opts.beforeId && opts.beforeId > 0 ? Math.floor(opts.beforeId) : null;
+  const monId =
+    opts.monHocId != null && Number.isFinite(Number(opts.monHocId)) && Number(opts.monHocId) > 0
+      ? Math.floor(Number(opts.monHocId))
+      : null;
 
   const run = (sel: string) => {
     let q = sb
@@ -265,8 +291,55 @@ export async function fetchAllSampleWorks(
       .order("id", { ascending: false })
       .limit(limit);
     if (before != null) q = q.lt("id", before);
+    if (monId != null) q = q.eq("bai_tap.mon_hoc", monId);
     return q;
   };
+
+  const selA = monId != null ? HV_SELECT_MON_LOP_A : HV_SELECT_LOP_A;
+  const selB = monId != null ? HV_SELECT_MON_LOP_B : HV_SELECT_LOP_B;
+  const selPlain = monId != null ? HV_SELECT_MON : HV_SELECT;
+
+  let { data, error } = await run(selA);
+  if (error) {
+    ({ data, error } = await run(selB));
+  }
+  if (error) {
+    ({ data, error } = await run(selPlain));
+  }
+  if (error) throw error;
+
+  const rawRows = (data ?? []) as unknown as HvGalleryRawRow[];
+  return mapRawRowsToStudentProfileRows(sb, rawRows);
+}
+
+/**
+ * Bài mẫu (`bai_mau`) Hoàn thiện cho **một** `hv_he_thong_bai_tap.id`.
+ * Đồng bộ logic với gallery `/he-thong-bai-tap/[slug]` (`getGalleryItemsForBaiTapExercise`): cùng `thuoc_bai_tap`,
+ * sắp `score` DESC, giới hạn như `HTBT_BAI_TAP_GALLERY_CAP` (120) — chỉ lọc thêm `bai_mau = true` như tab «Bài mẫu».
+ */
+export const CLASSROOM_BAI_MAU_PER_EXERCISE_CAP = 120;
+
+export async function fetchBaiMauSamplesForExercise(
+  sb: SupabaseClient,
+  thuocBaiTapId: number,
+  opts?: { limit?: number }
+): Promise<StudentProfileGalleryRow[]> {
+  const tid = Math.floor(Number(thuocBaiTapId));
+  if (!Number.isFinite(tid) || tid <= 0) return [];
+  const cap =
+    opts?.limit != null && opts.limit > 0
+      ? Math.min(200, Math.floor(opts.limit))
+      : CLASSROOM_BAI_MAU_PER_EXERCISE_CAP;
+
+  const run = (sel: string) =>
+    sb
+      .from("hv_bai_hoc_vien")
+      .select(sel)
+      .eq("status", "Hoàn thiện")
+      .eq("bai_mau", true)
+      .eq("thuoc_bai_tap", tid)
+      .order("score", { ascending: false, nullsFirst: false })
+      .limit(cap);
 
   let { data, error } = await run(HV_SELECT_LOP_A);
   if (error) {
@@ -278,15 +351,7 @@ export async function fetchAllSampleWorks(
   if (error) throw error;
 
   const rawRows = (data ?? []) as unknown as HvGalleryRawRow[];
-  const lopIds = rawRows.map((r) => lopIdFromHvRow(r)).filter((x): x is number => x != null);
-  const labelByLop = await fetchLopClassLabels(sb, lopIds);
-
-  return rawRows.map((row) => {
-    const base = mapHvRowToClassroomGalleryRow(row);
-    const lid = lopIdFromHvRow(row);
-    const classLabel = lid != null ? labelByLop.get(lid) ?? "—" : "—";
-    return { ...base, classLabel };
-  });
+  return mapRawRowsToStudentProfileRows(sb, rawRows);
 }
 
 export type EnrolledMonOption = { id: number; ten_mon_hoc: string };

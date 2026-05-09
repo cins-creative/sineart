@@ -7,6 +7,7 @@ import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
+/** invalidate toàn nhánh `[tab]` sau mutation */
 const ADMIN_PATH = "/admin/dashboard/quan-ly-bai-hoc-vien";
 
 const STATUS_VALUES = new Set(["Chờ xác nhận", "Hoàn thiện", "Không đủ chất lượng"]);
@@ -75,7 +76,7 @@ export async function updateBaiHocVien(id: number, patch: UpdateBaiHocVienPayloa
   }
   if (error) return { ok: false, error: error.message || "Không cập nhật được." };
 
-  revalidatePath(ADMIN_PATH);
+  revalidatePath(ADMIN_PATH, "layout");
   return { ok: true };
 }
 
@@ -93,6 +94,6 @@ export async function deleteBaiHocVien(id: number): Promise<AdminBhvMutationResu
   const { error } = await supabase.from("hv_bai_hoc_vien").delete().eq("id", id);
   if (error) return { ok: false, error: error.message || "Không xóa được." };
 
-  revalidatePath(ADMIN_PATH);
+  revalidatePath(ADMIN_PATH, "layout");
   return { ok: true };
 }

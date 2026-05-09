@@ -45,10 +45,30 @@ export type AdminBaiHocVienRow = {
 export type AdminBhvHocVienOpt = { id: number; full_name: string };
 export type AdminBhvLopOpt = { id: number; label: string };
 
+export const ADMIN_BHV_TAB_PATH: Record<AdminBhvStatusTab, string> = {
+  cho: "cho",
+  hoan: "hoan",
+  kcl: "kcl",
+  tat_ca: "tat-ca",
+};
+
+export function adminBhvPathSegmentFromTab(tab: AdminBhvStatusTab): string {
+  return ADMIN_BHV_TAB_PATH[tab];
+}
+
+/** Segment trong URL `/quan-ly-bai-hoc-vien/[tab]` → tab nội bộ. */
+export function adminBhvTabFromPathSegment(seg: string | undefined): AdminBhvStatusTab | null {
+  if (!seg) return null;
+  const s = seg.trim().toLowerCase();
+  if (s === "cho" || s === "hoan" || s === "kcl") return s as AdminBhvStatusTab;
+  if (s === "tat-ca" || s === "tat_ca") return "tat_ca";
+  return null;
+}
+
 export type AdminQuanLyBaiHocVienBundle = {
   tab: AdminBhvStatusTab;
   rows: AdminBaiHocVienRow[];
-  /** Tổng dòng khớp tab + lọc môn (không phụ thuộc sort/pagination). */
+  /** Tổng dòng khớp tab + lọc môn/bài/ẩn bài mẫu (không phụ thuộc sort/pagination). */
   totalCount: number;
   page: number;
   pageSize: number;
@@ -63,6 +83,10 @@ export type AdminBhvFetchParams = {
   pageSize: number;
   /** `ql_mon_hoc.ten_mon_hoc` — rỗng = không lọc. */
   filterMonHoc: string;
+  /** `hv_he_thong_bai_tap.id` — null = không lọc theo bài (chỉ theo môn nếu có). */
+  filterBaiTapId: number | null;
+  /** true = chỉ hiện bản ghi không phải bài mẫu (`bai_mau = false`). */
+  hideBaiMau: boolean;
   /** Sort điểm; null = mới tạo trước (`created_at` / `id`). */
   scoreSort: "desc" | "asc" | null;
 };
@@ -95,6 +119,11 @@ function applyTabFilter(q: AnyQuery, tab: AdminBhvStatusTab): AnyQuery {
   return q;
 }
 
+function applyHideBaiMauFilter(q: AnyQuery, hideBaiMau: boolean): AnyQuery {
+  if (!hideBaiMau) return q;
+  return q.eq("bai_mau", false);
+}
+
 function applyOrdering(q: AnyQuery, mode: OrderMode): AnyQuery {
   if (mode === "score_desc") {
     return q
@@ -115,6 +144,22 @@ function orderModeFromParams(scoreSort: AdminBhvFetchParams["scoreSort"]): Order
   if (scoreSort === "desc") return "score_desc";
   if (scoreSort === "asc") return "score_asc";
   return "created";
+}
+
+async function resolveThuocBaiTapFilter(
+  supabase: SupabaseClient,
+  filterMonHoc: string,
+  filterBaiTapId: number | null,
+): Promise<number[] | null> {
+  if (filterBaiTapId != null && filterBaiTapId > 0) {
+    const monIds = await resolveThuocBaiTapIdsForMon(supabase, filterMonHoc);
+    if (monIds === null) {
+      return [filterBaiTapId];
+    }
+    if (monIds.length === 0) return [];
+    return monIds.includes(filterBaiTapId) ? [filterBaiTapId] : [];
+  }
+  return resolveThuocBaiTapIdsForMon(supabase, filterMonHoc);
 }
 
 async function resolveThuocBaiTapIdsForMon(
@@ -150,6 +195,7 @@ async function fetchHvPageRaw(args: {
   tab: AdminBhvStatusTab;
   cols: string;
   thuocBaiTapFilter: number[] | null;
+  hideBaiMau: boolean;
   orderMode: OrderMode;
   page: number;
   pageSize: number;
@@ -158,7 +204,7 @@ async function fetchHvPageRaw(args: {
   totalCount: number;
   error: { message: string } | null;
 }> {
-  const { supabase, tab, cols, thuocBaiTapFilter, orderMode, page, pageSize } = args;
+  const { supabase, tab, cols, thuocBaiTapFilter, hideBaiMau, orderMode, page, pageSize } = args;
   const safePage = Math.max(1, page);
   const size = clampPageSize(pageSize);
   const from = (safePage - 1) * size;
@@ -167,6 +213,7 @@ async function fetchHvPageRaw(args: {
   const buildFiltered = () => {
     let q: AnyQuery = supabase.from("hv_bai_hoc_vien").select(cols);
     q = applyTabFilter(q, tab);
+    q = applyHideBaiMauFilter(q, hideBaiMau);
     if (thuocBaiTapFilter !== null) {
       if (thuocBaiTapFilter.length === 0) return null;
       q = q.in("thuoc_bai_tap", thuocBaiTapFilter);
@@ -182,6 +229,7 @@ async function fetchHvPageRaw(args: {
 
   let countQ: AnyQuery = supabase.from("hv_bai_hoc_vien").select("*", { count: "exact", head: true });
   countQ = applyTabFilter(countQ, tab);
+  countQ = applyHideBaiMauFilter(countQ, hideBaiMau);
   if (thuocBaiTapFilter !== null) {
     if (thuocBaiTapFilter.length === 0) {
       return { rows: [], totalCount: 0, error: null };
@@ -215,7 +263,11 @@ async function selectHvBaiHocVienPage(
     "id,photo,status,score,bai_mau,thuoc_bai_tap,ten_hoc_vien,ghi_chu,lop_hoc,class,created_at";
   const baseCols2 = "id,photo,status,score,bai_mau,thuoc_bai_tap,ten_hoc_vien,ghi_chu,class,created_at";
 
-  const thuocBaiTapFilter = await resolveThuocBaiTapIdsForMon(supabase, params.filterMonHoc);
+  const thuocBaiTapFilter = await resolveThuocBaiTapFilter(
+    supabase,
+    params.filterMonHoc,
+    params.filterBaiTapId,
+  );
   const orderMode = orderModeFromParams(params.scoreSort);
   const page = Math.max(1, params.page);
   const pageSize = clampPageSize(params.pageSize);
@@ -225,6 +277,7 @@ async function selectHvBaiHocVienPage(
     tab: params.tab,
     cols: baseCols,
     thuocBaiTapFilter,
+    hideBaiMau: params.hideBaiMau,
     orderMode,
     page,
     pageSize,
@@ -236,6 +289,7 @@ async function selectHvBaiHocVienPage(
       tab: params.tab,
       cols: baseCols2,
       thuocBaiTapFilter,
+      hideBaiMau: params.hideBaiMau,
       orderMode,
       page,
       pageSize,
@@ -499,17 +553,26 @@ export function adminBhvScoreSortFromSearch(
   return null;
 }
 
-/** Đọc `page`, `pageSize`, `mon`, `score` từ `searchParams` App Router. */
+/** Đọc `page`, `pageSize`, `mon`, `bai`, `hideMau`, `score` từ `searchParams` App Router; `routeTab` ghi đè tab khi dùng path `[tab]`. */
 export function adminBhvListParamsFromSearch(
   sp: Record<string, string | string[] | undefined>,
+  opts?: { routeTab?: AdminBhvStatusTab | null },
 ): AdminBhvFetchParams {
-  const tab = adminBhvTabFromSearch(sp.tab);
+  const tab = opts?.routeTab ?? adminBhvTabFromSearch(sp.tab);
   const rawPage = Array.isArray(sp.page) ? sp.page[0] : sp.page;
   const rawPs = Array.isArray(sp.pageSize) ? sp.pageSize[0] : sp.pageSize;
   const page = Math.max(1, parseInt(String(rawPage ?? "1"), 10) || 1);
   const pageSize = clampPageSize(parseInt(String(rawPs ?? String(PAGE_SIZE_DEFAULT)), 10) || PAGE_SIZE_DEFAULT);
   const rawMon = Array.isArray(sp.mon) ? sp.mon[0] : sp.mon;
   const filterMonHoc = typeof rawMon === "string" ? rawMon : "";
+  const rawBai = Array.isArray(sp.bai) ? sp.bai[0] : sp.bai;
+  let filterBaiTapId: number | null = null;
+  if (typeof rawBai === "string" && rawBai.trim()) {
+    const n = parseInt(rawBai.trim(), 10);
+    if (Number.isFinite(n) && n > 0) filterBaiTapId = n;
+  }
+  const rawHideMau = Array.isArray(sp.hideMau) ? sp.hideMau[0] : sp.hideMau;
+  const hideBaiMau = rawHideMau === "1" || String(rawHideMau).toLowerCase() === "true";
   const scoreSort = adminBhvScoreSortFromSearch(sp.score);
-  return { tab, page, pageSize, filterMonHoc, scoreSort };
+  return { tab, page, pageSize, filterMonHoc, filterBaiTapId, hideBaiMau, scoreSort };
 }

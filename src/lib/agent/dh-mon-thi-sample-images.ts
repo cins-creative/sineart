@@ -13,6 +13,10 @@ export const DH_MON_THI_SAMPLE_ORDER = [
 
 export type DhMonThiSampleLabel = (typeof DH_MON_THI_SAMPLE_ORDER)[number];
 
+/**
+ * Map cố định nhãn môn thi (khớp đề ĐH / prompt) → file trong `public/img/dh-mon-thi/`
+ * → URL công khai `…/img/dh-mon-thi/<file>` (VD: https://sineart.vn/img/dh-mon-thi/bo-cuc-mau.png).
+ */
 const FILENAME_BY_MON: Record<DhMonThiSampleLabel, string> = {
   "Hình họa khối cơ bản": "hinh-hoa-khoi-co-ban.png",
   "Hình họa tĩnh vật": "hinh-hoa-tinh-vat.png",
@@ -22,6 +26,11 @@ const FILENAME_BY_MON: Record<DhMonThiSampleLabel, string> = {
   "Trang trí màu": "trang-tri-mau.png",
   "Bố cục màu": "bo-cuc-mau.png",
 };
+
+export const DH_MON_THI_SAMPLE_FILENAME_BY_LABEL = FILENAME_BY_MON;
+
+/** Tối đa ảnh môn thi gửi kèm một lượt phản hồi — khuyến khích giải thích từng ảnh (tin tiếp theo có thể gửi ảnh khác). */
+export const MAX_DH_MON_THI_IMAGES_PER_REPLY = 2;
 
 export function getPublicSiteBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -54,9 +63,31 @@ function foldVi(s: string): string {
 const EXAM_SUBJECT_INTENT_RE =
   /(?:thi|đề)\s*môn|môn\s*(?:thi|nào|gì)|học\s*môn\s*gì|môn\s*nào|môn\s*gì|thi\s*những|đề\s*thi|thi\s*mấy\s*môn/i;
 
-/** Xin ảnh / minh họa — gộp vài tin assistant trước để vẫn bắt được tên môn đã nói. */
-const IMAGE_ASK_RE =
-  /ảnh|hình\s*ảnh|hình\s*minh|minh\s*họa|gửi.*ảnh|xin\s*ảnh|có\s*hình|co\s*hinh/i;
+/**
+ * User xin xem ảnh mẫu / minh họa — gộp vài tin assistant trước để bắt tên môn khi user chỉ nhắn "cho ảnh".
+ * Khớp rộng: hình mẫu, mẫu bài, xem mẫu, tham khảo ảnh…
+ */
+export const USER_ASKS_SAMPLE_IMAGE_RE =
+  /ảnh|hình\s*ảnh|hình\s*minh|minh\s*họa|gửi.*ảnh|xin\s*ảnh|có\s*hình|co\s*hinh|hình\s*mẫu|mẫu\s*bài|xem\s*mẫu|cho\s*xem|gửi\s*mẫu|tham\s*khảo\s*ảnh|xem\s*ảnh|họa\s*mẫu/i;
+
+/** HV có dấu hiệu nhầm / cần làm rõ trường–ngành–môn — cho phép gửi ảnh minh họa kèm giải thích. */
+const USER_SCHOOL_MAJOR_MON_CONFUSION_RE =
+  /(?:nhầm|nhằm|lộn)\s*(?:môn|trường|ngành)|hiểu\s*sai|sai\s*(?:trường|ngành|môn)|không\s*phải\s*môn|tưởng\s*(?:môn|trường|ngành)\s|(?:trường|ngành|môn)\s*(?:sai|nhầm)|lộn\s*môn/i;
+
+/**
+ * Chỉ đính kèm ảnh `/img/dh-mon-thi/*.png` khi HV chủ động xin mẫu/minh họa HOẶc thoại có dấu hiệu nhầm trường/ngành/môn.
+ * Không gửi chỉ vì trong tin có nhắc tên môn.
+ */
+export function shouldAttachDhMonThiSampleImages(
+  userMessage: string,
+  _assistantReply: string,
+  _priorAssistantContext?: string,
+): boolean {
+  const u = userMessage.trim();
+  if (USER_ASKS_SAMPLE_IMAGE_RE.test(u)) return true;
+  if (USER_SCHOOL_MAJOR_MON_CONFUSION_RE.test(u)) return true;
+  return false;
+}
 
 /**
  * Khi user chỉ nhắn “cho ảnh / xin ảnh”, nối các bubble assistant gần nhất để match tên môn.
@@ -65,7 +96,7 @@ export function buildPriorAssistantContextForMonMatch(
   userMessage: string,
   history: readonly { role: string; content: string }[],
 ): string | undefined {
-  if (!IMAGE_ASK_RE.test(userMessage)) return undefined;
+  if (!USER_ASKS_SAMPLE_IMAGE_RE.test(userMessage)) return undefined;
   const chunks: string[] = [];
   for (const t of history) {
     if (t.role === "assistant" && typeof t.content === "string" && t.content.trim()) {
@@ -91,6 +122,7 @@ const SHORT_NEEDLES: { needle: string; mon: DhMonThiSampleLabel }[] = [
   { needle: "khoi co ban", mon: "Hình họa khối cơ bản" },
   { needle: "tinh vat", mon: "Hình họa tĩnh vật" },
   { needle: "tuong tron", mon: "Hình họa tượng tròn" },
+  { needle: "hinh hoa tuong", mon: "Hình họa tượng tròn" },
   { needle: "chan dung", mon: "Hình họa chân dung" },
   { needle: "toan than", mon: "Hình họa toàn thân" },
 ];
@@ -140,12 +172,18 @@ export function pickDhMonThiSampleImageAttachments(
   priorAssistantContext?: string,
 ): PickedFaqAttachments | undefined {
   if (!urlByMon || typeof urlByMon !== "object") return undefined;
+  if (
+    !shouldAttachDhMonThiSampleImages(userMessage, assistantReply, priorAssistantContext)
+  ) {
+    return undefined;
+  }
   const labels = collectMatchedDhMonLabels(userMessage, assistantReply, priorAssistantContext);
   const images: string[] = [];
   for (const mon of DH_MON_THI_SAMPLE_ORDER) {
     if (!labels.has(mon)) continue;
     const u = urlByMon[mon];
     if (u && typeof u === "string" && u.trim()) images.push(u.trim());
+    if (images.length >= MAX_DH_MON_THI_IMAGES_PER_REPLY) break;
   }
   if (!images.length) return undefined;
   return { images, links: [] as KbLinkAttachment[] };

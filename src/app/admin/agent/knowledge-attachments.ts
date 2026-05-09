@@ -1,5 +1,11 @@
 /**
- * Supabase: thêm cột một lần (SQL Editor):
+ * Supabase FAQ: cột `ag_knowledge_base.attachments` (JSON — ảnh/link do TVV gán cho từng mục KB).
+ *
+ * Ảnh môn thi đại học (PNG cố định trên site: `/img/dh-mon-thi/<file>`): không lưu trong KB —
+ * map nhãn môn → tên file và luật gửi kèm xem `@/lib/agent/dh-mon-thi-sample-images`
+ * (`DH_MON_THI_SAMPLE_FILENAME_BY_LABEL`, `shouldAttachDhMonThiSampleImages`).
+ *
+ * SQL một lần nếu chưa có cột:
  * `alter table public.ag_knowledge_base add column if not exists attachments jsonb;`
  */
 

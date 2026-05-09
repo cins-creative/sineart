@@ -5,19 +5,21 @@ import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import {
   adminBhvListParamsFromSearch,
   fetchAdminQuanLyBaiHocVienBundle,
+  type AdminBhvStatusTab,
 } from "@/lib/data/admin-quan-ly-bai-hoc-vien";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 type PageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  routeTab?: AdminBhvStatusTab;
 };
 
-export default async function QuanLyBaiHocVienPageData({ searchParams }: PageProps) {
+export default async function QuanLyBaiHocVienPageData({ searchParams, routeTab }: PageProps) {
   const session = await getAdminSessionOrNull();
   if (!session) redirect("/admin");
 
   const sp = (await searchParams) ?? {};
-  const fetchParams = adminBhvListParamsFromSearch(sp);
+  const fetchParams = adminBhvListParamsFromSearch(sp, { routeTab: routeTab ?? null });
 
   const supabase = createServiceRoleClient();
   if (!supabase) {

@@ -654,7 +654,7 @@ export default {
  */
 function buildPriorAssistantMessenger(userText, session) {
   if (
-    !/(?:ảnh|hình\s*ảnh|hình\s*minh|minh\s*họa|gửi.*ảnh|xin\s*ảnh|có\s*hình|co\s*hinh)/i.test(
+    !/(?:ảnh|hình\s*ảnh|hình\s*minh|minh\s*họa|gửi.*ảnh|xin\s*ảnh|có\s*hình|co\s*hinh|hình\s*mẫu|mẫu\s*bài|xem\s*mẫu|cho\s*xem|gửi\s*mẫu|tham\s*khảo\s*ảnh|xem\s*ảnh|họa\s*mẫu)/i.test(
       String(userText || ""),
     )
   ) {
@@ -799,9 +799,109 @@ async function getAgentContext(env) {
   });
 }
 
+function foldViBranchProx(s) {
+  return String(s || "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function haversineKmBranch(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/** Đồng bộ logic `src/lib/agent/branch-proximity.ts` — Tân Phú / Bình Thạnh */
+const BRANCH_SITES_COORDS = [
+  { displayName: "Tân Phú", lat: 10.8023, lng: 106.6347 },
+  { displayName: "Bình Thạnh", lat: 10.8119, lng: 106.6957 },
+];
+
+const GEO_NEEDLES_BRANCH = [
+  ["dai hoc my thuat tphcm", 10.8233, 106.6989, "khu ĐH Mỹ thuật TP.HCM"],
+  ["truong dai hoc my thuat", 10.8233, 106.6989, "khu ĐH Mỹ thuật"],
+  ["dh my thuat", 10.8233, 106.6989, "khu ĐH Mỹ thuật"],
+  ["hong bang", 10.8233, 106.6989, "Phố Hồng Bàng / ĐH Mỹ thuật"],
+  ["no trang long", 10.8115, 106.702, "Nơ Trang Long / Bình Thạnh"],
+  ["binh thanh", 10.811, 106.708, "Quận Bình Thạnh"],
+  ["tan phu", 10.791, 106.628, "Quận Tân Phú"],
+  ["tan son nhi", 10.797, 106.638, "Tân Sơn Nhì"],
+  ["tan binh", 10.801, 106.652, "Quận Tân Bình"],
+  ["binh tan", 10.765, 106.603, "Quận Bình Tân"],
+  ["quan 1", 10.7769, 106.7009, "Quận 1"],
+  ["quan 7", 10.731, 106.718, "Quận 7"],
+  ["phu nhuan", 10.799, 106.68, "Phú Nhuận"],
+  ["go vap", 10.839, 106.666, "Gò Vấp"],
+  ["thu duc", 10.85, 106.771, "Thủ Đức"],
+];
+
+const LOCATION_INTENT_BRANCH_RE =
+  /(?:quận|quan|huyện|phường|đường|khu|ở|gần|địa chỉ|tân phú|bình thạnh|mỹ thuật|học ở|chỗ nào|tiện|tp\s*hcm|tphcm)/i;
+
+function formatBranchProximityHintMessenger(message) {
+  const raw = String(message || "").trim();
+  if (raw.length < 4 || !LOCATION_INTENT_BRANCH_RE.test(raw)) return "";
+  const f = foldViBranchProx(raw);
+  let lat = null;
+  let lng = null;
+  let label = "";
+  for (const row of GEO_NEEDLES_BRANCH) {
+    const [needle, la, ln, lb] = row;
+    if (f.includes(needle)) {
+      lat = la;
+      lng = ln;
+      label = lb;
+      break;
+    }
+  }
+  if (lat == null) {
+    const qn = f.match(/(?:quận|quan)\s*(\d{1,2})\b/);
+    if (qn) {
+      const n = Number(qn[1]);
+      const map = {
+        1: [10.7769, 106.7009, "Quận 1"],
+        3: [10.783, 106.683, "Quận 3"],
+        5: [10.755, 106.666, "Quận 5"],
+        7: [10.731, 106.718, "Quận 7"],
+        10: [10.775, 106.667, "Quận 10"],
+        12: [10.867, 106.653, "Quận 12"],
+      };
+      const hit = map[n];
+      if (hit) {
+        lat = hit[0];
+        lng = hit[1];
+        label = hit[2];
+      }
+    }
+  }
+  if (lat == null) return "";
+
+  const ranked = BRANCH_SITES_COORDS.map((b) => ({
+    ...b,
+    km: haversineKmBranch(lat, lng, b.lat, b.lng),
+  })).sort((a, b) => a.km - b.km);
+  const [a, b] = ranked;
+  return (
+    `─── GỢI Ý KHOẢNG CÁCH (ước lượng từ khu vực HV: «${label}») ───\n` +
+    `Điểm ước lượng ~ ${lat.toFixed(4)}, ${lng.toFixed(4)}.\n` +
+    `${a.displayName} ~${a.km.toFixed(1)} km; ${b.displayName} ~${b.km.toFixed(1)} km.\n` +
+    `Ưu tiên gợi ý chi nhánh gần hơn: ${a.displayName} — vẫn đọc địa chỉ đúng trong dữ liệu context.`
+  );
+}
+
 async function callClaude({ text, session, sender_id, ctx_data, env }) {
   const messages = [...(session.history ?? []), { role: "user", content: text }];
-  const systemPrompt = buildSystemPrompt(ctx_data);
+  let systemPrompt = buildSystemPrompt(ctx_data);
+  const px = formatBranchProximityHintMessenger(text);
+  if (px) systemPrompt += "\n\n" + px;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -909,7 +1009,7 @@ function buildTools() {
 
 async function queryCourses(ctx_data, env) {
   if (ctx_data.available_classes?.length > 0) {
-    return { courses: ctx_data.available_classes.slice(0, 5) };
+    return { courses: ctx_data.available_classes.slice(0, 15) };
   }
   try {
     const res = await fetch(
@@ -1037,6 +1137,7 @@ const SHORT_NEEDLES_DH = [
   ["hinh hoa khoi co ban", "Hình họa khối cơ bản"],
   ["hinh hoa tinh vat", "Hình họa tĩnh vật"],
   ["hinh hoa tuong tron", "Hình họa tượng tròn"],
+  ["hinh hoa tuong", "Hình họa tượng tròn"],
   ["hinh hoa chan dung", "Hình họa chân dung"],
   ["hinh chan dung", "Hình họa chân dung"],
   ["hinh hoa toan than", "Hình họa toàn thân"],
@@ -1049,8 +1150,24 @@ const SHORT_NEEDLES_DH = [
   ["toan than", "Hình họa toàn thân"],
 ];
 
+const USER_ASKS_SAMPLE_IMAGE_RE_W =
+  /ảnh|hình\s*ảnh|hình\s*minh|minh\s*họa|gửi.*ảnh|xin\s*ảnh|có\s*hình|co\s*hinh|hình\s*mẫu|mẫu\s*bài|xem\s*mẫu|cho\s*xem|gửi\s*mẫu|tham\s*khảo\s*ảnh|xem\s*ảnh|họa\s*mẫu/i;
+
+const USER_SCHOOL_MAJOR_MON_CONFUSION_RE_W =
+  /(?:nhầm|nhằm|lộn)\s*(?:môn|trường|ngành)|hiểu\s*sai|sai\s*(?:trường|ngành|môn)|không\s*phải\s*môn|tưởng\s*(?:môn|trường|ngành)\s|(?:trường|ngành|môn)\s*(?:sai|nhầm)|lộn\s*môn/i;
+
+function shouldAttachDhMonThiSampleImagesMessenger(userText) {
+  const u = String(userText || "").trim();
+  if (USER_ASKS_SAMPLE_IMAGE_RE_W.test(u)) return true;
+  if (USER_SCHOOL_MAJOR_MON_CONFUSION_RE_W.test(u)) return true;
+  return false;
+}
+
+const MAX_DH_MON_THI_IMAGES_PER_REPLY_W = 2;
+
 function pickDhMonThiSampleImages(userText, replyText, urlMap, priorAssistant) {
   if (!urlMap || typeof urlMap !== "object") return [];
+  if (!shouldAttachDhMonThiSampleImagesMessenger(userText)) return [];
   const uFold = foldViWorker(userText);
   const assistantBlock =
     priorAssistant && String(priorAssistant).trim() ?
@@ -1078,6 +1195,7 @@ function pickDhMonThiSampleImages(userText, replyText, urlMap, priorAssistant) {
     if (!found.has(mon)) continue;
     const url = urlMap[mon];
     if (url && typeof url === "string" && url.trim()) out.push(url.trim());
+    if (out.length >= MAX_DH_MON_THI_IMAGES_PER_REPLY_W) break;
   }
   return out;
 }

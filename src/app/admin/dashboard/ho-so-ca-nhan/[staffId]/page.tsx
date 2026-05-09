@@ -2,13 +2,26 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import StaffPersonalDashboardView from "@/app/admin/dashboard/ho-so-ca-nhan/[staffId]/StaffPersonalDashboardView";
-import { adminStaffCanViewStaffPersonalDashboard } from "@/lib/admin/staff-mutation-access";
 import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
 import { fetchAdminStaffPersonalDashboard } from "@/lib/data/admin-staff-personal-dashboard";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
+
+/** Cùng quy tắc `adminStaffCanViewStaffPersonalDashboard` — đặt cục bộ để tránh lỗi runtime «is not a function» do chunk/webpack. */
+function viewerCanAccessHoSoCaNhan(
+  viewerVaiTro: string | null | undefined,
+  viewerStaffId: number,
+  targetStaffId: number,
+): boolean {
+  if (Number(viewerStaffId) === Number(targetStaffId)) return true;
+  const v = (viewerVaiTro ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  return v === "admin" || v === "quan_ly";
+}
 
 export default async function HoSoCaNhanStaffPage({
   params,
@@ -40,9 +53,7 @@ export default async function HoSoCaNhanStaffPage({
   }
 
   const viewerProfile = await fetchAdminStaffShellProfile(supabase, session.staffId);
-  if (
-    !adminStaffCanViewStaffPersonalDashboard(viewerProfile.vai_tro, session.staffId, targetId)
-  ) {
+  if (!viewerCanAccessHoSoCaNhan(viewerProfile.vai_tro, session.staffId, targetId)) {
     return (
       <div className="mx-auto max-w-lg px-4 py-10">
         <div className="rounded-2xl border border-black/[0.1] bg-white p-6 text-sm shadow-sm">

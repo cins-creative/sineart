@@ -92,7 +92,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex w-full min-w-0 flex-col overflow-x-clip" suppressHydrationWarning>
         <SeoOrganizationJsonLd />
-        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
+        <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
         <ConditionalCta />
         <ConditionalHomeAdBanner />
       </body>

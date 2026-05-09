@@ -3,7 +3,6 @@
 import Image from "next/image";
 import type { HomeReview } from "@/types/homepage";
 import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const GOOGLE_MAPS_URL = "https://maps.app.goo.gl/LeKBd5WVyH6EtKjo9";
@@ -50,8 +49,6 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prefersReducedMotion = useReducedMotion();
-
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
@@ -176,14 +173,7 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
         onFocus={() => setPaused(true)}
         onBlur={() => setPaused(false)}
       >
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={rv.id}
-            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 14 }}
-            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -14 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          >
+        <div key={rv.id} className="rv-quote-panel">
             <div className="rv-head">
               <div
                 className="rv-avatar overflow-hidden"
@@ -220,8 +210,7 @@ export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {
               </a>
             </div>
             <div className="rv-text-big">{rv.text}</div>
-          </motion.div>
-        </AnimatePresence>
+        </div>
       </div>
     </div>
   );

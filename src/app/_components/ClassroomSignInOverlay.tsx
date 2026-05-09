@@ -38,7 +38,7 @@ const iVariants = {
   },
 };
 
-/** Vào phòng học khi còn ≥ 1 ngày trong kỳ; 0 ngày → không vào. Chỉ hiển thị UI cảnh báo (không chặn vào). */
+/** Cảnh báo sắp hết kỳ — vẫn cho vào lớp nếu còn > 0 ngày; chỉ nút/link «Đóng học phí» dẫn tới trang thanh toán. */
 const DAYS_LOW_KY_WARNING = 3;
 
 function enrollmentLooksInactive(data: ClassroomStudentSessionData): boolean {
@@ -76,13 +76,6 @@ function daysLabel(d: number | null, data: ClassroomStudentSessionData): string 
   if (d === 0) return "Hết hạn";
   if (d < DAYS_LOW_KY_WARNING) return `Sắp hết hạn — còn ${d} ngày`;
   return `Còn lại: ${d} ngày`;
-}
-
-/** Học viên còn 1–3 ngày: ưu tiên CTA đóng học phí thay vì vào lớp. */
-function studentShowPaymentInsteadOfEnter(data: ClassroomStudentSessionData): boolean {
-  const d = data.days_remaining;
-  if (d === null) return false;
-  return d > 0 && d <= DAYS_LOW_KY_WARNING;
 }
 
 /** Tránh hiển thị " | " khi không có trường/ngành; ưu tiên lịch học từ `ql_lop_hoc.lich_hoc`. */
@@ -296,35 +289,15 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
 
   const createAccountHref = paymentHref;
 
-  const handleAction = (item: ClassroomSessionRecord) => {
+  /** Chỉ vào lớp từ card — không điều hướng tới `/donghocphi` (link đóng phí nằm riêng). */
+  const handleCardEnter = (item: ClassroomSessionRecord) => {
     if (item.userType === "Teacher") {
       enterClass(item);
       return;
     }
-    const data = item.data;
-    if (studentShowPaymentInsteadOfEnter(data)) {
-      router.push(paymentHref);
-      onClose();
-      setTimeout(resetFormState, 320);
-      return;
+    if (studentCanEnterPhongHoc(item.data)) {
+      enterClass(item);
     }
-    if (!studentCanEnterPhongHoc(data)) {
-      let msg: string;
-      if (enrollmentLooksInactive(data)) {
-        msg =
-          "Ghi danh đã kết thúc hoặc trạng thái nghỉ — không thể vào phòng học. Liên hệ Sine Art nếu cần hỗ trợ.";
-      } else if (data.days_remaining === null) {
-        msg =
-          "Chưa có kỳ học phí hoặc chưa ghi nhận ngày. Vui lòng đóng học phí hoặc liên hệ Sine Art.";
-      } else if (data.days_remaining <= 0) {
-        msg = "Đã hết ngày trong kỳ học phí. Vui lòng đóng học phí tại trang Đóng học phí.";
-      } else {
-        msg = "Không thể vào phòng học. Vui lòng liên hệ Sine Art.";
-      }
-      window.alert(msg);
-      return;
-    }
-    enterClass(item);
   };
 
   if (!mounted) return null;
@@ -443,9 +416,13 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
                     {records.map((item, idx) => {
                       const isTeacher = item.userType === "Teacher";
                       const d = isTeacher ? null : item.data.days_remaining;
-                      const paySoon =
-                        !isTeacher && studentShowPaymentInsteadOfEnter(item.data);
                       const canEnter = isTeacher || studentCanEnterPhongHoc(item.data);
+                      const showDhpBesideEnter =
+                        !isTeacher &&
+                        canEnter &&
+                        d !== null &&
+                        d > 0 &&
+                        d <= DAYS_LOW_KY_WARNING;
                       const borderColor = isTeacher ? "#bc8af9" : "#eaeaea";
                       const thumb = item.data.class_avatar || "";
                       return (
@@ -460,15 +437,16 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
                               : { scale: 1, backgroundColor: "#f5f5f7" }
                           }
                           whileTap={canEnter ? { scale: 0.98 } : { scale: 1 }}
-                          role="button"
-                          tabIndex={0}
+                          role={canEnter ? "button" : undefined}
+                          tabIndex={canEnter ? 0 : undefined}
                           onClick={() => {
-                            handleAction(item);
+                            if (canEnter) handleCardEnter(item);
                           }}
                           onKeyDown={(e) => {
+                            if (!canEnter) return;
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
-                              handleAction(item);
+                              handleCardEnter(item);
                             }
                           }}
                         >
@@ -501,34 +479,39 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
                                 >
                                   {daysLabel(d, item.data)}
                                 </span>
-                                {paySoon ? (
-                                  <Link
-                                    href={paymentHref}
-                                    className="cso-link-dhp"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    Đóng học phí
-                                  </Link>
-                                ) : canEnter ? (
-                                  <button
-                                    type="button"
-                                    className="cso-link-enter"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAction(item);
-                                    }}
-                                  >
-                                    Vào lớp
-                                  </button>
-                                ) : (
-                                  <Link
-                                    href={paymentHref}
-                                    className="cso-link-dhp"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    Đóng học phí
-                                  </Link>
-                                )}
+                                <div className="cso-row-foot-actions">
+                                  {canEnter ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="cso-link-enter"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          enterClass(item);
+                                        }}
+                                      >
+                                        Vào lớp
+                                      </button>
+                                      {showDhpBesideEnter ? (
+                                        <Link
+                                          href={paymentHref}
+                                          className="cso-link-dhp"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          Đóng học phí
+                                        </Link>
+                                      ) : null}
+                                    </>
+                                  ) : (
+                                    <Link
+                                      href={paymentHref}
+                                      className="cso-link-dhp"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      Đóng học phí
+                                    </Link>
+                                  )}
+                                </div>
                               </div>
                             ) : null}
                           </div>

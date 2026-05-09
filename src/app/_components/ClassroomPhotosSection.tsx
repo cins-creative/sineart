@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { motion, useReducedMotion } from "framer-motion";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /** px/giây — chỉnh tốc độ ticker */
@@ -14,7 +14,7 @@ export default function ClassroomPhotosSection({ urls }: { urls: string[] }) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const [halfLoopPx, setHalfLoopPx] = useState(0);
-  const prefersReducedMotion = useReducedMotion();
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const loopUrls = urls.length > 0 ? [...urls, ...urls] : [];
 
@@ -67,22 +67,16 @@ export default function ClassroomPhotosSection({ urls }: { urls: string[] }) {
       </p>
 
       <div className="classroom-real-ticker-mask">
-        <motion.div
+        <div
           key={urls.join("\0")}
           ref={trackRef}
-          className="classroom-real-ticker-track"
-          animate={runTicker ? { x: [0, -halfLoopPx] } : false}
-          transition={
+          className={`classroom-real-ticker-track${runTicker ? " classroom-real-ticker-track--run" : ""}`}
+          style={
             runTicker
-              ? {
-                  x: {
-                    repeat: Infinity,
-                    repeatType: "loop",
-                    ease: "linear",
-                    duration: durationSec,
-                  },
-                }
-              : {}
+              ? ({
+                  ["--cr-ticker-duration" as string]: `${durationSec}s`,
+                } as CSSProperties)
+              : undefined
           }
         >
           {loopUrls.map((src, i) => (
@@ -93,7 +87,7 @@ export default function ClassroomPhotosSection({ urls }: { urls: string[] }) {
               onOpen={() => setLightboxSrc(src)}
             />
           ))}
-        </motion.div>
+        </div>
       </div>
 
       {lightboxSrc && typeof document !== "undefined"

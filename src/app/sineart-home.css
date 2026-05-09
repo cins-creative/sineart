@@ -180,10 +180,8 @@
   border: none;
   background: transparent;
   box-shadow: none;
-  pointer-events: none;
-}
-.nav-cta-fixed .nav-cta-btn {
-  pointer-events: auto;
+  /* Không dùng pointer-events:none + bật lại trên con — một số WebKit cũ (Android 7)
+     không hit-test touch đúng vào nút «Vào học». */
 }
 .nav-cta-fixed .nav-cta-lich-stack {
   pointer-events: auto;
@@ -294,6 +292,7 @@
   min-height: 48px;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .nav-cta-btn:active {
   transform: scale(0.97);
@@ -371,6 +370,7 @@
   letter-spacing: 0.01em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease,
     background 0.15s ease;
 }
@@ -540,6 +540,15 @@
   z-index: 200;
   font-family: var(--font);
   pointer-events: none;
+  animation: nav-mobile-overlay-in 0.34s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+@keyframes nav-mobile-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .nav-mobile-backdrop {
   position: absolute;
@@ -572,6 +581,34 @@
   -webkit-backdrop-filter: var(--nav-menu-sheet-blur);
   border-top: var(--nav-glass-border);
   box-shadow: var(--nav-glass-shadow);
+  animation: nav-mobile-sheet-in 0.46s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes nav-mobile-sheet-in {
+  from {
+    transform: translateY(100%);
+    opacity: 0.96;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-mobile-overlay {
+    animation-duration: 0.15s;
+    animation-timing-function: ease-out;
+  }
+  .nav-mobile-sheet {
+    animation: nav-mobile-sheet-in-reduced 0.2s ease-out both;
+  }
+}
+@keyframes nav-mobile-sheet-in-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .nav-mobile-sheet-handle {
   display: flex;
@@ -1665,6 +1702,23 @@ button.tc-art-full.tc-art-btn:hover .tc-art-img {
   width: max-content;
   will-change: transform;
 }
+@keyframes classroom-real-ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.classroom-real-ticker-track--run {
+  animation: classroom-real-ticker-scroll var(--cr-ticker-duration, 20s) linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .classroom-real-ticker-track--run {
+    animation: none;
+    transform: none;
+  }
+}
 .classroom-real-slide {
   display: block;
   flex-shrink: 0;
@@ -1909,6 +1963,32 @@ a.gmap-badge:focus-visible { outline:2px solid #4285F4; outline-offset:2px; }
 .rv-big {
   background:white; border:1.5px solid rgba(45,32,32,.07);
   border-radius:var(--r); padding:18px 18px 20px;
+}
+.rv-quote-panel {
+  animation: rv-quote-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes rv-quote-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv-quote-panel {
+    animation: rv-quote-in-reduced 0.2s ease both;
+  }
+}
+@keyframes rv-quote-in-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .rv-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
 .rv-avatar {
@@ -2213,10 +2293,6 @@ a.rv-source:focus-visible { outline:2px solid #4285F4; outline-offset:2px; borde
     box-shadow: none;
     /* Trên sticky nav desktop (.sticky z-index 100) */
     z-index: 120;
-    pointer-events: none;
-  }
-  .nav-cta-fixed .nav-cta-btn {
-    pointer-events: auto;
   }
   .nav-cta-btn {
     padding: 9px 20px 9px 11px;

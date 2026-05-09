@@ -6,7 +6,6 @@ import {
   type NavKhoaHocGroup,
   type NavSubItem,
 } from "@/constants/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -214,45 +213,19 @@ function NavDropdownView({
 function MobileNavContent({
   pathname,
   onNavigate,
-  reducedMotion,
   khoaHocGroups,
 }: {
   pathname: string;
   onNavigate: () => void;
-  reducedMotion: boolean | null;
   khoaHocGroups?: NavKhoaHocGroup[] | null;
 }) {
-  const rm = !!reducedMotion;
-  const container = {
-    hidden: {},
-    show: {
-      transition: {
-        staggerChildren: rm ? 0 : 0.045,
-        delayChildren: rm ? 0 : 0.06,
-      },
-    },
-  };
-  const row = {
-    hidden: { opacity: 0, y: rm ? 0 : 10 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: rm ? 0.12 : 0.22, ease: [0.25, 0.46, 0.45, 0.94] as const },
-    },
-  };
-
   return (
-    <motion.div
-      className="nav-m-list"
-      variants={container}
-      initial="hidden"
-      animate="show"
-    >
+    <div className="nav-m-list">
       {NAV_ITEMS.map((item) => {
         if (item.kind === "link") {
           if (item.external) {
             return (
-              <motion.div key={item.id} variants={row}>
+              <div key={item.id}>
                 <a
                   href={item.href}
                   target="_blank"
@@ -262,11 +235,11 @@ function MobileNavContent({
                 >
                   {item.label}
                 </a>
-              </motion.div>
+              </div>
             );
           }
           return (
-            <motion.div key={item.id} variants={row}>
+              <div key={item.id}>
                 <Link
                   href={item.href}
                   className={`nav-m-link${navItemActive(pathname, item, khoaHocGroups) ? " active" : ""}`}
@@ -274,12 +247,12 @@ function MobileNavContent({
                 >
                   {item.label}
                 </Link>
-            </motion.div>
+              </div>
           );
         }
 
         return (
-          <motion.div key={item.id} variants={row}>
+          <div key={item.id}>
             <details className="nav-m-details">
               <summary className="nav-m-summary">
                 {item.label}
@@ -334,10 +307,10 @@ function MobileNavContent({
                     })}
               </div>
             </details>
-          </motion.div>
+          </div>
         );
       })}
-    </motion.div>
+    </div>
   );
 }
 
@@ -365,7 +338,6 @@ export default function NavBar({
   /** Trang thi thử: mặc định mở ảnh lịch; nút chỉ icon để thu gọn. */
   const [thiThuLichOpen, setThiThuLichOpen] = useState(true);
   const menuId = useId();
-  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const readUi = () => setStudentSession(readNavStudentSession());
@@ -407,8 +379,6 @@ export default function NavBar({
     };
   }, [mobileOpen]);
 
-  const prefersReducedMotion = reducedMotion === true;
-
   const thiThuLichTrimmed =
     typeof thiThuLichChamUrl === "string" ? thiThuLichChamUrl.trim() : "";
   const thiThuReplacesEnterCta = thiThuLichChamUrl !== undefined;
@@ -416,21 +386,6 @@ export default function NavBar({
 
   /** Trang cá nhân học viên: không hiện CTA/ảnh quảng cáo góc màn hình. */
   const hideNavFloatingCta = pathname.startsWith("/hoc-vien");
-
-  const sheetTransition = prefersReducedMotion
-    ? { duration: 0.2, ease: "easeOut" as const }
-    : {
-        type: "tween" as const,
-        duration: 0.46,
-        ease: [0.32, 0.72, 0, 1] as const,
-      };
-
-  const backdropTransition = prefersReducedMotion
-    ? { duration: 0.15 }
-    : {
-        duration: 0.34,
-        ease: [0.25, 0.46, 0.45, 0.94] as const,
-      };
 
   return (
     <>
@@ -595,43 +550,21 @@ export default function NavBar({
         }}
       />
 
-      <AnimatePresence>
-        {mobileOpen ? (
-          <motion.div
-            id={menuId}
-            key="nav-mobile-overlay"
-            className="nav-mobile-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menu điều hướng"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={backdropTransition}
-          >
+      {mobileOpen ? (
+        <div
+          id={menuId}
+          className="nav-mobile-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu điều hướng"
+        >
             <div
               className="nav-mobile-backdrop"
               role="presentation"
               aria-hidden
               onClick={() => setMobileOpen(false)}
             />
-            <motion.div
-              className="nav-mobile-sheet"
-              initial={
-                prefersReducedMotion
-                  ? { opacity: 0 }
-                  : { y: "100%", opacity: 0.96 }
-              }
-              animate={
-                prefersReducedMotion ? { opacity: 1 } : { y: 0, opacity: 1 }
-              }
-              exit={
-                prefersReducedMotion
-                  ? { opacity: 0 }
-                  : { y: "100%", opacity: 0.96 }
-              }
-              transition={sheetTransition}
-            >
+            <div className="nav-mobile-sheet">
               <div className="nav-mobile-sheet-handle" aria-hidden>
                 <span className="nav-mobile-sheet-handle-bar" />
               </div>
@@ -650,14 +583,12 @@ export default function NavBar({
                 <MobileNavContent
                   pathname={pathname}
                   onNavigate={() => setMobileOpen(false)}
-                  reducedMotion={reducedMotion}
                   khoaHocGroups={khoaHocGroups}
                 />
               </nav>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         ) : null}
-      </AnimatePresence>
     </>
   );
 }

@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Camera, Check, ChevronLeft, Save, Sparkles, Upload, X } from "lucide-react";
 import {
   CLASSROOM_SESSION_CHANGED_EVENT,
@@ -333,46 +332,27 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
 
   return (
     <div className="luubai-root">
-      <AnimatePresence>
-        {!formOpen && (
-          <motion.button
-            key="fab"
-            type="button"
-            aria-label="Lưu bài"
-            title="Lưu bài"
-            className="luubai-fab"
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 320, damping: 22 }}
-            whileHover={{ scale: 1.06 }}
-            whileTap={{ scale: 0.94 }}
-            onClick={() => setPickerOpen(true)}
-          >
-            <Camera size={22} strokeWidth={2} />
-          </motion.button>
-        )}
-      </AnimatePresence>
+      {!formOpen && (
+        <button
+          type="button"
+          aria-label="Lưu bài"
+          title="Lưu bài"
+          className="luubai-fab"
+          onClick={() => setPickerOpen(true)}
+        >
+          <Camera size={22} strokeWidth={2} />
+        </button>
+      )}
 
-      <AnimatePresence>
-        {pickerOpen && (
-          <div className="luubai-picker-stack">
-            <motion.div
-              key="luubai-backdrop"
+      {pickerOpen && (
+        <div className="luubai-picker-stack">
+            <div
               className="luubai-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
               onClick={() => setPickerOpen(false)}
+              role="presentation"
             />
-            <motion.div
-              key="luubai-sheet"
+            <div
               className="luubai-sheet"
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", stiffness: 340, damping: 30 }}
               role="dialog"
               aria-modal
               aria-labelledby="luubai-sheet-title"
@@ -425,24 +405,17 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
                   <span className="luubai-opt-sub">JPG, PNG, WEBP</span>
                 </button>
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
-      </AnimatePresence>
 
-      <AnimatePresence>
-        {formOpen && (
-          <motion.div
-            key="luubai-form"
-            className="luubai-form"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            role="dialog"
-            aria-modal
-            aria-labelledby="luubai-form-title"
-          >
+      {formOpen && (
+        <div
+          className="luubai-form"
+          role="dialog"
+          aria-modal
+          aria-labelledby="luubai-form-title"
+        >
             <div className="luubai-form-head">
               <button
                 type="button"
@@ -601,13 +574,11 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
               <button type="button" className="luubai-btn luubai-btn--ghost" onClick={resetAll}>
                 Huỷ
               </button>
-              <motion.button
+              <button
                 type="button"
                 className="luubai-btn luubai-btn--primary"
                 onClick={handleSave}
                 disabled={saving || uploadState !== "done" || !classId}
-                whileHover={{ scale: saving ? 1 : 1.02 }}
-                whileTap={{ scale: saving ? 1 : 0.98 }}
                 data-state={saved ? "saved" : saving ? "saving" : "idle"}
               >
                 {saved ? (
@@ -623,11 +594,10 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
                     <Save size={16} strokeWidth={2.5} /> Lưu bài
                   </>
                 )}
-              </motion.button>
+              </button>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
 
       <input
         ref={fileInputRef}

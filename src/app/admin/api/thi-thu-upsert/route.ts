@@ -7,7 +7,7 @@ import {
 } from "@/lib/admin/staff-mutation-access";
 import { fetchAdminStaffShellProfile } from "@/lib/data/admin-shell-user";
 import { normalizeDeThiForSave, parseDeThiJson } from "@/lib/thi-thu/de-thi-json";
-import { parseThoiGianSuaBaiInputForPgTimeColumn } from "@/lib/thi-thu/replay-time";
+import { parseThoiGianSuaBaiInputForPersist } from "@/lib/thi-thu/replay-time";
 import { isMonThiKey } from "@/lib/thi-thu-config";
 import { formatSupabaseWriteError } from "@/lib/supabase/postgres-permission-hint";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -92,7 +92,21 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const supabase = supabaseGate;
 
-  const thoiGianSuaBai = parseThoiGianSuaBaiInputForPgTimeColumn(body.thoi_gian_sua_bai);
+  const thoiGianSuaBai = parseThoiGianSuaBaiInputForPersist(body.thoi_gian_sua_bai);
+  if (thoiGianSuaBai != null && t0 != null) {
+    const msStart = new Date(t0).getTime();
+    const msSua = new Date(thoiGianSuaBai).getTime();
+    if (Number.isFinite(msStart) && Number.isFinite(msSua) && msStart === msSua) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Thời gian phát video sửa bài phải khác giờ bắt đầu thi — đây là hai phiên (session) riêng.",
+        },
+        { status: 400 },
+      );
+    }
+  }
   const videoSuaBai =
     typeof body.video_sua_bai === "string" && body.video_sua_bai.trim()
       ? body.video_sua_bai.trim()

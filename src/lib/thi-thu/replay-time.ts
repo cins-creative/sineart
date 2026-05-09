@@ -22,7 +22,8 @@ export function isoInstantToPgTimeHoChiMinh(isoUtc: string): string {
 }
 
 /**
- * Chuẩn hóa input từ API (ISO hoặc `HH:mm[:ss]`) → giá trị ghi cột `time`.
+ * Chuẩn hóa input từ API (ISO hoặc `HH:mm[:ss]`) → giá trị ghi cột `time` (legacy).
+ * Ưu tiên migr DB sang `timestamptz` và dùng {@link parseThoiGianSuaBaiInputForPersist}.
  */
 export function parseThoiGianSuaBaiInputForPgTimeColumn(bodyValue: unknown): string | null {
   if (bodyValue == null || bodyValue === "") return null;
@@ -41,6 +42,20 @@ export function parseThoiGianSuaBaiInputForPgTimeColumn(bodyValue: unknown): str
   const d = new Date(s);
   if (!Number.isFinite(d.getTime())) return null;
   return isoInstantToPgTimeHoChiMinh(d.toISOString());
+}
+
+/**
+ * Chuẩn hóa input từ form/API → ISO UTC cho cột `timestamptz` (`thi_thu_ky_thi.thoi_gian_sua_bai`).
+ * Chấp nhận chuỗi datetime đầy đủ từ `<input type="datetime-local">` (parse theo local browser) hoặc ISO.
+ */
+export function parseThoiGianSuaBaiInputForPersist(bodyValue: unknown): string | null {
+  if (bodyValue == null || bodyValue === "") return null;
+  if (typeof bodyValue !== "string") return null;
+  const s = bodyValue.trim();
+  if (!s) return null;
+  const d = new Date(s);
+  if (!Number.isFinite(d.getTime())) return null;
+  return d.toISOString();
 }
 
 /**

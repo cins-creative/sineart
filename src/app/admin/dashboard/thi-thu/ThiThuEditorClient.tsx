@@ -137,6 +137,24 @@ export default function ThiThuEditorClient({
     setSaving(true);
     setSaveReport(null);
     try {
+      if (thoiGianSuaBaiLocal.trim() && t0.trim()) {
+        const msStart = new Date(t0).getTime();
+        const msSua = new Date(thoiGianSuaBaiLocal).getTime();
+        if (
+          Number.isFinite(msStart) &&
+          Number.isFinite(msSua) &&
+          msStart === msSua
+        ) {
+          setSaveReport({
+            ok: false,
+            title: "Thời gian không hợp lệ",
+            body:
+              "Buổi phát video sửa bài là một phiên riêng — không được trùng đúng giờ bắt đầu kỳ thi. Hãy chọn ngày giờ khác (thường sau khi kết thúc làm bài / ngày khác).",
+          });
+          setSaving(false);
+          return;
+        }
+      }
       const body: Record<string, unknown> = {
         id: initial?.id,
         tieu_de: tieuDe.trim(),
@@ -502,8 +520,8 @@ export default function ThiThuEditorClient({
               Thời gian phát video sửa bài
             </label>
             <p className="tti-f-hint">
-              Có thể chọn ngay lúc tạo kỳ. Giờ phát lại thường cùng ngày với buổi thi; có thể chọn ngày giờ
-              khác nếu lịch phát nằm hôm sau.
+              Đây là phiên phát video sau buổi thi — phải khác hoàn toàn với «Giờ bắt đầu» ở phần lịch thi
+              (không trùng ngày giờ). Có thể đặt trước cùng ngày nhưng sau giờ làm bài, hoặc ngày khác.
             </p>
             <input
               id="tti-ky-sua-time"

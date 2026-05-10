@@ -16,6 +16,10 @@ export const DH_MON_THI_HOP_LE = [
 export const DH_MON_THI_ITEM_MAX_LEN = 80;
 export const DH_MON_THI_ARRAY_MAX_COUNT = 40;
 
+/** Giới hạn số cặp trường–ngành trong prompt Agent — giảm token (đủ dữ liệu vẫn trong DB). */
+const MAX_EXAM_PAIR_ROWS_PROMPT = 45;
+const MAX_DETAILS_CHARS_PROMPT = 140;
+
 /** Giữ đúng chuỗi đã lưu trong DB (kể cả môn tùy chỉnh) — khớp admin Trường & ngành thi ĐH. */
 function parseMonThiArrayPermissive(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -114,27 +118,23 @@ export async function fetchDhExamProfilesSafe(
 export function formatDhExamProfilesForPrompt(rows: DhExamProfileRow[]): string {
   if (!rows.length) return "";
 
-  const chunks: string[] = [];
-  for (const r of rows) {
-    const lines: string[] = [];
-    lines.push(
-      `Trường: ${r.ten_truong_dai_hoc} (id_trường=${r.truong_id}) | Ngành: ${r.ten_nganh} (id_ngành=${r.nganh_id})`,
-    );
-    if (r.truong_score != null && Number.isFinite(r.truong_score)) {
-      lines.push(`Score trường (dh_truong_dai_hoc.score — thấp hơn = ưu tiên cao hơn): ${r.truong_score}`);
-    }
-    if (r.mon_thi.length) {
-      lines.push(`Môn thi / hình thức: ${r.mon_thi.join(", ")}`);
-    } else {
-      lines.push(
-        `Môn thi / hình thức: (chưa khai báo trong admin — không suy đoán; nhờ kiểm tra hoặc hỏi HV đề chính thức)`,
-      );
-    }
-    if (r.details?.trim()) {
-      lines.push(`Chi tiết thêm: ${r.details.trim()}`);
-    }
-    chunks.push(lines.join("\n"));
-  }
+  const truncated = rows.length > MAX_EXAM_PAIR_ROWS_PROMPT;
+  const useRows = truncated ? rows.slice(0, MAX_EXAM_PAIR_ROWS_PROMPT) : rows;
 
-  return chunks.join("\n\n---\n\n");
+  const pairBlocks = useRows.map((r) => {
+    const head = `[T${r.truong_id}] ${r.ten_truong_dai_hoc} · [N${r.nganh_id}] ${r.ten_nganh}`;
+    const mon =
+      r.mon_thi.length ?
+        `Môn: ${r.mon_thi.join(", ")}`
+      : `Môn: (chưa khai báo admin)`;
+    if (!r.details?.trim()) return `${head}\n${mon}`;
+    const d = r.details.trim();
+    const tail =
+      d.length > MAX_DETAILS_CHARS_PROMPT ? `${d.slice(0, MAX_DETAILS_CHARS_PROMPT)}…` : d;
+    return `${head}\n${mon}\nGhi chú: ${tail}`;
+  });
+
+  const body = pairBlocks.join("\n\n---\n\n");
+  if (!truncated) return body;
+  return `(Chỉ hiển thị ${MAX_EXAM_PAIR_ROWS_PROMPT}/${rows.length} cặp trong prompt — giới hạn token; toàn bộ trong DB/admin.)\n\n---\n\n${body}`;
 }

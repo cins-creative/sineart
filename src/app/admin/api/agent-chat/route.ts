@@ -105,7 +105,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   const origin = new URL(req.url).origin;
-  const ctxRes = await fetch(`${origin}/api/agent-context`, {
+  /** Prompt đầy đủ (KB + vận hành + đề ĐH + danh mục/mốc) dễ vượt giới hạn context — chat thử chỉ cần compact (Worker prod vẫn gọi full). */
+  const ctxRes = await fetch(`${origin}/api/agent-context?compact=1`, {
     cache: "no-store",
   });
   if (!ctxRes.ok) {
@@ -121,7 +122,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     system = `${system}\n\n${proximityHint}`;
   }
 
-  const turns = history.slice(-20);
+  const turns = history.slice(-6);
   const anthropicMessages = [
     ...turns.map((t) => ({
       role: t.role as "user" | "assistant",
@@ -148,8 +149,14 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (!res.ok) {
     const errText = await res.text();
     console.error("Anthropic:", res.status, errText);
+    const devHint =
+      process.env.NODE_ENV === "development" ?
+        ` ${errText.slice(0, 500)}`
+      : "";
     return NextResponse.json(
-      { error: "Agent tạm không phản hồi. Thử lại sau." },
+      {
+        error: `Agent tạm không phản hồi. Thử lại sau.${devHint ? ` (${res.status})` : ""}${devHint}`,
+      },
       { status: 502 },
     );
   }

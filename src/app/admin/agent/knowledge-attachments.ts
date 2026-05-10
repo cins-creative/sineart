@@ -73,6 +73,9 @@ const VI_STOPWORDS = new Set([
   "khóa",
 ]);
 
+/** Giới hạn độ dài câu trả lời FAQ trong prompt — giảm token (KB đầy đủ trong DB). */
+const MAX_FAQ_ANSWER_CHARS_PROMPT = 420;
+
 /** Dùng trong system prompt — cùng ý với Worker `formatFaqEntry`. */
 export function formatFaqRowForPrompt(row: {
   question?: string | null;
@@ -80,15 +83,19 @@ export function formatFaqRowForPrompt(row: {
   attachments?: unknown;
 }): string {
   const q = (row.question ?? "").trim();
-  const a = (row.answer ?? "").trim();
+  let a = (row.answer ?? "").trim();
+  if (a.length > MAX_FAQ_ANSWER_CHARS_PROMPT) {
+    a = `${a.slice(0, MAX_FAQ_ANSWER_CHARS_PROMPT)}…`;
+  }
   const lines = [`Q: ${q}`, `A: ${a}`];
   const parsed = parseKbAttachments(row.attachments);
   if (!parsed) return lines.join("\n");
 
   const extra: string[] = [];
   if (parsed.images?.length) {
+    const imgs = parsed.images.slice(0, 4);
     extra.push(
-      `Đính kèm ảnh (URL — gửi kèm khi phù hợp): ${parsed.images.join(" | ")}`,
+      `Đính kèm ảnh (tối đa 4 trong prompt): ${imgs.join(" | ")}`,
     );
   }
   if (parsed.links?.length) {

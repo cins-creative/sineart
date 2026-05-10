@@ -2,7 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fetchAdminGoiHocPhiBundle } from "@/lib/data/admin-goi-hoc-phi";
 
-const MAX_LOP_LINES = 120;
+/** Prompt: chỉ mẫu đại diện — đủ tra cứu; đầy đủ trong DB + tool query_courses. */
+const MAX_LOP_LINES = 22;
+const MAX_GOI_LINES = 28;
 
 function fmtMoney(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(Number(n))) return "—";
@@ -196,10 +198,7 @@ export async function fetchAgentOperationalCatalog(
           .map((m) => {
             const id = Number(m.id);
             const ten = String(m.ten_mon_hoc ?? "").trim() || "—";
-            const loai = m.loai_khoa_hoc != null ? String(m.loai_khoa_hoc).trim() : "";
-            const ht = m.hinh_thuc != null ? String(m.hinh_thuc).trim() : "";
-            const bits = [loai && `loại: ${loai}`, ht && `hình thức: ${ht}`].filter(Boolean).join(" | ");
-            return `- môn id ${Number.isFinite(id) ? id : "?"} — ${ten}${bits ? ` — ${bits}` : ""}`;
+            return `- môn id ${Number.isFinite(id) ? id : "?"} — ${ten}`;
           })
           .join("\n");
 
@@ -222,18 +221,12 @@ export async function fetchAgentOperationalCatalog(
               `Lớp #${id}`;
             const capToc = String(r.special ?? "").trim() === "Cấp tốc";
             const lh = r.lich_hoc != null ? String(r.lich_hoc).trim() : "";
-            const slug = r.url_class != null ? String(r.url_class).trim() : "";
-            const dev = r.device != null ? String(r.device).trim() : "";
-            const lvl = r.level_hinh_hoa != null ? String(r.level_hinh_hoa).trim() : "";
 
             const bits = [
               tenMon && `môn: ${tenMon}`,
-              tenChi && `chi nhánh: ${tenChi}`,
+              tenChi && `chi: ${tenChi}`,
               lh && `lịch: ${lh}`,
-              dev && `thiết bị: ${dev}`,
               capToc ? "cấp tốc" : "",
-              lvl && `level HH: ${lvl}`,
-              slug && `slug khóa học (public): ${slug}`,
             ].filter(Boolean);
             return `- lớp id ${Number.isFinite(id) ? id : "?"} — ${title}${bits.length ? ` — ${bits.join(" — ")}` : ""}`;
           })
@@ -242,36 +235,45 @@ export async function fetchAgentOperationalCatalog(
   const monLabel = (mid: number | null) =>
     mid != null && monById.has(mid) ? monById.get(mid)! : mid != null ? `môn id ${mid}` : "—";
 
+  const goiRowsPrompt = goiBundle.rows.slice(0, MAX_GOI_LINES);
+  const goiTruncated = goiBundle.rows.length > MAX_GOI_LINES;
+  if (goiTruncated) {
+    warnings.push(
+      `Gói học phí: chỉ ${MAX_GOI_LINES}/${goiBundle.rows.length} dòng trong prompt — đủ tra giá; chi tiết đầy đủ trong admin.`,
+    );
+  }
+
   const goiLines =
     goiBundle.rows.length === 0
       ? "(Không đọc được gói học phí hoặc danh sách trống.)"
-      : goiBundle.rows
+      : goiRowsPrompt
           .map((g) => {
             const parts: string[] = [];
-            parts.push(`gói id ${g.id}`);
-            parts.push(`môn: ${monLabel(g.mon_hoc)}`);
-            if (g.post_title) parts.push(`tên hiển thị: ${g.post_title}`);
-            if (g.goiNumber != null) parts.push(`số gói: ${g.goiNumber}`);
-            if (g.don_vi) parts.push(`đơn vị: ${g.don_vi}`);
-            parts.push(`giá gốc: ${fmtMoney(g.gia_goc)}`);
+            parts.push(`id ${g.id}`);
+            parts.push(monLabel(g.mon_hoc));
+            parts.push(`gốc ${fmtMoney(g.gia_goc)}`);
             if (g.discount != null && Number(g.discount) > 0) {
-              parts.push(`giảm: ${fmtMoney(g.discount)}`);
+              parts.push(`giảm ${fmtMoney(g.discount)}`);
               if (g.gia_goc != null && Number.isFinite(Number(g.gia_goc)) && Number.isFinite(Number(g.discount))) {
-                parts.push(`còn: ${fmtMoney(Number(g.gia_goc) - Number(g.discount))}`);
+                parts.push(`còn ${fmtMoney(Number(g.gia_goc) - Number(g.discount))}`);
               }
             }
-            if (g.so_buoi != null) parts.push(`số buổi: ${g.so_buoi}`);
-            if (g.special) parts.push(`đặc biệt: ${g.special}`);
-            if (g.note) parts.push(`ghi chú: ${g.note}`);
-            return `- ${parts.join(" — ")}`;
+            if (g.so_buoi != null) parts.push(`${g.so_buoi} buổi`);
+            return `- ${parts.join(" · ")}`;
           })
           .join("\n");
 
+  const MAX_COMBO_LINES = 8;
+  const comboActive = goiBundle.comboOptions.filter((c) => c.dang_hoat_dong).slice(0, MAX_COMBO_LINES);
+  const comboTruncated =
+    goiBundle.comboOptions.filter((c) => c.dang_hoat_dong).length > MAX_COMBO_LINES;
+  if (comboTruncated) {
+    warnings.push(`Combo môn: chỉ ${MAX_COMBO_LINES} dòng đầu trong prompt.`);
+  }
   const comboSection =
-    goiBundle.comboOptions.length === 0
+    comboActive.length === 0
       ? ""
-      : `\nCOMBO MÔN (hp_combo_mon — đang hoạt động):\n${goiBundle.comboOptions
-          .filter((c) => c.dang_hoat_dong)
+      : `\nCOMBO MÔN (hp_combo_mon — đang hoạt động):\n${comboActive
           .map(
             (c) =>
               `- combo id ${c.id} — ${c.ten_combo} — giảm combo ${fmtMoney(c.gia_giam)} — gồm gói id: ${c.goi_ids.join(", ")}`,
@@ -279,7 +281,7 @@ export async function fetchAgentOperationalCatalog(
           .join("\n")}`;
 
   const promptAppend = [
-    "Trả lời học phí / khóa / lớp / chi nhánh chỉ dựa vào các khối dưới và Knowledge Base; không bịa giá hay lịch.",
+    "Giá/lịch/chi nhánh chỉ theo khối dưới + KB; không bịa.",
     "",
     `CHI NHÁNH (ql_chi_nhanh):\n${branchesLines}`,
     "",

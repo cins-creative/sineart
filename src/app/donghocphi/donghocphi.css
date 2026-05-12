@@ -802,6 +802,16 @@
   background: rgba(45, 32, 32, 0.35);
 }
 
+.dhp-oc-badge--paused {
+  background: rgba(254, 243, 199, 0.95);
+  color: #92400e;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+}
+
+.dhp-oc-badge--paused .dhp-oc-badge-dot {
+  background: #f59e0b;
+}
+
 .dhp-oc-avatar-img {
   width: 100%;
   height: 100%;

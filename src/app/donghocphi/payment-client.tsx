@@ -77,6 +77,8 @@ export type PaymentClassItem = {
   filled: number;
   total: number;
   isFull: boolean;
+  /** `ql_lop_hoc.is_active` — false = tạm dừng khai giảng. */
+  isActive: boolean;
 };
 type DhpNvRowState = { truongId: number | ""; nganhId: number | "" };
 
@@ -134,9 +136,12 @@ function materializeStoredClassPick(
   skipRenewalByClassId: Record<number, boolean>;
 } {
   const validLop = new Set(lopHoc.map((c) => c.id));
-  const classIds = stored.classIds.filter(
-    (id: number) => Number.isFinite(id) && validLop.has(id),
-  );
+  const classIds = stored.classIds.filter((id: number) => {
+    if (!Number.isFinite(id) || !validLop.has(id)) return false;
+    const cls = lopHoc.find((c) => c.id === id);
+    if (cls && cls.isActive === false) return false;
+    return true;
+  });
 
   const feeByClassId: Record<number, number> = {};
   for (const id of classIds) {
@@ -322,6 +327,9 @@ function computeRenewalBlock(
 }
 
 function classSeatBadge(cls: PaymentClassItem): { className: string; label: string } {
+  if (!cls.isActive) {
+    return { className: "dhp-oc-badge dhp-oc-badge--paused", label: "Lớp hiện tạm dừng hoạt động" };
+  }
   if (cls.isFull) {
     return { className: "dhp-oc-badge dhp-oc-badge--full", label: "Đã đầy" };
   }
@@ -2127,32 +2135,34 @@ export default function DongHocPhiClient({
                 const levelHinhThumb = cls.levelHinhHoa
                   ? levelHinhHoaThumbSrc(cls.levelHinhHoa)
                   : null;
+                const isEnrolledHere = enrolledLopIds.includes(cls.id);
+                const blockedPick = cls.isFull || (!cls.isActive && !isEnrolledHere);
                 return (
                   <div
                     key={cls.id}
-                    role={cls.isFull ? undefined : "button"}
-                    tabIndex={cls.isFull ? -1 : 0}
+                    role={blockedPick ? undefined : "button"}
+                    tabIndex={blockedPick ? -1 : 0}
                     className={[
                       "dhp-oc-card",
-                      !cls.isFull ? "dhp-oc-card--pickable" : "",
-                      cls.isFull ? "dhp-oc-card--disabled" : "",
-                      checked && !cls.isFull ? "dhp-oc-card--selected" : "",
+                      !blockedPick ? "dhp-oc-card--pickable" : "",
+                      blockedPick ? "dhp-oc-card--disabled" : "",
+                      checked && !blockedPick ? "dhp-oc-card--selected" : "",
                       isCapTocLop ? "dhp-oc-card--cap-toc" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
                     onClick={() => {
-                      if (!cls.isFull) toggleClass(cls.id);
+                      if (!blockedPick) toggleClass(cls.id);
                     }}
                     onKeyDown={(e) => {
-                      if (cls.isFull) return;
+                      if (blockedPick) return;
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         toggleClass(cls.id);
                       }
                     }}
-                    aria-pressed={cls.isFull ? undefined : checked}
-                    aria-disabled={cls.isFull ? true : undefined}
+                    aria-pressed={blockedPick ? undefined : checked}
+                    aria-disabled={blockedPick ? true : undefined}
                   >
                     <div className="dhp-oc-muted-block">
                       <div className="dhp-oc-visual">

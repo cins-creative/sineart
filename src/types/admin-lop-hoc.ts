@@ -18,6 +18,8 @@ export type AdminLopRow = {
   special: boolean;
   /** Lớp đang hoạt động — theo cột `tinh_trang`. */
   tinh_trang: boolean;
+  /** Lớp còn mở khai giảng / nhận HV mới — `ql_lop_hoc.is_active`. */
+  is_active: boolean;
   /** Chỉ dùng khi môn Hình họa — `ql_lop_hoc.level_hinh_hoa`. */
   level_hinh_hoa: string | null;
 };

@@ -9,7 +9,16 @@ import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Copy, Flame, LayoutGr
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import type { LopHocFormState } from "@/app/admin/dashboard/lop-hoc/actions";
-import { createLopHoc, deleteLopHoc, duplicateLopHoc, toggleLopSpecial, updateLopHoc, updateTeacherPortfolio } from "@/app/admin/dashboard/lop-hoc/actions";
+import {
+  createLopHoc,
+  deleteLopHoc,
+  duplicateLopHoc,
+  toggleLopIsActive,
+  toggleLopSpecial,
+  toggleLopTinhTrang,
+  updateLopHoc,
+  updateTeacherPortfolio,
+} from "@/app/admin/dashboard/lop-hoc/actions";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
 import { LEVEL_HINH_HOA_VALUES, isTenMonHinhHoa } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import type { LopHocListFilters } from "@/lib/data/admin-lop-hoc-page";
@@ -529,6 +538,7 @@ function LopHocCard({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const router = useRouter();
   const tenMon = monList.find((m) => m.id === item.mon_hoc)?.ten_mon_hoc ?? null;
   const gvList = item.teacher
     .map((id) => nhanSuList.find((n) => n.id === id))
@@ -540,17 +550,43 @@ function LopHocCard({
   const aText = getAccentText(accent);
   const [imgErr, setImgErr] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [qBusy, setQBusy] = useState<null | "tt" | "ia">(null);
 
   const inactive = !item.tinh_trang;
 
   async function handleSpecialToggle(e: React.MouseEvent) {
     e.stopPropagation();
-    if (toggling) return;
+    if (toggling || qBusy) return;
     setToggling(true);
     try {
-      await toggleLopSpecial(item.id, !item.special);
+      const r = await toggleLopSpecial(item.id, !item.special);
+      if (r.ok) router.refresh();
     } finally {
       setToggling(false);
+    }
+  }
+
+  async function handleTinhTrangFlip(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (qBusy || toggling) return;
+    setQBusy("tt");
+    try {
+      const r = await toggleLopTinhTrang(item.id, !item.tinh_trang);
+      if (r.ok) router.refresh();
+    } finally {
+      setQBusy(null);
+    }
+  }
+
+  async function handleIsActiveFlip(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (qBusy || toggling) return;
+    setQBusy("ia");
+    try {
+      const r = await toggleLopIsActive(item.id, !item.is_active);
+      if (r.ok) router.refresh();
+    } finally {
+      setQBusy(null);
     }
   }
 
@@ -626,7 +662,7 @@ function LopHocCard({
         <button
           type="button"
           title={item.special ? "Bỏ cấp tốc" : "Đánh dấu cấp tốc"}
-          disabled={toggling}
+          disabled={toggling || qBusy !== null}
           onClick={handleSpecialToggle}
           className={cn(
             "absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border transition-all disabled:opacity-50",
@@ -653,15 +689,47 @@ function LopHocCard({
       </div>
 
       {/* ── Card body ──────────────────────────── */}
-      <div className="flex flex-1 flex-col px-3.5 pb-2.5 pt-3">
-        <p className="m-0 line-clamp-2 text-sm font-bold text-[#1a1a2e]">
+      <div className="relative flex flex-1 flex-col px-3.5 pb-2.5 pt-3">
+        <div className="pointer-events-auto absolute right-2 top-2 z-[1] flex max-w-[min(100%,11rem)] flex-col items-end gap-1">
+          <button
+            type="button"
+            title={item.tinh_trang ? "Chuyển sang tạm dừng" : "Bật đang hoạt động"}
+            disabled={qBusy !== null || toggling}
+            onClick={handleTinhTrangFlip}
+            className={cn(
+              "flex max-w-full items-center justify-end gap-1 rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide shadow-sm transition-colors disabled:opacity-50",
+              item.tinh_trang
+                ? "border-emerald-200/90 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                : "border-zinc-200 bg-zinc-100 text-zinc-600 hover:bg-zinc-50",
+            )}
+          >
+            {qBusy === "tt" ? <Loader2 className="h-3 w-3 shrink-0 animate-spin" strokeWidth={2.5} /> : null}
+            <span className="truncate">{item.tinh_trang ? "Đang hoạt động" : "Tạm dừng"}</span>
+          </button>
+          <button
+            type="button"
+            title={item.is_active ? "Tạm dừng khai giảng" : "Bật khai giảng"}
+            disabled={qBusy !== null || toggling}
+            onClick={handleIsActiveFlip}
+            className={cn(
+              "flex max-w-full items-center justify-end gap-1 rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide shadow-sm transition-colors disabled:opacity-50",
+              item.is_active
+                ? "border-sky-200/90 bg-sky-50 text-sky-900 hover:bg-sky-100"
+                : "border-amber-200/90 bg-amber-50 text-amber-950 hover:bg-amber-100",
+            )}
+          >
+            {qBusy === "ia" ? <Loader2 className="h-3 w-3 shrink-0 animate-spin" strokeWidth={2.5} /> : null}
+            <span className="truncate">{item.is_active ? "Đang khai giảng" : "Tạm dừng"}</span>
+          </button>
+        </div>
+        <p className="m-0 line-clamp-2 pr-[7.5rem] text-sm font-bold text-[#1a1a2e]">
           {item.class_name || item.class_full_name || "—"}
         </p>
         {item.class_full_name && item.class_name ? (
-          <p className="mt-0.5 line-clamp-1 text-[11px] text-[#AAAAAA]">{item.class_full_name}</p>
+          <p className="mt-0.5 line-clamp-1 pr-[7.5rem] text-[11px] text-[#AAAAAA]">{item.class_full_name}</p>
         ) : null}
         {firstGv ? (
-          <div className="mt-2 flex min-w-0 items-center gap-2">
+          <div className="mt-2 flex min-w-0 items-center gap-2 pr-[7.5rem]">
             <NsAvatar name={firstGv.full_name} src={firstGv.avatar} size={22} />
             <span className="truncate text-[11px] font-semibold text-[#666]">{firstGv.full_name}</span>
             {extraCount > 0 ? (
@@ -672,18 +740,23 @@ function LopHocCard({
           </div>
         ) : null}
         {item.lich_hoc ? (
-          <div className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-[#888]">
+          <div className="mt-1.5 flex items-center gap-1 pr-[7.5rem] text-[11px] font-medium text-[#888]">
             <Calendar className="h-3 w-3 shrink-0 text-[#AAAAAA]" />
             <span className="line-clamp-1">{item.lich_hoc}</span>
           </div>
         ) : null}
-        <p className="mt-1 text-[11px] tabular-nums text-[#AAAAAA]">{subTitle}</p>
+        <p className="mt-1 pr-[7.5rem] text-[11px] tabular-nums text-[#AAAAAA]">{subTitle}</p>
+        {!item.is_active ? (
+          <p className="mt-1.5 rounded-lg border border-amber-200/90 bg-amber-50 px-2 py-1.5 pr-[7.5rem] text-[10px] font-semibold leading-snug text-amber-950">
+            Lớp hiện tạm dừng hoạt động
+          </p>
+        ) : null}
       </div>
 
       {/* ── Footer ─────────────────────────────── */}
       <div className="flex items-center border-t border-[#F5F7F7]">
         <span className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-[#888]">
-          {inactive ? "Không hoạt động" : "Chi tiết"}
+          {inactive ? "Tạm dừng" : "Chi tiết"}
         </span>
         {/* Cấp tốc badge — bottom right, style giống hpb-cap-toc--on */}
         {item.special ? (
@@ -734,6 +807,7 @@ function LopHocListRow({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const router = useRouter();
   const tenMon = monList.find((m) => m.id === item.mon_hoc)?.ten_mon_hoc ?? null;
   const gvList = item.teacher.map((id) => nhanSuList.find((n) => n.id === id)).filter(Boolean) as NsOpt[];
   const accent = getAccent(tenMon);
@@ -742,15 +816,39 @@ function LopHocListRow({
   const inactive = !item.tinh_trang;
   const [imgErr, setImgErr] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [qBusy, setQBusy] = useState<null | "tt" | "ia">(null);
 
   async function handleSpecialToggle(e: React.MouseEvent) {
     e.stopPropagation();
-    if (toggling) return;
+    if (toggling || qBusy) return;
     setToggling(true);
     try {
-      await toggleLopSpecial(item.id, !item.special);
+      const r = await toggleLopSpecial(item.id, !item.special);
+      if (r.ok) router.refresh();
     } finally {
       setToggling(false);
+    }
+  }
+
+  async function applyTinhTrangRow(next: boolean) {
+    if (qBusy || toggling || next === item.tinh_trang) return;
+    setQBusy("tt");
+    try {
+      const r = await toggleLopTinhTrang(item.id, next);
+      if (r.ok) router.refresh();
+    } finally {
+      setQBusy(null);
+    }
+  }
+
+  async function applyIsActiveRow(next: boolean) {
+    if (qBusy || toggling || next === item.is_active) return;
+    setQBusy("ia");
+    try {
+      const r = await toggleLopIsActive(item.id, next);
+      if (r.ok) router.refresh();
+    } finally {
+      setQBusy(null);
     }
   }
 
@@ -788,17 +886,16 @@ function LopHocListRow({
         )}
       </div>
 
-      {/* Class name */}
-      <div className="min-w-0 w-[180px] shrink-0">
-        <div className="flex items-center gap-1.5">
-          <p className="m-0 truncate text-[13px] font-bold text-[#1a1a2e]">
+      {/* Class name + trạng thái (dropdown) */}
+      <div className="min-w-0 w-[200px] shrink-0">
+        <div className="flex items-center gap-1">
+          <p className="m-0 min-w-0 flex-1 truncate text-[13px] font-bold text-[#1a1a2e]">
             {item.class_name || item.class_full_name || "—"}
           </p>
-          {/* Cấp tốc quick-toggle */}
           <button
             type="button"
             title={item.special ? "Bỏ cấp tốc" : "Đánh dấu cấp tốc"}
-            disabled={toggling}
+            disabled={toggling || qBusy !== null}
             onClick={handleSpecialToggle}
             className={cn(
               "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all disabled:opacity-50",
@@ -809,6 +906,28 @@ function LopHocListRow({
           >
             <Zap size={9} strokeWidth={2.5} fill={item.special ? "currentColor" : "none"} />
           </button>
+        </div>
+        <div className="mt-1 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <select
+            aria-label="Trạng thái hoạt động lớp"
+            className="h-6 max-w-[calc(50%-2px)] min-w-0 flex-1 rounded-md border border-[#EAEAEA] bg-white py-0 pl-1.5 pr-1 text-[9px] font-semibold text-[#444] shadow-sm disabled:opacity-50"
+            value={item.tinh_trang ? "1" : "0"}
+            disabled={toggling || qBusy !== null}
+            onChange={(e) => void applyTinhTrangRow(e.target.value === "1")}
+          >
+            <option value="1">Đang hoạt động</option>
+            <option value="0">Tạm dừng</option>
+          </select>
+          <select
+            aria-label="Khai giảng"
+            className="h-6 max-w-[calc(50%-2px)] min-w-0 flex-1 rounded-md border border-[#EAEAEA] bg-white py-0 pl-1.5 pr-1 text-[9px] font-semibold text-[#444] shadow-sm disabled:opacity-50"
+            value={item.is_active ? "1" : "0"}
+            disabled={toggling || qBusy !== null}
+            onChange={(e) => void applyIsActiveRow(e.target.value === "1")}
+          >
+            <option value="1">Đang khai giảng</option>
+            <option value="0">Tạm dừng</option>
+          </select>
         </div>
         {item.class_full_name && item.class_name ? (
           <p className="m-0 truncate text-[10px] text-[#AAAAAA]">{item.class_full_name}</p>
@@ -867,7 +986,15 @@ function LopHocListRow({
       {/* Status */}
       {inactive ? (
         <span className="hidden shrink-0 rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[9px] font-semibold text-gray-400 sm:inline-block">
-          Không HĐ
+          Tạm dừng
+        </span>
+      ) : null}
+      {!item.is_active ? (
+        <span
+          className="hidden max-w-[140px] shrink-0 truncate rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-semibold text-amber-900 sm:inline-block"
+          title="Lớp hiện tạm dừng hoạt động"
+        >
+          Tạm dừng
         </span>
       ) : null}
 
@@ -891,6 +1018,8 @@ type DetailForm = {
   group_chat_messenger: string;
   special: boolean;
   tinh_trang: boolean;
+  /** Đang khai giảng / nhận HV mới — `ql_lop_hoc.is_active`. */
+  is_active: boolean;
   /** Form string — rỗng hoặc một trong `LEVEL_HINH_HOA_VALUES`. */
   level_hinh_hoa: string;
 };
@@ -908,6 +1037,7 @@ function rowToForm(r: AdminLopRow): DetailForm {
     group_chat_messenger: r.group_chat_messenger ?? "",
     special: r.special,
     tinh_trang: r.tinh_trang,
+    is_active: r.is_active,
     level_hinh_hoa: r.level_hinh_hoa ?? "",
   };
 }
@@ -938,6 +1068,7 @@ function LopDetailPanel({
   const [pending, startTransition] = useTransition();
   const [delBusy, setDelBusy] = useState(false);
   const [dupBusy, setDupBusy] = useState(false);
+  const [quickBusy, setQuickBusy] = useState<null | "tt" | "ia">(null);
 
   useEffect(() => {
     setForm(rowToForm(item));
@@ -980,6 +1111,7 @@ function LopDetailPanel({
     fd.set("group_chat_messenger", form.group_chat_messenger);
     fd.set("special", form.special ? "1" : "");
     fd.set("tinh_trang", form.tinh_trang ? "1" : "");
+    fd.set("is_active", form.is_active ? "1" : "0");
     fd.set("level_hinh_hoa", showLevelHinhHoaField ? form.level_hinh_hoa : "");
     startTransition(async () => {
       const r = await updateLopHoc(null, fd);
@@ -1020,6 +1152,32 @@ function LopDetailPanel({
       }
     } finally {
       setDupBusy(false);
+    }
+  }
+
+  async function applyTinhTrangPanel(next: boolean) {
+    if (quickBusy || next === item.tinh_trang) return;
+    setErr(null);
+    setQuickBusy("tt");
+    try {
+      const r = await toggleLopTinhTrang(item.id, next);
+      if (r.ok) router.refresh();
+      else setErr(r.error);
+    } finally {
+      setQuickBusy(null);
+    }
+  }
+
+  async function applyIsActivePanel(next: boolean) {
+    if (quickBusy || next === item.is_active) return;
+    setErr(null);
+    setQuickBusy("ia");
+    try {
+      const r = await toggleLopIsActive(item.id, next);
+      if (r.ok) router.refresh();
+      else setErr(r.error);
+    } finally {
+      setQuickBusy(null);
     }
   }
 
@@ -1077,19 +1235,73 @@ function LopDetailPanel({
             ) : null}
             {!item.tinh_trang ? (
               <span className="rounded-full border border-gray-300 bg-gray-100 px-2 py-px text-[10px] font-semibold text-gray-500">
-                Không hoạt động
+                Tạm dừng
+              </span>
+            ) : null}
+            {!item.is_active ? (
+              <span
+                className="max-w-[min(100%,220px)] truncate rounded-full border border-amber-200 bg-amber-50 px-2 py-px text-[10px] font-semibold text-amber-900"
+                title="Lớp hiện tạm dừng hoạt động"
+              >
+                Lớp hiện tạm dừng hoạt động
               </span>
             ) : null}
           </div>
         </div>
         {!editing ? (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="flex shrink-0 items-center gap-1 rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#666] hover:bg-white"
-          >
-            <Pencil size={13} /> Sửa
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            <div className="relative flex items-center">
+              <select
+                id={`lop-panel-tt-${item.id}`}
+                aria-label="Trạng thái hoạt động lớp"
+                className={cn(
+                  "h-[30px] min-w-[7.5rem] appearance-none rounded-lg border py-0 pl-2 pr-7 text-[11px] font-semibold shadow-sm disabled:opacity-50",
+                  item.tinh_trang
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-gray-200 bg-gray-100 text-gray-700",
+                )}
+                value={item.tinh_trang ? "1" : "0"}
+                disabled={quickBusy !== null}
+                onChange={(e) => void applyTinhTrangPanel(e.target.value === "1")}
+              >
+                <option value="1">Đang hoạt động</option>
+                <option value="0">Tạm dừng</option>
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#888]"
+                aria-hidden
+              />
+            </div>
+            <div className="relative flex items-center">
+              <select
+                id={`lop-panel-ia-${item.id}`}
+                aria-label="Khai giảng"
+                className={cn(
+                  "h-[30px] min-w-[7.5rem] appearance-none rounded-lg border py-0 pl-2 pr-7 text-[11px] font-semibold shadow-sm disabled:opacity-50",
+                  item.is_active
+                    ? "border-sky-200 bg-sky-50 text-sky-900"
+                    : "border-amber-200 bg-amber-50 text-amber-950",
+                )}
+                value={item.is_active ? "1" : "0"}
+                disabled={quickBusy !== null}
+                onChange={(e) => void applyIsActivePanel(e.target.value === "1")}
+              >
+                <option value="1">Đang khai giảng</option>
+                <option value="0">Tạm dừng</option>
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#888]"
+                aria-hidden
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="flex shrink-0 items-center gap-1 rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#666] hover:bg-white"
+            >
+              <Pencil size={13} /> Sửa
+            </button>
+          </div>
         ) : (
           <div className="flex shrink-0 gap-1">
             <button
@@ -1118,6 +1330,11 @@ function LopDetailPanel({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {err ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">✕ {err}</div>
+        ) : null}
+        {!item.is_active ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
+            Lớp hiện tạm dừng hoạt động
+          </div>
         ) : null}
 
         <div className="grid grid-cols-2 gap-2.5">
@@ -1230,37 +1447,55 @@ function LopDetailPanel({
                 />
               </div>
               {/* Toggles */}
-              <div className="flex gap-2.5">
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setK("special", !form.special)}
+                    className={cn(
+                      "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
+                      form.special
+                        ? "border-orange-300/60 bg-gradient-to-r from-orange-50 to-red-50 text-orange-700"
+                        : "border-[#EAEAEA] bg-white text-[#888]",
+                    )}
+                  >
+                    <span>Cấp tốc</span>
+                    <span className={cn(
+                      "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
+                      form.special ? "border-orange-400 bg-orange-400" : "border-[#CCCCCC] bg-white",
+                    )} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setK("tinh_trang", !form.tinh_trang)}
+                    className={cn(
+                      "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
+                      form.tinh_trang
+                        ? "border-emerald-300/60 bg-emerald-50 text-emerald-700"
+                        : "border-[#EAEAEA] bg-white text-[#888]",
+                    )}
+                  >
+                    <span>{form.tinh_trang ? "Hoạt động" : "Không HĐ"}</span>
+                    <span className={cn(
+                      "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
+                      form.tinh_trang ? "border-emerald-500 bg-emerald-500" : "border-[#CCCCCC] bg-white",
+                    )} />
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setK("special", !form.special)}
+                  onClick={() => setK("is_active", !form.is_active)}
                   className={cn(
-                    "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
-                    form.special
-                      ? "border-orange-300/60 bg-gradient-to-r from-orange-50 to-red-50 text-orange-700"
-                      : "border-[#EAEAEA] bg-white text-[#888]",
+                    "flex w-full items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
+                    form.is_active
+                      ? "border-sky-300/60 bg-sky-50 text-sky-800"
+                      : "border-amber-300/70 bg-amber-50 text-amber-900",
                   )}
                 >
-                  <span>Cấp tốc</span>
+                  <span>{form.is_active ? "Đang khai giảng" : "Tạm dừng khai giảng"}</span>
                   <span className={cn(
-                    "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
-                    form.special ? "border-orange-400 bg-orange-400" : "border-[#CCCCCC] bg-white",
-                  )} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setK("tinh_trang", !form.tinh_trang)}
-                  className={cn(
-                    "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
-                    form.tinh_trang
-                      ? "border-emerald-300/60 bg-emerald-50 text-emerald-700"
-                      : "border-[#EAEAEA] bg-white text-[#888]",
-                  )}
-                >
-                  <span>{form.tinh_trang ? "Hoạt động" : "Không HĐ"}</span>
-                  <span className={cn(
-                    "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
-                    form.tinh_trang ? "border-emerald-500 bg-emerald-500" : "border-[#CCCCCC] bg-white",
+                    "ml-2 h-4 w-4 shrink-0 rounded-full border-2 transition-colors",
+                    form.is_active ? "border-sky-500 bg-sky-500" : "border-amber-500 bg-amber-500",
                   )} />
                 </button>
               </div>
@@ -1369,6 +1604,20 @@ function LopDetailPanel({
                   )}
                 </dd>
               </div>
+              <div className="flex justify-between gap-2 border-t border-[#f0f0f0] py-1">
+                <dt className="text-[10px] font-bold uppercase text-[#AAA]">Khai giảng</dt>
+                <dd className="m-0">
+                  {item.is_active ? (
+                    <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+                      Đang mở lớp
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+                      Lớp hiện tạm dừng hoạt động
+                    </span>
+                  )}
+                </dd>
+              </div>
             </dl>
           )}
         </div>
@@ -1463,6 +1712,7 @@ function CreateLopModal({
   const [createTeachers, setCreateTeachers] = useState<string[]>([]);
   const [createSpecial, setCreateSpecial] = useState(false);
   const [createTinhTrang, setCreateTinhTrang] = useState(true);
+  const [createIsActive, setCreateIsActive] = useState(true);
   const [createMonHoc, setCreateMonHoc] = useState("");
   const [createLevelHinhHoa, setCreateLevelHinhHoa] = useState("");
 
@@ -1607,42 +1857,61 @@ function CreateLopModal({
             </div>
             <AdminCfImageInput label="Ảnh lớp" name="avatar" defaultValue="" />
             {/* Toggles */}
-            <div className="flex gap-2.5">
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setCreateSpecial((v) => !v)}
+                  className={cn(
+                    "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
+                    createSpecial
+                      ? "border-orange-300/60 bg-gradient-to-r from-orange-50 to-red-50 text-orange-700"
+                      : "border-[#EAEAEA] bg-white text-[#888]",
+                  )}
+                >
+                  <span>Cấp tốc</span>
+                  <span className={cn(
+                    "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
+                    createSpecial ? "border-orange-400 bg-orange-400" : "border-[#CCCCCC] bg-white",
+                  )} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateTinhTrang((v) => !v)}
+                  className={cn(
+                    "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
+                    createTinhTrang
+                      ? "border-emerald-300/60 bg-emerald-50 text-emerald-700"
+                      : "border-[#EAEAEA] bg-white text-[#888]",
+                  )}
+                >
+                  <span>{createTinhTrang ? "Hoạt động" : "Không HĐ"}</span>
+                  <span className={cn(
+                    "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
+                    createTinhTrang ? "border-emerald-500 bg-emerald-500" : "border-[#CCCCCC] bg-white",
+                  )} />
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={() => setCreateSpecial((v) => !v)}
+                onClick={() => setCreateIsActive((v) => !v)}
                 className={cn(
-                  "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
-                  createSpecial
-                    ? "border-orange-300/60 bg-gradient-to-r from-orange-50 to-red-50 text-orange-700"
-                    : "border-[#EAEAEA] bg-white text-[#888]",
+                  "flex w-full items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
+                  createIsActive
+                    ? "border-sky-300/60 bg-sky-50 text-sky-800"
+                    : "border-amber-300/70 bg-amber-50 text-amber-900",
                 )}
               >
-                <span>Cấp tốc</span>
+                <span>{createIsActive ? "Đang khai giảng" : "Tạm dừng khai giảng"}</span>
                 <span className={cn(
-                  "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
-                  createSpecial ? "border-orange-400 bg-orange-400" : "border-[#CCCCCC] bg-white",
-                )} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setCreateTinhTrang((v) => !v)}
-                className={cn(
-                  "flex flex-1 items-center justify-between rounded-[10px] border px-3 py-2 text-[12px] font-semibold transition-colors",
-                  createTinhTrang
-                    ? "border-emerald-300/60 bg-emerald-50 text-emerald-700"
-                    : "border-[#EAEAEA] bg-white text-[#888]",
-                )}
-              >
-                <span>{createTinhTrang ? "Hoạt động" : "Không HĐ"}</span>
-                <span className={cn(
-                  "ml-2 h-4 w-4 rounded-full border-2 transition-colors",
-                  createTinhTrang ? "border-emerald-500 bg-emerald-500" : "border-[#CCCCCC] bg-white",
+                  "ml-2 h-4 w-4 shrink-0 rounded-full border-2 transition-colors",
+                  createIsActive ? "border-sky-500 bg-sky-500" : "border-amber-500 bg-amber-500",
                 )} />
               </button>
             </div>
             <input type="hidden" name="special" value={createSpecial ? "1" : ""} />
             <input type="hidden" name="tinh_trang" value={createTinhTrang ? "1" : ""} />
+            <input type="hidden" name="is_active" value={createIsActive ? "1" : "0"} />
           </div>
           <div className="flex shrink-0 justify-end gap-2 border-t border-[#f0f0f0] px-5 py-3">
             <button type="button" onClick={onClose} className="rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2 text-[13px] text-[#666]">

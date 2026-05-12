@@ -3,6 +3,7 @@ import type { MetadataRoute } from "next";
 import { buildBlogSlug } from "@/lib/data/blog";
 import { fetchAllDeThiSlugs } from "@/lib/data/de-thi";
 import { fetchAllEbooks } from "@/lib/data/ebook";
+import { buildHeThongBaiTapHref } from "@/lib/he-thong-bai-tap/slug";
 import { createStaticClient } from "@/lib/supabase/static";
 
 const SITE = "https://sineart.vn";
@@ -133,7 +134,7 @@ export async function buildSitemapEntries(): Promise<MetadataRoute.Sitemap> {
     supabase.from("tra_cuu_thong_tin").select("slug").not("slug", "is", null).limit(3000),
     fetchAllDeThiSlugs(),
     fetchAllEbooks(),
-    supabase.from("hv_he_thong_bai_tap").select("url_bai_tap").not("url_bai_tap", "is", null).limit(2000),
+    supabase.from("hv_he_thong_bai_tap").select("bai_so, ten_bai_tap, mon_hoc").limit(2000),
   ]);
 
   const slugSet = new Set<string>();
@@ -168,9 +169,13 @@ export async function buildSitemapEntries(): Promise<MetadataRoute.Sitemap> {
   }
 
   for (const row of baiTapRes.data ?? []) {
-    const r = row as { url_bai_tap?: string | null };
-    const s = String(r.url_bai_tap ?? "").trim();
-    if (s) push(`/he-thong-bai-tap/${encodeURIComponent(s)}`);
+    const r = row as { bai_so?: unknown; ten_bai_tap?: unknown; mon_hoc?: unknown };
+    const baiSo = r.bai_so != null && r.bai_so !== "" ? Number(r.bai_so) : NaN;
+    const ten = String(r.ten_bai_tap ?? "").trim();
+    const mon = r.mon_hoc != null && r.mon_hoc !== "" ? Number(r.mon_hoc) : NaN;
+    if (!Number.isFinite(baiSo) || baiSo < 0 || !ten) continue;
+    const monHint = Number.isFinite(mon) && mon > 0 ? mon : null;
+    push(buildHeThongBaiTapHref(baiSo, ten, monHint));
   }
 
   const seen = new Set<string>();

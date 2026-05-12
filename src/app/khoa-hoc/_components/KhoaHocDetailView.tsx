@@ -801,11 +801,13 @@ export default function KhoaHocDetailView({
                 {ongoingClasses.map((c) => {
                   const meta = KD_OC_BADGE[c.status];
                   const pct = c.total > 0 ? Math.min(100, Math.round((100 * c.filled) / c.total)) : 0;
+                  const isPaused = c.isActive === false;
                   const hetCho = c.status === "full" || c.filled >= c.total;
+                  const blockReg = hetCho || isPaused;
                   return (
                     <div
                       key={c.id}
-                      className={`kd-sch-card${c.isCapToc ? " kd-sch-card--cap-toc" : ""}${hetCho ? " kd-sch-card--full" : ""}`}
+                      className={`kd-sch-card${c.isCapToc ? " kd-sch-card--cap-toc" : ""}${hetCho ? " kd-sch-card--full" : ""}${isPaused ? " kd-sch-card--paused" : ""}`}
                     >
                       {c.isCapToc && (
                         <span className="kd-oc-cap-toc">
@@ -815,19 +817,26 @@ export default function KhoaHocDetailView({
                       <div className="kd-sch-name" title={c.title}>
                         {c.title}
                       </div>
+                      {isPaused ? (
+                        <p className="kd-sch-pause-note m-0 text-[12px] font-bold leading-snug text-[var(--kd-ink)]">
+                          Lớp hiện tạm dừng hoạt động
+                        </p>
+                      ) : null}
                       {c.levelHinhHoa ? (
                         <div className="kd-sch-level-hinh-hoa">{c.levelHinhHoa}</div>
                       ) : null}
                       <div className="kd-sch-day">{c.lich}</div>
                       <div className="kd-sch-meta">GV: {c.gvNames}</div>
                       <div className="kd-oc-seats">
-                        {hetCho ? "Hết chỗ" : "Còn chỗ"}
+                        {isPaused ? "—" : hetCho ? "Hết chỗ" : "Còn chỗ"}
                       </div>
                       <div className="kd-oc-bar-track" role="progressbar" aria-valuenow={c.filled} aria-valuemin={0} aria-valuemax={c.total}>
                         <div className={meta.barClass} style={{ width: `${pct}%` }} />
                       </div>
-                      {hetCho ? (
-                        <span className="kd-sch-btn kd-sch-btn--disabled">Đăng ký đợt sau</span>
+                      {blockReg ? (
+                        <span className="kd-sch-btn kd-sch-btn--disabled">
+                          {isPaused ? "Tạm không nhận đăng ký" : "Đăng ký đợt sau"}
+                        </span>
                       ) : (
                         <a href={autoRegisterHref} className="kd-sch-btn kd-sch-btn--active">
                           Đăng ký khung này →

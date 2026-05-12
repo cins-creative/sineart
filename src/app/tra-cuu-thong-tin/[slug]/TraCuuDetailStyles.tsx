@@ -95,12 +95,22 @@ const css = `
   .bd-tc-body > * + *{margin-top:14px}
 
   /* ─── Album gallery đầu bài ───
-     Ảnh thông tin tuyển sinh thường tỉ lệ 1:1 → dùng khung vuông đều + object-fit:contain
-     để KHÔNG bị crop; phần trống dùng background nhẹ. */
+     Khung vuông; ảnh scale (contain), không crop. Flex item img có min-width/min-height:0
+     để vượt qua min-size:auto (intrinsic) — không thì ảnh dọc bị tràn và figure overflow:hidden cắt mép. */
   .bd-tc-album{display:grid;gap:10px;margin:14px 0 22px}
-  .bd-tc-album-fig{margin:0;padding:0;overflow:hidden;border-radius:12px;background:#faf6f2;aspect-ratio:1/1}
-  .bd-tc-album-link{display:flex;align-items:center;justify-content:center;width:100%;height:100%;line-height:0}
-  .bd-tc-album-img{display:block;max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;transition:transform .35s ease}
+  .bd-tc-album-fig{
+    margin:0;padding:0;overflow:hidden;border-radius:12px;background:#faf6f2;
+    aspect-ratio:1/1;min-width:0;display:flex;align-items:center;justify-content:center
+  }
+  .bd-tc-album-link{
+    display:flex;align-items:center;justify-content:center;
+    flex:1;min-width:0;min-height:0;width:100%;height:100%;line-height:0
+  }
+  .bd-tc-album-img{
+    display:block;flex-shrink:1;min-width:0;min-height:0;
+    max-width:100%;max-height:100%;width:auto;height:auto;
+    object-fit:contain;object-position:center;transition:transform .35s ease
+  }
   .bd-tc-album-link:hover .bd-tc-album-img{transform:scale(1.03)}
 
   /* 1 ảnh: giới hạn bề ngang để không quá to */

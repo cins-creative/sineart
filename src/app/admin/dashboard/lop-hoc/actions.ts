@@ -73,6 +73,7 @@ type LopPayload = {
   device: string | null;
   special: boolean;
   tinh_trang: boolean;
+  is_active: boolean;
   /** `ql_lop_hoc.level_hinh_hoa` — chỉ dùng khi môn Hình họa. */
   level_hinh_hoa: string | null;
   /** URL nhóm Messenger — `ql_lop_hoc.group_chat_messenger`. */
@@ -108,6 +109,7 @@ function readLopPayload(fd: FormData): { ok: true; data: LopPayload } | { ok: fa
       device: optionalText(fd, "device"),
       special: String(fd.get("special") ?? "") === "1",
       tinh_trang: String(fd.get("tinh_trang") ?? "") !== "0" && String(fd.get("tinh_trang") ?? "") !== "",
+      is_active: String(fd.get("is_active") ?? "1") !== "0",
       level_hinh_hoa,
       group_chat_messenger: optionalText(fd, "group_chat_messenger"),
     },
@@ -265,6 +267,36 @@ export async function toggleLopSpecial(id: number, value: boolean): Promise<LopH
 
   revalidateLopHocPublic();
   return { ok: true, message: value ? "Đã đánh dấu cấp tốc." : "Đã bỏ cấp tốc." };
+}
+
+export async function toggleLopTinhTrang(id: number, value: boolean): Promise<LopHocFormState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(id) || id <= 0) return { ok: false, error: "Mã lớp không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { error } = await supabase.from("ql_lop_hoc").update({ tinh_trang: value }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateLopHocPublic();
+  return { ok: true, message: value ? "Đã bật trạng thái hoạt động." : "Đã tắt trạng thái hoạt động." };
+}
+
+export async function toggleLopIsActive(id: number, value: boolean): Promise<LopHocFormState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(id) || id <= 0) return { ok: false, error: "Mã lớp không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { error } = await supabase.from("ql_lop_hoc").update({ is_active: value }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateLopHocPublic();
+  return { ok: true, message: value ? "Đã bật khai giảng." : "Đã tạm dừng khai giảng." };
 }
 
 export async function deleteLopHoc(id: number): Promise<LopHocFormState> {

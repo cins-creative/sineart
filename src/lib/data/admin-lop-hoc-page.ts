@@ -7,9 +7,9 @@ import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 export const LOP_LIST_PAGE_SIZE = 6;
 
 const LOP_SELECT_FULL =
-  "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, url_google_meet, group_chat_messenger, device, special, tinh_trang, level_hinh_hoa";
+  "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, url_google_meet, group_chat_messenger, device, special, tinh_trang, is_active, level_hinh_hoa";
 const LOP_SELECT_MIN =
-  "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, group_chat_messenger, device, special, tinh_trang";
+  "id, class_name, class_full_name, mon_hoc, teacher, chi_nhanh_id, avatar, lich_hoc, url_class, group_chat_messenger, device, special, tinh_trang, is_active";
 
 export type LopHocListFilters = {
   q: string;
@@ -44,6 +44,7 @@ function mapRawToAdminLopRow(raw: Record<string, unknown>): AdminLopRow {
     device: raw.device != null ? String(raw.device).trim() || null : null,
     special: raw.special != null && String(raw.special).trim() !== "",
     tinh_trang: raw.tinh_trang !== false,
+    is_active: raw.is_active !== false,
     level_hinh_hoa:
       raw.level_hinh_hoa != null && String(raw.level_hinh_hoa).trim() !== ""
         ? String(raw.level_hinh_hoa).trim()

@@ -864,8 +864,8 @@ export async function getOngoingClassesForMon(
   if (!supabase) return [];
 
   const selLopFull =
-    "id, class_name, class_full_name, teacher, chi_nhanh_id, lich_hoc, special, level_hinh_hoa";
-  const selLopMin = "id, class_name, class_full_name, teacher, chi_nhanh_id, lich_hoc, special";
+    "id, class_name, class_full_name, teacher, chi_nhanh_id, lich_hoc, special, level_hinh_hoa, is_active";
+  const selLopMin = "id, class_name, class_full_name, teacher, chi_nhanh_id, lich_hoc, special, is_active";
 
   let lopList: Record<string, unknown>[] = [];
   const lopFirst = await supabase
@@ -995,6 +995,7 @@ export async function getOngoingClassesForMon(
       filled,
       total: totalSeat,
       levelHinhHoa,
+      isActive: r.is_active !== false,
     };
   });
 }

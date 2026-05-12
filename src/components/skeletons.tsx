@@ -46,10 +46,11 @@ export function KhoaHocPageSkeleton({ className }: { className?: string }) {
         </div>
       </div>
 
-      <header className="kh-head">
-        <div className="w-full max-w-md">
-          <div className="h-8 w-40 animate-pulse rounded-md bg-zinc-200/80" />
-          <div className="mt-3 h-4 max-w-full w-64 animate-pulse rounded bg-zinc-200/70" />
+      <header className="kh-hero" aria-hidden>
+        <div className="kh-hero-inner w-full">
+          <div className="mb-2 h-3 w-36 max-w-[85%] animate-pulse rounded-full bg-zinc-200/90" />
+          <div className="mb-3 h-9 w-full max-w-md animate-pulse rounded-2xl bg-zinc-200/75" />
+          <div className="mb-2 h-4 w-full max-w-lg animate-pulse rounded-lg bg-zinc-200/65" />
         </div>
       </header>
 
@@ -74,10 +75,20 @@ export function KhoaHocPageSkeleton({ className }: { className?: string }) {
               className="overflow-hidden rounded-2xl border border-black/[0.08] bg-zinc-50"
             >
               <div className="aspect-[4/3] animate-pulse bg-zinc-200/70" />
-              <div className="space-y-2 p-4">
-                <div className="h-3 w-16 animate-pulse rounded bg-zinc-200/80" />
-                <div className="h-4 w-full animate-pulse rounded bg-zinc-200/70" />
-                <div className="h-3 w-11/12 max-w-[90%] animate-pulse rounded bg-zinc-200/60" />
+            <div className="space-y-2.5 p-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-zinc-300" />
+                  <div className="h-2.5 w-24 animate-pulse rounded bg-zinc-200/80" />
+                </div>
+                <div className="h-4 w-full animate-pulse rounded-md bg-zinc-200/70" />
+                <div className="flex items-start gap-2 pt-0.5">
+                  <div className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-pulse rounded-sm bg-zinc-200/70" />
+                  <div className="h-3 w-40 animate-pulse rounded bg-zinc-200/60" />
+                </div>
+                <div className="flex items-center gap-2.5 pt-2">
+                  <div className="h-2.5 flex-1 animate-pulse rounded-full bg-emerald-100/90" />
+                  <div className="h-3 w-8 shrink-0 animate-pulse rounded bg-zinc-200/75" />
+                </div>
               </div>
             </div>
           ))}

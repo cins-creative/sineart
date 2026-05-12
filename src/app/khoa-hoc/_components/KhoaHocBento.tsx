@@ -6,33 +6,8 @@ import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import { groupCoursesByGroup } from "@/lib/khoa-hoc-group-courses";
 import type { CourseGroupId, KhoaHocCourseCard } from "@/types/khoa-hoc";
 import Link from "next/link";
-import type { ReactElement, ReactNode } from "react";
-import {
-  Children,
-  Fragment,
-  cloneElement,
-  isValidElement,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-
-function tagClassByHinhThuc(tag: KhoaHocCourseCard["hinhThucTag"]): string {
-  return tag === "Online" ? "kh-ctag--online" : "kh-ctag--offline";
-}
-
-function badgeClass(tone: CourseGroupId): string {
-  switch (tone) {
-    case "lthi":
-      return "kh-badge--lthi";
-    case "digital":
-      return "kh-badge--digital";
-    case "kids":
-      return "kh-badge--kids";
-    default:
-      return "kh-badge--botro";
-  }
-}
+import type { ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 function sortCourses(list: KhoaHocCourseCard[]) {
   return [...list].sort((a, b) => {
@@ -41,19 +16,79 @@ function sortCourses(list: KhoaHocCourseCard[]) {
   });
 }
 
+function groupCatalogCategoryUpper(group: CourseGroupId): string {
+  switch (group) {
+    case "lthi":
+      return "Luyện thi ĐH";
+    case "digital":
+      return "Digital";
+    case "kids":
+      return "Thiếu nhi";
+    case "botro":
+      return "Bổ trợ";
+  }
+}
+
+function CourseThumbBadges({ course }: { course: KhoaHocCourseCard }) {
+  const items: ReactNode[] = [];
+  if (course.isFeatured) {
+    items.push(
+      <span key="feat" className="kh-thumb-badge kh-thumb-badge--feat">
+        Nổi bật
+      </span>,
+    );
+  }
+  if (course.group === "kids") {
+    items.push(
+      <span key="kids" className="kh-thumb-badge kh-thumb-badge--kids">
+        Thiếu nhi
+      </span>,
+    );
+  }
+  if (course.group === "botro" && !course.isFeatured) {
+    items.push(
+      <span key="sup" className="kh-thumb-badge kh-thumb-badge--support">
+        Bổ trợ
+      </span>,
+    );
+  }
+  if (!items.length) return null;
+  return (
+    <div className="kh-thumb-badges" aria-hidden>
+      {items}
+    </div>
+  );
+}
+
+function MetaCalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
 function CourseThumb({
   course,
-  badge,
   className = "",
-  hintOverlay,
   thumbPriority,
 }: {
   course: KhoaHocCourseCard;
-  badge?: string;
   className?: string;
-  /** Lớp “Xem chi tiết” — nằm trong khối ảnh, dưới badge */
-  hintOverlay?: ReactNode;
-  /** Ảnh đầu tiên danh sách — gợi ý LCP khi vào /khoa-hoc */
   thumbPriority?: boolean;
 }) {
   const tone = course.group;
@@ -70,7 +105,7 @@ function CourseThumb({
           alt={`Khóa học ${course.tenMonHoc} tại Sine Art`}
           className="kh-thumb-img"
           fill
-          sizes="(max-width: 719px) 50vw, 33vw"
+          sizes="(max-width: 719px) 46vw, 30vw"
           priority={thumbPriority}
           loading={thumbPriority ? undefined : "lazy"}
           unoptimized={nextImageShouldUnoptimize(course.thumbnail)}
@@ -82,23 +117,24 @@ function CourseThumb({
           aria-hidden
         />
       )}
-      {hintOverlay}
-      {badge ? <span className={`kh-badge ${badgeClass(tone)}`}>{badge}</span> : null}
+      <CourseThumbBadges course={course} />
     </div>
   );
 }
+
+type SectionTone = "brand" | "digital" | "kids" | "neutral";
 
 /** Một khối nhóm: tiêu đề + lưới thẻ đồng nhất */
 function FlatGroupSection({
   sectionId,
   title,
-  dotColor,
+  sectionTone,
   courses,
   lcpThumbCourseId,
 }: {
   sectionId: string;
   title: string;
-  dotColor: string;
+  sectionTone: SectionTone;
   courses: KhoaHocCourseCard[];
   lcpThumbCourseId: number | null;
 }) {
@@ -109,7 +145,7 @@ function FlatGroupSection({
     <section className="kh-section kh-section--editorial" aria-labelledby={sectionId}>
       <div className="kh-sl" id={sectionId}>
         <div className="kh-sl-left">
-          <span className="kh-sl-dot" style={{ background: dotColor }} />
+          <span className={`kh-sl-dot kh-sl-dot--${sectionTone}`} aria-hidden />
           <span className="kh-sl-name">{title}</span>
           <span className="kh-sl-count">{sorted.length} khóa</span>
         </div>
@@ -117,18 +153,17 @@ function FlatGroupSection({
 
       <div className="kh-grid">
         {sorted.map((c) => (
-          <CourseCardLink
+          <Link
             key={c.id}
             href={`/khoa-hoc/${c.slug}`}
-            className={`kh-grid-card kh-grid-card--p${Math.abs(c.id) % 8}`}
+            className="kh-cell kh-cell--hoverable kh-grid-card"
+            prefetch={false}
           >
-            <CourseThumb
-              course={c}
-              badge={c.loaiKhoaHoc ?? undefined}
-              thumbPriority={lcpThumbCourseId === c.id}
-            />
+            <div className="kh-thumb-wrap">
+              <CourseThumb course={c} thumbPriority={lcpThumbCourseId === c.id} />
+            </div>
             <CourseCardBody course={c} compact />
-          </CourseCardLink>
+          </Link>
         ))}
       </div>
     </section>
@@ -140,7 +175,6 @@ export default function KhoaHocBento({
   initialFilter = "all",
 }: {
   courses: KhoaHocCourseCard[];
-  /** Từ `?nhom=` — trang chủ / liên kết ngoài */
   initialFilter?: KhoaHocFilterId;
 }) {
   const [filter, setFilter] = useState<KhoaHocFilterId>(initialFilter);
@@ -154,10 +188,6 @@ export default function KhoaHocBento({
     return courses.filter((c) => c.group === filter);
   }, [filter, courses]);
 
-  /**
-   * Tất cả: gom Bổ trợ → Luyện thi; gom Digital + Kids → một khối.
-   * Lọc theo nhóm: giữ tách Digital / Kids như filter.
-   */
   const grouped = useMemo(() => {
     const g = groupCoursesByGroup(filteredCourses);
     if (filter === "all") {
@@ -178,7 +208,6 @@ export default function KhoaHocBento({
     };
   }, [filter, filteredCourses]);
 
-  /** Thẻ khóa đầu tiên trên trang (theo thứ tự section) — ưu tiên tải ảnh (LCP gợi ý). */
   const lcpThumbCourseId = useMemo(() => {
     const pick = (list: KhoaHocCourseCard[]) => sortCourses(list)[0]?.id ?? null;
     if (grouped.lthi.length) return pick(grouped.lthi);
@@ -196,10 +225,13 @@ export default function KhoaHocBento({
   if (!courses.length) {
     return (
       <>
-        <header className="kh-head">
-          <div>
-            <h1 className="kh-title">Khóa học</h1>
-            <p className="kh-sub">Danh sách từ hệ thống quản lý môn học</p>
+        <header className="kh-hero kh-hero--empty">
+          <div className="kh-hero-inner">
+            <p className="kh-hero-eyebrow">Giáo trình khoa học</p>
+            <h1 className="kh-hero-title">
+              Khóa học <em>mỹ thuật</em>
+            </h1>
+            <p className="kh-hero-lead">Danh sách từ hệ thống quản lý môn học.</p>
           </div>
         </header>
         <p className="kh-empty">Chưa có dữ liệu môn học.</p>
@@ -210,11 +242,15 @@ export default function KhoaHocBento({
   if (!filteredCourses.length) {
     return (
       <>
-        <header className="kh-head">
-          <div>
-            <h1 className="kh-title">Khóa học</h1>
-            <p className="kh-sub">
-              {courses.length} môn học · Online &amp; Offline tại TP.HCM
+        <header className="kh-hero">
+          <div className="kh-hero-inner">
+            <p className="kh-hero-eyebrow">Giáo trình khoa học</p>
+            <h1 className="kh-hero-title">
+              Khóa học <em>mỹ thuật</em>
+              <span className="kh-hero-title-rest"> tại TP.HCM</span>
+            </h1>
+            <p className="kh-hero-lead">
+              {courses.length} môn học · Online &amp; tại lớp — chọn nhóm bên dưới để lọc.
             </p>
           </div>
         </header>
@@ -242,11 +278,16 @@ export default function KhoaHocBento({
 
   return (
     <>
-      <header className="kh-head">
-        <div>
-          <h1 className="kh-title">Khóa học</h1>
-          <p className="kh-sub">
-            {courses.length} môn học · Online &amp; Offline tại TP.HCM
+      <header className="kh-hero">
+        <div className="kh-hero-inner">
+          <p className="kh-hero-eyebrow">Giáo trình khoa học</p>
+          <h1 className="kh-hero-title">
+            Khóa học <em>mỹ thuật</em>
+            <span className="kh-hero-title-rest"> tại TP.HCM</span>
+          </h1>
+          <p className="kh-hero-lead">
+            Hình họa, bố cục màu, trang trí màu, Digital &amp; Kids — luyện thi đại học và bổ
+            trợ. Online &amp; tại lớp.
           </p>
         </div>
       </header>
@@ -272,10 +313,8 @@ export default function KhoaHocBento({
       <div className="kh-wrap kh-wrap--editorial">
         <FlatGroupSection
           sectionId="kh-sec-lthi"
-          title={
-            filter === "all" ? "Luyện thi & bổ trợ" : "Luyện thi đại học"
-          }
-          dotColor="#7f77dd"
+          title={filter === "all" ? "Luyện thi & bổ trợ" : "Luyện thi đại học"}
+          sectionTone="brand"
           courses={grouped.lthi}
           lcpThumbCourseId={lcpThumbCourseId}
         />
@@ -284,7 +323,7 @@ export default function KhoaHocBento({
           <FlatGroupSection
             sectionId="kh-sec-digital-kids"
             title="Digital & Kids"
-            dotColor="#1d9e75"
+            sectionTone="digital"
             courses={grouped.digitalKids}
             lcpThumbCourseId={lcpThumbCourseId}
           />
@@ -293,14 +332,14 @@ export default function KhoaHocBento({
             <FlatGroupSection
               sectionId="kh-sec-digital"
               title="Digital"
-              dotColor="#1d9e75"
+              sectionTone="digital"
               courses={grouped.digital}
               lcpThumbCourseId={lcpThumbCourseId}
             />
             <FlatGroupSection
               sectionId="kh-sec-kids"
               title="Kids"
-              dotColor="#d4537e"
+              sectionTone="kids"
               courses={grouped.kids}
               lcpThumbCourseId={lcpThumbCourseId}
             />
@@ -311,60 +350,13 @@ export default function KhoaHocBento({
           <FlatGroupSection
             sectionId="kh-sec-botro"
             title="Bổ trợ"
-            dotColor="#888780"
+            sectionTone="neutral"
             courses={grouped.botro}
             lcpThumbCourseId={lcpThumbCourseId}
           />
         ) : null}
       </div>
     </>
-  );
-}
-
-function CourseCardLink({
-  href,
-  className = "",
-  children,
-  hintOnThumb = true,
-}: {
-  href: string;
-  className?: string;
-  children: ReactNode;
-  /** Chỉ phủ overlay lên khối ảnh (child đầu = CourseThumb) */
-  hintOnThumb?: boolean;
-}) {
-  if (hintOnThumb) {
-    const parts = Children.toArray(children);
-    if (parts.length >= 2) {
-      const first = parts[0];
-      const hint = <span className="kh-cell-hint">Xem chi tiết</span>;
-      const thumbWithHint = isValidElement(first)
-        ? cloneElement(first as ReactElement<{ hintOverlay?: ReactNode }>, {
-            hintOverlay: hint,
-          })
-        : first;
-      return (
-        <Link
-          href={href}
-          className={`kh-cell kh-cell--hoverable ${className}`.trim()}
-          prefetch={false}
-        >
-          <div className="kh-thumb-wrap">{thumbWithHint}</div>
-          {parts.slice(1)}
-        </Link>
-      );
-    }
-  }
-
-  return (
-    <Link
-      href={href}
-      className={`kh-cell kh-cell--hoverable ${className}`.trim()}
-      prefetch={false}
-    >
-      <span className="kh-cell-hint">Xem chi tiết</span>
-      {children}
-    </Link>
   );
 }
 
@@ -375,21 +367,46 @@ function CourseCardBody({
   course: KhoaHocCourseCard;
   compact?: boolean;
 }) {
-  const tag = course.hinhThucTag;
+  const n = course.soLopDangHoatDong;
+  /** Thanh mint: đầy khi có lớp đang mở (catalog — không dùng % học giả) */
+  const barPct = n > 0 ? 100 : 14;
+  const categoryHead = course.loaiKhoaHoc?.trim() || groupCatalogCategoryUpper(course.group);
+
   return (
     <div
       className={`kh-cbody kh-cbody--${course.group}${
         compact ? " kh-cbody--compact" : ""
       }`}
     >
-      <span className={`kh-ctag ${tagClassByHinhThuc(course.hinhThucTag)}`}>{tag}</span>
+      <div className={`kh-cat-rail kh-cat-rail--${course.group}`}>
+        <span className="kh-cat-dot" aria-hidden />
+        <span className="kh-cat-label">{categoryHead}</span>
+      </div>
       <span className="kh-ctitle">{course.tenMonHoc}</span>
-      {course.tinhChat ? (
-        <p className="kh-tinh-chat">{course.tinhChat}</p>
-      ) : null}
-      <p className="kh-metrics" aria-label="Số lớp đang hoạt động">
-        <strong>{course.soLopDangHoatDong}</strong> lớp đang hoạt động
-      </p>
+      {course.tinhChat ? <p className="kh-tinh-chat">{course.tinhChat}</p> : null}
+      <div className="kh-cmeta-rail">
+        <MetaCalendarIcon className="kh-cmeta-ic" />
+        <span className="kh-cmeta-txt">
+          {course.hinhThucTag}
+          <span className="kh-cmeta-dot" aria-hidden>
+            {" "}
+            ·{" "}
+          </span>
+          <strong>{n}</strong> lớp đang mở
+        </span>
+      </div>
+      <div
+        className="kh-cprog"
+        aria-label={`${n} lớp đang mở tuyển sinh cho khóa này`}
+      >
+        <div className="kh-cprog-track">
+          <div
+            className={`kh-cprog-fill${n === 0 ? " kh-cprog-fill--empty" : ""}`}
+            style={{ width: `${barPct}%` }}
+          />
+        </div>
+        <span className="kh-cprog-cap">{n}&nbsp;lớp</span>
+      </div>
     </div>
   );
 }

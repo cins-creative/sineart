@@ -24,6 +24,7 @@ import BaiTapListEditable from "@/app/admin/dashboard/he-thong-bai-tap/BaiTapLis
 import { getBySlug } from "@/data/ly-thuyet";
 import type { AdminBaiTapRow, AdminHeThongBaiTapBundle, AdminMonHocOpt } from "@/lib/data/admin-he-thong-bai-tap";
 import { mergeCatalogSlugsWithExtra, partitionVideoLyThuyet } from "@/lib/he-thong-bai-tap/catalog-video-ly";
+import { buildHeThongBaiTapHref } from "@/lib/he-thong-bai-tap/slug";
 import { cn } from "@/lib/utils";
 import { parseVideoBaiGiangEntries, youtubeVideoId } from "@/lib/utils/youtube";
 
@@ -54,7 +55,7 @@ function firstNonEmptyLine(raw: string | null | undefined): string | null {
   return line != null ? line.trim() : null;
 }
 
-function primaryBaiTapUrl(item: AdminBaiTapRow): string | null {
+function fallbackExternalBaiTapUrl(item: AdminBaiTapRow): string | null {
   const vbg = firstNonEmptyLine(item.video_bai_giang);
   if (vbg && /^https?:\/\//i.test(vbg)) return vbg;
   for (const raw of item.video_ly_thuyet ?? []) {
@@ -66,6 +67,27 @@ function primaryBaiTapUrl(item: AdminBaiTapRow): string | null {
   const tk = item.video_tham_khao?.find((u) => u.trim());
   const tkTrim = tk?.trim();
   return tkTrim && /^https?:\/\//i.test(tkTrim) ? tkTrim : null;
+}
+
+function monHintForBaiTapLink(item: AdminBaiTapRow): number | null {
+  const m = item.mon_hoc;
+  if (m != null && Number.isFinite(m) && m > 0) return m;
+  const id0 = item.mon_hoc_ids?.[0];
+  if (id0 != null && Number.isFinite(id0) && id0 > 0) return id0;
+  return null;
+}
+
+/** Trang công khai `/he-thong-bai-tap/bai_{so}-{slug}`[+`?mon=`]; không build được thì URL ngoài (video…). */
+function primaryBaiTapHref(item: AdminBaiTapRow): string | null {
+  if (
+    item.bai_so != null &&
+    Number.isFinite(item.bai_so) &&
+    item.bai_so >= 0 &&
+    item.ten_bai_tap?.trim()
+  ) {
+    return buildHeThongBaiTapHref(item.bai_so, item.ten_bai_tap, monHintForBaiTapLink(item));
+  }
+  return fallbackExternalBaiTapUrl(item);
 }
 
 type Props = { bundle: AdminHeThongBaiTapBundle };
@@ -244,7 +266,15 @@ export default function HeThongBaiTapView({ bundle }: Props) {
           />
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
-            {filtered.map((item, i) => (
+            {filtered.map((item, i) => {
+              const tapHref = primaryBaiTapHref(item);
+              const tapLabel =
+                tapHref != null && tapHref.startsWith("/he-thong-bai-tap/")
+                  ? "Mở bài giảng →"
+                  : item.video_bai_giang?.trim()
+                    ? "Video bài giảng →"
+                    : "Mở liên kết →";
+              return (
               <motion.div
                 key={item.id}
                 layout
@@ -277,14 +307,14 @@ export default function HeThongBaiTapView({ bundle }: Props) {
                 <div className="flex flex-1 flex-col px-3.5 pb-3 pt-3">
                   <p className="m-0 line-clamp-2 text-sm font-bold text-[#1a1a2e]">{item.ten_bai_tap}</p>
                   <p className="mt-1 line-clamp-1 text-[11px] text-[#AAAAAA]">{item.ten_mon_hoc ?? "—"}</p>
-                  {primaryBaiTapUrl(item) ? (
+                  {tapHref ? (
                     <a
-                      href={primaryBaiTapUrl(item)!}
+                      href={tapHref}
                       target="_blank"
                       rel="noreferrer"
                       className="mt-2 truncate text-[11px] font-semibold text-blue-600 hover:underline"
                     >
-                      {item.video_bai_giang?.trim() ? "Video bài giảng →" : "Mở liên kết →"}
+                      {tapLabel}
                     </a>
                   ) : null}
                 </div>
@@ -315,7 +345,8 @@ export default function HeThongBaiTapView({ bundle }: Props) {
                   ) : null}
                 </div>
               </motion.div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>

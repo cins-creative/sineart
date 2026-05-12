@@ -18,6 +18,8 @@ export type EnrichedPaymentClass = {
   filled: number;
   total: number;
   isFull: boolean;
+  /** `ql_lop_hoc.is_active` — false = tạm dừng khai giảng. */
+  isActive: boolean;
 };
 
 /**
@@ -28,9 +30,9 @@ export async function fetchEnrichedPaymentClasses(
   supabase: SupabaseClient
 ): Promise<EnrichedPaymentClass[]> {
   const selFull =
-    "id, class_name, class_full_name, mon_hoc, lich_hoc, teacher, avatar, special, level_hinh_hoa";
+    "id, class_name, class_full_name, mon_hoc, lich_hoc, teacher, avatar, special, level_hinh_hoa, is_active";
   const selMin =
-    "id, class_name, class_full_name, mon_hoc, lich_hoc, teacher, avatar, special";
+    "id, class_name, class_full_name, mon_hoc, lich_hoc, teacher, avatar, special, is_active";
 
   let lopRows: Record<string, unknown>[] | null = null;
   const first = await supabase
@@ -124,6 +126,7 @@ export async function fetchEnrichedPaymentClasses(
     const levelRaw = String(r.level_hinh_hoa ?? "").trim();
     const levelHinhHoa =
       isTenMonHinhHoa(tenMon) && levelRaw.length > 0 ? levelRaw : null;
+    const isActive = r.is_active !== false;
 
     return {
       id,
@@ -137,6 +140,7 @@ export async function fetchEnrichedPaymentClasses(
       filled,
       total: totalSeat,
       isFull,
+      isActive,
     };
   });
 }

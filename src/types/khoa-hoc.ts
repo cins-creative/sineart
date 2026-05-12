@@ -79,6 +79,8 @@ export type OngoingClassCard = {
   gio: string;
   filled: number;
   total: number;
+  /** `ql_lop_hoc.is_active` — false = tạm dừng khai giảng (mặc định true nếu cột chưa có). */
+  isActive?: boolean;
 };
 
 export type TeacherPortfolioSlide = {

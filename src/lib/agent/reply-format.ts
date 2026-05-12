@@ -9,6 +9,16 @@ export function stripMarkdownBold(text: string): string {
   return out.replace(/\*\*/g, "");
 }
 
+/**
+ * Gỡ cú pháp ảnh markdown `![…](url)` (model đôi khi vẫn chèn dù đã cấm).
+ * Không parse URL có dấu `)` trong query — trường hợp hiếm.
+ */
+export function stripMarkdownImages(text: string): string {
+  let out = text.replace(/!\[[^\]]*\]\([^)]+\)/g, "");
+  out = out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+  return out.trim();
+}
+
 const DEFAULT_MAX_CHUNK = 300;
 
 /** 60% → 1 tin, 30% → 2 tin, 10% → 3 tin (mỗi lần gọi độc lập). */

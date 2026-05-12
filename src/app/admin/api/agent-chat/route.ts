@@ -16,6 +16,7 @@ import { formatBranchProximityHintForPrompt } from "@/lib/agent/branch-proximity
 import {
   buildReplyPartsForChat,
   stripMarkdownBold,
+  stripMarkdownImages,
 } from "@/lib/agent/reply-format";
 import { adminStaffCanAccessAgentPage } from "@/lib/admin/staff-mutation-access";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
@@ -45,7 +46,7 @@ function buildSystemPrompt(ctx: AgentContextPayload): string {
     ctx.system_prompt?.trim() ||
     `Bạn là tư vấn viên Sine Art. Giọng nhắn tin Zalo: ngắn, "mình/bạn", có thể "chờ chút/check/nha". Tránh giọng AI ("Để mình check lịch..." khô; "Theo thông tin"; "Rất vui hỗ trợ"). Có thể tách vài ý: tin 1 xin chờ hoặc trả lời gọn, tin 2 hỏi tiếp cụ thể. Chỉ tiếng Việt.`;
   const noMd =
-    "\n- Không dùng markdown: không viết ** in đậm, không dùng __ hoặc dấu * quanh chữ.";
+    "\n- Không dùng markdown: không viết ** in đậm, không dùng __ hoặc dấu * quanh chữ, không viết ![…](url) hay dán URL ảnh trần; mô tả bằng lời — ảnh mẫu hợp lệ (nếu có) do hệ thống gửi kèm tin riêng.";
   const faq = ctx.faq ?? [];
   if (faq.length === 0) {
     return `${base}${noMd}\n\n[Chế độ thử nội bộ admin: chỉ dùng thông tin bạn biết, không gọi tool.]`;
@@ -105,8 +106,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   const origin = new URL(req.url).origin;
-  /** Prompt đầy đủ (KB + vận hành + đề ĐH + danh mục/mốc) dễ vượt giới hạn context — chat thử chỉ cần compact (Worker prod vẫn gọi full). */
-  const ctxRes = await fetch(`${origin}/api/agent-context?compact=1`, {
+  /** Cùng context đầy đủ như `/api/agent-context` (mốc TS + chỉ tiêu/điểm chuẩn `dh_truong_nganh_theo_nam`) để số liệu ĐH khớp admin; không dùng `compact=1` vì sẽ làm model bịa số. */
+  const ctxRes = await fetch(`${origin}/api/agent-context`, {
     cache: "no-store",
   });
   if (!ctxRes.ok) {
@@ -189,7 +190,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (attachments?.links?.length) {
     replyOut = stripMatchedLinkUrlsFromText(replyOut, attachments.links);
   }
-  const withoutMd = stripMarkdownBold(replyOut);
+  const withoutMd = stripMarkdownImages(stripMarkdownBold(replyOut));
   const replyFinal = withoutMd.trim() || "…";
   const replyParts = buildReplyPartsForChat(replyFinal, attachments);
 

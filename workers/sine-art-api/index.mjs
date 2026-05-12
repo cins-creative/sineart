@@ -726,7 +726,7 @@ async function processMessengerMessage({ sender_id, text }, env) {
   let replyForUser = reply.text;
   if (extras?.images?.length) replyForUser = stripMatchedImageUrlsFromText(replyForUser, extras.images);
   if (extras?.links?.length) replyForUser = stripMatchedLinkUrlsFromText(replyForUser, extras.links);
-  replyForUser = stripMarkdownBold(replyForUser);
+  replyForUser = stripMarkdownImages(stripMarkdownBold(replyForUser));
   if (!String(replyForUser || "").trim()) replyForUser = "…";
   const replyChunks = buildReplyPartsForChat(replyForUser, extras || undefined);
   const combinedForHistory = replyChunks.join("\n\n");
@@ -977,7 +977,7 @@ function buildTools() {
   return [
     {
       name: "query_courses",
-      description: "Lấy danh sách khóa học còn chỗ. Gọi khi học viên hỏi về khóa học, lịch học, hoặc muốn đăng ký.",
+      description: "Lấy danh sách lớp còn chỗ (tên lớp, môn, chi nhánh, lịch). Không có học phí. Gọi khi cần lọc lớp/lịch; không dùng để báo giá — học phí chỉ trên trang khóa (URL).",
       input_schema: { type: "object", properties: {} },
     },
     {
@@ -1013,7 +1013,7 @@ async function queryCourses(ctx_data, env) {
   }
   try {
     const res = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/tc_lop_hoc?select=id,ten_lop,hoc_phi,lich_hoc,con_cho,tc_khoa_hoc(ten_khoa,mon_hoc)&con_cho=gt.0&limit=5`,
+      `${env.SUPABASE_URL}/rest/v1/tc_lop_hoc?select=id,ten_lop,lich_hoc,con_cho,tc_khoa_hoc(ten_khoa,mon_hoc)&con_cho=gt.0&limit=5`,
       { headers: sbHeaders(env) }
     );
     const courses = await res.json();
@@ -1314,6 +1314,12 @@ function stripMarkdownBold(text) {
   return out.replace(/\*\*/g, "");
 }
 
+function stripMarkdownImages(text) {
+  let out = String(text || "").replace(/!\[[^\]]*\]\([^)]+\)/g, "");
+  out = out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+  return out.trim();
+}
+
 const CHUNK_MAX = 300;
 
 function splitAgentReplyIntoChatParts(text, maxChunk = CHUNK_MAX) {
@@ -1566,8 +1572,9 @@ function buildSystemPrompt(ctx_data) {
   const base =
     ctx_data.system_prompt ??
     `Bạn là Sơn — tư vấn viên Sine Art (TP.HCM). Chỉ tiếng Việt.
-Giọng nhắn tin thật (Zalo/Messenger): ngắn, "mình/bạn", có thể nói "chờ chút", "check", "nha", "Cho mình hỏi". Tránh giọng bot: không "Để mình check lịch lớp còn chỗ cho bạn nhé" kiểu khô; không "Theo thông tin", "Tóm lại", "Rất vui được hỗ trợ". Có thể tách vài ý: một tin xin chờ / nhận ý, tin sau hỏi cụ thể (thứ mấy, giờ nào).
-Không nhận là AI. Gọi query_courses khi cần lớp còn chỗ. Escalate khi hỏi giảm giá đặc biệt hoặc khiếu nại.`;
+Giọng nhắn tin thật (Zalo/Messenger): ngắn, "mình/bạn", có thể nói "chờ chút", "check", "nha", "Cho mình hỏi". Tránh giọng bot: không "Để mình check lịch lớp còn chỗ cho bạn nhé" kiểu khô; không "Theo thông tin", "Tóm lại", "Rất vui được hỗ trợ". Có thể tách vài ý: một tin xin chờ / nhận ý, tin sau hỏi cụ thể (thứ mấy, giờ nào). Hỏi từng ý một: mỗi tin tối đa một câu hỏi, không liệt kê 1. 2. 3. trong cùng một tin — chờ trả lời rồi mới hỏi tiếp.
+“Dạ”: không dùng “dạ” với học viên / bạn trẻ; chỉ khi rõ phụ huynh (anh/chị tìm lớp cho con/bé nhà, v.v.). Không nhận là AI. Gọi query_courses khi cần lớp còn chỗ. Escalate khi hỏi giảm giá đặc biệt hoặc khiếu nại.
+Chi tiết khóa (học phí, chương trình, lịch, lớp): không nêu số tiền trong tin; không dùng bảng gói học phí. Gợi ý HV mở hoặc gửi link https://www.sineart.vn/khoa-hoc/<slug> — trang đó có đủ nội dung; không bịa số nếu không chắc.`;
 
   const noMd =
     "\n- Không dùng markdown: không viết ** hoặc __ để in đậm; giá ghi bình thường (vd: 550k).";

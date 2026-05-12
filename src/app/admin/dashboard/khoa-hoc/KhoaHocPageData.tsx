@@ -1,4 +1,4 @@
-import { fetchMonHocLopAndStudentCounts } from "@/lib/data/admin-khoa-hoc-stats";
+import { fetchMonHocLopAndStudentCounts, fetchPublicKhoaSlugByMonIds } from "@/lib/data/admin-khoa-hoc-stats";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 import KhoaHocListView, { type AdminMonRow } from "./KhoaHocListView";
@@ -33,7 +33,23 @@ export default async function KhoaHocPageData() {
   const monIds = (monRes.data ?? [])
     .map((raw) => Number((raw as { id?: unknown }).id))
     .filter((id) => Number.isFinite(id) && id > 0);
-  const countsByMon = await fetchMonHocLopAndStudentCounts(supabase, monIds);
+
+  const slugSource = (monRes.data ?? []).map((raw) => {
+    const r = raw as { id?: unknown; ten_mon_hoc?: unknown };
+    const id = Number(r.id);
+    return {
+      id: Number.isFinite(id) && id > 0 ? id : 0,
+      ten_mon_hoc: String(r.ten_mon_hoc ?? "").trim() || "—",
+    };
+  });
+
+  const [countsByMon, slugByMon] = await Promise.all([
+    fetchMonHocLopAndStudentCounts(supabase, monIds),
+    fetchPublicKhoaSlugByMonIds(
+      supabase,
+      slugSource.filter((s) => s.id > 0),
+    ),
+  ]);
 
   const allRows: AdminMonRow[] = (monRes.data ?? []).map((raw) => {
     const r = raw as {
@@ -72,6 +88,7 @@ export default async function KhoaHocPageData() {
           : null,
       so_lop_hoc: c.soLop,
       so_hoc_vien: c.soHocVien,
+      public_slug: slugByMon.get(monId) ?? null,
     };
   });
 
@@ -87,6 +104,7 @@ export default async function KhoaHocPageData() {
         listStats={{ total, featured: featuredInPool }}
         dbEmpty={dbEmpty}
         searchHadNoMatch={false}
+        publicCourseOrigin="https://www.sineart.vn"
       />
     </div>
   );

@@ -32,7 +32,7 @@ type EnrollRow = { lop_hoc: number | null };
 const MON_HOC_CARD_SELECT =
   "id, ten_mon_hoc, loai_khoa_hoc, thumbnail, is_featured, hinh_thuc, thu_tu_hien_thi, si_so, video_gioi_thieu, gioi_thieu_mon_hoc, ket_qua_dat_duoc";
 
-function normalizeClassSlug(urlClass: string | null | undefined): string {
+export function normalizeClassSlug(urlClass: string | null | undefined): string {
   const raw = String(urlClass ?? "").trim();
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) {

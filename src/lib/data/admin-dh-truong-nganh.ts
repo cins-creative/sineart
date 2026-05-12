@@ -13,6 +13,14 @@ export type AdminDhTruongLookup = {
   score: number | null;
 };
 
+/** Thẻ danh sách trường admin — thêm số HV đăng ký thi & số ngành từ `dh_truong_nganh`. */
+export type AdminDhTruongListCard = AdminDhTruongLookup & {
+  /** Học viên distinct có ≥1 dòng `ql_hv_truong_nganh` cho trường này. */
+  hocVienDangKyThi: number;
+  /** Số dòng `dh_truong_nganh` (= ngành đào tạo gắn với trường). */
+  soNganhDaoTao: number;
+};
+
 export type AdminDhTruongNganhRow = {
   truong_id: number;
   ten_truong: string;
@@ -93,7 +101,7 @@ function sortKeyScore(v: number | null): number {
 }
 
 /** Client/server — dropdown & API: điểm thấp trước, không có điểm cuối cùng. */
-export function sortDhTruongLookupByScore(rows: readonly AdminDhTruongLookup[]): AdminDhTruongLookup[] {
+export function sortDhTruongLookupByScore<T extends AdminDhTruongLookup>(rows: readonly T[]): T[] {
   return [...rows].sort((a, b) => {
     const sa = sortKeyScore(a.score);
     const sb = sortKeyScore(b.score);
@@ -191,6 +199,62 @@ function nIdLoose(v: unknown): number | null {
   }
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Gom nhanh cho thẻ danh sách trường: HV distinct theo `truong_dai_hoc` trong `ql_hv_truong_nganh`,
+ * và số ngành (số dòng `dh_truong_nganh`) theo từng trường.
+ */
+export async function fetchAdminDhTruongListCardAggregates(
+  supabase: SupabaseClient,
+): Promise<
+  | { ok: true; hvCountByTruong: Map<number, number>; nganhCountByTruong: Map<number, number> }
+  | { ok: false; error: string }
+> {
+  const truongToHv = new Map<number, Set<number>>();
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("ql_hv_truong_nganh")
+      .select("truong_dai_hoc, hoc_vien")
+      .range(from, from + STUDENT_PAGE - 1);
+    if (error) return { ok: false, error: error.message };
+    const batch = (data ?? []) as Record<string, unknown>[];
+    if (!batch.length) break;
+    for (const r of batch) {
+      const tid = nIdLoose(r.truong_dai_hoc);
+      const hv = nIdLoose(r.hoc_vien);
+      if (tid == null || hv == null) continue;
+      if (!truongToHv.has(tid)) truongToHv.set(tid, new Set());
+      truongToHv.get(tid)!.add(hv);
+    }
+    if (batch.length < STUDENT_PAGE) break;
+    from += STUDENT_PAGE;
+  }
+
+  const nganhCountByTruong = new Map<number, number>();
+  from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("dh_truong_nganh")
+      .select("truong_dai_hoc")
+      .range(from, from + STUDENT_PAGE - 1);
+    if (error) return { ok: false, error: error.message };
+    const batch = (data ?? []) as Record<string, unknown>[];
+    if (!batch.length) break;
+    for (const r of batch) {
+      const tid = nIdLoose(r.truong_dai_hoc);
+      if (tid == null) continue;
+      nganhCountByTruong.set(tid, (nganhCountByTruong.get(tid) ?? 0) + 1);
+    }
+    if (batch.length < STUDENT_PAGE) break;
+    from += STUDENT_PAGE;
+  }
+
+  const hvCountByTruong = new Map<number, number>();
+  for (const [tid, set] of truongToHv) hvCountByTruong.set(tid, set.size);
+
+  return { ok: true, hvCountByTruong, nganhCountByTruong };
 }
 
 function parseNamThi(v: unknown): number | null {

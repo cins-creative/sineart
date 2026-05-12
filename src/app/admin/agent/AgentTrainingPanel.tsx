@@ -33,6 +33,10 @@ const SUGGESTED_QUESTIONS = [
   "Cho link đăng ký",
 ];
 
+/** Tin thay thế khi API chat / context lỗi — không hiển thị chi tiết kỹ thuật cho admin thử. */
+const AGENT_BUSY_FRIENDLY =
+  "Bạn đợi ad xíu nhé, ad có việc xử lý gấp rồi quay lại ngay";
+
 type ContextInfo = {
   updated: string;
   faqCount: number;
@@ -52,6 +56,28 @@ function formatContextTime(iso: string): string {
   });
 }
 
+/** Tránh `res.json()` ném lỗi khi body rỗng / HTML lỗi (502 gateway, timeout). */
+async function parseJsonBody<T>(res: Response): Promise<T> {
+  const raw = await res.text();
+  if (!raw.trim()) {
+    if (!res.ok) {
+      throw new Error(
+        `HTTP ${res.status} — phản hồi rỗng (timeout, gateway hoặc server crash). Thử lại.`,
+      );
+    }
+    return {} as T;
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new Error(
+      res.ok
+        ? "Phản hồi không phải JSON hợp lệ — thử lại."
+        : `HTTP ${res.status} — không đọc được JSON (thường là trang lỗi HTML).`,
+    );
+  }
+}
+
 export default function AgentTrainingPanel() {
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
@@ -67,13 +93,22 @@ export default function AgentTrainingPanel() {
     setCtxRefreshNote(null);
     try {
       const res = await fetch("/api/agent-context", { cache: "no-store" });
-      if (!res.ok) throw new Error(String(res.status));
-      const data = (await res.json()) as {
+      const data = await parseJsonBody<{
         updated?: string;
         faq?: unknown[];
         dh_exam_profiles?: unknown[];
         available_classes?: unknown[];
-      };
+      }>(res);
+      if (!res.ok) {
+        const err =
+          data &&
+          typeof data === "object" &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : `HTTP ${res.status}`;
+        throw new Error(err);
+      }
       setCtx({
         updated: data.updated ?? new Date().toISOString(),
         faqCount: Array.isArray(data.faq) ? data.faq.length : 0,
@@ -86,7 +121,6 @@ export default function AgentTrainingPanel() {
       });
     } catch {
       setCtx(null);
-      setCtxRefreshNote("Không tải được context.");
     } finally {
       setCtxLoading(false);
     }
@@ -128,14 +162,17 @@ export default function AgentTrainingPanel() {
           history: historyPayload,
         }),
       });
-      const data = (await res.json()) as {
+      const data = await parseJsonBody<{
         reply?: string;
         replyParts?: string[];
         error?: string;
         attachments?: PickedFaqAttachments;
-      };
+      }>(res);
       if (!res.ok) {
-        throw new Error(data.error ?? `HTTP ${res.status}`);
+        throw new Error(
+          data.error ??
+            `HTTP ${res.status} — không có thông báo lỗi từ server.`,
+        );
       }
       const parts =
         Array.isArray(data.replyParts) && data.replyParts.length > 0 ?
@@ -155,14 +192,12 @@ export default function AgentTrainingPanel() {
           ...(hasAtt ? { attachments: att } : {}),
         },
       ]);
-    } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : "Không gửi được tin. Thử lại.";
+    } catch {
       setMessages((m) => [
         ...m,
         {
           role: "assistant",
-          content: `⚠️ ${msg}`,
+          content: AGENT_BUSY_FRIENDLY,
         },
       ]);
     } finally {
@@ -379,11 +414,11 @@ export default function AgentTrainingPanel() {
               </li>
             </ul>
           ) : (
-            <p className="mt-3 text-[12px] text-amber-800">Không đọc được context.</p>
+            <p className="mt-3 text-[12px] text-black/65">{AGENT_BUSY_FRIENDLY}</p>
           )}
 
           {ctxRefreshNote ? (
-            <p className="mt-2 text-[12px] text-red-700">{ctxRefreshNote}</p>
+            <p className="mt-2 text-[12px] text-black/70">{ctxRefreshNote}</p>
           ) : null}
 
           <button

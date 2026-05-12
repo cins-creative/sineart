@@ -1,15 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { fetchAdminGoiHocPhiBundle } from "@/lib/data/admin-goi-hoc-phi";
-
 /** Prompt: chỉ mẫu đại diện — đủ tra cứu; đầy đủ trong DB + tool query_courses. */
 const MAX_LOP_LINES = 22;
-const MAX_GOI_LINES = 28;
-
-function fmtMoney(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(Number(n))) return "—";
-  return `${Math.round(Number(n)).toLocaleString("vi-VN")}đ`;
-}
 
 function truthyTinhTrang(v: unknown): boolean {
   return v !== false && v !== "false" && v !== 0 && v !== "0";
@@ -37,7 +29,7 @@ export type AgentOperationalCatalogResult = {
 
 /**
  * Dữ liệu vận hành đồng bộ trang admin: Chi nhánh (`ql_chi_nhanh`), Khóa/môn (`ql_mon_hoc`),
- * Lớp (`ql_lop_hoc`), Gói học phí (`hp_goi_hoc_phi*` qua `fetchAdminGoiHocPhiBundle`).
+ * Lớp (`ql_lop_hoc`). Không nạp bảng gói học phí — agent không dùng học phí trong chat.
  */
 export async function fetchAgentOperationalCatalog(
   supabase: SupabaseClient,
@@ -65,7 +57,7 @@ export async function fetchAgentOperationalCatalog(
     }
   }
 
-  const [monRes, lopRes, goiBundle] = await Promise.all([
+  const [monRes, lopRes] = await Promise.all([
     supabase
       .from("ql_mon_hoc")
       .select("id, ten_mon_hoc, loai_khoa_hoc, hinh_thuc")
@@ -76,7 +68,6 @@ export async function fetchAgentOperationalCatalog(
         "id, class_name, class_full_name, mon_hoc, chi_nhanh_id, lich_hoc, url_class, device, special, tinh_trang, level_hinh_hoa",
       )
       .order("class_full_name", { ascending: true }),
-    fetchAdminGoiHocPhiBundle(supabase),
   ]);
 
   if (branchSelectErr) {
@@ -87,9 +78,6 @@ export async function fetchAgentOperationalCatalog(
   }
   if (lopRes.error) {
     warnings.push(`Lớp học (ql_lop_hoc): ${lopRes.error.message}`);
-  }
-  if (goiBundle.loadError) {
-    warnings.push(`Gói học phí: ${goiBundle.loadError}`);
   }
 
   const branchRows = (branchData ?? []) as {
@@ -232,65 +220,14 @@ export async function fetchAgentOperationalCatalog(
           })
           .join("\n");
 
-  const monLabel = (mid: number | null) =>
-    mid != null && monById.has(mid) ? monById.get(mid)! : mid != null ? `môn id ${mid}` : "—";
-
-  const goiRowsPrompt = goiBundle.rows.slice(0, MAX_GOI_LINES);
-  const goiTruncated = goiBundle.rows.length > MAX_GOI_LINES;
-  if (goiTruncated) {
-    warnings.push(
-      `Gói học phí: chỉ ${MAX_GOI_LINES}/${goiBundle.rows.length} dòng trong prompt — đủ tra giá; chi tiết đầy đủ trong admin.`,
-    );
-  }
-
-  const goiLines =
-    goiBundle.rows.length === 0
-      ? "(Không đọc được gói học phí hoặc danh sách trống.)"
-      : goiRowsPrompt
-          .map((g) => {
-            const parts: string[] = [];
-            parts.push(`id ${g.id}`);
-            parts.push(monLabel(g.mon_hoc));
-            parts.push(`gốc ${fmtMoney(g.gia_goc)}`);
-            if (g.discount != null && Number(g.discount) > 0) {
-              parts.push(`giảm ${fmtMoney(g.discount)}`);
-              if (g.gia_goc != null && Number.isFinite(Number(g.gia_goc)) && Number.isFinite(Number(g.discount))) {
-                parts.push(`còn ${fmtMoney(Number(g.gia_goc) - Number(g.discount))}`);
-              }
-            }
-            if (g.so_buoi != null) parts.push(`${g.so_buoi} buổi`);
-            return `- ${parts.join(" · ")}`;
-          })
-          .join("\n");
-
-  const MAX_COMBO_LINES = 8;
-  const comboActive = goiBundle.comboOptions.filter((c) => c.dang_hoat_dong).slice(0, MAX_COMBO_LINES);
-  const comboTruncated =
-    goiBundle.comboOptions.filter((c) => c.dang_hoat_dong).length > MAX_COMBO_LINES;
-  if (comboTruncated) {
-    warnings.push(`Combo môn: chỉ ${MAX_COMBO_LINES} dòng đầu trong prompt.`);
-  }
-  const comboSection =
-    comboActive.length === 0
-      ? ""
-      : `\nCOMBO MÔN (hp_combo_mon — đang hoạt động):\n${comboActive
-          .map(
-            (c) =>
-              `- combo id ${c.id} — ${c.ten_combo} — giảm combo ${fmtMoney(c.gia_giam)} — gồm gói id: ${c.goi_ids.join(", ")}`,
-          )
-          .join("\n")}`;
-
   const promptAppend = [
-    "Giá/lịch/chi nhánh chỉ theo khối dưới + KB; không bịa.",
+    "Chi nhánh, môn, lịch lớp theo khối dưới + KB + tool query_courses; không bịa. Học phí không có trong khối này — không nêu số tiền trong chat (xem system prompt).",
     "",
     `CHI NHÁNH (ql_chi_nhanh):\n${branchesLines}`,
     "",
     `KHÓA HỌC / MÔN (ql_mon_hoc):\n${monLines}`,
     "",
     `LỚP ĐANG HOẠT ĐỘNG (ql_lop_hoc, tinh_trang đang bật)${truncatedLop ? " — đã cắt bớt nếu quá dài" : ""}:\n${lopLines}`,
-    "",
-    `GÓI HỌC PHÍ — bảng ${goiBundle.tableName} (đồng bộ trang admin Gói học phí):\n${goiLines}`,
-    comboSection.trimEnd(),
     warnings.length ? `\nLưu ý tải dữ liệu: ${warnings.join(" | ")}` : "",
   ]
     .filter((x) => x !== "")

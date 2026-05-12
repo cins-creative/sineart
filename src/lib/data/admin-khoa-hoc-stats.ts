@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { buildCourseSlugIndex, normalizeClassSlug, slugifyTenMonHoc } from "@/lib/data/courses-page";
 import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 
 const PAGE = 1000;
@@ -134,4 +135,65 @@ export async function fetchMonHocLopAndStudentCounts(
   }
 
   return map;
+}
+
+/**
+ * Slug đường dẫn `/khoa-hoc/[slug]` cho từng môn — ưu tiên `url_class` lớp (khớp site),
+ * fallback `idToSlug` từ `buildCourseSlugIndex` (tên môn).
+ */
+export async function fetchPublicKhoaSlugByMonIds(
+  supabase: SupabaseClient,
+  mons: { id: number; ten_mon_hoc: string }[],
+): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  const valid = mons.filter((m) => Number.isFinite(m.id) && m.id > 0);
+  if (!valid.length) return out;
+
+  const forIndex = valid.map(
+    (m) =>
+      ({
+        id: m.id,
+        ten_mon_hoc: m.ten_mon_hoc,
+        thumbnail: null,
+        loai_khoa_hoc: null,
+        thu_tu_hien_thi: 0,
+        is_featured: false,
+      }) as import("@/types/homepage").MonHoc,
+  );
+  const { idToSlug } = buildCourseSlugIndex(forIndex);
+
+  const monSet = new Set(valid.map((m) => m.id));
+  const lopSlugsByMon = new Map<number, Set<string>>();
+
+  const monIds = [...monSet];
+  for (let i = 0; i < monIds.length; i += IN_CHUNK) {
+    const chunk = monIds.slice(i, i + IN_CHUNK);
+    const { data, error } = await supabase
+      .from("ql_lop_hoc")
+      .select("mon_hoc, url_class")
+      .in("mon_hoc", chunk)
+      .not("url_class", "is", null);
+    if (error) break;
+    for (const raw of (data ?? []) as { mon_hoc?: unknown; url_class?: unknown }[]) {
+      const mid = Number(raw.mon_hoc);
+      if (!Number.isFinite(mid) || mid <= 0 || !monSet.has(mid)) continue;
+      const s = normalizeClassSlug(raw.url_class != null ? String(raw.url_class) : "");
+      if (!s) continue;
+      if (!lopSlugsByMon.has(mid)) lopSlugsByMon.set(mid, new Set());
+      lopSlugsByMon.get(mid)!.add(s);
+    }
+  }
+
+  for (const m of valid) {
+    const nameSlug = idToSlug.get(m.id) ?? slugifyTenMonHoc(m.ten_mon_hoc);
+    const cand = lopSlugsByMon.get(m.id);
+    let slug = nameSlug;
+    if (cand?.size) {
+      if (cand.has(nameSlug)) slug = nameSlug;
+      else slug = [...cand].sort((a, b) => a.localeCompare(b, "vi"))[0] ?? nameSlug;
+    }
+    out.set(m.id, slug);
+  }
+
+  return out;
 }

@@ -7,12 +7,12 @@ import { GraduationCap, School } from "lucide-react";
 import {
   buildDhTruongSlug,
   sortDhTruongLookupByScore,
-  type AdminDhTruongLookup,
+  type AdminDhTruongListCard,
 } from "@/lib/data/admin-dh-truong-nganh";
 import { cn } from "@/lib/utils";
 
 type Props = {
-  truongs: AdminDhTruongLookup[];
+  truongs: AdminDhTruongListCard[];
   missingServiceRole?: boolean;
   loadError?: string | null;
 };
@@ -32,7 +32,7 @@ export default function DhTruongListView({ truongs, missingServiceRole, loadErro
   return (
     <div
       className={cn(
-        "-m-4 flex min-h-[calc(100vh-5.5rem)] w-[calc(100%+2rem)] max-w-none min-w-0 flex-col gap-4 bg-[#F5F7F7] px-4 py-5 font-sans text-[#323232] md:-m-6 md:w-[calc(100%+3rem)] md:px-6",
+        "-m-4 flex min-h-[calc(100vh-5.5rem)] w-[calc(100%+2rem)] max-w-none min-w-0 flex-col gap-4 bg-[#F5F7F7] px-4 py-5 text-[#323232] md:-m-6 md:w-[calc(100%+3rem)] md:px-6",
       )}
     >
       <div className="min-w-0">
@@ -76,13 +76,12 @@ export default function DhTruongListView({ truongs, missingServiceRole, loadErro
                     <GraduationCap className="mt-0.5 h-5 w-5 shrink-0 text-[#EE5CA2]" aria-hidden />
                     <span className="text-[15px] font-extrabold leading-snug text-[#1a1a2e]">{t.ten}</span>
                   </span>
-                  {t.score != null ? (
-                    <span className="mt-2 text-[11px] font-bold text-black/40">Score (ưu tiên): {t.score}</span>
-                  ) : (
-                    <span className="mt-2 text-[11px] font-semibold text-black/30">—</span>
-                  )}
-                  <span className="mt-3 text-[11px] font-extrabold uppercase tracking-wide text-[#EE5CA2]">
-                    Mở trường →
+                  <span className="mt-2 text-[11px] font-bold leading-snug text-black/40">
+                    Tổng học viên Sine Art đăng ký thi trường này:{" "}
+                    <span className="text-[#1a1a2e]">{t.hocVienDangKyThi}</span>
+                  </span>
+                  <span className="mt-3 text-[11px] font-extrabold tracking-tight text-[#323232]">
+                    {t.soNganhDaoTao} ngành đào tạo
                   </span>
                 </Link>
               </li>

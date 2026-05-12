@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { BookOpen, ExternalLink, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 
 import type { KhoaHocFormState } from "@/app/admin/dashboard/khoa-hoc/actions";
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
@@ -28,6 +28,8 @@ export type AdminMonRow = {
   so_lop_hoc: number;
   /** Số học viên distinct (ghi danh hoạt động trên các lớp của môn) */
   so_hoc_vien: number;
+  /** Slug trang công khai `/khoa-hoc/[slug]` (từ lớp `url_class` hoặc tên môn). */
+  public_slug: string | null;
 };
 
 const LOAI_KHOA = ["Luyện thi", "Digital", "Kids", "Bổ trợ"] as const;
@@ -50,6 +52,8 @@ type Props = {
   listStats?: { total: number; featured: number };
   dbEmpty?: boolean;
   searchHadNoMatch?: boolean;
+  /** Origin trang khóa học công khai (vd https://www.sineart.vn). */
+  publicCourseOrigin?: string;
 };
 
 function loaiBadgeColors(loai: string | null): { bg: string; text: string } | null {
@@ -90,11 +94,13 @@ function MonHocCard({
   onEdit,
   onAskDelete,
   canDelete,
+  publicCourseOrigin,
 }: {
   item: AdminMonRow;
   onEdit: () => void;
   onAskDelete: () => void;
   canDelete: boolean;
+  publicCourseOrigin: string;
 }) {
   const loaiCfg = loaiBadgeColors(item.loai_khoa_hoc);
   const [imgErr, setImgErr] = useState(false);
@@ -141,6 +147,19 @@ function MonHocCard({
         <p className="mt-1 text-[11px] tabular-nums text-[#AAAAAA]">
           {item.so_lop_hoc} lớp · {item.so_hoc_vien} học viên
         </p>
+        {item.public_slug ? (
+          <a
+            href={`${publicCourseOrigin.replace(/\/$/, "")}/khoa-hoc/${encodeURIComponent(item.public_slug)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1.5 flex min-w-0 items-center gap-1 text-[10px] font-semibold text-[#BC8AF9] underline-offset-2 hover:underline"
+          >
+            <ExternalLink size={11} className="shrink-0 opacity-80" aria-hidden />
+            <span className="min-w-0 truncate">
+              {publicCourseOrigin.replace(/^https?:\/\//i, "").replace(/\/$/, "")}/khoa-hoc/{item.public_slug}
+            </span>
+          </a>
+        ) : null}
       </div>
       <div className="flex border-t border-[#F5F7F7]">
         <button
@@ -463,6 +482,7 @@ export default function KhoaHocListView({
   listStats,
   dbEmpty = false,
   searchHadNoMatch = false,
+  publicCourseOrigin = "https://www.sineart.vn",
 }: Props) {
   const { canDelete } = useAdminDashboardAbilities();
   const router = useRouter();
@@ -551,6 +571,7 @@ export default function KhoaHocListView({
                   <MonHocCard
                     item={item}
                     canDelete={canDelete}
+                    publicCourseOrigin={publicCourseOrigin}
                     onEdit={() => {
                       setEditing(item);
                       setPanel("edit");

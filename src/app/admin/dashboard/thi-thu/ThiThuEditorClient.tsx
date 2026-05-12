@@ -70,6 +70,8 @@ export default function ThiThuEditorClient({
   const [uploadLichPct, setUploadLichPct] = useState(0);
   const [uploadThumbErr, setUploadThumbErr] = useState<string | null>(null);
   const [uploadLichErr, setUploadLichErr] = useState<string | null>(null);
+  /** Một dòng bài nộp — bấm dòng trong bảng để xem toàn bộ ảnh trong modal. */
+  const [baiNopDetail, setBaiNopDetail] = useState<ThiThuBaiNopRow | null>(null);
   const clearedSavedFlash = useRef(false);
   const [tieuDe, setTieuDe] = useState(initial?.tieu_de ?? "");
   const [monThi, setMonThi] = useState<MonThiKey>((initial?.mon_thi as MonThiKey) ?? "hinh_hoa");
@@ -116,6 +118,15 @@ export default function ThiThuEditorClient({
     });
     router.replace(pathname);
   }, [initial?.id, initialSavedFlash, pathname, router]);
+
+  useEffect(() => {
+    if (!baiNopDetail) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") setBaiNopDetail(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [baiNopDetail]);
 
   const cfg = useMemo(() => getMonConfig(monThi), [monThi]);
 
@@ -710,7 +721,20 @@ export default function ThiThuEditorClient({
                   {baiNop.map((b) => {
                     const n = b.anh_bai_nop_urls?.length ?? 0;
                     return (
-                      <tr key={b.id}>
+                      <tr
+                        key={b.id}
+                        className="tti-bai-nop-row-click"
+                        tabIndex={0}
+                        role="button"
+                        title="Bấm để xem toàn bộ ảnh bài nộp"
+                        onClick={() => setBaiNopDetail(b)}
+                        onKeyDown={(ev) => {
+                          if (ev.key === "Enter" || ev.key === " ") {
+                            ev.preventDefault();
+                            setBaiNopDetail(b);
+                          }
+                        }}
+                      >
                         <td className="tti-bai-nop-cell-name">{b.ho_ten}</td>
                         <td className="tti-bai-nop-cell-fb">{b.facebook?.trim() ? b.facebook : "—"}</td>
                         <td className="tti-bai-nop-cell-time" title={new Date(b.thoi_gian_nop).toISOString()}>
@@ -726,6 +750,71 @@ export default function ThiThuEditorClient({
               </table>
             </div>
           )}
+        </div>
+      ) : null}
+
+      {baiNopDetail ? (
+        <div
+          className="tti-modal-overlay"
+          role="presentation"
+          onMouseDown={(ev) => {
+            if (ev.target === ev.currentTarget) setBaiNopDetail(null);
+          }}
+        >
+          <div
+            className="tti-modal-card tti-modal-card--nop-list tti-modal-card--nop-detail"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tti-editor-nop-detail-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="tti-modal-nop-hd">
+              <h2 id="tti-editor-nop-detail-title" className="tti-modal-nop-title">
+                Bài nộp — {baiNopDetail.ho_ten}
+              </h2>
+              <p className="tti-modal-nop-sub">
+                {new Date(baiNopDetail.thoi_gian_nop).toLocaleString("vi-VN")}
+                {" · "}
+                {baiNopDetail.anh_bai_nop_urls?.length ?? 0} ảnh
+                {baiNopDetail.facebook?.trim() ? ` · ${baiNopDetail.facebook.trim()}` : ""}
+              </p>
+            </div>
+            <div className="tti-modal-nop-body tti-modal-nop-body--editor-detail">
+              <section className="tti-nop-submission tti-nop-submission--single">
+                {baiNopDetail.ghi_chu?.trim() ? (
+                  <p className="tti-editor-nop-ghi-chu">{baiNopDetail.ghi_chu.trim()}</p>
+                ) : null}
+                {(baiNopDetail.anh_bai_nop_urls?.length ?? 0) > 0 ? (
+                  <div className="tti-nop-img-grid tti-nop-img-grid--single">
+                    {baiNopDetail.anh_bai_nop_urls.map((url, idx) => (
+                      <a
+                        key={`${baiNopDetail.id}-${idx}`}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="tti-nop-img-cell"
+                        title={`Mở ảnh gốc ${idx + 1}/${baiNopDetail.anh_bai_nop_urls.length}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt={`Bài nộp ${baiNopDetail.ho_ten} — ảnh ${idx + 1}`}
+                          loading="lazy"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="tti-nop-empty-imgs">Không có file ảnh trong bài nộp này.</div>
+                )}
+              </section>
+            </div>
+            <div className="tti-modal-nop-foot">
+              <button type="button" className="tti-modal-btn" onClick={() => setBaiNopDetail(null)}>
+                Đóng
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 

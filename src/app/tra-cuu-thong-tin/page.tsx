@@ -1,61 +1,31 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { JsonLd } from "@/components/seo/JsonLd";
 import NavBar from "../_components/NavBar";
 import TraCuuListClient from "./TraCuuListClient";
 import { TraCuuStyles } from "./TraCuuStyles";
 import { fetchAllTraCuu, fetchTruongLookup } from "@/lib/data/tra-cuu";
+import { buildTraCuuCatalogJsonLd } from "@/lib/seo/tra-cuu-jsonld";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
-import {
-  buildTraCuuListingBreadcrumbJsonLd,
-  buildTraCuuListingCollectionJsonLd,
-} from "@/lib/seo/tra-cuu-jsonld";
-import { SITE_OG_DEFAULT_IMAGE, SITE_ORIGIN } from "@/lib/seo/site-jsonld";
 
 export const revalidate = 600;
 
-const LISTING_PATH = "/tra-cuu-thong-tin" as const;
-const LISTING_URL = `${SITE_ORIGIN}${LISTING_PATH}` as const;
-
-/** Không ghi «| Sine Art» — root `title.template` đã thêm suffix. */
-const LISTING_TITLE = "Tra cứu thông tin thi đại học mỹ thuật";
-
-const LISTING_OG_IMAGE = {
-  url: SITE_OG_DEFAULT_IMAGE,
-  width: 1200,
-  height: 630,
-  alt: "Tra cứu thông tin thi đại học mỹ thuật — Sine Art",
-} as const;
-
-export async function generateMetadata(): Promise<Metadata> {
-  const items = await fetchAllTraCuu();
-  const n = items.length;
-  const description = `${n} bài tra cứu thông tin tuyển sinh mỹ thuật — điểm chuẩn, phương thức xét tuyển, cách tính điểm từ 15+ trường đại học. Cập nhật hàng năm bởi Sine Art.`;
-
-  return {
-    title: LISTING_TITLE,
-    description,
-    alternates: { canonical: LISTING_URL },
-    robots: { index: true, follow: true },
-    openGraph: {
-      title: `${LISTING_TITLE} | Sine Art`,
-      description,
-      url: LISTING_URL,
-      type: "website",
-      locale: "vi_VN",
-      siteName: "Sine Art",
-      images: [LISTING_OG_IMAGE],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: `${LISTING_TITLE} | Sine Art`,
-      description,
-      images: [SITE_OG_DEFAULT_IMAGE],
-    },
-  };
-}
+export const metadata: Metadata = {
+  title: "Thông tin thi đại học mỹ thuật | Sine Art",
+  description:
+    "Điểm chuẩn, phương thức xét tuyển, cách tính điểm, chương trình học và kinh nghiệm thi từ các trường đại học đối tác — cập nhật thường xuyên bởi Sine Art.",
+  alternates: { canonical: "https://sineart.vn/tra-cuu-thong-tin" },
+  openGraph: {
+    title: "Tra cứu thông tin thi đại học mỹ thuật | Sine Art",
+    description:
+      "Điểm chuẩn, xét tuyển, cách tính điểm và kinh nghiệm thi từ các trường đại học — Sine Art.",
+    url: "https://sineart.vn/tra-cuu-thong-tin",
+    type: "website",
+    locale: "vi_VN",
+    siteName: "Sine Art",
+  },
+};
 
 export default async function TraCuuListPage() {
   const [items, truongLookup, { courses }] = await Promise.all([
@@ -68,13 +38,15 @@ export default async function TraCuuListPage() {
   const totalTruong = new Set(items.flatMap((it) => it.truong_ids)).size;
   const totalTypes = new Set(items.flatMap((it) => it.type)).size;
 
-  const collectionJsonLd = buildTraCuuListingCollectionJsonLd(items.length);
-  const breadcrumbJsonLd = buildTraCuuListingBreadcrumbJsonLd();
+  const catalogJsonLd = buildTraCuuCatalogJsonLd(items);
 
   return (
     <div className="sa-root sa-tracuu">
-      <JsonLd schema={collectionJsonLd} />
-      <JsonLd schema={breadcrumbJsonLd} />
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(catalogJsonLd) }}
+      />
       <NavBar khoaHocGroups={khoaHocGroups} />
 
       {/* HERO */}

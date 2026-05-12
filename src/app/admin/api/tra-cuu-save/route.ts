@@ -53,6 +53,7 @@ export async function POST(req: Request) {
     published_at: patch.published_at ?? new Date().toISOString(),
     truong_ids: patch.truong_ids ?? [],
     type: patch.type ?? [],
+    album: patch.album ?? [],
   };
 
   const { data, error } = await supabase

@@ -12,7 +12,7 @@
  * markup `<img>` hiện rõ trong HTML source để crawler index.
  */
 
-import { cfImageForThumbnail, cfImageForLightbox } from "@/lib/cfImageUrl";
+import { cfImageForThumbnail, cfImageForLightbox, cfImageNormalizeAccount } from "@/lib/cfImageUrl";
 
 type Props = {
   images: string[];
@@ -36,8 +36,9 @@ export function TraCuuAlbumGallery({ images, title }: Props) {
   return (
     <section className={`bd-tc-album ${layoutClass}`} aria-label={`Thư viện ảnh: ${title}`}>
       {urls.map((url, i) => {
-        const thumb = cfImageForThumbnail(url) ?? url;
-        const full = cfImageForLightbox(url) ?? url;
+        const resolved = (cfImageNormalizeAccount(url) ?? url).trim();
+        const thumb = cfImageForThumbnail(resolved) ?? resolved;
+        const full = cfImageForLightbox(resolved) ?? resolved;
         const alt = buildAlt(title, i, count);
         return (
           <figure key={`${i}-${url}`} className="bd-tc-album-fig">

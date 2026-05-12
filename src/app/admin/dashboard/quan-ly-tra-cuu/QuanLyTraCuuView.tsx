@@ -421,9 +421,10 @@ export default function QuanLyTraCuuView({
 }
 
 function toList(r: AdminTraCuuFullRow): AdminTraCuuListRow {
-  const { body_html: _body_html, updated_at: _updated_at, ...rest } = r;
+  const { body_html: _body_html, updated_at: _updated_at, album: _album, ...rest } = r;
   void _body_html;
   void _updated_at;
+  void _album;
   return rest;
 }
 
@@ -437,6 +438,8 @@ type EditorForm = {
   slugManuallyEdited: boolean;
   thumbnail_url: string;
   thumbnail_alt: string;
+  /** URL ảnh album — hiển thị đầu bài `/tra-cuu-thong-tin/[slug]`. */
+  album: string[];
   nam: string;
   excerpt: string;
   body_html: string;
@@ -454,6 +457,7 @@ function initialForm(mode: ModalMode): EditorForm {
       slugManuallyEdited: false,
       thumbnail_url: "",
       thumbnail_alt: "",
+      album: [],
       nam: "",
       excerpt: "",
       body_html: "",
@@ -470,6 +474,7 @@ function initialForm(mode: ModalMode): EditorForm {
     slugManuallyEdited: true,
     thumbnail_url: v.thumbnail_url ?? "",
     thumbnail_alt: v.thumbnail_alt ?? "",
+    album: Array.isArray(v.album) ? [...v.album] : [],
     nam: v.nam != null ? String(v.nam) : "",
     excerpt: v.excerpt ?? "",
     body_html: v.body_html ?? "",
@@ -566,6 +571,7 @@ function TraCuuEditorModal({
         slug: form.slug.trim() || slugifyVi(form.title),
         thumbnail_url: form.thumbnail_url.trim() || null,
         thumbnail_alt: form.thumbnail_alt.trim() || form.title.trim(),
+        album: form.album.map((u) => u.trim()).filter(Boolean),
         nam: form.nam.trim() ? Number(form.nam) : null,
         excerpt: form.excerpt.trim() || null,
         body_html: form.body_html.trim() || null,
@@ -683,6 +689,62 @@ function TraCuuEditorModal({
                   placeholder="Mô tả ngắn gọn ảnh thumbnail"
                 />
               </label>
+
+              <div className="qlt-field">
+                <div className="qlt-label-row">
+                  <span className="qlt-label">Album ảnh (đầu bài public)</span>
+                  <button
+                    type="button"
+                    className="qlt-btn-ghost"
+                    onClick={() =>
+                      setForm((prev) => ({ ...prev, album: [...prev.album, ""] }))
+                    }
+                    disabled={saving}
+                  >
+                    <Plus size={14} /> Thêm ảnh
+                  </button>
+                </div>
+                <span className="qlt-hint">
+                  Upload từng URL Cloudflare — hiển thị dưới tiêu đề tại{" "}
+                  <code>/tra-cuu-thong-tin/…</code>. Có thể để trống toàn bộ nếu chỉ cần thumbnail.
+                </span>
+                <div className="qlt-album-list">
+                  {form.album.length === 0 ? (
+                    <p className="qlt-muted">Chưa có ảnh album — bấm «Thêm ảnh».</p>
+                  ) : (
+                    form.album.map((url, idx) => (
+                      <div key={`album-${idx}`} className="qlt-album-row">
+                        <AdminCfImageInput
+                          label={`Ảnh album ${idx + 1}`}
+                          value={url}
+                          onValueChange={(next) =>
+                            setForm((prev) => {
+                              const album = [...prev.album];
+                              album[idx] = next;
+                              return { ...prev, album };
+                            })
+                          }
+                          preview="banner"
+                        />
+                        <button
+                          type="button"
+                          className="qlt-icon-btn qlt-album-remove"
+                          aria-label="Xoá ảnh album"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              album: prev.album.filter((_, i) => i !== idx),
+                            }))
+                          }
+                          disabled={saving}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
 
               <div className="qlt-field-row">
                 <label className="qlt-field">
@@ -1381,6 +1443,16 @@ const QLT_CSS = `
   .qlt-label{font-size:12px;font-weight:600;color:#6b5c5c;letter-spacing:.02em;text-transform:uppercase}
   .qlt-hint{font-size:11.5px;color:#9c8a8a;line-height:1.4}
   .qlt-hint code{background:#fff4ec;padding:1px 6px;border-radius:6px;font-size:11px;color:#c45127;font-family:ui-monospace,SFMono-Regular,monospace}
+
+  .qlt-label-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .qlt-label-row .qlt-label{margin:0}
+  .qlt-album-list{display:flex;flex-direction:column;gap:12px;margin-top:8px}
+  .qlt-album-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}
+  .qlt-album-row > .qlt-field{min-width:0}
+  .qlt-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;border:1px solid rgba(45,32,32,.12);background:#fff;color:#b91c1c;cursor:pointer;transition:all .15s ease;flex-shrink:0}
+  .qlt-icon-btn:hover:not(:disabled){background:#fef2f2;border-color:#fecaca}
+  .qlt-icon-btn:disabled{opacity:.5;cursor:not-allowed}
+  .qlt-album-remove{align-self:center;margin-top:20px}
 
   .qlt-toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:#5a4a4a;cursor:pointer;padding:4px 0;user-select:none}
   .qlt-toggle input{width:16px;height:16px;accent-color:#ee5b9f}

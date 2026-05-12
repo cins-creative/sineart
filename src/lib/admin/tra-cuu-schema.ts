@@ -36,6 +36,8 @@ export type AdminTraCuuListRow = {
 export type AdminTraCuuFullRow = AdminTraCuuListRow & {
   body_html: string | null;
   updated_at: string | null;
+  /** URL ảnh album (Cloudflare Images / ngoài) — hiển thị đầu bài public. */
+  album: string[];
 };
 
 export type TruongLookupRow = { id: number; ten: string };
@@ -43,8 +45,8 @@ export type TruongLookupRow = { id: number; ten: string };
 /** Cột SELECT cho danh sách (không kèm `body_html` dài). `type` quote tránh 400 PostgREST. */
 export const TRA_CUU_LIST_COLS = `id, created_at, slug, title, thumbnail_url, thumbnail_alt, nam, excerpt, is_featured, published_at, truong_ids, "type"`;
 
-/** Cột SELECT chi tiết (có `body_html`). */
-export const TRA_CUU_FULL_COLS = `${TRA_CUU_LIST_COLS}, body_html, updated_at`;
+/** Cột SELECT chi tiết (có `body_html`, `album`). */
+export const TRA_CUU_FULL_COLS = `${TRA_CUU_LIST_COLS}, body_html, updated_at, album`;
 
 export function mapRowToList(raw: Record<string, unknown>): AdminTraCuuListRow {
   return {
@@ -68,6 +70,7 @@ export function mapRowToFull(raw: Record<string, unknown>): AdminTraCuuFullRow {
     ...mapRowToList(raw),
     body_html: asStrOrNull(raw.body_html),
     updated_at: asStrOrNull(raw.updated_at),
+    album: parseTraCuuAlbumFromDb(raw.album),
   };
 }
 
@@ -101,6 +104,76 @@ function asStrArray(v: unknown): string[] {
   return out;
 }
 
+/** Một URL từ phần tử album (chuỗi hoặc object jsonb). */
+function albumItemToUrl(it: unknown): string | null {
+  if (typeof it === "string") {
+    const t = it.trim();
+    return t.length > 0 ? t : null;
+  }
+  if (!it || typeof it !== "object" || Array.isArray(it)) return null;
+  const o = it as Record<string, unknown>;
+  for (const k of ["url", "src", "image", "href", "thumbnail_url", "publicUrl", "public_url"]) {
+    const s = o[k];
+    if (typeof s === "string" && s.trim()) return s.trim();
+  }
+  return null;
+}
+
+/**
+ * Chuẩn hoá `tra_cuu_thong_tin.album` từ Supabase (text[] / jsonb / JSON string / object bọc).
+ * Dùng chung admin mapRow + public `fetchTraCuuBySlug`.
+ */
+export function parseTraCuuAlbumFromDb(v: unknown): string[] {
+  if (v == null) return [];
+
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return [];
+    if (t.startsWith("[") || t.startsWith("{")) {
+      try {
+        return parseTraCuuAlbumFromDb(JSON.parse(t) as unknown);
+      } catch {
+        return [t];
+      }
+    }
+    return [t];
+  }
+
+  if (Array.isArray(v)) {
+    const out: string[] = [];
+    for (const it of v) {
+      const u = albumItemToUrl(it);
+      if (u) out.push(u);
+    }
+    return out;
+  }
+
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const keys = Object.keys(o);
+    if (
+      keys.length > 0 &&
+      keys.every((k) => /^\d+$/.test(k)) &&
+      !("url" in o) &&
+      !("src" in o)
+    ) {
+      const sorted = [...keys].sort((a, b) => Number(a) - Number(b)).map((k) => o[k]);
+      return parseTraCuuAlbumFromDb(sorted);
+    }
+    for (const key of ["images", "urls", "album", "photos", "items"] as const) {
+      const inner = o[key];
+      if (inner != null && inner !== v) {
+        const nested = parseTraCuuAlbumFromDb(inner);
+        if (nested.length > 0) return nested;
+      }
+    }
+    const single = albumItemToUrl(v);
+    return single ? [single] : [];
+  }
+
+  return [];
+}
+
 /** Slugify tiếng Việt — dùng cho cả UI preview và fallback phía server. */
 export function slugifyVi(input: string): string {
   return input
@@ -128,6 +201,7 @@ export type TraCuuUpsertPayload = {
   published_at: string | null;
   truong_ids: number[] | null;
   type: TraCuuTypeValue[] | null;
+  album: string[] | null;
 };
 
 type LooseInput = Record<string, unknown>;
@@ -158,6 +232,9 @@ export function normalizeUpsert(input: LooseInput): Partial<TraCuuUpsertPayload>
       TRA_CUU_TYPE_VALUES.has(v),
     );
     patch.type = arr;
+  }
+  if ("album" in input) {
+    patch.album = parseTraCuuAlbumFromDb(input.album);
   }
   return patch;
 }

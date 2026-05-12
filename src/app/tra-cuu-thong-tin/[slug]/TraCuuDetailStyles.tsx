@@ -32,11 +32,47 @@ const css = `
   .bd-tc-body strong,.bd-tc-body b{font-weight:700;color:#1a1a1a}
   .bd-tc-body hr{border:none;border-top:1px solid rgba(45,32,32,.08);margin:2em 0}
   .bd-tc-body img{max-width:100%;height:auto;border-radius:10px}
-  /* Table defaults — padding cho ô + margin, KHÔNG áp border/background toàn cục
-     để inline style của Claude (gradient header, zebra row, v.v.) tự quyết. */
-  .bd-tc-body table{width:100%;border-collapse:separate;border-spacing:0;margin:18px 0;font-size:14px}
-  .bd-tc-body th,.bd-tc-body td{padding:11px 14px;vertical-align:top}
-  .bd-tc-body thead th{font-weight:800}
+
+  /* Bảng dữ liệu (điểm chuẩn, v.v.): mỗi hàng = grid cột đều — dễ quét, nhiều cột thì scroll ngang.
+     thead/tbody display:block + tr display:grid + grid-auto-flow:column → số cột khớp số ô, không cần biết N trước. */
+  .bd-tc-body table{
+    display:block;
+    width:100%;
+    max-width:100%;
+    overflow-x:auto;
+    margin:18px 0;
+    font-size:14px;
+    border-radius:12px;
+    border:1px solid rgba(45,32,32,.1);
+    background:#fffdf9;
+    -webkit-overflow-scrolling:touch;
+    box-shadow:0 4px 14px rgba(45,32,32,.04);
+  }
+  .bd-tc-body thead,.bd-tc-body tbody{display:block;width:100%}
+  .bd-tc-body thead tr,.bd-tc-body tbody tr{
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:minmax(min(120px,28vw),1fr);
+    align-items:stretch;
+    min-width:min-content;
+  }
+  .bd-tc-body thead tr{
+    background:linear-gradient(135deg,rgba(248,166,104,.2),rgba(238,91,159,.12));
+    border-bottom:1px solid rgba(45,32,32,.1);
+  }
+  .bd-tc-body tbody tr:nth-child(even){background:rgba(250,246,242,.5)}
+  .bd-tc-body tbody tr:hover{background:rgba(248,166,104,.06)}
+  .bd-tc-body th,.bd-tc-body td{
+    padding:12px 14px;
+    vertical-align:top;
+    border-right:1px solid rgba(45,32,32,.06);
+    border-bottom:1px solid rgba(45,32,32,.07);
+    min-width:0;
+    line-height:1.45;
+  }
+  .bd-tc-body thead th:last-child,.bd-tc-body tbody td:last-child{border-right:none}
+  .bd-tc-body tbody tr:last-child td{border-bottom:none}
+  .bd-tc-body thead th{font-weight:800;color:#2d2020;font-size:13px;letter-spacing:.02em}
 
   /* Grid defaults — gap + margin khi Claude quên khai báo.
      Inline style="gap:..." của Claude sẽ override do specificity cao hơn. */

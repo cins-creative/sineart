@@ -7,6 +7,7 @@ import { BlogDetailStyles } from "../../blogs/[slug]/BlogDetailStyles";
 import { DeThiDetailStyles } from "./DeThiDetailStyles";
 import { DeThiHero } from "./DeThiHero";
 
+import { JsonLd } from "@/components/seo/JsonLd";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
 import {
   buildDeThiHref,
@@ -17,7 +18,11 @@ import {
   formatDateVi,
   monAccent,
 } from "@/lib/data/de-thi";
-import { buildTongHopDeThiDetailJsonLd } from "@/lib/seo/tong-hop-de-thi-jsonld";
+import {
+  buildTongHopDeThiDetailBreadcrumbJsonLd,
+  buildTongHopDeThiLearningResourceJsonLd,
+} from "@/lib/seo/tong-hop-de-thi-jsonld";
+import { SITE_OG_DEFAULT_IMAGE, SITE_ORIGIN } from "@/lib/seo/site-jsonld";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { getTopLuyenThiStudentWorks } from "@/lib/data/hv-bai-hoc-vien-gallery";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
@@ -26,26 +31,82 @@ export const revalidate = 600;
 
 type Props = { params: Promise<{ slug: string }> };
 
+function toAbsoluteUrl(u: string | undefined): string | undefined {
+  if (!u?.trim()) return undefined;
+  const t = u.trim();
+  if (/^https?:\/\//i.test(t)) return t;
+  return `${SITE_ORIGIN}${t.startsWith("/") ? "" : "/"}${t}`;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const post = await fetchDeThiBySlug(slug);
+  const [post, truongLookup] = await Promise.all([
+    fetchDeThiBySlug(slug),
+    fetchTruongLookup(),
+  ]);
   if (!post) return {};
-  const plain = post.excerpt
-    ? post.excerpt.replace(/<[^>]+>/g, " ").slice(0, 160)
-    : post.body_html?.replace(/<[^>]+>/g, " ").slice(0, 160) ?? "";
-  const title = post.ten ?? "Đề thi";
+
+  const truongNameById = new Map(truongLookup.map((t) => [t.id, t.ten]));
+  const tenTruong =
+    post.truong_ids.map((id) => truongNameById.get(id)).filter((s): s is string => !!s)[0] ??
+    null;
+  const monThi = post.mon[0]?.trim() ?? "Mỹ thuật";
+
+  const primaryOgTitle =
+    post.nam != null && tenTruong?.trim()
+      ? `Đề thi ${monThi} — ${tenTruong.trim()} ${post.nam}`
+      : post.ten?.trim() || "Đề thi";
+
+  const plain =
+    post.excerpt?.replace(/<[^>]+>/g, " ").trim().slice(0, 200) ||
+    post.body_html?.replace(/<[^>]+>/g, " ").trim().slice(0, 200) ||
+    `Đề thi ${monThi}${tenTruong ? ` ${tenTruong}` : ""}${post.nam != null ? ` năm ${post.nam}` : ""}. Kèm OCR đề gốc — Sine Art.`;
+
+  const rawThumb = post.thumbnail_url?.trim();
+  const thumbResolved = rawThumb ? cfImageForThumbnail(rawThumb) ?? rawThumb : undefined;
+  const thumbAbs = toAbsoluteUrl(thumbResolved);
+  const pagePath = buildDeThiHref(post.slug);
+  const pageUrl = `${SITE_ORIGIN}${pagePath}`;
+
+  const ogImages = thumbAbs
+    ? [{ url: thumbAbs, width: 1200, height: 630, alt: primaryOgTitle }]
+    : [
+        {
+          url: SITE_OG_DEFAULT_IMAGE,
+          width: 1200,
+          height: 630,
+          alt: `${primaryOgTitle} — Sine Art`,
+        },
+      ];
+  const twitterImg = thumbAbs ?? SITE_OG_DEFAULT_IMAGE;
+
+  const keywords = [
+    ...post.mon,
+    ...(post.nam != null ? [`Năm ${post.nam}`] : []),
+    ...(tenTruong ? [tenTruong] : []),
+    ...post.loai_mau_hinh_hoa,
+  ].filter(Boolean);
+
   return {
-    title: `${title} — Đề thi Sine Art`,
+    title: `${primaryOgTitle} — Đề thi`,
     description: plain,
-    alternates: { canonical: `https://sineart.vn/tong-hop-de-thi/${slug}` },
+    keywords: keywords.length > 0 ? keywords : undefined,
+    robots: { index: true, follow: true },
+    alternates: { canonical: pageUrl },
     openGraph: {
-      title,
+      title: primaryOgTitle,
       description: plain,
-      images: post.thumbnail_url ? [{ url: post.thumbnail_url }] : [],
-      url: `https://sineart.vn/tong-hop-de-thi/${slug}`,
-      type: "article",
-      locale: "vi_VN",
+      url: pageUrl,
       siteName: "Sine Art",
+      locale: "vi_VN",
+      type: "article",
+      images: ogImages,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: primaryOgTitle,
+      description: plain,
+      images: [twitterImg],
     },
   };
 }
@@ -91,7 +152,9 @@ export default async function DeThiDetailPage({ params }: Props) {
 
   const dateStr = formatDateVi(post.updated_at ?? post.created_at);
 
-  const jsonLd = buildTongHopDeThiDetailJsonLd(post);
+  const tenTruongPrimary = truongNames[0] ?? null;
+  const learningSchema = buildTongHopDeThiLearningResourceJsonLd(post, tenTruongPrimary);
+  const detailBreadcrumbSchema = buildTongHopDeThiDetailBreadcrumbJsonLd(post, tenTruongPrimary);
 
   return (
     <div className="sa-root bd">
@@ -299,13 +362,8 @@ export default async function DeThiDetailPage({ params }: Props) {
         </div>
       </div>
 
-      {jsonLd ? (
-        <script
-          type="application/ld+json"
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      ) : null}
+      {learningSchema ? <JsonLd schema={learningSchema} /> : null}
+      {detailBreadcrumbSchema ? <JsonLd schema={detailBreadcrumbSchema} /> : null}
     </div>
   );
 }

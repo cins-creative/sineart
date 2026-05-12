@@ -2,21 +2,24 @@ import { traCuuTypeLabel } from "@/lib/data/tra-cuu-shared";
 import type { TraCuuDetail, TraCuuListItem } from "@/lib/data/tra-cuu-shared";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { stripHtmlToPlain } from "@/lib/seo/plain-text";
-import { SITE_ORIGIN } from "@/lib/seo/site-jsonld";
-
-const ORG_REF = { "@id": `${SITE_ORIGIN}/#organization` as const };
+import { SITE_LOGO_URL, SITE_ORIGIN } from "@/lib/seo/site-jsonld";
 
 const CATALOG_URL = `${SITE_ORIGIN}/tra-cuu-thong-tin`;
 
-const CATALOG_TITLE = "Tra cứu thông tin thi đại học mỹ thuật | Sine Art";
-const CATALOG_DESC =
-  "Điểm chuẩn, phương thức xét tuyển, cách tính điểm, chương trình học và kinh nghiệm thi từ các trường đại học đối tác — cập nhật bởi Sine Art.";
+/** Mô tả ngắn JSON-LD listing — đồng bộ messaging với metadata. */
+export const TRA_CUU_LISTING_DESC_SHORT =
+  "Bài tra cứu tuyển sinh mỹ thuật — điểm chuẩn, phương thức xét tuyển, kinh nghiệm thi từ nhiều trường đại học";
 
 function toIso8601(isoLike: string | null | undefined): string | undefined {
   if (!isoLike?.trim()) return undefined;
   const d = new Date(isoLike.trim());
   if (Number.isNaN(d.getTime())) return undefined;
   return d.toISOString();
+}
+
+function toSchemaDate(isoLike: string | null | undefined): string | undefined {
+  const iso = toIso8601(isoLike);
+  return iso ? iso.slice(0, 10) : undefined;
 }
 
 function thumbUrl(url: string | null | undefined): string | undefined {
@@ -32,112 +35,17 @@ function excerptPlain(html: string | null | undefined, maxLen: number): string |
   return p.trim() || undefined;
 }
 
-function wordCount(html: string | null | undefined): number | undefined {
-  const plain = stripHtmlToPlain(html ?? "", undefined);
-  const words = plain.trim().split(/\s+/).filter(Boolean);
-  return words.length > 0 ? words.length : undefined;
-}
-
-function typeKeywords(post: TraCuuListItem): string | undefined {
-  if (!post.type.length) return undefined;
-  return post.type.map((t) => traCuuTypeLabel(t)).join(", ");
-}
-
-/**
- * `/tra-cuu-thong-tin` — CollectionPage + ItemList (Article) + BreadcrumbList.
- */
-export function buildTraCuuCatalogJsonLd(items: TraCuuListItem[]): Record<string, unknown> {
-  const filtered = items.filter((it) => it.slug?.trim());
-  const itemListElement = filtered.map((it, index) => {
-    const url = `${SITE_ORIGIN}/tra-cuu-thong-tin/${encodeURIComponent(it.slug!)}`;
-    const article: Record<string, unknown> = {
-      "@type": "Article",
-      "@id": `${url}#article`,
-      headline: it.title?.trim() || "Tra cứu thông tin",
-      url,
-      inLanguage: "vi-VN",
-      author: ORG_REF,
-      publisher: ORG_REF,
-      isAccessibleForFree: true,
-    };
-
-    const desc = excerptPlain(it.excerpt, 280);
-    if (desc) article.description = desc;
-
-    const img = thumbUrl(it.thumbnail_url);
-    if (img) article.image = [img];
-
-    const pub = toIso8601(it.published_at);
-    if (pub) article.datePublished = pub;
-
-    const tk = typeKeywords(it);
-    if (tk) {
-      article.articleSection = tk;
-      article.keywords = tk;
-    }
-
-    return {
-      "@type": "ListItem",
-      position: index + 1,
-      url,
-      name: it.title?.trim() || "Tra cứu",
-      item: article,
-    };
-  });
-
-  return {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "CollectionPage",
-        "@id": `${CATALOG_URL}#webpage`,
-        url: CATALOG_URL,
-        name: CATALOG_TITLE,
-        description: CATALOG_DESC,
-        inLanguage: "vi-VN",
-        publisher: ORG_REF,
-        breadcrumb: { "@id": `${CATALOG_URL}#breadcrumb` },
-        mainEntity: { "@id": `${CATALOG_URL}#itemlist` },
-        about: ORG_REF,
-      },
-      {
-        "@type": "ItemList",
-        "@id": `${CATALOG_URL}#itemlist`,
-        name: CATALOG_TITLE,
-        description: CATALOG_DESC,
-        numberOfItems: itemListElement.length,
-        itemListOrder: "https://schema.org/ItemListUnordered",
-        publisher: ORG_REF,
-        itemListElement,
-      },
-      {
-        "@type": "BreadcrumbList",
-        "@id": `${CATALOG_URL}#breadcrumb`,
-        itemListElement: [
-          {
-            "@type": "ListItem",
-            position: 1,
-            name: "Trang chủ",
-            item: `${SITE_ORIGIN}/`,
-          },
-          {
-            "@type": "ListItem",
-            position: 2,
-            name: "Tra cứu thông tin",
-            item: CATALOG_URL,
-          },
-        ],
-      },
-    ],
-  };
-}
-
-function detailDescription(post: TraCuuDetail): string {
+export function traCuuDetailDescription(post: TraCuuDetail): string {
   const fromEx = excerptPlain(post.excerpt, 800);
   if (fromEx) return fromEx;
   const fromBody = excerptPlain(post.body_html, 400);
   if (fromBody) return fromBody;
   return `${post.title?.trim() || "Tra cứu"} — Thông tin tuyển sinh đại học mỹ thuật tại Sine Art.`;
+}
+
+function typeKeywordsJoined(post: TraCuuListItem): string | undefined {
+  if (!post.type.length) return undefined;
+  return post.type.map((t) => traCuuTypeLabel(t)).join(", ");
 }
 
 function detailImageUrls(post: TraCuuDetail): string[] {
@@ -152,122 +60,196 @@ function detailImageUrls(post: TraCuuDetail): string[] {
   return urls;
 }
 
+export function isTraCuuDiemChuan(post: TraCuuListItem): boolean {
+  return post.type.includes("diem-chuan");
+}
+
+/**
+ * `/tra-cuu-thong-tin` — `CollectionPage` (một script JSON-LD).
+ */
+export function buildTraCuuListingCollectionJsonLd(
+  numberOfItems: number,
+): Record<string, unknown> {
+  const description =
+    numberOfItems > 0
+      ? `${numberOfItems} bài tra cứu thông tin tuyển sinh — điểm chuẩn, phương thức xét tuyển, kinh nghiệm thi từ 15+ trường đại học`
+      : TRA_CUU_LISTING_DESC_SHORT;
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Tra cứu thông tin thi đại học mỹ thuật — Sine Art",
+    description,
+    url: CATALOG_URL,
+    numberOfItems,
+    inLanguage: "vi-VN",
+    isPartOf: {
+      "@type": "WebSite",
+      name: "Sine Art",
+      url: SITE_ORIGIN,
+    },
+  };
+}
+
+/** Breadcrumb listing — mục 2: «Thông tin đại học». */
+export function buildTraCuuListingBreadcrumbJsonLd(): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Trang chủ",
+        item: `${SITE_ORIGIN}/`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Thông tin đại học",
+        item: CATALOG_URL,
+      },
+    ],
+  };
+}
+
+const SINE_ART_ORG: Record<string, unknown> = {
+  "@type": "Organization",
+  name: "Sine Art",
+  url: SITE_ORIGIN,
+  logo: {
+    "@type": "ImageObject",
+    url: SITE_LOGO_URL,
+  },
+};
+
 export type TraCuuDetailJsonLdContext = {
   readMin: number;
   truongNames: string[];
 };
 
 /**
- * `/tra-cuu-thong-tin/[slug]` — WebPage + Article + BreadcrumbList.
+ * `/tra-cuu-thong-tin/[slug]` — `Article` độc lập (một script).
  */
-export function buildTraCuuDetailJsonLd(
+export function buildTraCuuDetailArticleJsonLd(
   post: TraCuuDetail,
-  ctx: TraCuuDetailJsonLdContext
+  ctx: TraCuuDetailJsonLdContext,
 ): Record<string, unknown> | null {
   const slug = post.slug?.trim();
   if (!slug) return null;
 
   const pageUrl = `${SITE_ORIGIN}/tra-cuu-thong-tin/${encodeURIComponent(slug)}`;
-  const desc = detailDescription(post);
+  const desc = traCuuDetailDescription(post);
   const images = detailImageUrls(post);
   const published = toIso8601(post.published_at);
   const modified = toIso8601(post.updated_at ?? post.published_at) ?? published;
-  const wc = wordCount(post.body_html ?? post.excerpt);
   const readMin = Math.max(1, ctx.readMin);
-
-  const webpageId = `${pageUrl}#webpage`;
-  const articleId = `${pageUrl}#article`;
-  const breadcrumbId = `${pageUrl}#breadcrumb`;
-
-  const tk = typeKeywords(post);
+  const tk = typeKeywordsJoined(post);
   const kwParts = [
     ...ctx.truongNames,
     ...post.type.map((t) => traCuuTypeLabel(t)),
     ...(post.nam != null ? [`Năm ${post.nam}`] : []),
   ].filter(Boolean);
   const keywordsJoined = kwParts.length ? kwParts.join(", ") : undefined;
+  const aboutName =
+    ctx.truongNames[0]?.trim() ?? "Tuyển sinh đại học mỹ thuật Việt Nam";
 
   const article: Record<string, unknown> = {
+    "@context": "https://schema.org",
     "@type": "Article",
-    "@id": articleId,
     headline: post.title?.trim() || "Tra cứu thông tin",
     description: desc,
     url: pageUrl,
-    inLanguage: "vi-VN",
-    author: ORG_REF,
-    publisher: ORG_REF,
-    copyrightHolder: ORG_REF,
+    inLanguage: "vi",
+    author: SINE_ART_ORG,
+    publisher: SINE_ART_ORG,
     isAccessibleForFree: true,
-    mainEntityOfPage: { "@id": webpageId },
     timeRequired: `PT${readMin}M`,
+    isPartOf: {
+      "@type": "CollectionPage",
+      name: "Tra cứu thông tin thi đại học mỹ thuật",
+      url: CATALOG_URL,
+    },
+    about: { "@type": "Thing", name: aboutName },
   };
 
   if (images.length) article.image = images;
-
   if (published) {
     article.datePublished = published;
     article.dateModified = modified ?? published;
   }
-
   if (tk) article.articleSection = tk;
   if (keywordsJoined) article.keywords = keywordsJoined;
 
-  if (wc != null && wc > 0) article.wordCount = wc;
+  return article;
+}
 
-  const webPage: Record<string, unknown> = {
-    "@type": "WebPage",
-    "@id": webpageId,
-    url: pageUrl,
-    name: post.title?.trim() || "Tra cứu thông tin",
-    description: desc,
-    inLanguage: "vi-VN",
-    publisher: ORG_REF,
-    breadcrumb: { "@id": breadcrumbId },
-    mainEntity: { "@id": articleId },
-  };
+/**
+ * `Dataset` — chỉ bài loại điểm chuẩn (dữ liệu bảng có cấu trúc).
+ */
+export function buildTraCuuDetailDatasetJsonLd(
+  post: TraCuuDetail,
+  truongNames: string[],
+): Record<string, unknown> | null {
+  if (!isTraCuuDiemChuan(post)) return null;
+  const slug = post.slug?.trim();
+  if (!slug) return null;
 
-  if (published) {
-    webPage.datePublished = published;
-    webPage.dateModified = modified ?? published;
-  }
-
-  if (images[0]) {
-    webPage.primaryImageOfPage = {
-      "@type": "ImageObject",
-      url: images[0],
-    };
-  }
-
-  const crumbs: Array<Record<string, unknown>> = [
-    {
-      "@type": "ListItem",
-      position: 1,
-      name: "Trang chủ",
-      item: `${SITE_ORIGIN}/`,
-    },
-    {
-      "@type": "ListItem",
-      position: 2,
-      name: "Tra cứu thông tin",
-      item: CATALOG_URL,
-    },
-    {
-      "@type": "ListItem",
-      position: 3,
-      name: post.title?.trim() || "Bài tra cứu",
-      item: pageUrl,
-    },
-  ];
+  const pageUrl = `${SITE_ORIGIN}/tra-cuu-thong-tin/${encodeURIComponent(slug)}`;
+  const desc = traCuuDetailDescription(post);
+  const published = toSchemaDate(post.published_at);
+  const modified = toSchemaDate(post.updated_at ?? post.published_at) ?? published;
+  const truongLabel =
+    truongNames[0]?.trim() ?? "các trường đại học mỹ thuật Việt Nam";
+  const yearPart = post.nam != null ? `năm ${post.nam}` : "";
 
   return {
     "@context": "https://schema.org",
-    "@graph": [
-      webPage,
-      article,
+    "@type": "Dataset",
+    name: post.title?.trim() || "Điểm chuẩn",
+    description: `Bảng điểm chuẩn ${yearPart ? `${yearPart} ` : ""}— ${truongLabel}.`,
+    url: pageUrl,
+    inLanguage: "vi",
+    creator: SINE_ART_ORG,
+    keywords: ["điểm chuẩn", truongLabel, ...(post.nam != null ? [String(post.nam)] : [])].join(
+      ", ",
+    ),
+    variableMeasured: "Điểm chuẩn xét tuyển đại học",
+    temporalCoverage: post.nam != null ? String(post.nam) : undefined,
+    ...(published && {
+      datePublished: published,
+      dateModified: modified ?? published,
+    }),
+  };
+}
+
+export function buildTraCuuDetailBreadcrumbJsonLd(post: TraCuuDetail): Record<string, unknown> | null {
+  const slug = post.slug?.trim();
+  if (!slug) return null;
+
+  const pageUrl = `${SITE_ORIGIN}/tra-cuu-thong-tin/${encodeURIComponent(slug)}`;
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
       {
-        "@type": "BreadcrumbList",
-        "@id": breadcrumbId,
-        itemListElement: crumbs,
+        "@type": "ListItem",
+        position: 1,
+        name: "Trang chủ",
+        item: `${SITE_ORIGIN}/`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Thông tin đại học",
+        item: CATALOG_URL,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: post.title?.trim() || "Bài tra cứu",
+        item: pageUrl,
       },
     ],
   };

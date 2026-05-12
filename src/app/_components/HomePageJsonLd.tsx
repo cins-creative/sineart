@@ -1,12 +1,17 @@
-import { getHomePageJsonLdGraph } from "@/lib/seo/site-jsonld";
+import SchemaOrg from "@/components/seo/SchemaOrg";
+import {
+  getHomeBreadcrumbListJsonLd,
+  getHomeWebPageJsonLd,
+  getHomeWebSiteJsonLd,
+} from "@/lib/seo/site-jsonld";
 
-/** JSON-LD WebSite + WebPage (`@graph`) — chỉ render trên `/`. Bổ sung cho EducationalOrganization ở layout. */
+/** Ba JSON-LD tách script: WebSite (+ SearchAction), WebPage, BreadcrumbList — trang chủ. */
 export default function HomePageJsonLd() {
-  const payload = getHomePageJsonLdGraph();
   return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(payload) }}
-    />
+    <>
+      <SchemaOrg schema={getHomeWebSiteJsonLd()} />
+      <SchemaOrg schema={getHomeWebPageJsonLd()} />
+      <SchemaOrg schema={getHomeBreadcrumbListJsonLd()} />
+    </>
   );
 }

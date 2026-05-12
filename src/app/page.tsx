@@ -17,6 +17,7 @@ import { HomeClassroomPhotosSection } from "./_components/home/HomeClassroomPhot
 import { HomeTeachersSection } from "./_components/home/HomeTeachersSection";
 import { HomeTeachersSectionSkeleton } from "./_components/home/HomeTeachersSection.skeleton";
 import "./sineart-home.css";
+import { SITE_OG_DEFAULT_IMAGE } from "@/lib/seo/site-jsonld";
 
 /** ISR — dữ liệu public; admin có `revalidatePath` khi đổi môn/lớp. */
 export const revalidate = 300;
@@ -26,7 +27,21 @@ export const metadata: Metadata = {
   description:
     "Học vẽ mỹ thuật tại TP.HCM — hình họa, bố cục màu, trang trí màu, luyện thi kiến trúc & đại học tại Sine Art.",
   alternates: { canonical: "https://sineart.vn/" },
-  openGraph: { url: "https://sineart.vn/" },
+  openGraph: {
+    url: "https://sineart.vn/",
+    images: [
+      {
+        url: SITE_OG_DEFAULT_IMAGE,
+        width: 1200,
+        height: 630,
+        alt: "Sine Art – Trường vẽ mỹ thuật nền tảng tại TP.HCM",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: [SITE_OG_DEFAULT_IMAGE],
+  },
 };
 
 export default function Home() {

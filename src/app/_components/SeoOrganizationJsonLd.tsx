@@ -1,9 +1,7 @@
+import SchemaOrg from "@/components/seo/SchemaOrg";
 import { getOrganizationJsonLd } from "@/lib/seo/site-jsonld";
 
-/** JSON-LD EducationalOrganization — toàn site; có `@id` để trang chủ tham chiếu trong `@graph`. */
+/** JSON-LD EducationalOrganization + LocalBusiness — toàn site; `@id` để các schema khác tham chiếu. */
 export default function SeoOrganizationJsonLd() {
-  const org = getOrganizationJsonLd();
-  return (
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(org) }} />
-  );
+  return <SchemaOrg schema={getOrganizationJsonLd()} />;
 }

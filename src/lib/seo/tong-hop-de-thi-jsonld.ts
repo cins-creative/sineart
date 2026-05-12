@@ -1,16 +1,14 @@
 import { buildDeThiHref } from "@/lib/data/de-thi-shared";
-import type { DeThiDetail, DeThiListItem } from "@/lib/data/de-thi-shared";
+import type { DeThiDetail } from "@/lib/data/de-thi-shared";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { stripHtmlToPlain } from "@/lib/seo/plain-text";
-import { SITE_ORIGIN } from "@/lib/seo/site-jsonld";
-
-const ORG_REF = { "@id": `${SITE_ORIGIN}/#organization` as const };
+import { SITE_LOGO_URL, SITE_ORIGIN } from "@/lib/seo/site-jsonld";
 
 const CATALOG_URL = `${SITE_ORIGIN}/tong-hop-de-thi`;
 
-const CATALOG_TITLE = "Tổng hợp đề thi mỹ thuật — Sine Art";
-const CATALOG_DESC =
-  "Thư viện đề luyện thi Bố cục màu, Trang trí màu — biên soạn bởi giáo viên Sine Art, cập nhật hàng năm. Có lời giải, OCR đề gốc, filter theo môn · năm · loại mẫu.";
+/** Đồng bộ với metadata listing — mô tả ngắn cho JSON-LD CollectionPage. */
+export const TONG_HOP_DE_THI_LISTING_DESC_SHORT =
+  "75+ đề thi Bố cục màu và Trang trí màu từ 2017–2026, kèm OCR đề gốc và lời giải";
 
 function toIso8601(isoLike: string | null | undefined): string | undefined {
   if (!isoLike?.trim()) return undefined;
@@ -19,14 +17,12 @@ function toIso8601(isoLike: string | null | undefined): string | undefined {
   return d.toISOString();
 }
 
-function excerptPlain(it: DeThiListItem): string | undefined {
-  const ex = it.excerpt?.trim();
-  if (!ex) return undefined;
-  const plain = stripHtmlToPlain(ex, 280);
-  return plain.trim() || undefined;
+function toSchemaDate(isoLike: string | null | undefined): string | undefined {
+  const iso = toIso8601(isoLike);
+  return iso ? iso.slice(0, 10) : undefined;
 }
 
-function detailDescription(post: DeThiDetail): string {
+export function detailDescription(post: DeThiDetail): string {
   const ex = post.excerpt?.trim();
   if (ex) {
     const p = stripHtmlToPlain(ex, 600);
@@ -43,102 +39,58 @@ function primaryImage(url: string | null | undefined): string | undefined {
   return cfImageForThumbnail(raw) ?? raw;
 }
 
-function wordCount(html: string | null | undefined): number | undefined {
-  const plain = stripHtmlToPlain(html ?? "", undefined);
-  const words = plain.trim().split(/\s+/).filter(Boolean);
-  return words.length > 0 ? words.length : undefined;
-}
-
 /**
- * `/tong-hop-de-thi` — CollectionPage + ItemList (Article từng đề) + BreadcrumbList.
+ * `/tong-hop-de-thi` — `CollectionPage` (độc lập, một `<script>` JSON-LD).
  */
-export function buildTongHopDeThiCatalogJsonLd(items: DeThiListItem[]): Record<string, unknown> {
-  const filtered = items.filter((it) => it.slug?.trim());
-  const itemListElement = filtered.map((it, index) => {
-    const path = buildDeThiHref(it.slug);
-    const url = `${SITE_ORIGIN}${path}`;
-    const article: Record<string, unknown> = {
-      "@type": "Article",
-      "@id": `${url}#article`,
-      headline: it.ten?.trim() || "Đề thi",
-      url,
-      inLanguage: "vi-VN",
-      author: ORG_REF,
-      publisher: ORG_REF,
-      isAccessibleForFree: true,
-    };
-
-    const desc = excerptPlain(it);
-    if (desc) article.description = desc;
-
-    const img = primaryImage(it.thumbnail_url);
-    if (img) article.image = [img];
-
-    const pub = toIso8601(it.created_at);
-    if (pub) article.datePublished = pub;
-
-    if (it.mon.length) article.articleSection = it.mon.join(" · ");
-
-    return {
-      "@type": "ListItem",
-      position: index + 1,
-      url,
-      name: it.ten?.trim() || "Đề thi",
-      item: article,
-    };
-  });
-
+export function buildTongHopDeThiListingCollectionJsonLd(
+  numberOfItems: number,
+): Record<string, unknown> {
   return {
     "@context": "https://schema.org",
-    "@graph": [
+    "@type": "CollectionPage",
+    name: "Tổng hợp đề thi mỹ thuật — Sine Art",
+    description: TONG_HOP_DE_THI_LISTING_DESC_SHORT,
+    url: CATALOG_URL,
+    numberOfItems,
+    inLanguage: "vi-VN",
+    isPartOf: {
+      "@type": "WebSite",
+      name: "Sine Art",
+      url: SITE_ORIGIN,
+    },
+  };
+}
+
+/** Breadcrumb listing — mục 2 nhãn «Đề thi» theo brief SEO. */
+export function buildTongHopDeThiListingBreadcrumbJsonLd(): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
       {
-        "@type": "CollectionPage",
-        "@id": `${CATALOG_URL}#webpage`,
-        url: CATALOG_URL,
-        name: CATALOG_TITLE,
-        description: CATALOG_DESC,
-        inLanguage: "vi-VN",
-        publisher: ORG_REF,
-        breadcrumb: { "@id": `${CATALOG_URL}#breadcrumb` },
-        mainEntity: { "@id": `${CATALOG_URL}#itemlist` },
-        about: ORG_REF,
+        "@type": "ListItem",
+        position: 1,
+        name: "Trang chủ",
+        item: `${SITE_ORIGIN}/`,
       },
       {
-        "@type": "ItemList",
-        "@id": `${CATALOG_URL}#itemlist`,
-        name: CATALOG_TITLE,
-        description: CATALOG_DESC,
-        numberOfItems: itemListElement.length,
-        itemListOrder: "https://schema.org/ItemListUnordered",
-        publisher: ORG_REF,
-        itemListElement,
-      },
-      {
-        "@type": "BreadcrumbList",
-        "@id": `${CATALOG_URL}#breadcrumb`,
-        itemListElement: [
-          {
-            "@type": "ListItem",
-            position: 1,
-            name: "Trang chủ",
-            item: `${SITE_ORIGIN}/`,
-          },
-          {
-            "@type": "ListItem",
-            position: 2,
-            name: "Tổng hợp đề thi",
-            item: CATALOG_URL,
-          },
-        ],
+        "@type": "ListItem",
+        position: 2,
+        name: "Đề thi",
+        item: CATALOG_URL,
       },
     ],
   };
 }
 
 /**
- * `/tong-hop-de-thi/[slug]` — WebPage + Article + BreadcrumbList.
+ * `/tong-hop-de-thi/[slug]` — `LearningResource` (đề thi = tài liệu học tập).
+ * `tenTruong`: tên trường đầu tiên từ `truong_ids` + lookup (có thể null).
  */
-export function buildTongHopDeThiDetailJsonLd(post: DeThiDetail): Record<string, unknown> | null {
+export function buildTongHopDeThiLearningResourceJsonLd(
+  post: DeThiDetail,
+  tenTruong: string | null,
+): Record<string, unknown> | null {
   const slug = post.slug?.trim();
   if (!slug) return null;
 
@@ -146,100 +98,99 @@ export function buildTongHopDeThiDetailJsonLd(post: DeThiDetail): Record<string,
   const pageUrl = `${SITE_ORIGIN}${path}`;
   const desc = detailDescription(post);
   const img = primaryImage(post.thumbnail_url);
-  const published = toIso8601(post.created_at);
-  const modified = toIso8601(post.updated_at ?? post.created_at) ?? published;
-  const wc = wordCount(post.body_html ?? post.content_raw);
+  const monThi = post.mon[0]?.trim() || "Mỹ thuật";
+  const datePart = toSchemaDate(post.updated_at ?? post.created_at);
 
-  const webpageId = `${pageUrl}#webpage`;
-  const articleId = `${pageUrl}#article`;
-  const breadcrumbId = `${pageUrl}#breadcrumb`;
+  const name =
+    post.nam != null && tenTruong?.trim()
+      ? `Đề thi ${monThi} — ${tenTruong.trim()} ${post.nam}`
+      : post.ten?.trim() || "Đề thi";
 
-  const article: Record<string, unknown> = {
-    "@type": "Article",
-    "@id": articleId,
-    headline: post.ten?.trim() || "Đề thi",
-    description: desc,
+  const loaiMau =
+    post.loai_mau_hinh_hoa.length > 0 ? post.loai_mau_hinh_hoa.join(", ") : undefined;
+
+  const description =
+    loaiMau && !desc.toLowerCase().includes(loaiMau.toLowerCase())
+      ? `${desc} Mẫu: ${loaiMau}.`
+      : desc;
+
+  const out: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "LearningResource",
+    name,
+    description,
     url: pageUrl,
-    inLanguage: "vi-VN",
-    author: ORG_REF,
-    publisher: ORG_REF,
-    copyrightHolder: ORG_REF,
-    isAccessibleForFree: true,
-    mainEntityOfPage: { "@id": webpageId },
+    inLanguage: "vi",
+    teaches: monThi,
+    educationalLevel: "upperSecondary",
+    learningResourceType: "ExamQuestion",
+    about: { "@type": "Thing", name: monThi },
+    isPartOf: {
+      "@type": "CollectionPage",
+      name: "Tổng hợp đề thi mỹ thuật — Sine Art",
+      url: CATALOG_URL,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "Sine Art",
+      url: SITE_ORIGIN,
+      logo: {
+        "@type": "ImageObject",
+        url: SITE_LOGO_URL,
+      },
+    },
   };
 
-  if (img) article.image = [img];
-
-  if (published) {
-    article.datePublished = published;
-    article.dateModified = modified ?? published;
+  if (img) out.image = img;
+  if (datePart) {
+    out.datePublished = datePart;
+    out.dateModified = datePart;
   }
-
-  if (post.mon.length) {
-    article.articleSection = post.mon.join(" · ");
-    article.keywords = [...post.mon, post.nam != null ? `Năm ${post.nam}` : ""]
-      .filter(Boolean)
-      .join(", ");
-  } else if (post.nam != null) {
-    article.keywords = `Năm ${post.nam}`;
-  }
-
-  if (wc != null) article.wordCount = wc;
-
-  const webPage: Record<string, unknown> = {
-    "@type": "WebPage",
-    "@id": webpageId,
-    url: pageUrl,
-    name: post.ten?.trim() || "Đề thi",
-    description: desc,
-    inLanguage: "vi-VN",
-    publisher: ORG_REF,
-    breadcrumb: { "@id": breadcrumbId },
-    mainEntity: { "@id": articleId },
-  };
-
-  if (published) {
-    webPage.datePublished = published;
-    webPage.dateModified = modified ?? published;
-  }
-
-  if (img) {
-    webPage.primaryImageOfPage = {
-      "@type": "ImageObject",
-      url: img,
+  if (tenTruong?.trim()) {
+    out.provider = {
+      "@type": "EducationalOrganization",
+      name: tenTruong.trim(),
     };
   }
 
-  const crumbs: Array<Record<string, unknown>> = [
-    {
-      "@type": "ListItem",
-      position: 1,
-      name: "Trang chủ",
-      item: `${SITE_ORIGIN}/`,
-    },
-    {
-      "@type": "ListItem",
-      position: 2,
-      name: "Tổng hợp đề thi",
-      item: CATALOG_URL,
-    },
-    {
-      "@type": "ListItem",
-      position: 3,
-      name: post.ten?.trim() || "Đề thi",
-      item: pageUrl,
-    },
-  ];
+  return out;
+}
+
+export function buildTongHopDeThiDetailBreadcrumbJsonLd(
+  post: DeThiDetail,
+  tenTruong: string | null,
+): Record<string, unknown> | null {
+  const slug = post.slug?.trim();
+  if (!slug) return null;
+
+  const path = buildDeThiHref(slug);
+  const pageUrl = `${SITE_ORIGIN}${path}`;
+  const crumb3Name =
+    post.nam != null && tenTruong?.trim()
+      ? `${tenTruong.trim()} ${post.nam}`
+      : post.ten?.trim() || "Đề thi";
 
   return {
     "@context": "https://schema.org",
-    "@graph": [
-      webPage,
-      article,
+    "@type": "BreadcrumbList",
+    itemListElement: [
       {
-        "@type": "BreadcrumbList",
-        "@id": breadcrumbId,
-        itemListElement: crumbs,
+        "@type": "ListItem",
+        position: 1,
+        name: "Trang chủ",
+        item: `${SITE_ORIGIN}/`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Đề thi",
+        item: CATALOG_URL,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: crumb3Name,
+        item: pageUrl,
       },
     ],
   };

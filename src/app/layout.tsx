@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import ConditionalCta from "./_components/ConditionalCta";
 import ConditionalHomeAdBanner from "./_components/ConditionalHomeAdBanner";
 import SeoOrganizationJsonLd from "./_components/SeoOrganizationJsonLd";
+import { SITE_OG_DEFAULT_IMAGE } from "@/lib/seo/site-jsonld";
 import "./globals.css";
 import "./sineart-home.css";
 import "./sineart-home-v2.css";
@@ -73,9 +74,18 @@ export const metadata: Metadata = {
     locale: "vi_VN",
     siteName: "Sine Art",
     url: "https://sineart.vn",
+    images: [
+      {
+        url: SITE_OG_DEFAULT_IMAGE,
+        width: 1200,
+        height: 630,
+        alt: "Sine Art – Trường vẽ mỹ thuật nền tảng tại TP.HCM",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
+    images: [SITE_OG_DEFAULT_IMAGE],
   },
 };
 

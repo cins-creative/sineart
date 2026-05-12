@@ -31,7 +31,7 @@ function courseDescription(c: KhoaHocCourseCard): string | undefined {
 export function buildKhoaHocCatalogJsonLd(courses: KhoaHocCourseCard[]): Record<string, unknown> {
   const catalogTitle = "Các khóa học vẽ mỹ thuật tại Sine Art";
   const catalogDesc =
-    "Danh sách khóa học mỹ thuật tại Sine Art — theo dữ liệu môn học và lớp mở ghi danh tại TP.HCM.";
+    "7 khóa học mỹ thuật tại TP.HCM — Hình họa, Bố cục màu, Trang trí màu, Digital Art, Luyện thi tại lớp. Online & tại lớp. Lớp mới khai giảng hàng tuần.";
 
   const itemListElement = courses.map((c, index) => {
     const courseUrl = `${SITE_ORIGIN}/khoa-hoc/${encodeURIComponent(c.slug)}`;

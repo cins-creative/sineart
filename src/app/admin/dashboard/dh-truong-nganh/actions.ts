@@ -21,6 +21,8 @@ function revalidateDhSlugRoutes(): void {
   revalidatePath(`${REV}/[truongSlug]`, "page");
   revalidatePath(`${REV}/[truongSlug]/nganh/[nganhSlug]`, "page");
   revalidatePath(`${REV}/[truongSlug]/tuyen-sinh/[nam]`, "page");
+  revalidatePath("/tra-cuu-thong-tin/truong/[truong-slug]", "page");
+  revalidatePath("/tra-cuu-thong-tin/truong/[truong-slug]/[nganh-slug]", "page");
 }
 
 function sanitizeMonThiForSave(raw: unknown[]): string[] {

@@ -6,7 +6,7 @@ import {
 } from "@/lib/data/blog";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { stripHtmlToPlain } from "@/lib/seo/plain-text";
-import { SITE_ORIGIN } from "@/lib/seo/site-jsonld";
+import { SITE_LOGO_URL, SITE_ORIGIN } from "@/lib/seo/site-jsonld";
 
 const ORG_REF = { "@id": `${SITE_ORIGIN}/#organization` as const };
 
@@ -180,15 +180,25 @@ export function buildBlogDetailJsonLd(
   const articleId = `${pageUrl}#article`;
   const breadcrumbId = `${pageUrl}#breadcrumb`;
 
+  const publisherOrg = {
+    "@type": "Organization",
+    name: "Sine Art",
+    url: SITE_ORIGIN,
+    logo: {
+      "@type": "ImageObject",
+      url: SITE_LOGO_URL,
+    },
+  } as const;
+
   const article: Record<string, unknown> = {
-    "@type": "Article",
+    "@type": "BlogPosting",
     "@id": articleId,
     headline: post.title?.trim() || "Bài viết",
     description: desc,
     url: pageUrl,
     inLanguage: "vi-VN",
-    author: ORG_REF,
-    publisher: ORG_REF,
+    author: { "@type": "Organization", name: "Sine Art", url: SITE_ORIGIN },
+    publisher: publisherOrg,
     copyrightHolder: ORG_REF,
     isAccessibleForFree: true,
     mainEntityOfPage: { "@id": webpageId },

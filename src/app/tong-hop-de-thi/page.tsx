@@ -1,29 +1,56 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
+import { JsonLd } from "@/components/seo/JsonLd";
 import NavBar from "../_components/NavBar";
 import DeThiListClient from "./DeThiListClient";
 import { DeThiStyles } from "./DeThiStyles";
 import { fetchAllDeThi, fetchTruongLookup } from "@/lib/data/de-thi";
-import { buildTongHopDeThiCatalogJsonLd } from "@/lib/seo/tong-hop-de-thi-jsonld";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import {
+  buildTongHopDeThiListingBreadcrumbJsonLd,
+  buildTongHopDeThiListingCollectionJsonLd,
+} from "@/lib/seo/tong-hop-de-thi-jsonld";
+import { SITE_OG_DEFAULT_IMAGE, SITE_ORIGIN } from "@/lib/seo/site-jsonld";
 
 export const revalidate = 600;
 
+const LISTING_PATH = "/tong-hop-de-thi" as const;
+const LISTING_URL = `${SITE_ORIGIN}${LISTING_PATH}` as const;
+
+/** Không ghi «| Sine Art» — root `title.template` đã thêm suffix. */
+const LISTING_TITLE = "Tổng hợp đề thi mỹ thuật";
+
+const LISTING_DESCRIPTION =
+  "Thư viện 75+ đề thi mỹ thuật — Bố cục màu, Trang trí màu từ 2017–2026. Kèm OCR đề gốc và lời giải. Biên soạn bởi giáo viên Sine Art, lọc theo môn · năm · trường.";
+
+const LISTING_OG_IMAGE = {
+  url: SITE_OG_DEFAULT_IMAGE,
+  width: 1200,
+  height: 630,
+  alt: "Tổng hợp đề thi mỹ thuật — Sine Art",
+} as const;
+
 export const metadata: Metadata = {
-  title: "Tổng hợp đề thi mỹ thuật — Sine Art",
-  description:
-    "Thư viện đề luyện thi Bố cục màu, Trang trí màu — biên soạn bởi giáo viên Sine Art, cập nhật hàng năm. Có lời giải, OCR đề gốc, filter theo môn · năm · loại mẫu.",
-  alternates: { canonical: "https://sineart.vn/tong-hop-de-thi" },
+  title: LISTING_TITLE,
+  description: LISTING_DESCRIPTION,
+  alternates: { canonical: LISTING_URL },
+  robots: { index: true, follow: true },
   openGraph: {
-    title: "Tổng hợp đề thi mỹ thuật — Sine Art",
-    description:
-      "Thư viện đề luyện thi Bố cục màu, Trang trí màu — biên soạn bởi giáo viên Sine Art, cập nhật hàng năm.",
-    url: "https://sineart.vn/tong-hop-de-thi",
+    title: `${LISTING_TITLE} | Sine Art`,
+    description: LISTING_DESCRIPTION,
+    url: LISTING_URL,
     type: "website",
     locale: "vi_VN",
     siteName: "Sine Art",
+    images: [LISTING_OG_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${LISTING_TITLE} | Sine Art`,
+    description: LISTING_DESCRIPTION,
+    images: [SITE_OG_DEFAULT_IMAGE],
   },
 };
 
@@ -35,9 +62,6 @@ export default async function TongHopDeThiPage() {
   ]);
   const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 
-  // Distinct năm/môn/loại mẫu từ dataset thực tế — filter options.
-  // Brief v3: filter Trường luôn hiển thị (kèm option "Đề luyện tập Sine Art"
-  // cho `truong_ids = []` hoặc `[1]`) — không ẩn dựa trên dataset.
   const namSet = new Set<number>();
   const monSet = new Set<string>();
   const mauSet = new Set<string>();
@@ -51,15 +75,13 @@ export default async function TongHopDeThiPage() {
   const monOptions = Array.from(monSet).sort();
   const mauOptions = Array.from(mauSet).sort();
 
-  const catalogJsonLd = buildTongHopDeThiCatalogJsonLd(items);
+  const collectionJsonLd = buildTongHopDeThiListingCollectionJsonLd(items.length);
+  const breadcrumbJsonLd = buildTongHopDeThiListingBreadcrumbJsonLd();
 
   return (
     <div className="sa-root sa-dethi">
-      <script
-        type="application/ld+json"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(catalogJsonLd) }}
-      />
+      <JsonLd schema={collectionJsonLd} />
+      <JsonLd schema={breadcrumbJsonLd} />
       <NavBar khoaHocGroups={khoaHocGroups} />
 
       {/* HERO */}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { JsonLd } from "@/components/seo/JsonLd";
 import NavBar from "../../_components/NavBar";
 import { BlogDetailStyles } from "../../blogs/[slug]/BlogDetailStyles";
 import { BlogToc } from "../../blogs/[slug]/BlogToc";
@@ -11,7 +12,6 @@ import { TraCuuDetailStyles } from "./TraCuuDetailStyles";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
 import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
 import {
   buildTraCuuHref,
   estimateReadMinutes,
@@ -24,31 +24,81 @@ import {
   injectHeadingIds,
   traCuuTypeLabel,
 } from "@/lib/data/tra-cuu";
-import { buildTraCuuDetailJsonLd } from "@/lib/seo/tra-cuu-jsonld";
+import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import {
+  buildTraCuuDetailArticleJsonLd,
+  buildTraCuuDetailBreadcrumbJsonLd,
+  buildTraCuuDetailDatasetJsonLd,
+  traCuuDetailDescription,
+} from "@/lib/seo/tra-cuu-jsonld";
+import { SITE_OG_DEFAULT_IMAGE, SITE_ORIGIN } from "@/lib/seo/site-jsonld";
 
 export const revalidate = 600;
 
 type Props = { params: Promise<{ slug: string }> };
 
+function clampMetaDescription(text: string, max = 320): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+function toIso8601(isoLike: string | null | undefined): string | undefined {
+  if (!isoLike?.trim()) return undefined;
+  const d = new Date(isoLike.trim());
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const post = await fetchTraCuuBySlug(slug);
   if (!post) return {};
-  const plain = post.excerpt
-    ? post.excerpt.replace(/<[^>]+>/g, " ").slice(0, 160)
-    : post.body_html?.replace(/<[^>]+>/g, " ").slice(0, 160) ?? "";
+
+  const [truongLookup] = await Promise.all([fetchTruongLookup()]);
+  const truongNameById = new Map(truongLookup.map((t) => [t.id, t.ten]));
+  const truongNames = post.truong_ids
+    .map((id) => truongNameById.get(id))
+    .filter((s): s is string => !!s);
+
+  const headline = post.title?.trim() || "Tra cứu thông tin";
+  const description = clampMetaDescription(traCuuDetailDescription(post));
+  const pageUrl = `${SITE_ORIGIN}${buildTraCuuHref(slug)}`;
+  const publishedTime = toIso8601(post.published_at);
+  const modifiedTime = toIso8601(post.updated_at ?? post.published_at) ?? publishedTime;
+
+  const ogImageRaw =
+    (post.thumbnail_url ? cfImageForThumbnail(post.thumbnail_url) ?? post.thumbnail_url : null) ??
+    SITE_OG_DEFAULT_IMAGE;
+  const ogImage = {
+    url: ogImageRaw,
+    width: 1200,
+    height: 630,
+    alt: headline,
+  };
+
   return {
-    title: post.title ? `${post.title} — Sine Art` : "Tra cứu thông tin — Sine Art",
-    description: plain,
-    alternates: { canonical: `https://sineart.vn/tra-cuu-thong-tin/${slug}` },
+    title: headline,
+    description,
+    robots: { index: true, follow: true },
+    alternates: { canonical: pageUrl },
     openGraph: {
-      title: post.title ?? "Tra cứu thông tin — Sine Art",
-      description: plain,
-      images: post.thumbnail_url ? [{ url: post.thumbnail_url }] : [],
-      url: `https://sineart.vn/tra-cuu-thong-tin/${slug}`,
+      title: headline,
+      description,
+      url: pageUrl,
       type: "article",
       locale: "vi_VN",
       siteName: "Sine Art",
+      images: [ogImage],
+      ...(publishedTime && {
+        publishedTime,
+        modifiedTime: modifiedTime ?? publishedTime,
+      }),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: headline,
+      description,
+      images: [ogImageRaw],
     },
   };
 }
@@ -93,7 +143,9 @@ export default async function TraCuuDetailPage({ params }: Props) {
   const readMin = estimateReadMinutes(post.body_html ?? post.excerpt ?? "");
   const dateStr = formatDateVi(post.published_at);
 
-  const jsonLd = buildTraCuuDetailJsonLd(post, { readMin, truongNames });
+  const articleJsonLd = buildTraCuuDetailArticleJsonLd(post, { readMin, truongNames });
+  const datasetJsonLd = buildTraCuuDetailDatasetJsonLd(post, truongNames);
+  const breadcrumbJsonLd = buildTraCuuDetailBreadcrumbJsonLd(post);
 
   // Author display: ưu tiên trường đầu tiên, fallback "Sine Art"
   const authorLabel = truongNames[0] ?? "Sine Art";
@@ -105,13 +157,9 @@ export default async function TraCuuDetailPage({ params }: Props) {
 
   return (
     <div className="sa-root bd">
-      {jsonLd ? (
-        <script
-          type="application/ld+json"
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      ) : null}
+      {articleJsonLd ? <JsonLd schema={articleJsonLd} /> : null}
+      {datasetJsonLd ? <JsonLd schema={datasetJsonLd} /> : null}
+      {breadcrumbJsonLd ? <JsonLd schema={breadcrumbJsonLd} /> : null}
       <BlogDetailStyles />
       <TraCuuDetailStyles />
       <NavBar khoaHocGroups={khoaHocGroups} />

@@ -35,6 +35,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     : post.content?.replace(/<[^>]+>/g, " ") ?? "";
   const description = rawDesc.replace(/\s+/g, " ").trim().slice(0, 155);
   const canonicalPath = `/blogs/${buildBlogSlug(post.id, post.title)}`;
+  const thumbOg =
+    post.thumbnail?.trim() ?
+      (cfImageForThumbnail(post.thumbnail.trim()) ?? post.thumbnail.trim())
+    : undefined;
+  const ogImages =
+    thumbOg ?
+      [
+        {
+          url: thumbOg,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ]
+    : [];
   return {
     title,
     description: description || "Bài viết mỹ thuật và tuyển sinh tại Sine Art.",
@@ -46,12 +61,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: "article",
       locale: "vi_VN",
       siteName: "Sine Art",
-      images: post.thumbnail ? [{ url: post.thumbnail }] : [],
+      images: ogImages,
     },
     twitter: {
       card: "summary_large_image",
       title,
       description: description || undefined,
+      images: thumbOg ? [thumbOg] : [],
     },
   };
 }

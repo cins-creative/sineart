@@ -1,10 +1,18 @@
 import { buildLyThuyetHref } from "@/lib/data/ly-thuyet-shared";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { stripHtmlToPlain } from "@/lib/seo/plain-text";
-import { SITE_ORIGIN } from "@/lib/seo/site-jsonld";
+import { SITE_LOGO_URL, SITE_ORIGIN } from "@/lib/seo/site-jsonld";
 import type { LyThuyet } from "@/types/ly-thuyet";
 
-const ORG_REF = { "@id": `${SITE_ORIGIN}/#organization` as const };
+const SINE_ART_ORG_INLINE: Record<string, unknown> = {
+  "@type": "Organization",
+  name: "Sine Art",
+  url: SITE_ORIGIN,
+  logo: {
+    "@type": "ImageObject",
+    url: SITE_LOGO_URL,
+  },
+};
 
 function toIso8601(isoLike: string | null | undefined): string | undefined {
   if (!isoLike?.trim()) return undefined;
@@ -35,7 +43,7 @@ function wordCount(ly: LyThuyet): number | undefined {
 
 /**
  * JSON-LD `@graph`: WebPage + Article + BreadcrumbList.
- * Trùng khóa `@id` với layout (`#organization`). Ảnh dùng Cloudflare thumbnail khi có.
+ * `publisher` / `author` kèm logo Cloudflare — đồng bộ layout tổ chức.
  */
 export function buildKienThucNenTangArticleJsonLd(ly: LyThuyet): Record<string, unknown> {
   const path = buildLyThuyetHref(ly.slug);
@@ -58,12 +66,21 @@ export function buildKienThucNenTangArticleJsonLd(ly: LyThuyet): Record<string, 
     description: desc,
     url: pageUrl,
     inLanguage: "vi-VN",
-    author: ORG_REF,
-    publisher: ORG_REF,
-    copyrightHolder: ORG_REF,
+    author: SINE_ART_ORG_INLINE,
+    publisher: SINE_ART_ORG_INLINE,
+    copyrightHolder: SINE_ART_ORG_INLINE,
     isAccessibleForFree: true,
     mainEntityOfPage: { "@id": webpageId },
     timeRequired: `PT${readMin}M`,
+    isPartOf: {
+      "@type": "CollectionPage",
+      name: "Thư viện kiến thức mỹ thuật nền tảng",
+      url: `${SITE_ORIGIN}/kien-thuc-nen-tang`,
+    },
+    educationalLevel: "beginner",
+    learningResourceType: "Article",
+    teaches: ly.ten,
+    about: { "@type": "Thing", name: "Mỹ thuật" },
   };
 
   if (published) {
@@ -86,7 +103,7 @@ export function buildKienThucNenTangArticleJsonLd(ly: LyThuyet): Record<string, 
     name: ly.ten,
     description: desc,
     inLanguage: "vi-VN",
-    publisher: ORG_REF,
+    publisher: SINE_ART_ORG_INLINE,
     breadcrumb: { "@id": breadcrumbId },
     mainEntity: { "@id": articleId },
   };
@@ -113,7 +130,7 @@ export function buildKienThucNenTangArticleJsonLd(ly: LyThuyet): Record<string, 
     {
       "@type": "ListItem",
       position: 2,
-      name: "Thư viện",
+      name: "Kiến thức nền tảng",
       item: `${SITE_ORIGIN}/kien-thuc-nen-tang`,
     },
   ];

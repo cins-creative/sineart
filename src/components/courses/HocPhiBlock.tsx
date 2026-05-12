@@ -121,6 +121,13 @@ export default function HocPhiBlock({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monHocId, expressMode, usePostTitleGrouping]);
 
+  /** Gói mặc định — đồng bộ paint đầu với `useEffect` (tránh «—» trước hydrate). */
+  const fallbackFirstGoi = useMemo(() => {
+    if (usePostTitleGrouping) return postTitleGroups[0]?.pills[0] ?? null;
+    return mon1Pills[0] ?? null;
+  }, [usePostTitleGrouping, postTitleGroups, mon1Pills]);
+
+  const activeGoi = selGoi ?? fallbackFirstGoi;
   /**
    * Partner môn ID = các môn khác môn chính xuất hiện trong `hp_combo_mon.goi_ids`
    * của combo đang hoạt động và chứa ít nhất 1 gói của môn chính.
@@ -143,12 +150,12 @@ export default function HocPhiBlock({
 
   const activeCombo: HocPhiComboRow | null = useMemo(() => {
     if (usePostTitleGrouping) return null; // 2-môn price is baked into gia_goc
-    if (!selGoi || selPartners.size === 0) return null;
-    const cartIds = new Set<number>([selGoi.id]);
+    if (!activeGoi || selPartners.size === 0) return null;
+    const cartIds = new Set<number>([activeGoi.id]);
     for (const monId of selPartners) {
       const dur = partnerDur[monId] ?? {
-        number: selGoi.number,
-        don_vi: selGoi.don_vi,
+        number: activeGoi.number,
+        don_vi: activeGoi.don_vi,
       };
       const pg = gois.find(
         (r) =>
@@ -160,7 +167,7 @@ export default function HocPhiBlock({
     }
     const lines = [...cartIds].map((id) => ({ goiId: id }));
     return bestApplicableCombo(lines, combos)?.combo ?? null;
-  }, [selGoi, selPartners, partnerDur, gois, combos, monHocId, usePostTitleGrouping]);
+  }, [activeGoi, selPartners, partnerDur, gois, combos, monHocId, usePostTitleGrouping]);
 
   const headerRow = (
     <div className="hpb-goi-head">
@@ -211,16 +218,16 @@ export default function HocPhiBlock({
   }
 
   // ── Tính giá ────────────────────────────────────────────────────────────────
-  const price1 = selGoi ? calc(selGoi.gia_goc, selGoi.discount) : 0;
+  const price1 = activeGoi ? calc(activeGoi.gia_goc, activeGoi.discount) : 0;
 
   let partnerSum = 0;
   let origPartnerSum = 0;
   if (!usePostTitleGrouping) {
     Array.from(selPartners).forEach((monId) => {
-      if (!selGoi) return;
+      if (!activeGoi) return;
       const dur = partnerDur[monId] ?? {
-        number: selGoi.number,
-        don_vi: selGoi.don_vi,
+        number: activeGoi.number,
+        don_vi: activeGoi.don_vi,
       };
       const pg = gois.find(
         (r) =>
@@ -240,19 +247,19 @@ export default function HocPhiBlock({
     ? price1
     : price1 + partnerSum - comboSaving;
   const origTotal = usePostTitleGrouping
-    ? (selGoi?.gia_goc ?? 0)
-    : (selGoi?.gia_goc ?? 0) + origPartnerSum;
+    ? (activeGoi?.gia_goc ?? 0)
+    : (activeGoi?.gia_goc ?? 0) + origPartnerSum;
   const saved = origTotal - total;
   // ────────────────────────────────────────────────────────────────────────────
 
   const mainName = monMap[monHocId]?.trim() || `Môn ${monHocId}`;
 
   const selGoiNoteText = useMemo(() => {
-    const raw = selGoi?.note;
+    const raw = activeGoi?.note;
     if (raw == null || typeof raw !== "string") return null;
     const t = raw.trim();
     return t.length > 0 ? t : null;
-  }, [selGoi]);
+  }, [activeGoi]);
 
   if (!mon1Pills.length) {
     return (
@@ -275,19 +282,19 @@ export default function HocPhiBlock({
       {headerRow}
       <div className="hpb-price-wrap">
         <span className="hpb-price-main">
-          {selGoi ? vnd(total) : "—"}
+          {activeGoi ? vnd(total) : "—"}
         </span>
         {origTotal > total ? (
           <span className="hpb-price-orig">{vnd(origTotal)}</span>
         ) : null}
-        {!usePostTitleGrouping && selPartners.size === 0 && selGoi && selGoi.discount > 0 ? (
+        {!usePostTitleGrouping && selPartners.size === 0 && activeGoi && activeGoi.discount > 0 ? (
           <span className="hpb-badge hpb-badge--disc">
-            -{Math.round(selGoi.discount)}%
+            -{Math.round(activeGoi.discount)}%
           </span>
         ) : null}
-        {usePostTitleGrouping && selGoi && selGoi.discount > 0 ? (
+        {usePostTitleGrouping && activeGoi && activeGoi.discount > 0 ? (
           <span className="hpb-badge hpb-badge--disc">
-            -{Math.round(selGoi.discount)}%
+            -{Math.round(activeGoi.discount)}%
           </span>
         ) : null}
         {saved > 0 ? (
@@ -317,7 +324,7 @@ export default function HocPhiBlock({
               aria-label={group.postTitle || `Thời lượng ${mainName}`}
             >
               {group.pills.map((goi) => {
-                const isActive = selGoi != null && selGoi.id === goi.id;
+                const isActive = activeGoi != null && activeGoi.id === goi.id;
                 return (
                   <button
                     key={`${group.postTitle}|${durationKey(goi)}`}
@@ -345,9 +352,9 @@ export default function HocPhiBlock({
             <div className="hpb-pills" role="group" aria-label="Thời lượng môn chính">
               {mon1Pills.map((goi) => {
                 const isActive =
-                  selGoi != null &&
-                  goi.number === selGoi.number &&
-                  goi.don_vi.trim() === selGoi.don_vi.trim();
+                  activeGoi != null &&
+                  goi.number === activeGoi.number &&
+                  goi.don_vi.trim() === activeGoi.don_vi.trim();
                 return (
                   <button
                     key={durationKey(goi)}

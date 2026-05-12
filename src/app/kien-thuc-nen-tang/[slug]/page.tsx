@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import Script from "next/script";
 import { Suspense } from "react";
 
+import { JsonLd } from "@/components/seo/JsonLd";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import {
   buildLyThuyetHref,
@@ -11,6 +11,7 @@ import {
   fetchLyThuyetBySlug,
 } from "@/lib/data/ly-thuyet";
 import { buildKienThucNenTangArticleJsonLd } from "@/lib/seo/kien-thuc-nen-tang-article-jsonld";
+import { SITE_OG_DEFAULT_IMAGE, SITE_ORIGIN } from "@/lib/seo/site-jsonld";
 import { GROUP_ACCENT } from "@/types/ly-thuyet";
 
 import HeroFocusToggle from "../_components/HeroFocusToggle";
@@ -83,6 +84,13 @@ export async function generateStaticParams() {
   return slugs.map((slug) => ({ slug }));
 }
 
+function toAbsoluteImageUrl(url: string | undefined): string | undefined {
+  if (!url?.trim()) return undefined;
+  const u = url.trim();
+  if (/^https?:\/\//i.test(u)) return u;
+  return `${SITE_ORIGIN}${u.startsWith("/") ? "" : "/"}${u}`;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const row = await fetchLyThuyetBySlug(slug);
@@ -90,29 +98,48 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const desc =
     row.short_content?.trim() ||
     row.content?.replace(/<[^>]+>/g, " ").slice(0, 160).trim() ||
-    undefined;
+    `${row.ten} — Thư viện kiến thức nền tảng mỹ thuật Sine Art.`;
   const title = row.ten;
-  const thumb = row.thumbnail
-    ? cfImageForThumbnail(row.thumbnail) ?? row.thumbnail
-    : undefined;
+  const rawThumb = row.thumbnail?.trim();
+  const thumbResolved = rawThumb ? cfImageForThumbnail(rawThumb) ?? rawThumb : undefined;
+  const thumbAbs = toAbsoluteImageUrl(thumbResolved);
+  const pagePath = buildLyThuyetHref(row.slug);
+  const pageUrl = `${SITE_ORIGIN}${pagePath}`;
+  const ogImage = thumbAbs
+    ? [{ url: thumbAbs, width: 1200, height: 630, alt: title }]
+    : [
+        {
+          url: SITE_OG_DEFAULT_IMAGE,
+          width: 1200,
+          height: 630,
+          alt: `${title} — Thư viện Sine Art`,
+        },
+      ];
+  const twitterImg = thumbAbs ?? SITE_OG_DEFAULT_IMAGE;
+
   return {
-    title: `${title} — Thư viện Sine Art`,
+    /** Không ghi «Sine Art» ở cuối — `layout` đã có `title.template` thêm suffix. */
+    title: `${title} — Thư viện`,
     description: desc,
+    keywords: row.tagList.length > 0 ? row.tagList : undefined,
+    robots: { index: true, follow: true },
     alternates: {
-      canonical: `https://sineart.vn${buildLyThuyetHref(row.slug)}`,
+      canonical: pageUrl,
     },
     openGraph: {
       title,
       description: desc,
-      images: thumb ? [{ url: thumb }] : [],
-      type: "article",
+      url: pageUrl,
+      siteName: "Sine Art",
       locale: "vi_VN",
+      type: "article",
+      images: ogImage,
     },
     twitter: {
       card: "summary_large_image",
       title,
       description: desc,
-      images: thumb ? [thumb] : [],
+      images: [twitterImg],
     },
   };
 }
@@ -140,11 +167,7 @@ export default async function LyThuyetDetailPage({ params }: Props) {
 
   return (
     <>
-      <Script
-        id="ktn-detail-jsonld"
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <JsonLd schema={jsonLd} />
       <div className="sa-root kien-thuc-nen-tang-root">
         {/* Suspense #1: NavBar (cần fetch courses) — stream độc lập, không
             chặn hero/body. Skeleton giữ đúng chiều cao để tránh CLS. */}

@@ -25,8 +25,10 @@ import {
   createHoaCuDonBan,
   createHoaCuDonNhap,
   createHoaCuSanPham,
+  deleteHoaCuDonNhap,
   deleteHoaCuSanPham,
   loadHoaCuSanPhamCatalogAction,
+  updateHoaCuDonNhapMeta,
   updateHoaCuSanPham,
 } from "@/app/admin/dashboard/quan-ly-hoa-cu/actions";
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
@@ -91,6 +93,8 @@ type Props = {
     searchQ: string;
     inventoryTotal: number;
     inventoryHetHang: number;
+    /** Σ `ton_kho` toàn danh mục (khác với số dòng mặt hàng). */
+    inventoryTonSum: number;
   };
   nhapPage?: { rows: AdminHoaCuNhapDon[]; page: number; pageSize: number; total: number };
   banPage?: { rows: AdminHoaCuBanDon[]; page: number; pageSize: number; total: number };
@@ -149,6 +153,7 @@ export default function QuanLyHoaCuView({
 
   const inventoryTotal = khoPage?.inventoryTotal ?? 0;
   const hetHang = khoPage?.inventoryHetHang ?? 0;
+  const inventoryTonSum = khoPage?.inventoryTonSum ?? 0;
 
   function pushKhoSearch() {
     const t = qInput.trim();
@@ -174,7 +179,11 @@ export default function QuanLyHoaCuView({
             </p>
             <h1 className="m-0 text-[17px] font-bold tracking-tight">Quản lý họa cụ</h1>
             <p className="m-0 mt-0.5 text-xs text-[#AAAAAA]">
-              {inventoryTotal} mặt hàng · {hetHang} hết tồn
+              Tổng{" "}
+              <span className="font-semibold tabular-nums text-[#888]">
+                {new Intl.NumberFormat("vi-VN").format(inventoryTonSum)}
+              </span>{" "}
+              đơn vị tồn · {inventoryTotal} mặt hàng · {hetHang} hết tồn
             </p>
           </div>
         </div>
@@ -283,7 +292,14 @@ export default function QuanLyHoaCuView({
             }}
           />
         ) : activeSection === "nhap" && nhapPage ? (
-          <NhapTab rows={nhapPage.rows} pagination={{ ...nhapPage, basePath: HOA_CU_NHAP_PATH }} />
+          <NhapTab
+            rows={nhapPage.rows}
+            pagination={{ ...nhapPage, basePath: HOA_CU_NHAP_PATH }}
+            onListChanged={(msg, ok) => {
+              notify(msg, ok);
+              if (ok) router.refresh();
+            }}
+          />
         ) : activeSection === "ban" && banPage ? (
           <BanTab rows={banPage.rows} pagination={{ ...banPage, basePath: HOA_CU_BAN_PATH }} />
         ) : null}
@@ -570,70 +586,223 @@ function KhoTab({
   );
 }
 
+function ModalSuaDonNhap({
+  don,
+  onClose,
+  onDone,
+}: {
+  don: AdminHoaCuNhapDon;
+  onClose: () => void;
+  onDone: (msg: string, ok: boolean) => void;
+}) {
+  const [ncc, setNcc] = useState(don.nha_cung_cap?.trim() ?? "");
+  const [hinhThucChi, setHinhThucChi] = useState(don.hinh_thuc_chi?.trim() || HINH_THUC[0]);
+  const [busy, setBusy] = useState(false);
+
+  useLayoutEffect(() => {
+    setNcc(don.nha_cung_cap?.trim() ?? "");
+    setHinhThucChi(don.hinh_thuc_chi?.trim() || HINH_THUC[0]);
+  }, [don]);
+
+  async function save() {
+    setBusy(true);
+    const r = await updateHoaCuDonNhapMeta({
+      id: don.id,
+      nha_cung_cap: ncc.trim() || null,
+      hinh_thuc_chi: hinhThucChi.trim() || HINH_THUC[0],
+    });
+    setBusy(false);
+    if (r.ok) onDone(r.message ?? "Đã cập nhật.", true);
+    else onDone(r.error, false);
+  }
+
+  return (
+    <ModalShell
+      subtitle="Đơn nhập"
+      title="Sửa phiếu nhập"
+      maxWidthClassName="max-w-[min(96vw,520px)]"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2 text-[13px] text-[#666]">
+            Hủy
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void save()}
+            className="flex items-center gap-2 rounded-[10px] bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-5 py-2 text-[13px] font-bold text-white disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="animate-spin" size={16} /> : null}
+            Lưu
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-3">
+        <p className="m-0 text-[11px] leading-snug text-[#888]">
+          Chỉnh <span className="font-semibold text-[#555]">nhà cung cấp</span> ghi trên phiếu. Dòng hàng và số lượng giữ nguyên — muốn đổi SL hãy xoá phiếu rồi tạo đơn nhập mới.
+        </p>
+        <div className="rounded-[10px] border border-[#EAEAEA] bg-[#fafafa] px-3 py-2 text-[12px] text-[#555]">
+          <p className="m-0 font-semibold text-[#1a1a2e]">{fmtDt(don.created_at)}</p>
+          <p className="m-0 mt-1">
+            Người nhập: <span className="font-medium">{don.nguoi_nhap_name}</span> · {don.so_mat_hang} dòng · {fmtVnd(don.tong_tien)}
+          </p>
+        </div>
+        <label className="block">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Nhà cung cấp</span>
+          <input
+            value={ncc}
+            onChange={(e) => setNcc(e.target.value)}
+            className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+            placeholder="Tuỳ chọn"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Hình thức chi *</span>
+          <select
+            value={hinhThucChi}
+            onChange={(e) => setHinhThucChi(e.target.value)}
+            className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+          >
+            {HINH_THUC.map((h) => (
+              <option key={h} value={h}>
+                {h}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </ModalShell>
+  );
+}
+
 function NhapTab({
   rows,
   pagination,
+  onListChanged,
 }: {
   rows: AdminHoaCuNhapDon[];
   pagination: { page: number; pageSize: number; total: number; basePath: string };
+  onListChanged: (msg: string, ok: boolean) => void;
 }) {
+  const [editDon, setEditDon] = useState<AdminHoaCuNhapDon | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  async function handleDelete(r: AdminHoaCuNhapDon) {
+    if (!window.confirm(`Xoá phiếu nhập ${fmtDt(r.created_at)}? Tồn kho sẽ điều chỉnh theo cấu hình database (trigger).`)) return;
+    setDeletingId(r.id);
+    const res = await deleteHoaCuDonNhap(r.id);
+    setDeletingId(null);
+    if (res.ok) onListChanged(res.message ?? "Đã xoá.", true);
+    else onListChanged(res.error, false);
+  }
+
   return (
-    <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
-      <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
-        <table className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
-          <colgroup>
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "32%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "20%" }} />
-          </colgroup>
-          <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
-            <tr>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Thời gian</th>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Người nhập</th>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Nhà cung cấp</th>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Dòng</th>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Tổng (theo giá nhập)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
+    <>
+      <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
+        <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
+          <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
+            <colgroup>
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "22%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "15%" }} />
+            </colgroup>
+            <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
               <tr>
-                <td
-                  colSpan={5}
-                  className="border-b border-[#f8fafc] px-4 py-10 text-center align-middle text-sm text-[#888] min-h-[min(50dvh,520px)]"
-                >
-                  Chưa có đơn nhập.
-                </td>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Thời gian</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Người nhập</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Nhà cung cấp</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Dòng</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Tổng (theo giá nhập)</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Hình thức chi</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Thao tác</th>
               </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id} className="hover:bg-[#fafafa]">
-                  <td className="border-b border-[#f8fafc] px-2 py-2 align-middle whitespace-nowrap text-[#666] sm:px-3">
-                    {fmtDt(r.created_at)}
-                  </td>
-                  <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">{r.nguoi_nhap_name}</td>
-                  <td className="border-b border-[#f8fafc] px-2 py-2 align-middle break-words text-[#555] sm:px-3">
-                    {r.nha_cung_cap?.trim() || "—"}
-                  </td>
-                  <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle tabular-nums sm:px-3">{r.so_mat_hang}</td>
-                  <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle font-semibold tabular-nums sm:px-3">
-                    {fmtVnd(r.tong_tien)}
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="border-b border-[#f8fafc] px-4 py-10 text-center align-middle text-sm text-[#888] min-h-[min(50dvh,520px)]"
+                  >
+                    Chưa có đơn nhập.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                rows.map((r) => {
+                  const busy = deletingId === r.id;
+                  return (
+                    <tr key={r.id} className="hover:bg-[#fafafa]">
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle whitespace-nowrap text-[#666] sm:px-3">
+                        {fmtDt(r.created_at)}
+                      </td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">{r.nguoi_nhap_name}</td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle break-words text-[#555] sm:px-3">
+                        {r.nha_cung_cap?.trim() || "—"}
+                      </td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle tabular-nums sm:px-3">{r.so_mat_hang}</td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle font-semibold tabular-nums sm:px-3">
+                        {fmtVnd(r.tong_tien)}
+                      </td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle text-[#555] sm:px-3">
+                        {r.hinh_thuc_chi?.trim() || "—"}
+                      </td>
+                      <td className="border-b border-[#f8fafc] px-1 py-2 text-right align-middle sm:px-2">
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            title="Sửa"
+                            onClick={() => setEditDon(r)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#EAEAEA] text-[#555] transition hover:border-[#BC8AF9]/50 hover:bg-[#BC8AF9]/8 hover:text-[#1a1a2e]"
+                          >
+                            <Pencil size={15} strokeWidth={2} aria-hidden />
+                            <span className="sr-only">Sửa</span>
+                          </button>
+                          <button
+                            type="button"
+                            title="Xoá"
+                            disabled={busy}
+                            onClick={() => void handleDelete(r)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                          >
+                            {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Trash2 size={15} strokeWidth={2} aria-hidden />}
+                            <span className="sr-only">Xoá</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        <HoaCuPager
+          page={pagination.page}
+          total={pagination.total}
+          pageSize={pagination.pageSize}
+          basePath={pagination.basePath}
+        />
       </div>
-      <HoaCuPager
-        page={pagination.page}
-        total={pagination.total}
-        pageSize={pagination.pageSize}
-        basePath={pagination.basePath}
-      />
-    </div>
+      <AnimatePresence>
+        {editDon ? (
+          <ModalSuaDonNhap
+            key={`sua-nhap-${editDon.id}`}
+            don={editDon}
+            onClose={() => setEditDon(null)}
+            onDone={(msg, ok) => {
+              onListChanged(msg, ok);
+              if (ok) setEditDon(null);
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -1338,7 +1507,6 @@ function FieldLoggedInStaffRow({ label, name }: { label: string; name: string })
           {display}
         </span>
       </div>
-      <p className="m-0 text-[11px] leading-snug text-[#888]">Theo tài khoản đăng nhập dashboard.</p>
     </div>
   );
 }
@@ -1359,30 +1527,51 @@ function ModalNhapHang({
   onDone: (msg: string, ok: boolean) => void;
 }) {
   const [ncc, setNcc] = useState("");
+  const [hinhThucChi, setHinhThucChi] = useState<string>(HINH_THUC[0]);
   const [lines, setLines] = useState<Line[]>([{ hangId: "", qty: "1" }]);
   const [busy, setBusy] = useState(false);
+  const saveLockRef = useRef(false);
+
+  const tamTinhNhap = useMemo(() => {
+    return lines.reduce((s, l) => {
+      const sp = sanPham.find((x) => String(x.id) === l.hangId);
+      return s + (sp ? sp.gia_nhap * (Number(l.qty) || 0) : 0);
+    }, 0);
+  }, [lines, sanPham]);
 
   async function save() {
-    const valid = lines
-      .map((l) => ({ mat_hang: Number(l.hangId), so_luong_nhap: Number(l.qty) }))
-      .filter((l) => l.mat_hang > 0 && l.so_luong_nhap > 0);
-    if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) {
-      onDone("Không xác định được nhân sự đăng nhập.", false);
-      return;
+    if (saveLockRef.current) return;
+    saveLockRef.current = true;
+    try {
+      const valid = lines
+        .map((l) => ({ mat_hang: Number(l.hangId), so_luong_nhap: Number(l.qty) }))
+        .filter((l) => l.mat_hang > 0 && l.so_luong_nhap > 0);
+      if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) {
+        onDone("Không xác định được nhân sự đăng nhập.", false);
+        return;
+      }
+      if (!valid.length) {
+        onDone("Thêm ít nhất một mặt hàng.", false);
+        return;
+      }
+      setBusy(true);
+      const idempotency_key =
+        typeof globalThis.crypto !== "undefined" && "randomUUID" in globalThis.crypto
+          ? globalThis.crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const r = await createHoaCuDonNhap({
+        nguoi_nhap: defaultStaffId,
+        nha_cung_cap: ncc.trim() || null,
+        hinh_thuc_chi: hinhThucChi.trim() || HINH_THUC[0],
+        lines: valid,
+        idempotency_key,
+      });
+      if (r.ok) onDone(r.message ?? "Đã lưu.", true);
+      else onDone(r.error, false);
+    } finally {
+      saveLockRef.current = false;
+      setBusy(false);
     }
-    if (!valid.length) {
-      onDone("Thêm ít nhất một mặt hàng.", false);
-      return;
-    }
-    setBusy(true);
-    const r = await createHoaCuDonNhap({
-      nguoi_nhap: defaultStaffId,
-      nha_cung_cap: ncc.trim() || null,
-      lines: valid,
-    });
-    setBusy(false);
-    if (r.ok) onDone(r.message ?? "Đã lưu.", true);
-    else onDone(r.error, false);
   }
 
   return (
@@ -1424,21 +1613,52 @@ function ModalNhapHang({
             placeholder="Tuỳ chọn"
           />
         </label>
-        <p className="m-0 text-[10px] font-bold uppercase text-[#AAA]">Hàng nhập *</p>
+        <label className="block">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Hình thức chi *</span>
+          <select
+            value={hinhThucChi}
+            onChange={(e) => setHinhThucChi(e.target.value)}
+            className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+          >
+            {HINH_THUC.map((h) => (
+              <option key={h} value={h}>
+                {h}
+              </option>
+            ))}
+          </select>
+          <p className="m-0 mt-1 text-[11px] leading-snug text-[#888]">
+            Ghi nhận cho <span className="font-semibold text-[#555]">Thống kê thu chi</span> và BCTC (khoản chi nhập kho).
+          </p>
+        </label>
+        <div className="flex items-center justify-between rounded-[10px] border border-[#EAEAEA] bg-[#fafafa] px-3 py-2.5">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-[#AAA]">Tạm tính (giá nhập × SL)</span>
+          <span className="text-sm font-extrabold tabular-nums text-[#1a1a2e]">{fmtVnd(tamTinhNhap)}</span>
+        </div>
+        <div className="space-y-1">
+          <p className="m-0 text-[10px] font-bold uppercase text-[#AAA]">Hàng nhập *</p>
+          <p className="m-0 text-[11px] leading-snug text-[#888]">
+            Ô số là <span className="font-semibold text-[#555]">số lượng nhập trên phiếu</span> — được{" "}
+            <span className="font-semibold text-[#555]">cộng thêm</span> vào tồn kho hiện tại (không phải nhập tồn tuyệt đối).
+          </p>
+        </div>
         {lines.map((l, i) => (
-          <div key={i} className="flex flex-wrap gap-2">
+          <div key={i} className="flex flex-wrap items-end gap-2">
             <HoaCuSanPhamPicker
               variant="nhap"
               sanPham={sanPham}
               value={l.hangId}
               onChange={(id) => setLines((p) => p.map((x, j) => (j === i ? { ...x, hangId: id } : x)))}
             />
-            <input
-              value={l.qty}
-              onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
-              inputMode="numeric"
-              className="w-20 rounded-[10px] border border-[#EAEAEA] px-2 py-2 text-center text-[13px]"
-            />
+            <label className="flex shrink-0 flex-col gap-1">
+              <span className="text-[9px] font-extrabold uppercase tracking-wide text-[#AAA]">SL nhập</span>
+              <input
+                value={l.qty}
+                onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
+                inputMode="numeric"
+                aria-label="Số lượng nhập (cộng vào tồn)"
+                className="w-20 rounded-[10px] border border-[#EAEAEA] px-2 py-2 text-center text-[13px]"
+              />
+            </label>
             <button
               type="button"
               aria-label="Xóa dòng"
@@ -1483,6 +1703,7 @@ function ModalBanHang({
   const [hinhThuc, setHinhThuc] = useState<string>(HINH_THUC[0]);
   const [lines, setLines] = useState<Line[]>([{ hangId: "", qty: "1" }]);
   const [busy, setBusy] = useState(false);
+  const saveLockRef = useRef(false);
 
   const tenKhach = students.find((s) => String(s.id) === hv)?.full_name ?? "";
   const total = lines.reduce((s, l) => {
@@ -1491,39 +1712,50 @@ function ModalBanHang({
   }, 0);
 
   async function save() {
-    const valid = lines
-      .map((l) => ({ mat_hang: Number(l.hangId), so_luong_ban: Number(l.qty) }))
-      .filter((l) => l.mat_hang > 0 && l.so_luong_ban > 0);
-    if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) {
-      onDone("Không xác định được nhân sự đăng nhập.", false);
-      return;
-    }
-    if (!hv) {
-      onDone("Chọn khách hàng (học viên).", false);
-      return;
-    }
-    if (!valid.length) {
-      onDone("Thêm ít nhất một mặt hàng.", false);
-      return;
-    }
-    for (const l of valid) {
-      const sp = sanPham.find((x) => x.id === l.mat_hang);
-      const t = sp?.ton_kho ?? 0;
-      if (t > 0 && l.so_luong_ban > t) {
-        onDone(`«${sp?.ten_hang ?? "#" + l.mat_hang}» chỉ còn ${t}.`, false);
+    if (saveLockRef.current) return;
+    saveLockRef.current = true;
+    try {
+      const valid = lines
+        .map((l) => ({ mat_hang: Number(l.hangId), so_luong_ban: Number(l.qty) }))
+        .filter((l) => l.mat_hang > 0 && l.so_luong_ban > 0);
+      if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) {
+        onDone("Không xác định được nhân sự đăng nhập.", false);
         return;
       }
+      if (!hv) {
+        onDone("Chọn khách hàng (học viên).", false);
+        return;
+      }
+      if (!valid.length) {
+        onDone("Thêm ít nhất một mặt hàng.", false);
+        return;
+      }
+      for (const l of valid) {
+        const sp = sanPham.find((x) => x.id === l.mat_hang);
+        const t = sp?.ton_kho ?? 0;
+        if (t > 0 && l.so_luong_ban > t) {
+          onDone(`«${sp?.ten_hang ?? "#" + l.mat_hang}» chỉ còn ${t}.`, false);
+          return;
+        }
+      }
+      setBusy(true);
+      const idempotency_key =
+        typeof globalThis.crypto !== "undefined" && "randomUUID" in globalThis.crypto
+          ? globalThis.crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const r = await createHoaCuDonBan({
+        nguoi_ban: defaultStaffId,
+        khach_hang: Number(hv),
+        hinh_thuc_thu: hinhThuc,
+        lines: valid,
+        idempotency_key,
+      });
+      if (r.ok) onDone(r.message ?? "Đã lưu.", true);
+      else onDone(r.error, false);
+    } finally {
+      saveLockRef.current = false;
+      setBusy(false);
     }
-    setBusy(true);
-    const r = await createHoaCuDonBan({
-      nguoi_ban: defaultStaffId,
-      khach_hang: Number(hv),
-      hinh_thuc_thu: hinhThuc,
-      lines: valid,
-    });
-    setBusy(false);
-    if (r.ok) onDone(r.message ?? "Đã lưu.", true);
-    else onDone(r.error, false);
   }
 
   const qrUrl =
@@ -1533,21 +1765,30 @@ function ModalBanHang({
 
   const hangBanLines = (
     <>
-      <p className="m-0 text-[10px] font-bold uppercase text-[#AAA]">Hàng bán *</p>
+      <div className="space-y-1">
+        <p className="m-0 text-[10px] font-bold uppercase text-[#AAA]">Hàng bán *</p>
+        <p className="m-0 text-[11px] leading-snug text-[#888]">
+          Ô số là số lượng bán — <span className="font-semibold text-[#555]">trừ khỏi</span> tồn kho.
+        </p>
+      </div>
       {lines.map((l, i) => (
-        <div key={i} className="flex flex-wrap gap-2">
+        <div key={i} className="flex flex-wrap items-end gap-2">
           <HoaCuSanPhamPicker
             variant="ban"
             sanPham={sanPham}
             value={l.hangId}
             onChange={(id) => setLines((p) => p.map((x, j) => (j === i ? { ...x, hangId: id } : x)))}
           />
-          <input
-            value={l.qty}
-            onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
-            inputMode="numeric"
-            className="w-20 rounded-[10px] border border-[#EAEAEA] px-2 py-2 text-center text-[13px]"
-          />
+          <label className="flex shrink-0 flex-col gap-1">
+            <span className="text-[9px] font-extrabold uppercase tracking-wide text-[#AAA]">SL bán</span>
+            <input
+              value={l.qty}
+              onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
+              inputMode="numeric"
+              aria-label="Số lượng bán"
+              className="w-20 rounded-[10px] border border-[#EAEAEA] px-2 py-2 text-center text-[13px]"
+            />
+          </label>
           <button
             type="button"
             aria-label="Xóa dòng"

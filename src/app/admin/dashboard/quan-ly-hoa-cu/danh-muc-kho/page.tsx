@@ -81,6 +81,7 @@ export default async function QuanLyHoaCuDanhMucKhoPage({ searchParams }: Props)
         searchQ: q,
         inventoryTotal: inv.total,
         inventoryHetHang: inv.hetHang,
+        inventoryTonSum: inv.tonSum,
       }}
     />
   );

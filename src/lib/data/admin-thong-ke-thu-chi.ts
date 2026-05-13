@@ -7,7 +7,7 @@ const MAX_HP_DONS = 4000;
 const MAX_HC_DONS = 2000;
 const MAX_GD = 500;
 
-export type ThongKeThuChiNguon = "hoc-phi" | "hoa-cu" | "giao-dich";
+export type ThongKeThuChiNguon = "hoc-phi" | "hoa-cu" | "hoa-cu-nhap" | "giao-dich";
 
 export type AdminThongKeThuChiRow = {
   id: string;
@@ -97,6 +97,24 @@ function unwrapSp(
   };
 }
 
+type ChiNhapThongKeRow = {
+  don_nhap: number;
+  so_luong_nhap: number | null;
+  mat_hang: number | null;
+  thanh_tien?: number | string | null;
+  hc_danh_sach_san_pham?: { ten_hang?: string | null; gia_nhap?: number | null } | { ten_hang?: string | null; gia_nhap?: number | null }[] | null;
+};
+
+function unwrapSpNhap(
+  v: { ten_hang?: unknown; gia_nhap?: unknown } | { ten_hang?: unknown; gia_nhap?: unknown }[] | null | undefined
+): { tenHang: string; giaNhap: number } {
+  const o = Array.isArray(v) ? v[0] : v;
+  return {
+    tenHang: String(o?.ten_hang ?? "").trim(),
+    giaNhap: Number(o?.gia_nhap) || 0,
+  };
+}
+
 function transferIsThu(raw: string | null | undefined): boolean {
   const t = (raw ?? "").trim().toLowerCase();
   return t === "in" || t === "credit" || t.includes("thu");
@@ -108,7 +126,7 @@ function transferIsChi(raw: string | null | undefined): boolean {
 }
 
 /**
- * Gộp học phí (đã thanh toán), bán họa cụ, giao dịch SePay (`hp_giao_dich_thanh_toan`) cho trang thống kê.
+ * Gộp học phí (đã thanh toán), bán họa cụ (thu), nhập họa cụ (chi), giao dịch SePay cho trang thống kê.
  * Tiền học phí = tổng dòng `hp_thu_hp_chi_tiet` (theo gói) trừ `giam_gia` và `giam_gia_vnd` đơn — cùng logic «Quản lý hóa đơn».
  */
 export async function fetchAdminThongKeThuChiBundle(
@@ -116,7 +134,7 @@ export async function fetchAdminThongKeThuChiBundle(
 ): Promise<{ ok: true; data: AdminThongKeThuChiBundle } | { ok: false; error: string }> {
   const rows: AdminThongKeThuChiRow[] = [];
 
-  const [donRes, banDonRes, gdRes, loaiRes] = await Promise.all([
+  const [donRes, banDonRes, nhapDonRes, gdRes, loaiRes] = await Promise.all([
     supabase
       .from("hp_don_thu_hoc_phi")
       .select(
@@ -128,6 +146,11 @@ export async function fetchAdminThongKeThuChiBundle(
     supabase
       .from("hc_don_ban_hoa_cu")
       .select("id, created_at, hinh_thuc_thu, tong_tien")
+      .order("created_at", { ascending: false })
+      .limit(MAX_HC_DONS),
+    supabase
+      .from("hc_nhap_hoa_cu")
+      .select("id, created_at, hinh_thuc_chi, tong_tien, nha_cung_cap")
       .order("created_at", { ascending: false })
       .limit(MAX_HC_DONS),
     supabase
@@ -145,6 +168,9 @@ export async function fetchAdminThongKeThuChiBundle(
   }
   if (banDonRes.error) {
     return { ok: false, error: banDonRes.error.message || "Không đọc được đơn bán họa cụ." };
+  }
+  if (nhapDonRes.error) {
+    return { ok: false, error: nhapDonRes.error.message || "Không đọc được đơn nhập họa cụ." };
   }
   if (gdRes.error) {
     return { ok: false, error: gdRes.error.message || "Không đọc được giao dịch thanh toán." };
@@ -386,6 +412,89 @@ export async function fetchAdminThongKeThuChiBundle(
         chi: 0,
         trangThai: "Đã thanh toán",
         ghiChu: "",
+      });
+    }
+  }
+
+  const nhapRecs = nhapDonRes.data ?? [];
+  const nhapIds = nhapRecs
+    .map((r) => nId((r as { id?: unknown }).id))
+    .filter((x): x is number => x != null);
+
+  const nhapMeta = new Map<
+    number,
+    { created_at: string; hinh_thuc_chi: string; tong_tien_db: unknown; nha_cung_cap: string }
+  >();
+  for (const raw of nhapRecs) {
+    const r = raw as {
+      id?: unknown;
+      created_at?: unknown;
+      hinh_thuc_chi?: unknown;
+      tong_tien?: unknown;
+      nha_cung_cap?: unknown;
+    };
+    const id = nId(r.id);
+    if (!id) continue;
+    nhapMeta.set(id, {
+      created_at: String(r.created_at ?? ""),
+      hinh_thuc_chi: String(r.hinh_thuc_chi ?? "").trim(),
+      tong_tien_db: r.tong_tien,
+      nha_cung_cap: String(r.nha_cung_cap ?? "").trim(),
+    });
+  }
+
+  if (nhapIds.length > 0) {
+    const { data: ctNhap, error: ctNhapErr } = await supabase
+      .from("hc_nhap_hoa_cu_chi_tiet")
+      .select("don_nhap, so_luong_nhap, mat_hang, thanh_tien, hc_danh_sach_san_pham(ten_hang,gia_nhap)")
+      .in("don_nhap", nhapIds);
+    if (ctNhapErr) {
+      return { ok: false, error: ctNhapErr.message || "Không đọc được chi tiết nhập họa cụ." };
+    }
+
+    const nhapGroups = new Map<number, { total: number; items: string[]; created_at: string; hinhThuc: string }>();
+    for (const line of (ctNhap ?? []) as ChiNhapThongKeRow[]) {
+      const donId = nId(line.don_nhap);
+      if (!donId) continue;
+      const { tenHang, giaNhap } = unwrapSpNhap(line.hc_danh_sach_san_pham);
+      const sl = Number(line.so_luong_nhap) || 1;
+      const rawTt = line.thanh_tien;
+      const lineTotal =
+        rawTt != null && String(rawTt).trim() !== "" ? parseMoney(rawTt) : giaNhap * sl;
+      if (!nhapGroups.has(donId)) {
+        const m = nhapMeta.get(donId);
+        nhapGroups.set(donId, {
+          total: 0,
+          items: [],
+          created_at: m?.created_at ?? "",
+          hinhThuc: m?.hinh_thuc_chi ?? "",
+        });
+      }
+      const g = nhapGroups.get(donId)!;
+      g.total += lineTotal;
+      if (tenHang) g.items.push(tenHang);
+    }
+
+    for (const [donId, g] of nhapGroups) {
+      const meta = nhapMeta.get(donId);
+      const headerRaw = meta?.tong_tien_db;
+      const headerTotal =
+        headerRaw != null && headerRaw !== "" ? parseMoney(headerRaw) : null;
+      const totalChi = headerTotal !== null ? headerTotal : g.total;
+      if (totalChi <= 0) continue;
+      const tieude = g.items.filter(Boolean).join(", ") || "Nhập họa cụ";
+      const ncc = meta?.nha_cung_cap?.trim() ?? "";
+      rows.push({
+        id: `hcn_${donId}`,
+        nguon: "hoa-cu-nhap",
+        datetime: g.created_at || "",
+        maDon: `HCN-${donId}`,
+        tieude,
+        hinhThuc: g.hinhThuc,
+        thu: 0,
+        chi: Math.round(totalChi),
+        trangThai: g.hinhThuc || "—",
+        ghiChu: ncc ? `NCC: ${ncc}` : "",
       });
     }
   }

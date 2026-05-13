@@ -27,6 +27,8 @@ export type AdminHoaCuNhapDon = {
   id: number;
   created_at: string;
   nha_cung_cap: string | null;
+  /** Tiền mặt / Chuyển khoản — chi phí nhập kho. */
+  hinh_thuc_chi: string | null;
   nguoi_nhap: number | null;
   nguoi_nhap_name: string;
   so_mat_hang: number;
@@ -213,14 +215,10 @@ function groupByDon<T extends { don_nhap?: number; don_ban?: number }>(
   return m;
 }
 
-/** Toàn bộ danh mục kho (dùng cho modal nhập/bán / picker). */
+/** Toàn bộ danh mục kho (dùng cho modal nhập/bán / picker). Luôn đọc bảng gốc — `hc_danh_sach_san_pham_view` có thể tính `ton_kho` lệch so với cột thật (nhập 1 mà hiển thị +2). */
 export async function fetchAllHoaCuSanPham(
   supabase: SupabaseClient,
 ): Promise<{ data: AdminHoaCuSanPham[]; error: string | null }> {
-  const viewRes = await supabase.from("hc_danh_sach_san_pham_view").select(KHO_SELECT).order("ten_hang");
-  if (!viewRes.error && viewRes.data) {
-    return { data: normalizeSanPham(viewRes.data), error: null };
-  }
   const tRes = await supabase.from("hc_danh_sach_san_pham").select(KHO_SELECT).order("ten_hang");
   if (tRes.error) return { data: [], error: tRes.error.message };
   return { data: normalizeSanPham(tRes.data ?? []), error: null };
@@ -309,7 +307,7 @@ export async function fetchAdminHoaCuBundle(
 
   const { data: nhapRecs, error: nhapErr } = await supabase
     .from("hc_nhap_hoa_cu")
-    .select("id, created_at, nha_cung_cap, nguoi_nhap, tong_tien")
+    .select("id, created_at, nha_cung_cap, hinh_thuc_chi, nguoi_nhap, tong_tien")
     .order("created_at", { ascending: false })
     .limit(300);
   if (nhapErr) return { ok: false, error: nhapErr.message };
@@ -330,6 +328,7 @@ export async function fetchAdminHoaCuBundle(
       id: number;
       created_at: string;
       nha_cung_cap?: string | null;
+      hinh_thuc_chi?: string | null;
       nguoi_nhap?: number | null;
       tong_tien?: unknown;
     };
@@ -340,6 +339,7 @@ export async function fetchAdminHoaCuBundle(
       id: r.id,
       created_at: r.created_at,
       nha_cung_cap: r.nha_cung_cap ?? null,
+      hinh_thuc_chi: r.hinh_thuc_chi ?? null,
       nguoi_nhap: r.nguoi_nhap ?? null,
       nguoi_nhap_name: nv,
       so_mat_hang: ct.length,
@@ -416,7 +416,7 @@ export type KhoSanPhamPage = {
   pageSize: number;
 };
 
-/** Một trang danh mục kho + tổng bản ghi (server pagination). */
+/** Một trang danh mục kho + tổng bản ghi (server pagination). Chỉ `hc_danh_sach_san_pham` — không dùng view (tránh `ton_kho` lệch). */
 export async function fetchKhoSanPhamPage(
   supabase: SupabaseClient,
   opts: { page: number; pageSize?: number; q?: string | null },
@@ -428,18 +428,11 @@ export async function fetchKhoSanPhamPage(
   const rawQ = (opts.q ?? "").trim();
   const searchPat = rawQ ? `%${rawQ.replace(/%/g, "\\%")}%` : "";
 
-  async function runTable(table: "hc_danh_sach_san_pham_view" | "hc_danh_sach_san_pham") {
-    let qb = supabase.from(table).select(KHO_SELECT, { count: "exact" });
-    if (searchPat) {
-      qb = qb.or(`ten_hang.ilike.${searchPat},loai_san_pham.ilike.${searchPat}`);
-    }
-    return qb.order("ton_kho", { ascending: false }).order("ten_hang", { ascending: true }).range(from, to);
+  let qb = supabase.from("hc_danh_sach_san_pham").select(KHO_SELECT, { count: "exact" });
+  if (searchPat) {
+    qb = qb.or(`ten_hang.ilike.${searchPat},loai_san_pham.ilike.${searchPat}`);
   }
-
-  let res = await runTable("hc_danh_sach_san_pham_view");
-  if (res.error) {
-    res = await runTable("hc_danh_sach_san_pham");
-  }
+  const res = await qb.order("ton_kho", { ascending: false }).order("ten_hang", { ascending: true }).range(from, to);
   if (res.error) return { ok: false, error: res.error.message };
 
   return {
@@ -451,18 +444,20 @@ export async function fetchKhoSanPhamPage(
   };
 }
 
-/** Số mặt hàng + số hết tồn (header trang kho). */
+/** Số mặt hàng, số hết tồn, và tổng đơn vị tồn (Σ `ton_kho`) — header trang kho. */
 export async function fetchKhoInventoryStats(
   supabase: SupabaseClient,
-): Promise<{ total: number; hetHang: number }> {
-  const { count: total } = await supabase
-    .from("hc_danh_sach_san_pham")
-    .select("id", { count: "exact", head: true });
-  const { count: het } = await supabase
-    .from("hc_danh_sach_san_pham")
-    .select("id", { count: "exact", head: true })
-    .lte("ton_kho", 0);
-  return { total: total ?? 0, hetHang: het ?? 0 };
+): Promise<{ total: number; hetHang: number; tonSum: number }> {
+  const [{ count: total }, { count: het }, tonsRes] = await Promise.all([
+    supabase.from("hc_danh_sach_san_pham").select("id", { count: "exact", head: true }),
+    supabase.from("hc_danh_sach_san_pham").select("id", { count: "exact", head: true }).lte("ton_kho", 0),
+    supabase.from("hc_danh_sach_san_pham").select("ton_kho"),
+  ]);
+  const tonSum = (tonsRes.data ?? []).reduce((s, r) => s + (Number((r as { ton_kho?: unknown }).ton_kho) || 0), 0);
+  if (tonsRes.error) {
+    return { total: total ?? 0, hetHang: het ?? 0, tonSum: 0 };
+  }
+  return { total: total ?? 0, hetHang: het ?? 0, tonSum };
 }
 
 export type DonNhapPage = {
@@ -569,7 +564,7 @@ export async function fetchDonNhapPage(
 
   const { data: nhapRecs, error: nhapErr, count } = await supabase
     .from("hc_nhap_hoa_cu")
-    .select("id, created_at, nha_cung_cap, nguoi_nhap, tong_tien", { count: "exact" })
+    .select("id, created_at, nha_cung_cap, hinh_thuc_chi, nguoi_nhap, tong_tien", { count: "exact" })
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -591,6 +586,7 @@ export async function fetchDonNhapPage(
       id: number;
       created_at: string;
       nha_cung_cap?: string | null;
+      hinh_thuc_chi?: string | null;
       nguoi_nhap?: number | null;
       tong_tien?: unknown;
     };
@@ -601,6 +597,7 @@ export async function fetchDonNhapPage(
       id: r.id,
       created_at: r.created_at,
       nha_cung_cap: r.nha_cung_cap ?? null,
+      hinh_thuc_chi: r.hinh_thuc_chi ?? null,
       nguoi_nhap: r.nguoi_nhap ?? null,
       nguoi_nhap_name: nv,
       so_mat_hang: ct.length,

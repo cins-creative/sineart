@@ -47,12 +47,90 @@ async function refreshBanDonTongTien(
   return { ok: true };
 }
 
+function mergeNhapLines(lines: { mat_hang: number; so_luong_nhap: number }[]) {
+  const m = new Map<number, number>();
+  for (const l of lines) {
+    const id = l.mat_hang;
+    if (!Number.isFinite(id) || id <= 0) continue;
+    const q = Math.max(1, Math.trunc(l.so_luong_nhap));
+    if (!Number.isFinite(q) || q <= 0) continue;
+    m.set(id, (m.get(id) ?? 0) + q);
+  }
+  return [...m.entries()].map(([mat_hang, so_luong_nhap]) => ({ mat_hang, so_luong_nhap }));
+}
+
+function mergeBanLines(lines: { mat_hang: number; so_luong_ban: number }[]) {
+  const m = new Map<number, number>();
+  for (const l of lines) {
+    const id = l.mat_hang;
+    if (!Number.isFinite(id) || id <= 0) continue;
+    const q = Math.max(1, Math.trunc(l.so_luong_ban));
+    if (!Number.isFinite(q) || q <= 0) continue;
+    m.set(id, (m.get(id) ?? 0) + q);
+  }
+  return [...m.entries()].map(([mat_hang, so_luong_ban]) => ({ mat_hang, so_luong_ban }));
+}
+
+function isPgUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err != null && (err as { code?: string }).code === "23505";
+}
+
 async function rollbackNhapDon(
   supabase: NonNullable<ReturnType<typeof createServiceRoleClient>>,
   donNhapId: number
 ): Promise<void> {
   await supabase.from("hc_nhap_hoa_cu_chi_tiet").delete().eq("don_nhap", donNhapId);
   await supabase.from("hc_nhap_hoa_cu").delete().eq("id", donNhapId);
+}
+
+/** Gộp số lượng theo `mat_hang` đúng như trong DB (không ép tối thiểu 1 như lúc tạo đơn). */
+function mergeNhapQtyFromDetailRows(rows: { mat_hang: number; so_luong_nhap: number }[]) {
+  const m = new Map<number, number>();
+  for (const l of rows) {
+    const id = l.mat_hang;
+    if (!Number.isFinite(id) || id <= 0) continue;
+    const q = Math.trunc(l.so_luong_nhap);
+    if (!Number.isFinite(q) || q <= 0) continue;
+    m.set(id, (m.get(id) ?? 0) + q);
+  }
+  return [...m.entries()].map(([mat_hang, so_luong_nhap]) => ({ mat_hang, so_luong_nhap }));
+}
+
+/** Trừ `ton_kho` theo phiếu nhập trước khi xoá chi tiết (DB có thể không có trigger DELETE đối xứng với INSERT). */
+async function subtractTonKhoForNhapDon(
+  supabase: NonNullable<ReturnType<typeof createServiceRoleClient>>,
+  donNhapId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: lines, error: le } = await supabase
+    .from("hc_nhap_hoa_cu_chi_tiet")
+    .select("mat_hang, so_luong_nhap")
+    .eq("don_nhap", donNhapId);
+  if (le) return { ok: false, error: le.message || "Không đọc được chi tiết đơn nhập." };
+
+  const merged = mergeNhapQtyFromDetailRows(
+    (lines ?? []).map((row) => ({
+      mat_hang: Number((row as { mat_hang?: unknown }).mat_hang),
+      so_luong_nhap: Number((row as { so_luong_nhap?: unknown }).so_luong_nhap) || 0,
+    }))
+  );
+  if (!merged.length) return { ok: true };
+
+  for (const l of merged) {
+    const { data: sp, error: se } = await supabase
+      .from("hc_danh_sach_san_pham")
+      .select("ton_kho")
+      .eq("id", l.mat_hang)
+      .maybeSingle();
+    if (se) return { ok: false, error: se.message || `Không đọc tồn kho mặt hàng #${l.mat_hang}.` };
+    const cur = Number((sp as { ton_kho?: unknown } | null)?.ton_kho) || 0;
+    const next = Math.max(0, cur - l.so_luong_nhap);
+    const { error: ue } = await supabase
+      .from("hc_danh_sach_san_pham")
+      .update({ ton_kho: next })
+      .eq("id", l.mat_hang);
+    if (ue) return { ok: false, error: ue.message || `Không cập nhật tồn kho #${l.mat_hang}.` };
+  }
+  return { ok: true };
 }
 
 async function rollbackBanDon(
@@ -170,7 +248,11 @@ export async function deleteHoaCuSanPham(id: number): Promise<HoaCuActionResult>
 export async function createHoaCuDonNhap(input: {
   nguoi_nhap: number;
   nha_cung_cap: string | null;
+  /** Tiền mặt / Chuyển khoản — cột `hinh_thuc_chi` trên `hc_nhap_hoa_cu` (chạy SQL `scripts/sql/hc-nhap-hinh-thuc-chi.sql` nếu chưa có). */
+  hinh_thuc_chi: string;
   lines: { mat_hang: number; so_luong_nhap: number }[];
+  /** Gửi `crypto.randomUUID()` từ client mỗi lần bấm lưu — cần cột + index unique (xem scripts/sql/hc-hoa-cu-idempotency.sql). */
+  idempotency_key?: string | null;
 }): Promise<HoaCuActionResult> {
   const session = await getAdminSessionOrNull();
   if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
@@ -178,22 +260,32 @@ export async function createHoaCuDonNhap(input: {
   if (!Number.isFinite(input.nguoi_nhap) || input.nguoi_nhap <= 0) {
     return { ok: false, error: "Chọn người nhập." };
   }
-  const lines = input.lines.filter((l) => l.mat_hang > 0 && l.so_luong_nhap > 0);
+  const rawLines = input.lines.filter((l) => l.mat_hang > 0 && l.so_luong_nhap > 0);
+  const lines = mergeNhapLines(rawLines);
   if (!lines.length) return { ok: false, error: "Thêm ít nhất một dòng hàng." };
 
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
 
-  const { data: don, error: e1 } = await supabase
-    .from("hc_nhap_hoa_cu")
-    .insert({
-      nguoi_nhap: input.nguoi_nhap,
-      nha_cung_cap: input.nha_cung_cap?.trim() || null,
-    })
-    .select("id")
-    .single();
+  const idem = input.idempotency_key?.trim() || null;
+  const hinhChi = input.hinh_thuc_chi?.trim() || "Tiền mặt";
+  const headerInsert: Record<string, unknown> = {
+    nguoi_nhap: input.nguoi_nhap,
+    nha_cung_cap: input.nha_cung_cap?.trim() || null,
+    hinh_thuc_chi: hinhChi,
+  };
+  if (idem) headerInsert.idempotency_key = idem;
 
-  if (e1 || !don?.id) return { ok: false, error: e1?.message || "Không tạo được đơn nhập." };
+  const { data: don, error: e1 } = await supabase.from("hc_nhap_hoa_cu").insert(headerInsert).select("id").single();
+
+  if (e1) {
+    if (idem && isPgUniqueViolation(e1)) {
+      revalidatePath(ADMIN_PATH, "layout");
+      return { ok: true, message: "Đã lưu đơn nhập." };
+    }
+    return { ok: false, error: e1.message || "Không tạo được đơn nhập." };
+  }
+  if (!don?.id) return { ok: false, error: "Không tạo được đơn nhập." };
 
   const donId = Number(don.id);
   const matIds = [...new Set(lines.map((l) => l.mat_hang))];
@@ -238,11 +330,64 @@ export async function createHoaCuDonNhap(input: {
   return { ok: true, message: "Đã lưu đơn nhập." };
 }
 
+export async function updateHoaCuDonNhapMeta(input: {
+  id: number;
+  nha_cung_cap: string | null;
+  hinh_thuc_chi?: string | null;
+}): Promise<HoaCuActionResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(input.id) || input.id <= 0) return { ok: false, error: "Đơn nhập không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const patch: Record<string, unknown> = {
+    nha_cung_cap: input.nha_cung_cap?.trim() || null,
+  };
+  if (input.hinh_thuc_chi !== undefined) {
+    patch.hinh_thuc_chi = input.hinh_thuc_chi?.trim() || null;
+  }
+
+  const { error } = await supabase.from("hc_nhap_hoa_cu").update(patch).eq("id", input.id);
+
+  if (error) return { ok: false, error: error.message || "Không cập nhật được đơn nhập." };
+
+  revalidatePath(ADMIN_PATH, "layout");
+  return { ok: true, message: "Đã cập nhật đơn nhập." };
+}
+
+/**
+ * Xoá đơn nhập: trừ lại `ton_kho` theo từng dòng chi tiết, rồi xoá chi tiết + header (`rollbackNhapDon`).
+ * Nếu sau này Supabase có trigger DELETE trên `hc_nhap_hoa_cu_chi_tiet` đã trừ tồn, cần bỏ `subtractTonKhoForNhapDon` để tránh trừ hai lần.
+ */
+export async function deleteHoaCuDonNhap(donId: number): Promise<HoaCuActionResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(donId) || donId <= 0) return { ok: false, error: "Đơn nhập không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const { data: exists, error: fe } = await supabase.from("hc_nhap_hoa_cu").select("id").eq("id", donId).maybeSingle();
+  if (fe) return { ok: false, error: fe.message };
+  if (!exists) return { ok: false, error: "Không tìm thấy đơn nhập." };
+
+  const sub = await subtractTonKhoForNhapDon(supabase, donId);
+  if (!sub.ok) return { ok: false, error: sub.error };
+
+  await rollbackNhapDon(supabase, donId);
+
+  revalidatePath(ADMIN_PATH, "layout");
+  return { ok: true, message: "Đã xoá đơn nhập." };
+}
+
 export async function createHoaCuDonBan(input: {
   nguoi_ban: number;
   khach_hang: number;
   hinh_thuc_thu: string;
   lines: { mat_hang: number; so_luong_ban: number }[];
+  idempotency_key?: string | null;
 }): Promise<HoaCuActionResult> {
   const session = await getAdminSessionOrNull();
   if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
@@ -251,7 +396,8 @@ export async function createHoaCuDonBan(input: {
   if (!Number.isFinite(input.khach_hang) || input.khach_hang <= 0) {
     return { ok: false, error: "Chọn khách hàng (học viên)." };
   }
-  const lines = input.lines.filter((l) => l.mat_hang > 0 && l.so_luong_ban > 0);
+  const rawLines = input.lines.filter((l) => l.mat_hang > 0 && l.so_luong_ban > 0);
+  const lines = mergeBanLines(rawLines);
   if (!lines.length) return { ok: false, error: "Thêm ít nhất một dòng hàng." };
 
   const supabase = createServiceRoleClient();
@@ -282,17 +428,24 @@ export async function createHoaCuDonBan(input: {
     }
   }
 
-  const { data: don, error: e1 } = await supabase
-    .from("hc_don_ban_hoa_cu")
-    .insert({
-      nguoi_ban: input.nguoi_ban,
-      khach_hang: input.khach_hang,
-      hinh_thuc_thu: input.hinh_thuc_thu.trim() || "Tiền mặt",
-    })
-    .select("id")
-    .single();
+  const idem = input.idempotency_key?.trim() || null;
+  const banHeader: Record<string, unknown> = {
+    nguoi_ban: input.nguoi_ban,
+    khach_hang: input.khach_hang,
+    hinh_thuc_thu: input.hinh_thuc_thu.trim() || "Tiền mặt",
+  };
+  if (idem) banHeader.idempotency_key = idem;
 
-  if (e1 || !don?.id) return { ok: false, error: e1?.message || "Không tạo được đơn bán." };
+  const { data: don, error: e1 } = await supabase.from("hc_don_ban_hoa_cu").insert(banHeader).select("id").single();
+
+  if (e1) {
+    if (idem && isPgUniqueViolation(e1)) {
+      revalidatePath(ADMIN_PATH, "layout");
+      return { ok: true, message: "Đã lưu đơn bán." };
+    }
+    return { ok: false, error: e1.message || "Không tạo được đơn bán." };
+  }
+  if (!don?.id) return { ok: false, error: "Không tạo được đơn bán." };
 
   const donId = Number(don.id);
   for (const l of lines) {

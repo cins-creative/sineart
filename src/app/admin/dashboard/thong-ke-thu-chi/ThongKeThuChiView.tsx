@@ -17,6 +17,7 @@ const DATE_PRESETS: { label: string; days: number }[] = [
 const NGUON_LABEL: Record<ThongKeThuChiNguon, string> = {
   "hoc-phi": "Học phí",
   "hoa-cu": "Bán họa cụ",
+  "hoa-cu-nhap": "Nhập họa cụ",
   "giao-dich": "Giao dịch",
 };
 
@@ -271,6 +272,7 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
                     <option value="all">Mọi nguồn</option>
                     <option value="hoc-phi">Học phí</option>
                     <option value="hoa-cu">Bán họa cụ</option>
+                    <option value="hoa-cu-nhap">Nhập họa cụ</option>
                     <option value="giao-dich">Giao dịch</option>
                   </select>
                   <select
@@ -347,9 +349,17 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
                                   ? "#eff6ff"
                                   : r.nguon === "hoa-cu"
                                     ? "#fffbeb"
-                                    : "#f5f3ff",
+                                    : r.nguon === "hoa-cu-nhap"
+                                      ? "#fff1f2"
+                                      : "#f5f3ff",
                               color:
-                                r.nguon === "hoc-phi" ? "#2563eb" : r.nguon === "hoa-cu" ? "#d97706" : "#7c3aed",
+                                r.nguon === "hoc-phi"
+                                  ? "#2563eb"
+                                  : r.nguon === "hoa-cu"
+                                    ? "#d97706"
+                                    : r.nguon === "hoa-cu-nhap"
+                                      ? "#e11d48"
+                                      : "#7c3aed",
                             }}
                           >
                             {NGUON_LABEL[r.nguon]}

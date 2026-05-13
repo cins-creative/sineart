@@ -8,13 +8,14 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 export type UpdateStaffSelfBasicInfoResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Nhân sự chỉnh sửa **chính mình**: email, SĐT, ngày sinh, STK nhận lương (`stk_nhan_luong`).
+ * Nhân sự chỉnh sửa **chính mình**: email, SĐT, ngày sinh, Facebook, STK nhận lương (`stk_nhan_luong`).
  * Không áp dụng khi xem hồ sơ người khác (chỉ đọc).
  */
 export async function updateStaffSelfBasicInfo(payload: {
   email: string | null;
   sdt: string | null;
   ngay_sinh: string | null;
+  facebook: string | null;
   stk_nhan_luong: string | null;
 }): Promise<UpdateStaffSelfBasicInfoResult> {
   const session = await getAdminSessionOrNull();
@@ -52,6 +53,7 @@ export async function updateStaffSelfBasicInfo(payload: {
       email,
       sdt: trimOrNull(payload.sdt),
       ngay_sinh: toDateOrNull(payload.ngay_sinh),
+      facebook: trimOrNull(payload.facebook),
       stk_nhan_luong: trimOrNull(payload.stk_nhan_luong),
     })
     .eq("id", id);

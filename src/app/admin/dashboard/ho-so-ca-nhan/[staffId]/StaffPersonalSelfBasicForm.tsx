@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Mail, Phone, CalendarClock, Landmark } from "lucide-react";
+import { CalendarClock, Landmark, Link2, Loader2, Mail, Phone } from "lucide-react";
 
 import { updateStaffSelfBasicInfo } from "@/app/admin/dashboard/ho-so-ca-nhan/actions";
 import type { AdminNhanSuRow } from "@/lib/data/admin-quan-ly-nhan-su";
@@ -33,6 +33,7 @@ export default function StaffPersonalSelfBasicForm({
   const [email, setEmail] = useState(staff.email?.trim() ?? "");
   const [sdt, setSdt] = useState(staff.sdt?.trim() ?? "");
   const [ngaySinh, setNgaySinh] = useState(isoFromStaffNgaySinh(staff.ngay_sinh));
+  const [facebook, setFacebook] = useState(staff.facebook?.trim() ?? "");
   const [stk, setStk] = useState((staff.stk_nhan_luong ?? staff.bank_stk)?.trim() ?? "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -41,6 +42,7 @@ export default function StaffPersonalSelfBasicForm({
     setEmail(staff.email?.trim() ?? "");
     setSdt(staff.sdt?.trim() ?? "");
     setNgaySinh(isoFromStaffNgaySinh(staff.ngay_sinh));
+    setFacebook(staff.facebook?.trim() ?? "");
     setStk((staff.stk_nhan_luong ?? staff.bank_stk)?.trim() ?? "");
   }, [staff]);
 
@@ -53,6 +55,7 @@ export default function StaffPersonalSelfBasicForm({
         email: email.trim() || null,
         sdt: sdt.trim() || null,
         ngay_sinh: ngaySinh.trim() || null,
+        facebook: facebook.trim() || null,
         stk_nhan_luong: stk.trim() || null,
       });
       setBusy(false);
@@ -63,7 +66,7 @@ export default function StaffPersonalSelfBasicForm({
       setMsg({ ok: true, text: "Đã lưu thay đổi." });
       router.refresh();
     },
-    [email, sdt, ngaySinh, stk, router],
+    [email, sdt, ngaySinh, facebook, stk, router],
   );
 
   return (
@@ -74,7 +77,9 @@ export default function StaffPersonalSelfBasicForm({
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="text-sm font-bold text-[#1a1a1a]">Thông tin bạn có thể chỉnh</h2>
-          <p className="mt-0.5 text-[11px] text-black/45">Email, điện thoại, ngày sinh và STK nhận lương.</p>
+          <p className="mt-0.5 text-[11px] text-black/45">
+            Email, điện thoại, ngày sinh, Facebook và STK nhận lương.
+          </p>
         </div>
         <button
           type="submit"
@@ -125,6 +130,21 @@ export default function StaffPersonalSelfBasicForm({
             name="ngay_sinh"
             value={ngaySinh}
             onChange={(e) => setNgaySinh(e.target.value)}
+            className={inputClass}
+          />
+        </label>
+        <label className="block min-w-0 sm:col-span-2">
+          <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/40">
+            <Link2 className="h-3.5 w-3.5 text-[#c2417c]" strokeWidth={2} aria-hidden />
+            Facebook
+          </span>
+          <input
+            type="text"
+            name="facebook"
+            autoComplete="off"
+            placeholder="Link Facebook (vd: https://facebook.com/…)"
+            value={facebook}
+            onChange={(e) => setFacebook(e.target.value)}
             className={inputClass}
           />
         </label>

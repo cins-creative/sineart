@@ -5,6 +5,8 @@ import {
   DH_MON_THI_ITEM_MAX_LEN,
 } from "@/lib/agent/dh-exam-profiles";
 import { slugifyVi } from "@/lib/admin/tra-cuu-schema";
+import { isEnrollmentDangHocByKy } from "@/lib/data/admin-qlhv-tinh-trang";
+import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 
 export type AdminDhTruongLookup = {
   id: number;
@@ -13,9 +15,9 @@ export type AdminDhTruongLookup = {
   score: number | null;
 };
 
-/** Thẻ danh sách trường admin — thêm số HV đăng ký thi & số ngành từ `dh_truong_nganh`. */
+/** Thẻ danh sách trường admin — thêm số HV đang học (đăng ký thi) & số ngành từ `dh_truong_nganh`. */
 export type AdminDhTruongListCard = AdminDhTruongLookup & {
-  /** Học viên distinct có ≥1 dòng `ql_hv_truong_nganh` cho trường này. */
+  /** Học viên distinct có ít nhất một ghi danh «Đang học» theo kỳ HP (`isEnrollmentDangHocByKy`, không dùng cột `status` trên `ql_quan_ly_hoc_vien`) và có ≥1 dòng `ql_hv_truong_nganh` cho trường này. */
   hocVienDangKyThi: number;
   /** Số dòng `dh_truong_nganh` (= ngành đào tạo gắn với trường). */
   soNganhDaoTao: number;
@@ -203,6 +205,7 @@ function nIdLoose(v: unknown): number | null {
 
 /**
  * Gom nhanh cho thẻ danh sách trường: HV distinct theo `truong_dai_hoc` trong `ql_hv_truong_nganh`,
+ * **chỉ** học viên có ít nhất một ghi danh «Đang học» theo kỳ HP (`fetchKyByKhoaHocVienIds` + `isEnrollmentDangHocByKy`, cùng Quản lý học viên — không dùng cột `status` trên `ql_quan_ly_hoc_vien`);
  * và số ngành (số dòng `dh_truong_nganh`) theo từng trường.
  */
 export async function fetchAdminDhTruongListCardAggregates(
@@ -211,8 +214,36 @@ export async function fetchAdminDhTruongListCardAggregates(
   | { ok: true; hvCountByTruong: Map<number, number>; nganhCountByTruong: Map<number, number> }
   | { ok: false; error: string }
 > {
-  const truongToHv = new Map<number, Set<number>>();
+  const activeHvIds = new Set<number>();
   let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("ql_quan_ly_hoc_vien")
+      .select("id, hoc_vien_id")
+      .range(from, from + STUDENT_PAGE - 1);
+    if (error) return { ok: false, error: error.message };
+    const batch = (data ?? []) as Record<string, unknown>[];
+    if (!batch.length) break;
+
+    const qlIds = batch
+      .map((r) => nIdLoose(r.id))
+      .filter((id): id is number => id != null);
+    const kyMap = await fetchKyByKhoaHocVienIds(supabase, qlIds);
+
+    for (const r of batch) {
+      const qid = nIdLoose(r.id);
+      const hid = nIdLoose(r.hoc_vien_id);
+      if (qid == null || hid == null) continue;
+      const ky = kyMap.get(qid);
+      if (isEnrollmentDangHocByKy(ky?.ngay_dau_ky, ky?.ngay_cuoi_ky)) activeHvIds.add(hid);
+    }
+
+    if (batch.length < STUDENT_PAGE) break;
+    from += STUDENT_PAGE;
+  }
+
+  const truongToHv = new Map<number, Set<number>>();
+  from = 0;
   for (;;) {
     const { data, error } = await supabase
       .from("ql_hv_truong_nganh")
@@ -225,6 +256,7 @@ export async function fetchAdminDhTruongListCardAggregates(
       const tid = nIdLoose(r.truong_dai_hoc);
       const hv = nIdLoose(r.hoc_vien);
       if (tid == null || hv == null) continue;
+      if (!activeHvIds.has(hv)) continue;
       if (!truongToHv.has(tid)) truongToHv.set(tid, new Set());
       truongToHv.get(tid)!.add(hv);
     }

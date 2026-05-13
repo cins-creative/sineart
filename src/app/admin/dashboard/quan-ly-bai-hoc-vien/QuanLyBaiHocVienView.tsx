@@ -9,6 +9,7 @@ import {
   ChevronRight,
   ClipboardPaste,
   Copy,
+  ImageDown,
   ImageIcon,
   Images,
   LayoutGrid,
@@ -37,6 +38,10 @@ import {
   type AdminBhvStatusTab,
   type AdminQuanLyBaiHocVienBundle,
 } from "@/lib/data/admin-quan-ly-bai-hoc-vien";
+import {
+  downloadPngBlob,
+  renderBhvShowcaseCardPng,
+} from "@/app/admin/dashboard/quan-ly-bai-hoc-vien/bhv-showcase-canvas-export";
 import { cn } from "@/lib/utils";
 
 const STATUS_OPTS = ["Chờ xác nhận", "Hoàn thiện", "Không đủ chất lượng"] as const;
@@ -434,10 +439,12 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
   const [layout, setLayout] = useState<BhvLayout>("table");
   const [draftByRowId, setDraftByRowId] = useState<Record<number, UpdateBaiHocVienPayload>>({});
   const [saveBusy, setSaveBusy] = useState(false);
+  const [exportCanvasBusy, setExportCanvasBusy] = useState(false);
   const [uploadRowId, setUploadRowId] = useState<number | null>(null);
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<number>>(() => new Set());
   const filterMonHoc = searchParams.get("mon") ?? "";
   const filterBaiTapRaw = searchParams.get("bai") ?? "";
+  const filterChuaScore = searchParams.get("chuaScore") === "1";
   const scoreSort = adminBhvScoreSortFromSearch(searchParams.get("score") ?? undefined) as BhvScoreSort;
   const bulkAnchorIndexRef = useRef<number | null>(null);
   const bulkSelectedIdsRef = useRef(bulkSelectedIds);
@@ -506,7 +513,8 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
     return base;
   }, [exerciseFilterOptions, filterBaiTapRaw, bundle.exercises]);
 
-  const hasActiveListFilter = filterMonHoc.trim().length > 0 || filterBaiTapRaw.trim().length > 0;
+  const hasActiveListFilter =
+    filterMonHoc.trim().length > 0 || filterBaiTapRaw.trim().length > 0 || filterChuaScore;
 
   const totalRows = bundle.totalCount;
   const totalPages = Math.max(1, Math.ceil(bundle.totalCount / bundle.pageSize));
@@ -552,7 +560,7 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
 
   useEffect(() => {
     clearBulkSelection();
-  }, [bundle.page, bundle.tab, layout, filterMonHoc, filterBaiTapRaw, scoreSort, clearBulkSelection]);
+  }, [bundle.page, bundle.tab, layout, filterMonHoc, filterBaiTapRaw, filterChuaScore, scoreSort, clearBulkSelection]);
 
   useEffect(() => {
     if (layout !== "table") return;
@@ -684,6 +692,47 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
     [onDelete],
   );
 
+  const exportSelectedShowcase = useCallback(async () => {
+    if (bulkSelectedIds.size === 0 || layout !== "table") return;
+    if (hasDirty) {
+      notify("Hãy lưu hoặc hủy thay đổi trước khi xuất Canvas.", false);
+      return;
+    }
+    const rows = bundle.rows
+      .filter((r) => bulkSelectedIds.has(r.id))
+      .map((base) => mergeBhvDisplayRow(base, draftByRowId[base.id], mergeCtx));
+    setExportCanvasBusy(true);
+    try {
+      let n = 0;
+      for (const row of rows) {
+        const khoaThi = row.nam_thi != null && Number.isFinite(row.nam_thi) ? String(row.nam_thi) : "—";
+        const blob = await renderBhvShowcaseCardPng({
+          photoUrl: row.photo,
+          hocVien: row.ten_hoc_vien_name,
+          lop: row.lop_name,
+          gvHuongDan: row.gv_huong_dan,
+          khoaThi,
+        });
+        downloadPngBlob(blob, `sineart-bai-hoc-vien-${row.id}.png`);
+        n += 1;
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      notify(`Đã xuất ${n} ảnh Canvas.`, true);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Xuất ảnh thất bại.", false);
+    } finally {
+      setExportCanvasBusy(false);
+    }
+  }, [
+    bulkSelectedIds,
+    bundle.rows,
+    draftByRowId,
+    mergeCtx,
+    layout,
+    hasDirty,
+    notify,
+  ]);
+
   return (
     <div className="-m-4 flex h-[calc(100dvh-5.5rem)] max-h-[calc(100dvh-5.5rem)] min-h-0 flex-col overflow-hidden bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
@@ -700,6 +749,26 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {bulkSelectedIds.size > 0 && layout === "table" ? (
+            <button
+              type="button"
+              disabled={exportCanvasBusy || hasDirty || pending}
+              title={
+                hasDirty
+                  ? "Lưu hoặc hủy thay đổi trước khi xuất."
+                  : "Xuất ảnh showcase PNG 1000×1000 — trái: học viên / lớp / giảng viên / khóa thi; phải: ảnh bài; footer: icon Web→Facebook→Instagram→YouTube→TikTok + sineart.vn."
+              }
+              onClick={() => void exportSelectedShowcase()}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[#BC8AF9]/40 bg-[#BC8AF9]/10 px-[14px] py-2.5 text-[13px] font-semibold text-[#6b3dc7] hover:bg-[#BC8AF9]/18 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exportCanvasBusy ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+              ) : (
+                <ImageDown className="h-4 w-4 shrink-0" aria-hidden />
+              )}
+              Xuất Canvas ({bulkSelectedIds.size})
+            </button>
+          ) : null}
           {hasDirty ? (
             <>
               <button
@@ -836,6 +905,20 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
                     ))}
                   </select>
                 </div>
+                <label
+                  className="flex shrink-0 cursor-pointer select-none items-center gap-2 rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-2 text-[12px] font-semibold text-[#323232] hover:bg-black/[0.02]"
+                  title="Chỉ bài nộp của học viên: không đánh dấu bài mẫu và chưa nhập điểm."
+                >
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 shrink-0 rounded border-[#ccc] text-[#BC8AF9] focus:ring-[#BC8AF9]"
+                    checked={filterChuaScore}
+                    onChange={(e) => {
+                      pushParams({ chuaScore: e.target.checked ? "1" : "", page: "1" });
+                    }}
+                  />
+                  <span>Chưa có điểm (không mẫu)</span>
+                </label>
               </div>
             </div>
 
@@ -912,7 +995,7 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
                       <tr>
                         <td colSpan={9} className="px-6 py-12 text-center text-sm text-[#888]">
                           {hasActiveListFilter
-                            ? "Không có bản ghi khớp tab và bộ lọc (môn / bài)."
+                            ? "Không có bản ghi khớp tab và bộ lọc (môn / bài / chưa điểm & không mẫu)."
                             : "Không có bản ghi trong tab này."}
                         </td>
                       </tr>
@@ -952,7 +1035,7 @@ export default function QuanLyBaiHocVienView({ bundle }: Props) {
                 {bundle.rows.length === 0 ? (
                   <div className="py-12 text-center text-sm text-[#888]">
                     {hasActiveListFilter
-                      ? "Không có bản ghi khớp tab và bộ lọc (môn / bài)."
+                      ? "Không có bản ghi khớp tab và bộ lọc (môn / bài / chưa điểm & không mẫu)."
                       : "Không có bản ghi trong tab này."}
                   </div>
                 ) : (

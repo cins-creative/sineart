@@ -77,7 +77,7 @@ export default function DhTruongListView({ truongs, missingServiceRole, loadErro
                     <span className="text-[15px] font-extrabold leading-snug text-[#1a1a2e]">{t.ten}</span>
                   </span>
                   <span className="mt-2 text-[11px] font-bold leading-snug text-black/40">
-                    Tổng học viên Sine Art đăng ký thi trường này:{" "}
+                    Học viên đang học (đăng ký thi trường này):{" "}
                     <span className="text-[#1a1a2e]">{t.hocVienDangKyThi}</span>
                   </span>
                   <span className="mt-3 text-[11px] font-extrabold tracking-tight text-[#323232]">

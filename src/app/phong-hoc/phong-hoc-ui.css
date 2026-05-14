@@ -4338,6 +4338,69 @@
   transform: scale(0.98);
 }
 
+.phc .phc-meet-cta-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+/* Cụ thể hơn `.phc .canvas-ph code` (10px) — mã phòng Meet phải đọc rõ */
+.phc .canvas-ph--meet-cta code.phc-meet-cta-code,
+.phc .phc-meet-cta-card code.phc-meet-cta-code {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(16px, 2.8vw, 20px);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.42);
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  word-break: break-all;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+.phc button.phc-meet-cta-copy {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fafafa;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.phc button.phc-meet-cta-copy:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.phc button.phc-meet-cta-copy:active {
+  transform: scale(0.96);
+}
+
+.phc .phc-meet-cta-copy-hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.62);
+}
+
 .phc.phc--dark .canvas-ph--meet-cta {
   background: linear-gradient(165deg, #101014 0%, #060608 100%);
 }

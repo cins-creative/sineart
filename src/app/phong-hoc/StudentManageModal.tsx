@@ -116,6 +116,37 @@ const TINH_TRANG_COLOR: Record<string, { bg: string; text: string }> = {
   "Nghỉ học": { bg: "rgba(238, 91, 159, 0.2)", text: "#2d2020" },
 };
 
+/** Ghi danh «Nghỉ học» — thu gọn trong danh sách quản lý, mở rộng khi GV bấm. */
+function isNghiHocEnrollmentStatus(status: string): boolean {
+  return status.trim() === "Nghỉ học";
+}
+
+/** Chấm tròn theo tình trạng ghi danh (xanh = đang học, đỏ = nghỉ học, …). */
+function TinhTrangDot({ value }: { value: string }) {
+  const label = value?.trim() || "—";
+  let fill = "#94a3b8";
+  if (label === "Đang học") fill = "#22c55e";
+  else if (label === "Nghỉ học") fill = "#ef4444";
+  else if (label === "Bảo lưu") fill = "#f59e0b";
+  else if (label === "Hoàn thành") fill = "#a78bfa";
+  return (
+    <span
+      role="img"
+      aria-label={`Tình trạng: ${label}`}
+      title={label}
+      style={{
+        display: "inline-block",
+        width: 10,
+        height: 10,
+        borderRadius: "50%",
+        background: fill,
+        boxShadow: "0 0 0 1px rgba(15, 23, 42, 0.14)",
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
 function Ring({
   subject,
   order,
@@ -170,27 +201,6 @@ function Ring({
         ) : null}
       </div>
     </div>
-  );
-}
-
-function TinhTrangBadge({ value }: { value: string }) {
-  const cfg = TINH_TRANG_COLOR[value] || { bg: "rgba(187, 137, 248, 0.1)", text: "#2d2020" };
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "2px 8px",
-        borderRadius: 20,
-        fontSize: 10,
-        fontWeight: 600,
-        background: cfg.bg,
-        color: cfg.text,
-        fontFamily: DS.font,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {value || "—"}
-    </span>
   );
 }
 
@@ -360,13 +370,17 @@ const TH: React.CSSProperties = {
 
 const COL = {
   num: 38,
-  name: 160,
+  /** Tình trạng = chấm tròn cạnh tên — không còn cột riêng. */
+  name: 240,
   cls: 80,
-  status: 100,
   year: 65,
   /** Nhiều dòng: Trường — Ngành */
   truongNganh: 240,
 };
+
+type DanhSachListItem =
+  | { kind: "student"; s: StudentManageRow; displayIndex: number }
+  | { kind: "nghi-divider"; nghiCount: number };
 
 export default function StudentManageModal({
   open,
@@ -398,6 +412,8 @@ export default function StudentManageModal({
   const [sortDir, setSortDir] = useState<"asc" | "desc" | null>("asc");
   /** Compact: mặc định thu gọn; chỉ enrollmentId trong Set là đang mở rộng (trường/ngành + ProgressCard đầy đủ). */
   const [compactExpandedIds, setCompactExpandedIds] = useState<Set<number>>(() => new Set());
+  /** Danh sách: học viên «Nghỉ học» thu gọn — bấm thanh mới xổ ra. */
+  const [showNghiStudents, setShowNghiStudents] = useState(false);
 
   type ManageMainTab = "danh-sach" | "diem-danh";
   const [mainTab, setMainTab] = useState<ManageMainTab>("danh-sach");
@@ -570,6 +586,36 @@ export default function StudentManageModal({
     }
     setFiltered(list);
   }, [students, query, sortDir]);
+
+  useEffect(() => {
+    setShowNghiStudents(false);
+  }, [open, lopHocId]);
+
+  useEffect(() => {
+    if (loading || filtered.length === 0) return;
+    const hasActive = filtered.some((s) => !isNghiHocEnrollmentStatus(s.status));
+    if (!hasActive) setShowNghiStudents(true);
+  }, [loading, filtered]);
+
+  const danhSachListItems = useMemo((): DanhSachListItem[] => {
+    const active = filtered.filter((s) => !isNghiHocEnrollmentStatus(s.status));
+    const nghi = filtered.filter((s) => isNghiHocEnrollmentStatus(s.status));
+    const out: DanhSachListItem[] = active.map((s, i) => ({
+      kind: "student",
+      s,
+      displayIndex: i,
+    }));
+    if (nghi.length > 0) {
+      out.push({ kind: "nghi-divider", nghiCount: nghi.length });
+      if (showNghiStudents) {
+        for (let j = 0; j < nghi.length; j++) {
+          const row = nghi[j]!;
+          out.push({ kind: "student", s: row, displayIndex: active.length + j });
+        }
+      }
+    }
+    return out;
+  }, [filtered, showNghiStudents]);
 
   const ddDateColumns = useMemo(
     () => enumerateCalendarDatesInclusive(ddFrom, ddTo),
@@ -1090,37 +1136,6 @@ export default function StudentManageModal({
                     <div style={{ ...TH, width: COL.num }}>#</div>
                     <div style={{ ...TH, width: COL.name }}>Họ tên</div>
                     <div style={{ ...TH, width: COL.cls }}>Lớp</div>
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setSortDir((p) => (p === null ? "asc" : p === "asc" ? "desc" : null));
-                        }
-                      }}
-                      onClick={() =>
-                        setSortDir((p) => (p === null ? "asc" : p === "asc" ? "desc" : null))
-                      }
-                      style={{
-                        ...TH,
-                        width: COL.status,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                        color: sortDir !== null ? DS.colorTeacher : "#94a3b8",
-                        userSelect: "none",
-                      }}
-                    >
-                      Tình trạng
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M7 16V4m0 0L3 8m4-4l4 4" />
-                        <path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
-                      </svg>
-                      {sortDir === "asc" ? <span style={{ fontSize: 9 }}>↑</span> : null}
-                      {sortDir === "desc" ? <span style={{ fontSize: 9 }}>↓</span> : null}
-                    </div>
                     <div style={{ ...TH, width: COL.year }}>Năm thi</div>
                     <div style={{ ...TH, width: COL.truongNganh }}>Trường &amp; ngành dự thi</div>
                     <div style={{ ...TH, flex: 1 }}>Tiến độ</div>
@@ -1203,7 +1218,81 @@ export default function StudentManageModal({
 
                 {!loading &&
                   !error &&
-                  filtered.map((s, i) => {
+                  danhSachListItems.map((item) => {
+                    if (item.kind === "nghi-divider") {
+                      return (
+                        <div
+                          key="nghi-divider"
+                          style={{
+                            borderBottom: "1px solid #e2e8f0",
+                            background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+                            padding: isCompact ? "8px 10px" : "8px 14px",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            aria-expanded={showNghiStudents}
+                            onClick={() => setShowNghiStudents((v) => !v)}
+                            style={{
+                              width: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 10,
+                              padding: "8px 10px",
+                              borderRadius: 10,
+                              border: `1px solid ${showNghiStudents ? `${DS.colorTeacher}40` : DS.colorBorder}`,
+                              background: showNghiStudents ? `${DS.colorTeacher}0d` : DS.colorBg,
+                              cursor: "pointer",
+                              fontFamily: DS.font,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: DS.colorText,
+                              textAlign: "left",
+                            }}
+                          >
+                            <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                              <span
+                                aria-hidden
+                                style={{
+                                  display: "inline-flex",
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: "50%",
+                                  background: "#ef4444",
+                                  flexShrink: 0,
+                                  boxShadow: "0 0 0 1px rgba(15, 23, 42, 0.12)",
+                                }}
+                              />
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                Học viên nghỉ ({item.nghiCount})
+                              </span>
+                            </span>
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="#94a3b8"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden
+                              style={{
+                                flexShrink: 0,
+                                transform: showNghiStudents ? "rotate(180deg)" : "rotate(0deg)",
+                                transition: "transform 0.2s ease",
+                              }}
+                            >
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    const s = item.s;
+                    const i = item.displayIndex;
                     const studentMon =
                       visSub.find((m) => s.latest[m]) ||
                       Object.keys(s.latest)[0] ||
@@ -1297,7 +1386,8 @@ export default function StudentManageModal({
                                   minWidth: 0,
                                 }}
                               >
-                                <div style={{ flex: "1 1 120px", minWidth: 0 }}>
+                                <div style={{ flex: "1 1 120px", minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                                  <TinhTrangDot value={s.status} />
                                   <p
                                     style={{
                                       margin: 0,
@@ -1307,21 +1397,12 @@ export default function StudentManageModal({
                                       overflow: "hidden",
                                       textOverflow: "ellipsis",
                                       whiteSpace: "nowrap",
+                                      minWidth: 0,
+                                      flex: 1,
                                     }}
                                   >
                                     {s.name}
                                   </p>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 6,
-                                      marginTop: 3,
-                                      flexWrap: "wrap",
-                                    }}
-                                  >
-                                    <TinhTrangBadge value={s.status} />
-                                  </div>
                                 </div>
                                 <div
                                   style={{
@@ -1378,21 +1459,32 @@ export default function StudentManageModal({
                                     gap: 10,
                                   }}
                                 >
-                                  <p
+                                  <div
                                     style={{
-                                      margin: 0,
-                                      fontSize: 13,
-                                      fontWeight: 700,
-                                      color: "#0f172a",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      whiteSpace: "nowrap",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 8,
                                       flex: 1,
                                       minWidth: 0,
                                     }}
                                   >
-                                    {s.name}
-                                  </p>
+                                    <TinhTrangDot value={s.status} />
+                                    <p
+                                      style={{
+                                        margin: 0,
+                                        fontSize: 13,
+                                        fontWeight: 700,
+                                        color: "#0f172a",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        flex: 1,
+                                        minWidth: 0,
+                                      }}
+                                    >
+                                      {s.name}
+                                    </p>
+                                  </div>
                                   <div
                                     style={{
                                       flexShrink: 0,
@@ -1427,17 +1519,6 @@ export default function StudentManageModal({
                                       {s.namThi}
                                     </span>
                                   </div>
-                                </div>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 6,
-                                    marginTop: 5,
-                                    flexWrap: "wrap",
-                                  }}
-                                >
-                                  <TinhTrangBadge value={s.status} />
                                 </div>
                               </>
                             )}
@@ -1645,6 +1726,7 @@ export default function StudentManageModal({
                             alignItems: "center",
                             gap: 8,
                             overflow: "hidden",
+                            minWidth: 0,
                             paddingTop: 3,
                           }}
                         >
@@ -1665,6 +1747,7 @@ export default function StudentManageModal({
                           >
                             {s.name.charAt(0).toUpperCase()}
                           </div>
+                          <TinhTrangDot value={s.status} />
                           <span
                             style={{
                               fontSize: 12,
@@ -1673,6 +1756,8 @@ export default function StudentManageModal({
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
+                              minWidth: 0,
+                              flex: 1,
                             }}
                           >
                             {s.name}
@@ -1701,9 +1786,6 @@ export default function StudentManageModal({
                           ) : (
                             <span style={{ color: "#e5e7eb" }}>—</span>
                           )}
-                        </div>
-                        <div style={{ width: COL.status, flexShrink: 0, paddingTop: 3 }}>
-                          <TinhTrangBadge value={s.status} />
                         </div>
                         <div style={{ width: COL.year, flexShrink: 0, paddingTop: 3 }}>
                           <span

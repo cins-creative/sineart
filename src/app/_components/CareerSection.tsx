@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import type { CareerCard } from "@/types/career";
+import { cfResolvedImageUrl } from "@/lib/cfImageUrl";
 import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import { useCallback, useEffect, useRef } from "react";
 
@@ -14,7 +15,9 @@ function CareerCardLinks({
 }) {
   return (
     <>
-      {careers.map((c, i) => (
+      {careers.map((c, i) => {
+        const imgSrc = c.imageUrl ? cfResolvedImageUrl(c.imageUrl, "thumb") : "";
+        return (
         <a
           key={`${suffix}-${c.slug}-${i}`}
           href={c.href}
@@ -27,17 +30,17 @@ function CareerCardLinks({
           <div
             className={`cc-art${c.imageUrl ? " cc-art--has-img" : ""}`}
           >
-            {c.imageUrl ? (
+            {c.imageUrl && imgSrc ? (
               <Image
                 className="cc-art-img"
-                src={c.imageUrl}
+                src={imgSrc}
                 alt=""
                 fill
                 sizes="148px"
                 loading="lazy"
                 decoding="async"
                 draggable={false}
-                unoptimized={nextImageShouldUnoptimize(c.imageUrl)}
+                unoptimized={nextImageShouldUnoptimize(imgSrc)}
               />
             ) : null}
             <div className="ca-bg" style={{ background: c.grad }} aria-hidden />
@@ -45,7 +48,7 @@ function CareerCardLinks({
               className="ca-sh"
               style={{ width: 60, height: 60, top: -14, right: -14 }}
             />
-            {!c.imageUrl ? (
+            {!c.imageUrl || !imgSrc ? (
               <span className="cc-art-emoji" aria-hidden>
                 {c.emoji}
               </span>
@@ -57,7 +60,8 @@ function CareerCardLinks({
             <div className="cc-arrow">→</div>
           </div>
         </a>
-      ))}
+        );
+      })}
     </>
   );
 }

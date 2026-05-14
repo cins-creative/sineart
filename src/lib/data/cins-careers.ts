@@ -1,5 +1,19 @@
-import { cinsSupabase } from "@/lib/cins/client";
+import { cfImageNormalizeAccount } from "@/lib/cfImageUrl";
+import { CINS_SUPABASE_URL, cinsSupabase } from "@/lib/cins/client";
 import type { CareerCard } from "@/types/career";
+
+/** Thumbnail DB: URL đầy đủ, hoặc đường dẫn `/storage/...` — ghép origin CINS để `next/image` tải được. */
+function resolveCareerThumbnail(raw: string | null | undefined): string | null {
+  let t = raw?.trim() ?? "";
+  if (!t) return null;
+  if (t.startsWith("//")) t = `https:${t}`;
+  if (!/^https?:\/\//i.test(t)) {
+    const origin = CINS_SUPABASE_URL.replace(/\/$/, "");
+    const path = t.startsWith("/") ? t : `/${t}`;
+    t = `${origin}${path}`;
+  }
+  return cfImageNormalizeAccount(t) ?? t;
+}
 
 const CINS_SITE = "https://cins.vn";
 
@@ -39,7 +53,7 @@ function mapRow(row: BaiVietNganhHocRow, index: number): CareerCard | null {
 
   const sub = row.ma_nganh?.trim() || "";
   const i = index % GRAD_ROTATION.length;
-  const imageUrl = row.thumbnail?.trim() || null;
+  const imageUrl = resolveCareerThumbnail(row.thumbnail);
 
   return {
     slug,

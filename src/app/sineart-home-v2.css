@@ -461,6 +461,16 @@
 .hero-trust-avs .av:first-child {
   margin-left: 0;
 }
+.hero-trust-avs .av.av--face {
+  overflow: hidden;
+  padding: 0;
+}
+.hero-trust-avs .hero-trust-av-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .hero-trust-avs .av.more {
   background: var(--grad);
   color: #fff;

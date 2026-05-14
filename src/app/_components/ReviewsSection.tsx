@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { HomeReview } from "@/types/homepage";
 import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
+import { reviewInitials } from "@/lib/review-initials";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const GOOGLE_MAPS_URL = "https://maps.app.goo.gl/LeKBd5WVyH6EtKjo9";
@@ -30,19 +31,6 @@ const GoogleIcon = () => (
 
 function stars(n: number) {
   return "⭐".repeat(Math.min(5, Math.max(1, n)));
-}
-
-/** Chữ cái avatar: tên một từ → 1–2 ký tự; nhiều từ → chữ đầu họ + chữ đầu tên. */
-function reviewInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) {
-    const w = parts[0];
-    return w.slice(0, Math.min(2, w.length)).toUpperCase();
-  }
-  const a = parts[0][0] ?? "";
-  const b = parts[parts.length - 1][0] ?? "";
-  return `${a}${b}`.toUpperCase();
 }
 
 export default function ReviewsSection({ reviews }: { reviews: HomeReview[] }) {

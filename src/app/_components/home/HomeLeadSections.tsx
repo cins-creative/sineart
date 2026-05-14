@@ -7,7 +7,7 @@ import {
   DEFAULT_HOME_CONTENT,
   type WhyContent,
 } from "@/lib/admin/home-content-schema";
-import { getHomeStatStripData } from "@/lib/data/home";
+import { getHomeStatStripData, getHomeReviewsData } from "@/lib/data/home";
 import { getHomeContent } from "@/lib/data/home-content";
 
 import { HomeStatStripSection } from "./HomeStatStripSection";
@@ -19,10 +19,28 @@ type Props = { children: ReactNode };
  * Phần đầu trang chủ phụ thuộc CMS + stat strip — tách để `page.tsx` sync và stream skeleton ngay.
  */
 export async function HomeLeadSections({ children }: Props) {
-  const [homeContent, statStrip] = await Promise.all([
+  const [homeContent, statStrip, reviews] = await Promise.all([
     getHomeContent(),
     getHomeStatStripData(),
+    getHomeReviewsData(),
   ]);
+
+  const heroTrustAvatars = reviews.slice(0, 4).map((r) => ({
+    id: r.id,
+    name: r.name,
+    avatarUrl: r.avatarUrl,
+    grad: r.grad,
+  }));
+
+  const reviewExtra = Math.max(0, reviews.length - heroTrustAvatars.length);
+  const studentCountMatch = String(statStrip.students).match(/(\d+)/);
+  const studentCount = studentCountMatch
+    ? parseInt(studentCountMatch[1]!, 10)
+    : NaN;
+  const trustAvatarOverflow =
+    Number.isFinite(studentCount) && studentCount > 4
+      ? studentCount - 4
+      : reviewExtra;
 
   const heroContent = {
     ...homeContent.hero,
@@ -43,7 +61,11 @@ export async function HomeLeadSections({ children }: Props) {
 
   return (
     <>
-      <HeroSection content={heroContent} />
+      <HeroSection
+        content={heroContent}
+        trustAvatars={heroTrustAvatars}
+        trustAvatarOverflow={trustAvatarOverflow}
+      />
 
       <Suspense fallback={<HomeStatStripSectionSkeleton />}>
         <HomeStatStripSection />

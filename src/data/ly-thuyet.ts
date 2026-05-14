@@ -211,11 +211,11 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     nhom: "Giải phẫu",
     so_thu_tu: 17,
     mo_ta:
-      "Khối sọ, cơ và cử động của mặt — nền để dựng chân dung và biểu cảm đúng quy luật.",
+      "Hộp sọ, mặt phẳng nghiêng, ổ mắt, khớp hàm và cơ biểu cảm; chính diện / 3/4 / profile; trẻ – trưởng thành – lão hóa; liên hệ tỉ lệ, cấu trúc, silhouette và thiết kế nhân vật.",
     tags: ["chân-dung", "mặt", "hộp-sọ", "cơ-bảng-mặt"],
-    doc_time: 12,
+    doc_time: 20,
     hero_image: "/img/giai-phau-chan-dung-nguoi/hero-cover.png",
-    thumbnail: "/img/giai-phau-chan-dung-nguoi/thumbnail.jpg",
+    thumbnail: "/img/giai-phau-chan-dung-nguoi/mosaic-thumb-1.png",
   },
   {
     slug: "giai-phau-ban-chan",
@@ -223,11 +223,11 @@ export const LY_THUYET_LIST: LyThuyet[] = [
     nhom: "Giải phẫu",
     so_thu_tu: 18,
     mo_ta:
-      "Xương vòm, khớp cổ chân ngang dọc và phân ngón — vẽ giày dép, tượng đứng và pose không bị ‘trôi’ khối.",
+      "Gót–cầu cổ chân–vòm–bàn ngón; khớp gập/duỗi và lật trong–ngoài; điểm chạm đất, giày dép như bọc khối; góc nhìn chân; liên hệ tỉ lệ toàn thân, tay và chân dung.",
     tags: ["bàn-chân", "xương", "giải-phẫu", "tư-thế"],
-    doc_time: 11,
+    doc_time: 22,
     hero_image: "/img/giai-phau-ban-chan/hero-cover.png",
-    thumbnail: "/img/giai-phau-ban-chan/thumbnail.jpg",
+    thumbnail: "/img/giai-phau-ban-chan/mosaic-thumb-1.png",
   },
   {
     slug: "giai-phau-ban-tay",

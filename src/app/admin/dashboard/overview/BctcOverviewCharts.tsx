@@ -29,6 +29,7 @@ import {
   resolveCurrentPreviousYears,
   rowFormulaValue,
   type BctcMonthAlignedDatum,
+  yoyPercentOrNull,
   yoYAlignedTotalsVsBaseline,
 } from "./bctc-chart-helpers";
 
@@ -181,10 +182,9 @@ function MonthCompareTooltip({
           ) {
             const pv = rowFormulaValue(parsed.metric, prevCol);
             if (pv === 0 && value === 0) vsLine = null;
-            else if (pv === 0) vsLine = "—";
             else {
-              vsPctNum = ((value - pv) / pv) * 100;
-              vsLine = fmtPctSub(vsPctNum);
+              vsPctNum = yoyPercentOrNull(value, pv);
+              vsLine = vsPctNum === null ? "—" : fmtPctSub(vsPctNum);
             }
           }
           return (

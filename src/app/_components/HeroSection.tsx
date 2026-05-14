@@ -7,6 +7,9 @@ import {
   type HeroCardImage,
   type HeroContent,
 } from "@/lib/admin/home-content-schema";
+import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
+import { reviewInitials } from "@/lib/review-initials";
+import type { HomeReview } from "@/types/homepage";
 
 /** Dot check dùng cho eyebrow — gradient ball trắng tick. */
 const CheckIcon = () => (
@@ -48,8 +51,17 @@ const BookIcon = () => (
   </svg>
 );
 
+export type HeroTrustAvatar = Pick<HomeReview, "id" | "name" | "avatarUrl" | "grad">;
+
 type Props = {
   content?: HeroContent;
+  /** Ảnh / chữ cái học viên — cùng nguồn `getHomeReviewsData` như `ReviewsSection`. */
+  trustAvatars?: HeroTrustAvatar[];
+  /**
+   * Số “còn lại” sau 4 mặt hiển thị — ưu tiên theo tổng học viên (cùng nguồn stat strip),
+   * fallback theo số review. Hiển thị +N, tối đa +99.
+   */
+  trustAvatarOverflow?: number;
 };
 
 function cardImageStyle(card: HeroCardImage): CSSProperties | undefined {
@@ -58,6 +70,12 @@ function cardImageStyle(card: HeroCardImage): CSSProperties | undefined {
 
 function isAbsoluteHttpHref(href: string): boolean {
   return /^https?:\/\//i.test(href.trim());
+}
+
+/** Nhãn ô “+N” — không vượt +99 cho vừa vòng avatar. */
+function formatTrustMoreLabel(extra: number): string {
+  if (extra <= 0) return "";
+  return `+${Math.min(99, extra)}`;
 }
 
 function HeroImageCard({
@@ -88,8 +106,14 @@ function HeroImageCard({
   );
 }
 
-export default function HeroSection({ content = DEFAULT_HOME_CONTENT.hero }: Props) {
+export default function HeroSection({
+  content = DEFAULT_HOME_CONTENT.hero,
+  trustAvatars = [],
+  trustAvatarOverflow = 0,
+}: Props) {
   const [stickerOne, stickerTwo] = content.stickers;
+  const showRealTrust = trustAvatars.length > 0;
+  const trustMoreLabel = formatTrustMoreLabel(trustAvatarOverflow);
 
   return (
     <section className="hero">
@@ -139,37 +163,69 @@ export default function HeroSection({ content = DEFAULT_HOME_CONTENT.hero }: Pro
 
           <div className="hero-trust">
             <div className="hero-trust-avs" aria-hidden>
-              <div
-                className="av"
-                style={{ background: "linear-gradient(135deg,#f8a668,#ee5b9f)" }}
-              >
-                LP
-              </div>
-              <div
-                className="av"
-                style={{
-                  background: "linear-gradient(135deg,#fde859,#f8a668)",
-                  color: "#5a4a00",
-                }}
-              >
-                MT
-              </div>
-              <div
-                className="av"
-                style={{
-                  background: "linear-gradient(135deg,#6efec0,#3dc9a3)",
-                  color: "#0a4a34",
-                }}
-              >
-                TH
-              </div>
-              <div
-                className="av"
-                style={{ background: "linear-gradient(135deg,#bb89f8,#8a5fd8)" }}
-              >
-                QA
-              </div>
-              <div className="av more">+</div>
+              {showRealTrust ? (
+                <>
+                  {trustAvatars.slice(0, 4).map((r) => (
+                    <div
+                      key={String(r.id)}
+                      className={`av${r.avatarUrl?.trim() ? " av--face" : ""}`}
+                      style={{ background: r.grad }}
+                    >
+                      {r.avatarUrl?.trim() ? (
+                        <Image
+                          src={r.avatarUrl.trim()}
+                          alt=""
+                          width={36}
+                          height={36}
+                          className="hero-trust-av-img"
+                          loading="lazy"
+                          decoding="async"
+                          unoptimized={nextImageShouldUnoptimize(r.avatarUrl.trim())}
+                        />
+                      ) : (
+                        reviewInitials(r.name)
+                      )}
+                    </div>
+                  ))}
+                  {trustMoreLabel ? (
+                    <div className="av more">{trustMoreLabel}</div>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <div
+                    className="av"
+                    style={{ background: "linear-gradient(135deg,#f8a668,#ee5b9f)" }}
+                  >
+                    LP
+                  </div>
+                  <div
+                    className="av"
+                    style={{
+                      background: "linear-gradient(135deg,#fde859,#f8a668)",
+                      color: "#5a4a00",
+                    }}
+                  >
+                    MT
+                  </div>
+                  <div
+                    className="av"
+                    style={{
+                      background: "linear-gradient(135deg,#6efec0,#3dc9a3)",
+                      color: "#0a4a34",
+                    }}
+                  >
+                    TH
+                  </div>
+                  <div
+                    className="av"
+                    style={{ background: "linear-gradient(135deg,#bb89f8,#8a5fd8)" }}
+                  >
+                    QA
+                  </div>
+                  <div className="av more">+</div>
+                </>
+              )}
             </div>
             <div className="hero-trust-text">
               <div>

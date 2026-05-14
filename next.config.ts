@@ -14,6 +14,23 @@ const nextConfig: NextConfig = {
         hostname: "imagedelivery.net",
         pathname: "/**",
       },
+      /** Ảnh public Supabase (thumbnail ngành CINS, v.v.) — `next/image` bắt buộc khai báo host. */
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        pathname: "/**",
+      },
+      /** CDN / site CINS nếu thumbnail trỏ tuyệt đối về domain này */
+      {
+        protocol: "https",
+        hostname: "cins.vn",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "www.cins.vn",
+        pathname: "/**",
+      },
     ],
   },
   experimental: {

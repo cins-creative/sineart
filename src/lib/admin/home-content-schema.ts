@@ -12,6 +12,9 @@
 
 import { parseYoutubeVideoId } from "@/lib/youtube";
 
+/** Hero "Học thử" — CMS cũ hay để `/dang-ky`; CTA mở trang Facebook chính thức. */
+export const HERO_HOC_THU_FACEBOOK_URL = "https://www.facebook.com/sineart0102";
+
 // ── Blocks ────────────────────────────────────────────────────────────────────
 
 export type CtaLink = {
@@ -211,7 +214,7 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
     lead: "Sine Art xây dựng nền tảng Mỹ thuật bài bản và khoa học, giúp các bạn đủ kiến thức để trở thành Họa sỹ công nghệ trong Hoạt hình, Phim và Game.",
     ctaPrimary: {
       label: "Học thử miễn phí",
-      href: "https://www.facebook.com/sineart0102",
+      href: HERO_HOC_THU_FACEBOOK_URL,
     },
     ctaGhost: { label: "Xem khoá học", href: "/khoa-hoc" },
     ratingScore: "4.9/5",
@@ -384,7 +387,12 @@ function mergeHero(v: unknown): HeroContent {
     headlineAfter: str(o.headlineAfter, d.headlineAfter),
     headlineSuffix: str(o.headlineSuffix, d.headlineSuffix),
     lead: str(o.lead, d.lead),
-    ctaPrimary: cta(o.ctaPrimary, d.ctaPrimary),
+    ctaPrimary: (() => {
+      const m = cta(o.ctaPrimary, d.ctaPrimary);
+      return m.href.trim() === "/dang-ky"
+        ? { ...m, href: HERO_HOC_THU_FACEBOOK_URL }
+        : m;
+    })(),
     ctaGhost: cta(o.ctaGhost, d.ctaGhost),
     ratingScore: str(o.ratingScore, d.ratingScore),
     ratingSource: str(o.ratingSource, d.ratingSource),

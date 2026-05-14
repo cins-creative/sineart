@@ -96,8 +96,29 @@ export type YoYAlignedMetric = {
   pairedMonths: number;
 };
 
+const WEAK_BASELINE_RATIO = 0.02;
+const EXTREME_YOY_ABS_PCT = 400;
+
+/**
+ * % YoY an toàn hiển thị: mẫu số quá nhỏ so với quy mô, hoặc |%| cực đoan → null.
+ */
+export function yoyPercentOrNull(currentSum: number, baselineSum: number): number | null {
+  if (baselineSum === 0) {
+    return currentSum === 0 ? 0 : null;
+  }
+  const raw = ((currentSum - baselineSum) / baselineSum) * 100;
+  if (!Number.isFinite(raw)) return null;
+  const scale = Math.max(Math.abs(baselineSum), Math.abs(currentSum), 1);
+  if (Math.abs(baselineSum) < scale * WEAK_BASELINE_RATIO) return null;
+  if (Math.abs(raw) > EXTREME_YOY_ABS_PCT) return null;
+  return raw;
+}
+
 /**
  * Cộng dồn theo **các tháng có mặt ở cả hai năm** (cùng kỳ đã nhập đủ cặp).
+ *
+ * % YoY: khi tổng năm trước quá nhỏ so với quy mô hiện tại, hoặc |%| quá lớn (lợi nhuận
+ * đổi dấu / mốc gần 0), trả `pct: null` để UI hiển thị "—" thay vì số gây hiểu nhầm.
  */
 export function yoYAlignedTotalsVsBaseline(
   columns: BaoCaoColumn[],
@@ -123,16 +144,7 @@ export function yoYAlignedTotalsVsBaseline(
       pairedMonths++;
     }
 
-    let pct: number | null = null;
-    if (pairedMonths > 0) {
-      if (baselineSum !== 0) {
-        pct = ((currentSum - baselineSum) / baselineSum) * 100;
-      } else if (currentSum !== 0) {
-        pct = null;
-      } else {
-        pct = 0;
-      }
-    }
+    const pct = pairedMonths > 0 ? yoyPercentOrNull(currentSum, baselineSum) : null;
 
     out.push({
       rowKey: key,

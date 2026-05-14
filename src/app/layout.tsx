@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/react";
 import localFont from "next/font/local";
 import ConditionalCta from "./_components/ConditionalCta";
 import ConditionalHomeAdBanner from "./_components/ConditionalHomeAdBanner";
@@ -105,6 +106,7 @@ export default function RootLayout({
         <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
         <ConditionalCta />
         <ConditionalHomeAdBanner />
+        <Analytics />
       </body>
     </html>
   );

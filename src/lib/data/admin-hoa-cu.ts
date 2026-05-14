@@ -10,8 +10,7 @@ export const HOA_CU_KHO_PATH = `${HOA_CU_BASE_PATH}/danh-muc-kho`;
 export const HOA_CU_NHAP_PATH = `${HOA_CU_BASE_PATH}/don-nhap`;
 export const HOA_CU_BAN_PATH = `${HOA_CU_BASE_PATH}/don-ban`;
 
-const KHO_SELECT =
-  "id, ten_hang, loai_san_pham, gia_nhap, gia_ban, ton_kho, thumbnail";
+const KHO_SELECT_BASE = "id, ten_hang, loai_san_pham, gia_nhap, gia_ban, thumbnail";
 
 export type AdminHoaCuSanPham = {
   id: number;
@@ -19,6 +18,7 @@ export type AdminHoaCuSanPham = {
   loai_san_pham: string | null;
   gia_nhap: number;
   gia_ban: number;
+  /** Σ nhập − Σ bán từ `hc_*_chi_tiet` (không đọc cột `ton_kho` DB). */
   ton_kho: number;
   thumbnail: string | null;
 };
@@ -215,27 +215,118 @@ function groupByDon<T extends { don_nhap?: number; don_ban?: number }>(
   return m;
 }
 
-/** Toàn bộ danh mục kho (dùng cho modal nhập/bán / picker). Luôn đọc bảng gốc — `hc_danh_sach_san_pham_view` có thể tính `ton_kho` lệch so với cột thật (nhập 1 mà hiển thị +2). */
+/** Tồn theo phiếu toàn hệ thống: Σ `so_luong_nhap` − Σ `so_luong_ban` (không dùng cột `ton_kho`). */
+async function fetchTonKhoMapTuPhieuToanCuc(supabase: SupabaseClient): Promise<Map<number, number>> {
+  const m = new Map<number, number>();
+  const { data: nRows, error: ne } = await supabase.from("hc_nhap_hoa_cu_chi_tiet").select("mat_hang, so_luong_nhap");
+  if (ne) throw new Error(ne.message);
+  const { data: bRows, error: be } = await supabase.from("hc_ban_hc_chi_tiet").select("mat_hang, so_luong_ban");
+  if (be) throw new Error(be.message);
+  for (const r of nRows ?? []) {
+    const mh = Number((r as { mat_hang?: unknown }).mat_hang);
+    const q = Math.trunc(Number((r as { so_luong_nhap?: unknown }).so_luong_nhap) || 0);
+    if (!Number.isFinite(mh) || mh <= 0 || q <= 0) continue;
+    m.set(mh, (m.get(mh) ?? 0) + q);
+  }
+  for (const r of bRows ?? []) {
+    const mh = Number((r as { mat_hang?: unknown }).mat_hang);
+    const q = Math.trunc(Number((r as { so_luong_ban?: unknown }).so_luong_ban) || 0);
+    if (!Number.isFinite(mh) || mh <= 0 || q <= 0) continue;
+    m.set(mh, (m.get(mh) ?? 0) - q);
+  }
+  return m;
+}
+
+const TON_PHIEU_IN_CHUNK = 280;
+
+/** Tồn theo phiếu cho danh sách `mat_hang` (dùng trang kho / validate đơn bán). */
+export async function fetchTonKhoTheoPhieuForIds(
+  supabase: SupabaseClient,
+  matIds: number[],
+): Promise<Map<number, number>> {
+  const uniq = [...new Set(matIds)].filter((x) => Number.isFinite(x) && x > 0) as number[];
+  const m = new Map<number, number>();
+  for (const id of uniq) m.set(id, 0);
+  if (!uniq.length) return m;
+
+  for (let i = 0; i < uniq.length; i += TON_PHIEU_IN_CHUNK) {
+    const chunk = uniq.slice(i, i + TON_PHIEU_IN_CHUNK);
+    const { data: nRows, error: ne } = await supabase
+      .from("hc_nhap_hoa_cu_chi_tiet")
+      .select("mat_hang, so_luong_nhap")
+      .in("mat_hang", chunk);
+    if (ne) throw new Error(ne.message);
+    const { data: bRows, error: be } = await supabase
+      .from("hc_ban_hc_chi_tiet")
+      .select("mat_hang, so_luong_ban")
+      .in("mat_hang", chunk);
+    if (be) throw new Error(be.message);
+    for (const r of nRows ?? []) {
+      const mh = Number((r as { mat_hang?: unknown }).mat_hang);
+      const q = Math.trunc(Number((r as { so_luong_nhap?: unknown }).so_luong_nhap) || 0);
+      if (!Number.isFinite(mh) || mh <= 0 || q <= 0) continue;
+      m.set(mh, (m.get(mh) ?? 0) + q);
+    }
+    for (const r of bRows ?? []) {
+      const mh = Number((r as { mat_hang?: unknown }).mat_hang);
+      const q = Math.trunc(Number((r as { so_luong_ban?: unknown }).so_luong_ban) || 0);
+      if (!Number.isFinite(mh) || mh <= 0 || q <= 0) continue;
+      m.set(mh, (m.get(mh) ?? 0) - q);
+    }
+  }
+  return m;
+}
+
+async function fetchAllSanPhamIds(supabase: SupabaseClient): Promise<number[]> {
+  const ids: number[] = [];
+  const PAGE = 1000;
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("hc_danh_sach_san_pham")
+      .select("id")
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data?.length) break;
+    for (const r of data) {
+      const id = Number((r as { id: unknown }).id);
+      if (Number.isFinite(id) && id > 0) ids.push(id);
+    }
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return ids;
+}
+
+/** Toàn bộ danh mục kho (modal nhập/bán / picker). `ton_kho` = Σ nhập − Σ bán theo phiếu, không đọc cột DB. */
 export async function fetchAllHoaCuSanPham(
   supabase: SupabaseClient,
 ): Promise<{ data: AdminHoaCuSanPham[]; error: string | null }> {
-  const tRes = await supabase.from("hc_danh_sach_san_pham").select(KHO_SELECT).order("ten_hang");
+  const tRes = await supabase.from("hc_danh_sach_san_pham").select(KHO_SELECT_BASE).order("ten_hang");
   if (tRes.error) return { data: [], error: tRes.error.message };
-  return { data: normalizeSanPham(tRes.data ?? []), error: null };
+  try {
+    const tonMap = await fetchTonKhoMapTuPhieuToanCuc(supabase);
+    return { data: normalizeSanPham(tRes.data ?? [], tonMap), error: null };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Không tổng hợp được tồn theo phiếu.";
+    return { data: [], error: msg };
+  }
 }
 
-function normalizeSanPham(rows: Record<string, unknown>[]): AdminHoaCuSanPham[] {
+function normalizeSanPham(rows: Record<string, unknown>[], tonTheoPhieu: Map<number, number>): AdminHoaCuSanPham[] {
   return rows
     .map((r) => {
       const id = Number(r.id);
       if (!Number.isFinite(id) || id <= 0) return null;
+      const computedTon = Math.trunc(tonTheoPhieu.get(id) ?? 0);
       return {
         id,
         ten_hang: String(r.ten_hang ?? "").trim() || "—",
         loai_san_pham: r.loai_san_pham != null ? String(r.loai_san_pham).trim() || null : null,
         gia_nhap: Number(r.gia_nhap) || 0,
         gia_ban: Number(r.gia_ban) || 0,
-        ton_kho: Number(r.ton_kho) || 0,
+        ton_kho: computedTon,
         thumbnail: r.thumbnail != null ? String(r.thumbnail).trim() || null : null,
       };
     })
@@ -416,7 +507,7 @@ export type KhoSanPhamPage = {
   pageSize: number;
 };
 
-/** Một trang danh mục kho + tổng bản ghi (server pagination). Chỉ `hc_danh_sach_san_pham` — không dùng view (tránh `ton_kho` lệch). */
+/** Một trang danh mục kho + tổng bản ghi. `ton_kho` hiển thị = Σ nhập − Σ bán (không đọc cột DB). */
 export async function fetchKhoSanPhamPage(
   supabase: SupabaseClient,
   opts: { page: number; pageSize?: number; q?: string | null },
@@ -428,36 +519,53 @@ export async function fetchKhoSanPhamPage(
   const rawQ = (opts.q ?? "").trim();
   const searchPat = rawQ ? `%${rawQ.replace(/%/g, "\\%")}%` : "";
 
-  let qb = supabase.from("hc_danh_sach_san_pham").select(KHO_SELECT, { count: "exact" });
+  let qb = supabase.from("hc_danh_sach_san_pham").select(KHO_SELECT_BASE, { count: "exact" });
   if (searchPat) {
     qb = qb.or(`ten_hang.ilike.${searchPat},loai_san_pham.ilike.${searchPat}`);
   }
-  const res = await qb.order("ton_kho", { ascending: false }).order("ten_hang", { ascending: true }).range(from, to);
+  const res = await qb.order("ten_hang", { ascending: true }).order("id", { ascending: true }).range(from, to);
   if (res.error) return { ok: false, error: res.error.message };
 
-  return {
-    ok: true,
-    rows: normalizeSanPham((res.data ?? []) as Record<string, unknown>[]),
-    total: res.count ?? 0,
-    page,
-    pageSize,
-  };
+  const rawRows = (res.data ?? []) as Record<string, unknown>[];
+  const pageIds = rawRows.map((r) => Number(r.id)).filter((id) => Number.isFinite(id) && id > 0);
+  try {
+    const tonMap = await fetchTonKhoTheoPhieuForIds(supabase, pageIds);
+    return {
+      ok: true,
+      rows: normalizeSanPham(rawRows, tonMap),
+      total: res.count ?? 0,
+      page,
+      pageSize,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Không tổng hợp được tồn theo phiếu.";
+    return { ok: false, error: msg };
+  }
 }
 
-/** Số mặt hàng, số hết tồn, và tổng đơn vị tồn (Σ `ton_kho`) — header trang kho. */
+/** Số mặt hàng, số hết tồn, Σ tồn — tồn theo phiếu (không dùng cột `ton_kho`). */
 export async function fetchKhoInventoryStats(
   supabase: SupabaseClient,
 ): Promise<{ total: number; hetHang: number; tonSum: number }> {
-  const [{ count: total }, { count: het }, tonsRes] = await Promise.all([
-    supabase.from("hc_danh_sach_san_pham").select("id", { count: "exact", head: true }),
-    supabase.from("hc_danh_sach_san_pham").select("id", { count: "exact", head: true }).lte("ton_kho", 0),
-    supabase.from("hc_danh_sach_san_pham").select("ton_kho"),
-  ]);
-  const tonSum = (tonsRes.data ?? []).reduce((s, r) => s + (Number((r as { ton_kho?: unknown }).ton_kho) || 0), 0);
-  if (tonsRes.error) {
-    return { total: total ?? 0, hetHang: het ?? 0, tonSum: 0 };
+  const totalRes = await supabase.from("hc_danh_sach_san_pham").select("id", { count: "exact", head: true });
+  const total = totalRes.count ?? 0;
+  if (totalRes.error) {
+    return { total: 0, hetHang: 0, tonSum: 0 };
   }
-  return { total: total ?? 0, hetHang: het ?? 0, tonSum };
+
+  try {
+    const [tonMap, ids] = await Promise.all([fetchTonKhoMapTuPhieuToanCuc(supabase), fetchAllSanPhamIds(supabase)]);
+    let hetHang = 0;
+    let tonSum = 0;
+    for (const id of ids) {
+      const t = Math.trunc(tonMap.get(id) ?? 0);
+      tonSum += t;
+      if (t <= 0) hetHang += 1;
+    }
+    return { total, hetHang, tonSum };
+  } catch {
+    return { total, hetHang: 0, tonSum: 0 };
+  }
 }
 
 export type DonNhapPage = {

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
+  ClipboardList,
   Loader2,
   Package,
   Pencil,
@@ -27,6 +28,8 @@ import {
   createHoaCuSanPham,
   deleteHoaCuDonNhap,
   deleteHoaCuSanPham,
+  loadHoaCuDonBanChiTietAction,
+  loadHoaCuDonNhapChiTietAction,
   loadHoaCuSanPhamCatalogAction,
   updateHoaCuDonNhapMeta,
   updateHoaCuSanPham,
@@ -42,6 +45,7 @@ import {
   type AdminHoaCuSanPham,
   type AdminHoaCuStaffOpt,
 } from "@/lib/data/admin-hoa-cu";
+import type { AdminHoaCuBanChiTietLine, AdminHoaCuNhapChiTietLine } from "@/app/admin/dashboard/quan-ly-hoa-cu/actions";
 import { cn } from "@/lib/utils";
 
 const KHACH_PICKER_MAX = 10;
@@ -63,6 +67,66 @@ function fmtVnd(n: number): string {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Math.max(0, Math.round(n))) + " ₫";
 }
 
+const KHO_SEARCH_DEBOUNCE_MS = 320;
+
+function KhoSearchBox({ searchQ }: { searchQ: string }) {
+  const router = useRouter();
+  const [qInput, setQInput] = useState(searchQ);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const applySearchToUrl = useCallback(
+    (raw: string) => {
+      const t = raw.trim();
+      const p = new URLSearchParams();
+      if (t) p.set("q", t);
+      p.set("page", "1");
+      const qs = p.toString();
+      const href = qs ? `${HOA_CU_KHO_PATH}?${qs}` : HOA_CU_KHO_PATH;
+      router.replace(href, { scroll: false });
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    if (qInput.trim() === searchQ.trim()) return;
+    if (debounceTimerRef.current != null) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      applySearchToUrl(qInput);
+    }, KHO_SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (debounceTimerRef.current != null) clearTimeout(debounceTimerRef.current);
+    };
+  }, [qInput, searchQ, applySearchToUrl]);
+
+  function flushSearchNow() {
+    if (debounceTimerRef.current != null) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    applySearchToUrl(qInput);
+  }
+
+  return (
+    <div className="relative flex w-full min-w-0 flex-wrap gap-2 sm:max-w-md md:flex-1 md:max-w-none lg:max-w-xl">
+      <Search className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+      <input
+        value={qInput}
+        onChange={(e) => setQInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            flushSearchNow();
+          }
+        }}
+        placeholder="Tìm tên hàng, loại… (gõ để lọc)"
+        aria-label="Tìm trong danh mục kho"
+        className="h-10 w-full min-w-0 rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-3 text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white"
+      />
+    </div>
+  );
+}
+
 function fmtDt(iso: string): string {
   try {
     return new Date(iso).toLocaleString("vi-VN", {
@@ -75,6 +139,26 @@ function fmtDt(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+function HoaCuChiTietThumb({ url }: { url: string | null }) {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className="h-10 w-10 shrink-0 rounded-lg border border-[#EAEAEA] object-cover"
+      />
+    );
+  }
+  return (
+    <div
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-[#E5E5E5] bg-[#fafafa] text-[10px] text-[#CCC]"
+      aria-hidden
+    >
+      —
+    </div>
+  );
 }
 
 type Props = {
@@ -93,7 +177,7 @@ type Props = {
     searchQ: string;
     inventoryTotal: number;
     inventoryHetHang: number;
-    /** Σ `ton_kho` toàn danh mục (khác với số dòng mặt hàng). */
+    /** Σ tồn theo phiếu (nhập − bán) toàn danh mục. */
     inventoryTonSum: number;
   };
   nhapPage?: { rows: AdminHoaCuNhapDon[]; page: number; pageSize: number; total: number };
@@ -103,7 +187,6 @@ type Props = {
 export default function QuanLyHoaCuView({
   defaultStaffId,
   loggedInStaffName,
-  staffOptions,
   studentOptions,
   sanPhamCatalog: initialCatalog,
   activeSection,
@@ -112,7 +195,6 @@ export default function QuanLyHoaCuView({
   banPage,
 }: Props) {
   const router = useRouter();
-  const [qInput, setQInput] = useState(khoPage?.searchQ ?? "");
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [modal, setModal] = useState<"sp" | "nhap" | "ban" | null>(null);
   /** `null` = thêm mới; có giá trị = sửa mặt hàng đó. */
@@ -125,10 +207,6 @@ export default function QuanLyHoaCuView({
     window.setTimeout(() => setToast(null), 2800);
   };
 
-  useEffect(() => {
-    setQInput(khoPage?.searchQ ?? "");
-  }, [khoPage?.searchQ]);
-
   const sanPhamForPickers = useMemo(() => {
     if (initialCatalog != null) return initialCatalog;
     return lazyCatalog ?? [];
@@ -139,7 +217,9 @@ export default function QuanLyHoaCuView({
     if (initialCatalog != null) return;
     if (lazyCatalog != null) return;
     let cancelled = false;
-    setCatalogLoading(true);
+    const raf = requestAnimationFrame(() => {
+      if (!cancelled) setCatalogLoading(true);
+    });
     void loadHoaCuSanPhamCatalogAction().then((r) => {
       if (cancelled) return;
       setCatalogLoading(false);
@@ -148,20 +228,13 @@ export default function QuanLyHoaCuView({
     });
     return () => {
       cancelled = true;
+      cancelAnimationFrame(raf);
     };
   }, [modal, initialCatalog, lazyCatalog]);
 
   const inventoryTotal = khoPage?.inventoryTotal ?? 0;
   const hetHang = khoPage?.inventoryHetHang ?? 0;
   const inventoryTonSum = khoPage?.inventoryTonSum ?? 0;
-
-  function pushKhoSearch() {
-    const t = qInput.trim();
-    const p = new URLSearchParams();
-    if (t) p.set("q", t);
-    p.set("page", "1");
-    router.push(`${HOA_CU_KHO_PATH}?${p.toString()}`);
-  }
 
   return (
     <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
@@ -249,25 +322,7 @@ export default function QuanLyHoaCuView({
           ))}
         </div>
         {activeSection === "kho" ? (
-          <div className="relative flex w-full min-w-0 flex-wrap gap-2 sm:max-w-md md:flex-1 md:max-w-none lg:max-w-xl">
-            <Search className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
-            <input
-              value={qInput}
-              onChange={(e) => setQInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") pushKhoSearch();
-              }}
-              placeholder="Tìm tên hàng, loại…"
-              className="h-10 w-full min-w-0 rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-[88px] text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white"
-            />
-            <button
-              type="button"
-              onClick={() => pushKhoSearch()}
-              className="absolute right-1 top-1/2 z-[1] -translate-y-1/2 rounded-lg bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-3 py-1.5 text-[12px] font-bold text-white"
-            >
-              Tìm
-            </button>
-          </div>
+          <KhoSearchBox key={khoPage?.searchQ ?? ""} searchQ={khoPage?.searchQ ?? ""} />
         ) : null}
       </div>
 
@@ -599,11 +654,6 @@ function ModalSuaDonNhap({
   const [hinhThucChi, setHinhThucChi] = useState(don.hinh_thuc_chi?.trim() || HINH_THUC[0]);
   const [busy, setBusy] = useState(false);
 
-  useLayoutEffect(() => {
-    setNcc(don.nha_cung_cap?.trim() ?? "");
-    setHinhThucChi(don.hinh_thuc_chi?.trim() || HINH_THUC[0]);
-  }, [don]);
-
   async function save() {
     setBusy(true);
     const r = await updateHoaCuDonNhapMeta({
@@ -677,6 +727,262 @@ function ModalSuaDonNhap({
   );
 }
 
+function ModalChiTietDonNhap({
+  don,
+  onClose,
+}: {
+  don: AdminHoaCuNhapDon;
+  onClose: () => void;
+}) {
+  const [lines, setLines] = useState<AdminHoaCuNhapChiTietLine[] | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadHoaCuDonNhapChiTietAction(don.id).then((r) => {
+      if (cancelled) return;
+      if (r.ok) {
+        setLines(r.lines);
+        setLoadErr(null);
+      } else {
+        setLines([]);
+        setLoadErr(r.error);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [don.id]);
+
+  const sumChiTiet = lines?.reduce((s, l) => s + l.thanh_tien, 0) ?? 0;
+
+  return (
+    <ModalShell
+      subtitle="Chi tiết phiếu nhập"
+      title="Thông tin nhập kho"
+      maxWidthClassName="max-w-[min(96vw,720px)]"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-[10px] border border-[#EAEAEA] bg-white px-5 py-2 text-[13px] font-semibold text-[#666] hover:bg-[#fafafa]"
+          >
+            Đóng
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-start gap-3 rounded-[10px] border border-[#EAEAEA] bg-[#fafafa] px-3 py-2.5 text-[12px] text-[#555]">
+          <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-[#BC8AF9]" aria-hidden />
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="m-0 font-semibold text-[#1a1a2e]">{fmtDt(don.created_at)}</p>
+            <p className="m-0">
+              Người nhập: <span className="font-medium">{don.nguoi_nhap_name}</span>
+              {don.nha_cung_cap?.trim() ? (
+                <>
+                  {" "}
+                  · NCC: <span className="font-medium">{don.nha_cung_cap.trim()}</span>
+                </>
+              ) : null}
+            </p>
+            <p className="m-0">
+              Hình thức chi: <span className="font-medium">{don.hinh_thuc_chi?.trim() || "—"}</span> ·{" "}
+              <span className="font-semibold tabular-nums text-[#1a1a2e]">Tổng phiếu: {fmtVnd(don.tong_tien)}</span>
+            </p>
+          </div>
+        </div>
+
+        {lines === null && loadErr == null ? (
+          <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#666]">
+            <Loader2 className="h-5 w-5 animate-spin text-[#BC8AF9]" aria-hidden />
+            Đang tải chi tiết…
+          </div>
+        ) : loadErr ? (
+          <p className="m-0 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[13px] text-red-700">{loadErr}</p>
+        ) : (lines ?? []).length === 0 ? (
+          <p className="m-0 text-center text-[13px] text-[#888]">Không có dòng chi tiết.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-[#EAEAEA]">
+            <table className="w-full min-w-[600px] border-separate border-spacing-0 text-left text-[13px]">
+              <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
+                <tr>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 sm:px-3">#</th>
+                  <th className="border-b border-[#EAEAEA] px-1 py-2 text-center sm:px-2">Ảnh</th>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 sm:px-3">Tên hàng</th>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 text-right sm:px-3">Mã SP</th>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 text-right sm:px-3">SL nhập</th>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 text-right sm:px-3">Đơn giá (lúc nhập)</th>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 text-right sm:px-3">Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(lines ?? []).map((row, idx) => (
+                  <tr key={`${row.mat_hang}-${idx}`} className="hover:bg-[#fafafa]">
+                    <td className="border-b border-[#f8fafc] px-2 py-2 tabular-nums text-[#888] sm:px-3">{idx + 1}</td>
+                    <td className="border-b border-[#f8fafc] px-1 py-2 align-middle sm:px-2">
+                      <HoaCuChiTietThumb url={row.thumbnail} />
+                    </td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 font-medium text-[#1a1a2e] sm:px-3">{row.ten_hang}</td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right tabular-nums text-[#666] sm:px-3">{row.mat_hang}</td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right font-semibold tabular-nums text-emerald-700 sm:px-3">
+                      {row.so_luong_nhap}
+                    </td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right tabular-nums text-[#555] sm:px-3">
+                      {fmtVnd(row.gia_nhap_snapshot)}
+                    </td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right font-semibold tabular-nums text-[#1a1a2e] sm:px-3">
+                      {fmtVnd(row.thanh_tien)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-[#fafafa]">
+                  <td colSpan={6} className="rounded-bl-xl px-2 py-2.5 text-right text-[11px] font-bold uppercase text-[#AAA] sm:px-3">
+                    Cộng (theo dòng)
+                  </td>
+                  <td className="rounded-br-xl px-2 py-2.5 text-right text-sm font-extrabold tabular-nums text-[#1a1a2e] sm:px-3">
+                    {fmtVnd(sumChiTiet)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+function ModalChiTietDonBan({
+  don,
+  onClose,
+}: {
+  don: AdminHoaCuBanDon;
+  onClose: () => void;
+}) {
+  const [lines, setLines] = useState<AdminHoaCuBanChiTietLine[] | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadHoaCuDonBanChiTietAction(don.id).then((r) => {
+      if (cancelled) return;
+      if (r.ok) {
+        setLines(r.lines);
+        setLoadErr(null);
+      } else {
+        setLines([]);
+        setLoadErr(r.error);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [don.id]);
+
+  const sumChiTiet = lines?.reduce((s, l) => s + l.thanh_tien, 0) ?? 0;
+
+  return (
+    <ModalShell
+      subtitle="Chi tiết đơn bán"
+      title="Thông tin bán hàng"
+      maxWidthClassName="max-w-[min(96vw,720px)]"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-[10px] border border-[#EAEAEA] bg-white px-5 py-2 text-[13px] font-semibold text-[#666] hover:bg-[#fafafa]"
+          >
+            Đóng
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-start gap-3 rounded-[10px] border border-[#EAEAEA] bg-[#fafafa] px-3 py-2.5 text-[12px] text-[#555]">
+          <ShoppingCart className="mt-0.5 h-4 w-4 shrink-0 text-[#BC8AF9]" aria-hidden />
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="m-0 font-semibold text-[#1a1a2e]">{fmtDt(don.created_at)}</p>
+            <p className="m-0">
+              Người bán: <span className="font-medium">{don.nguoi_ban_name}</span>
+              {" · "}
+              Khách: <span className="font-medium">{don.khach_hang_name}</span>
+            </p>
+            <p className="m-0">
+              Hình thức thu: <span className="font-medium">{don.hinh_thuc_thu?.trim() || "—"}</span> ·{" "}
+              <span className="font-semibold tabular-nums text-[#1a1a2e]">Tổng đơn: {fmtVnd(don.tong_tien)}</span>
+            </p>
+          </div>
+        </div>
+
+        {lines === null && loadErr == null ? (
+          <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#666]">
+            <Loader2 className="h-5 w-5 animate-spin text-[#BC8AF9]" aria-hidden />
+            Đang tải chi tiết…
+          </div>
+        ) : loadErr ? (
+          <p className="m-0 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[13px] text-red-700">{loadErr}</p>
+        ) : (lines ?? []).length === 0 ? (
+          <p className="m-0 text-center text-[13px] text-[#888]">Không có dòng chi tiết.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-[#EAEAEA]">
+            <table className="w-full min-w-[600px] border-separate border-spacing-0 text-left text-[13px]">
+              <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
+                <tr>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 sm:px-3">#</th>
+                  <th className="border-b border-[#EAEAEA] px-1 py-2 text-center sm:px-2">Ảnh</th>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 sm:px-3">Tên hàng</th>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 text-right sm:px-3">Mã SP</th>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 text-right sm:px-3">SL bán</th>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 text-right sm:px-3">Đơn giá (lúc bán)</th>
+                  <th className="border-b border-[#EAEAEA] px-2 py-2 text-right sm:px-3">Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(lines ?? []).map((row, idx) => (
+                  <tr key={`${row.mat_hang}-${idx}`} className="hover:bg-[#fafafa]">
+                    <td className="border-b border-[#f8fafc] px-2 py-2 tabular-nums text-[#888] sm:px-3">{idx + 1}</td>
+                    <td className="border-b border-[#f8fafc] px-1 py-2 align-middle sm:px-2">
+                      <HoaCuChiTietThumb url={row.thumbnail} />
+                    </td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 font-medium text-[#1a1a2e] sm:px-3">{row.ten_hang}</td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right tabular-nums text-[#666] sm:px-3">{row.mat_hang}</td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right font-semibold tabular-nums text-rose-700 sm:px-3">
+                      {row.so_luong_ban}
+                    </td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right tabular-nums text-[#555] sm:px-3">
+                      {fmtVnd(row.gia_ban_snapshot)}
+                    </td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right font-semibold tabular-nums text-[#1a1a2e] sm:px-3">
+                      {fmtVnd(row.thanh_tien)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-[#fafafa]">
+                  <td colSpan={6} className="rounded-bl-xl px-2 py-2.5 text-right text-[11px] font-bold uppercase text-[#AAA] sm:px-3">
+                    Cộng (theo dòng)
+                  </td>
+                  <td className="rounded-br-xl px-2 py-2.5 text-right text-sm font-extrabold tabular-nums text-[#1a1a2e] sm:px-3">
+                    {fmtVnd(sumChiTiet)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
 function NhapTab({
   rows,
   pagination,
@@ -687,10 +993,11 @@ function NhapTab({
   onListChanged: (msg: string, ok: boolean) => void;
 }) {
   const [editDon, setEditDon] = useState<AdminHoaCuNhapDon | null>(null);
+  const [detailDon, setDetailDon] = useState<AdminHoaCuNhapDon | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   async function handleDelete(r: AdminHoaCuNhapDon) {
-    if (!window.confirm(`Xoá phiếu nhập ${fmtDt(r.created_at)}? Tồn kho sẽ điều chỉnh theo cấu hình database (trigger).`)) return;
+    if (!window.confirm(`Xoá phiếu nhập ${fmtDt(r.created_at)}? Số tồn kho sẽ được điều chỉnh lại theo số lượng trên phiếu.`)) return;
     setDeletingId(r.id);
     const res = await deleteHoaCuDonNhap(r.id);
     setDeletingId(null);
@@ -737,7 +1044,11 @@ function NhapTab({
                 rows.map((r) => {
                   const busy = deletingId === r.id;
                   return (
-                    <tr key={r.id} className="hover:bg-[#fafafa]">
+                    <tr
+                      key={r.id}
+                      onClick={() => setDetailDon(r)}
+                      className="cursor-pointer hover:bg-[#fafafa]"
+                    >
                       <td className="border-b border-[#f8fafc] px-2 py-2 align-middle whitespace-nowrap text-[#666] sm:px-3">
                         {fmtDt(r.created_at)}
                       </td>
@@ -753,11 +1064,14 @@ function NhapTab({
                         {r.hinh_thuc_chi?.trim() || "—"}
                       </td>
                       <td className="border-b border-[#f8fafc] px-1 py-2 text-right align-middle sm:px-2">
-                        <div className="flex flex-wrap items-center justify-end gap-1">
+                        <div className="flex flex-wrap items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             title="Sửa"
-                            onClick={() => setEditDon(r)}
+                            onClick={() => {
+                              setDetailDon(null);
+                              setEditDon(r);
+                            }}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#EAEAEA] text-[#555] transition hover:border-[#BC8AF9]/50 hover:bg-[#BC8AF9]/8 hover:text-[#1a1a2e]"
                           >
                             <Pencil size={15} strokeWidth={2} aria-hidden />
@@ -790,6 +1104,9 @@ function NhapTab({
         />
       </div>
       <AnimatePresence>
+        {detailDon ? (
+          <ModalChiTietDonNhap key={`chi-nhap-${detailDon.id}`} don={detailDon} onClose={() => setDetailDon(null)} />
+        ) : null}
         {editDon ? (
           <ModalSuaDonNhap
             key={`sua-nhap-${editDon.id}`}
@@ -813,66 +1130,79 @@ function BanTab({
   rows: AdminHoaCuBanDon[];
   pagination: { page: number; pageSize: number; total: number; basePath: string };
 }) {
+  const [detailDon, setDetailDon] = useState<AdminHoaCuBanDon | null>(null);
+
   return (
-    <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
-      <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
-        <table className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
-          <colgroup>
-            <col style={{ width: "16%" }} />
-            <col style={{ width: "16%" }} />
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "14%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "26%" }} />
-          </colgroup>
-          <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
-            <tr>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Thời gian</th>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Người bán</th>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Khách</th>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Hình thức</th>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Dòng</th>
-              <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Tổng (theo giá bán)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
+    <>
+      <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
+        <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
+          <table className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
+            <colgroup>
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "26%" }} />
+            </colgroup>
+            <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
               <tr>
-                <td
-                  colSpan={6}
-                  className="border-b border-[#f8fafc] px-4 py-10 text-center align-middle text-sm text-[#888] min-h-[min(50dvh,520px)]"
-                >
-                  Chưa có đơn bán.
-                </td>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Thời gian</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Người bán</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Khách</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Hình thức</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Dòng</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Tổng (theo giá bán)</th>
               </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id} className="hover:bg-[#fafafa]">
-                  <td className="border-b border-[#f8fafc] px-2 py-2 align-middle whitespace-nowrap text-[#666] sm:px-3">
-                    {fmtDt(r.created_at)}
-                  </td>
-                  <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">{r.nguoi_ban_name}</td>
-                  <td className="border-b border-[#f8fafc] px-2 py-2 align-middle break-words sm:px-3">{r.khach_hang_name}</td>
-                  <td className="border-b border-[#f8fafc] px-2 py-2 align-middle text-[#555] sm:px-3">
-                    {r.hinh_thuc_thu?.trim() || "—"}
-                  </td>
-                  <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle tabular-nums sm:px-3">{r.so_mat_hang}</td>
-                  <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle font-semibold tabular-nums sm:px-3">
-                    {fmtVnd(r.tong_tien)}
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="border-b border-[#f8fafc] px-4 py-10 text-center align-middle text-sm text-[#888] min-h-[min(50dvh,520px)]"
+                  >
+                    Chưa có đơn bán.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                rows.map((r) => (
+                  <tr
+                    key={r.id}
+                    onClick={() => setDetailDon(r)}
+                    className="cursor-pointer hover:bg-[#fafafa]"
+                  >
+                    <td className="border-b border-[#f8fafc] px-2 py-2 align-middle whitespace-nowrap text-[#666] sm:px-3">
+                      {fmtDt(r.created_at)}
+                    </td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">{r.nguoi_ban_name}</td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 align-middle break-words sm:px-3">{r.khach_hang_name}</td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 align-middle text-[#555] sm:px-3">
+                      {r.hinh_thuc_thu?.trim() || "—"}
+                    </td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle tabular-nums sm:px-3">{r.so_mat_hang}</td>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle font-semibold tabular-nums sm:px-3">
+                      {fmtVnd(r.tong_tien)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <HoaCuPager
+          page={pagination.page}
+          total={pagination.total}
+          pageSize={pagination.pageSize}
+          basePath={pagination.basePath}
+        />
       </div>
-      <HoaCuPager
-        page={pagination.page}
-        total={pagination.total}
-        pageSize={pagination.pageSize}
-        basePath={pagination.basePath}
-      />
-    </div>
+      <AnimatePresence>
+        {detailDon ? (
+          <ModalChiTietDonBan key={`chi-ban-${detailDon.id}`} don={detailDon} onClose={() => setDetailDon(null)} />
+        ) : null}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -1375,28 +1705,12 @@ function ModalThemHang({
   onDone: (msg: string, ok: boolean) => void;
 }) {
   const isEdit = initial != null;
-  const [ten, setTen] = useState("");
-  const [loai, setLoai] = useState("");
-  const [giaNhap, setGiaNhap] = useState("");
-  const [giaBan, setGiaBan] = useState("");
-  const [thumb, setThumb] = useState("");
+  const [ten, setTen] = useState(() => initial?.ten_hang ?? "");
+  const [loai, setLoai] = useState(() => initial?.loai_san_pham ?? "");
+  const [giaNhap, setGiaNhap] = useState(() => (initial ? String(initial.gia_nhap ?? 0) : ""));
+  const [giaBan, setGiaBan] = useState(() => (initial ? String(initial.gia_ban ?? 0) : ""));
+  const [thumb, setThumb] = useState(() => initial?.thumbnail?.trim() ?? "");
   const [busy, setBusy] = useState(false);
-
-  useLayoutEffect(() => {
-    if (initial) {
-      setTen(initial.ten_hang);
-      setLoai(initial.loai_san_pham ?? "");
-      setGiaNhap(String(initial.gia_nhap ?? 0));
-      setGiaBan(String(initial.gia_ban ?? 0));
-      setThumb(initial.thumbnail?.trim() ?? "");
-    } else {
-      setTen("");
-      setLoai("");
-      setGiaNhap("");
-      setGiaBan("");
-      setThumb("");
-    }
-  }, [initial]);
 
   async function save() {
     if (!ten.trim()) {
@@ -1733,7 +2047,7 @@ function ModalBanHang({
       for (const l of valid) {
         const sp = sanPham.find((x) => x.id === l.mat_hang);
         const t = sp?.ton_kho ?? 0;
-        if (t > 0 && l.so_luong_ban > t) {
+        if (l.so_luong_ban > t) {
           onDone(`«${sp?.ten_hang ?? "#" + l.mat_hang}» chỉ còn ${t}.`, false);
           return;
         }

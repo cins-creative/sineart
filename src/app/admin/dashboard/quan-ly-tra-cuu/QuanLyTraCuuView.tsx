@@ -1382,20 +1382,21 @@ const QLT_CSS = `
   .qlt-table tbody td{padding:12px;border-bottom:1px solid rgba(45,32,32,.06);vertical-align:middle}
   .qlt-table tbody tr:hover{background:#fff9f2}
   .qlt-col-thumb{width:72px}
-  .qlt-col-truong{width:200px}
-  .qlt-col-type{width:200px}
+  .qlt-col-title{min-width:min(400px,48vw)}
+  .qlt-col-truong{width:180px;min-width:140px}
+  .qlt-col-type{width:180px;min-width:120px}
   .qlt-col-nam{width:64px;text-align:center}
   .qlt-col-feat{width:70px;text-align:center}
   .qlt-col-date{width:110px}
-  .qlt-col-act{width:220px}
+  .qlt-col-act{width:200px;min-width:180px}
   .qlt-empty{text-align:center;padding:36px 12px!important;color:#9c8a8a;font-style:italic}
 
   .qlt-row-thumb{width:56px;height:56px;border-radius:8px;overflow:hidden;background:#fafafa;border:1px solid rgba(45,32,32,.06)}
   .qlt-row-thumb img{width:100%;height:100%;object-fit:cover;display:block}
   .qlt-row-thumb-empty{display:flex;align-items:center;justify-content:center;color:#c0b5b5}
 
-  .qlt-cell-title{max-width:320px}
-  .qlt-cell-title-text{font-weight:600;color:#2d2020;line-height:1.35}
+  .qlt-cell-title{min-width:min(380px,42vw);max-width:none}
+  .qlt-cell-title-text{font-weight:600;color:#2d2020;line-height:1.35;word-break:break-word}
   .qlt-cell-slug{font-size:11px;color:#9c8a8a;margin-top:2px;font-family:ui-monospace,SFMono-Regular,monospace}
   .qlt-cell-nam{text-align:center;font-weight:600;color:#5a4a4a}
   .qlt-cell-date{font-size:12px;color:#6b5c5c;white-space:nowrap}

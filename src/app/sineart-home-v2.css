@@ -1323,4 +1323,36 @@
   .sa-root .cta-band-right {
     grid-template-columns: 1fr 1fr;
   }
+
+  /* Video — mobile: ít padding để khung embed rộng & nổi bật hơn */
+  .sa-root .video-section {
+    padding: 24px 12px 26px;
+    border-radius: 20px;
+  }
+  .sa-root .video-section .sec-head {
+    margin-bottom: 20px;
+  }
+  .sa-root .video-section .sec-label {
+    margin-bottom: 10px;
+  }
+  .sa-root .video-tabs {
+    margin-bottom: 16px !important;
+  }
+  .sa-root .video-block--embed {
+    border-radius: 16px !important;
+  }
+  .sa-root .video-caption {
+    margin-top: 10px !important;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sa-root .video-section {
+    padding: 18px 10px 22px;
+    border-radius: 16px;
+  }
+  .sa-root .video-section .sec-head {
+    margin-bottom: 16px;
+  }
 }

@@ -13,6 +13,7 @@ import TiptapPlaceholder from "@tiptap/extension-placeholder";
 import {
   Bold,
   CirclePlay,
+  Copy,
   Braces,
   Code,
   Heading1,
@@ -131,6 +132,35 @@ export default function AdminRichTextEditor({
   const [htmlEmbedValue, setHtmlEmbedValue] = useState("");
   const [htmlEmbedError, setHtmlEmbedError] = useState<string | null>(null);
   const [showHtmlReview, setShowHtmlReview] = useState(false);
+  const [copyHtmlHint, setCopyHtmlHint] = useState<string | null>(null);
+  const copyHtmlHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function copyEditorHtmlToClipboard() {
+    const raw = editorRef.current?.getHTML() ?? "";
+    const html = raw.trim() ? raw : "<p></p>";
+    try {
+      await navigator.clipboard.writeText(html);
+      if (copyHtmlHintTimerRef.current) clearTimeout(copyHtmlHintTimerRef.current);
+      setCopyHtmlHint("Đã sao chép HTML vào clipboard.");
+      copyHtmlHintTimerRef.current = setTimeout(() => {
+        setCopyHtmlHint(null);
+        copyHtmlHintTimerRef.current = null;
+      }, 2200);
+    } catch {
+      if (copyHtmlHintTimerRef.current) clearTimeout(copyHtmlHintTimerRef.current);
+      setCopyHtmlHint("Không sao chép được — mở «Review HTML» và chọn text trong «HTML source».");
+      copyHtmlHintTimerRef.current = setTimeout(() => {
+        setCopyHtmlHint(null);
+        copyHtmlHintTimerRef.current = null;
+      }, 4000);
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (copyHtmlHintTimerRef.current) clearTimeout(copyHtmlHintTimerRef.current);
+    };
+  }, []);
 
   function incPending() {
     pendingCountRef.current++;
@@ -564,6 +594,16 @@ export default function AdminRichTextEditor({
           >
             Review HTML
           </button>
+          <button
+            type="button"
+            className={cn(tb(), "text-[#2d6a4f] hover:bg-emerald-50")}
+            title="Sao chép HTML hiện tại của editor (TipTap, chưa sanitize)"
+            onMouseDown={keepSelectionMouseDown}
+            onClick={() => void copyEditorHtmlToClipboard()}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            <span className="ml-1">Copy HTML</span>
+          </button>
 
           {sep}
 
@@ -652,6 +692,16 @@ export default function AdminRichTextEditor({
       />
 
       {/* ─── Upload error ─── */}
+      {copyHtmlHint ? (
+        <div
+          className="flex items-center gap-2 border-t border-emerald-100 bg-emerald-50/90 px-3 py-1.5 text-[11.5px] font-medium text-emerald-900"
+          role="status"
+          aria-live="polite"
+        >
+          {copyHtmlHint}
+        </div>
+      ) : null}
+
       {uploadError ? (
         <div className="flex items-center gap-2 border-t border-red-100 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
           <span className="shrink-0">⚠</span>

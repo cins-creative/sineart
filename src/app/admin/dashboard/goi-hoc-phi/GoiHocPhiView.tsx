@@ -1527,6 +1527,7 @@ function GoiModal({
 
 export default function GoiHocPhiView({ bundle }: Props) {
   const router = useRouter();
+  const { canDelete: roleMayDeleteGoi } = useAdminDashboardAbilities();
   const tableSpecialListId = useId();
   const editBaselineRef = useRef<Map<number, string>>(new Map());
   const [bannerError, setBannerError] = useState(bundle.loadError ?? "");
@@ -1546,7 +1547,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
 
   const tableEditMode = editDraftById != null;
   const emptyTableColSpan =
-    (bundle.tableName !== "hp_goi_hoc_phi" ? 13 : 9) + (tableEditMode ? 1 : 0);
+    (bundle.tableName !== "hp_goi_hoc_phi" ? 13 : 9) + (roleMayDeleteGoi ? 1 : 0);
 
   useEffect(() => {
     setBannerError(bundle.loadError ?? "");
@@ -1930,7 +1931,14 @@ export default function GoiHocPhiView({ bundle }: Props) {
           {tableEditMode ? (
             <p className="m-0 border-b border-amber-100 bg-amber-50/90 px-4 py-2 text-xs leading-relaxed text-amber-950">
               Đang chỉnh sửa toàn bộ danh sách đã tải. Dùng <strong className="font-semibold">Lưu tất cả</strong> để ghi
-              xuống database; cột <strong className="font-semibold">Xóa</strong> gỡ bản ghi ngay (không cần Lưu).{" "}
+              xuống database
+              {roleMayDeleteGoi ? (
+                <>
+                  ; cột <strong className="font-semibold">Xóa</strong> gỡ bản ghi ngay (không cần Lưu).
+                </>
+              ) : (
+                <>.</>
+              )}{" "}
               <strong className="font-semibold">Nhân bản</strong> tạo bản ghi mới và thoát chế độ chỉnh sửa bảng. Chuyển
               trang vẫn giữ bản nháp cho mọi dòng.
             </p>
@@ -1948,10 +1956,14 @@ export default function GoiHocPhiView({ bundle }: Props) {
                 isNewGoiTable
                   ? tableEditMode
                     ? "min-w-[1760px]"
-                    : "min-w-[1520px]"
+                    : roleMayDeleteGoi
+                      ? "min-w-[1564px]"
+                      : "min-w-[1520px]"
                   : tableEditMode
                     ? "min-w-[1040px]"
-                    : "min-w-[840px]"
+                    : roleMayDeleteGoi
+                      ? "min-w-[884px]"
+                      : "min-w-[840px]"
               }`}
             >
               <thead>
@@ -1979,7 +1991,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
                     <span className="sr-only">Nhân bản</span>
                     <Copy className="mx-auto inline h-3.5 w-3.5 opacity-50" aria-hidden />
                   </th>
-                  {tableEditMode ? (
+                  {roleMayDeleteGoi ? (
                     <th className="w-11 shrink-0 px-2 py-3 text-center normal-case">Xóa</th>
                   ) : null}
                   <th className="min-w-[6.5rem] whitespace-nowrap px-3 py-3">Tạo</th>
@@ -2184,7 +2196,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
                             <Copy size={15} strokeWidth={2} />
                           </button>
                         </td>
-                        {tableEditMode ? (
+                        {roleMayDeleteGoi ? (
                           <td className="px-2 py-2 align-middle text-center">
                             <button
                               type="button"

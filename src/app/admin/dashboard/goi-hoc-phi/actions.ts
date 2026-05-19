@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import { deleteHpDonThu } from "@/app/admin/dashboard/quan-ly-hoa-don/actions";
+import { parseGoiIsActive } from "@/lib/data/hp-goi-is-active";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
@@ -26,6 +28,14 @@ function table(): string {
 
 function revalidateGoiPages(): void {
   revalidatePath(REVALIDATE);
+  revalidatePath("/admin/dashboard/quan-ly-hoa-don");
+  revalidatePath("/donghocphi");
+  revalidatePath("/khoa-hoc", "layout");
+}
+
+function nId(v: unknown): number | null {
+  const n = typeof v === "bigint" ? Number(v) : Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function parseComboIdsCsv(raw: unknown): number[] {
@@ -198,6 +208,25 @@ export async function deleteHpComboMon(comboId: number): Promise<DeleteComboResu
 
 export type DeleteGoiHocPhiResult = { ok: true } | { ok: false; error: string };
 
+function goiHocPhiInUseMessage(goiId: number, chiTietCount: number): string {
+  const n = chiTietCount.toLocaleString("vi-VN");
+  return (
+    `Không xóa được gói #${goiId}: đang có ${n} dòng chi tiết học phí trên hóa đơn ` +
+    `(hp_thu_hp_chi_tiet). Nhấn vào dòng gói trên bảng để xem danh sách đơn, gỡ dòng hoặc xóa đơn.`
+  );
+}
+
+function humanizeGoiDeleteDbError(goiId: number, message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes("hp_thu_hp_chi_tiet") || lower.includes("goi_hoc_phi_fkey")) {
+    return (
+      `Không xóa được gói #${goiId}: gói đang được dùng trên hóa đơn học phí. ` +
+      `Đổi hoặc gỡ gói trên các đơn trước — xem Quản lý hóa đơn / đóng học phí.`
+    );
+  }
+  return message;
+}
+
 /** Xóa một dòng trong bảng gói học phí (`hp_goi_hoc_phi_new` hoặc legacy). */
 export async function deleteGoiHocPhi(goiId: number): Promise<DeleteGoiHocPhiResult> {
   const session = await getAdminSessionOrNull();
@@ -213,18 +242,241 @@ export async function deleteGoiHocPhi(goiId: number): Promise<DeleteGoiHocPhiRes
   const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
   if (!delOk.ok) return { ok: false, error: delOk.error };
 
+  const { count: chiTietCount, error: usageErr } = await supabase
+    .from("hp_thu_hp_chi_tiet")
+    .select("id", { count: "exact", head: true })
+    .eq("goi_hoc_phi", goiId);
+
+  if (usageErr) {
+    return { ok: false, error: usageErr.message || "Không kiểm tra được dữ liệu tham chiếu gói." };
+  }
+
+  if ((chiTietCount ?? 0) > 0) {
+    return { ok: false, error: goiHocPhiInUseMessage(goiId, chiTietCount ?? 0) };
+  }
+
   const tbl = table();
   const { error } = await supabase.from(tbl).delete().eq("id", goiId);
 
   if (error) {
+    const raw = error.message || `Không xóa được gói #${goiId}.`;
     return {
       ok: false,
-      error:
-        error.message ||
-        `Không xóa được gói (kiểm tra FK: học viên / hóa đơn có thể đang tham chiếu gói #${goiId}).`,
+      error: humanizeGoiDeleteDbError(goiId, raw),
     };
   }
 
+  revalidateGoiPages();
+  return { ok: true };
+}
+
+const MAX_GOI_HP_USAGE_ROWS = 500;
+
+export type GoiHpDonUsageRow = {
+  chiId: number;
+  donId: number;
+  ma_don: string | null;
+  ma_don_so: string | null;
+  donStatus: string | null;
+  donCreatedAt: string | null;
+  chiStatus: string | null;
+  ngay_dau_ky: string | null;
+  ngay_cuoi_ky: string | null;
+  studentId: number | null;
+  studentName: string;
+  tenLop: string;
+};
+
+export type FetchGoiHpDonUsageResult =
+  | { ok: true; rows: GoiHpDonUsageRow[]; truncated: boolean }
+  | { ok: false; error: string };
+
+/** Các đơn / dòng chi tiết đang gán `goi_hoc_phi` = goiId (để gỡ trước khi xóa gói). */
+export async function fetchGoiHpDonUsage(goiId: number): Promise<FetchGoiHpDonUsageResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(goiId) || goiId <= 0) return { ok: false, error: "ID gói không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { data: chiRaw, error: chiErr } = await supabase
+    .from("hp_thu_hp_chi_tiet")
+    .select("id, don_thu, khoa_hoc_vien, status, ngay_dau_ky, ngay_cuoi_ky, created_at")
+    .eq("goi_hoc_phi", goiId)
+    .order("created_at", { ascending: false })
+    .limit(MAX_GOI_HP_USAGE_ROWS + 1);
+
+  if (chiErr) {
+    return { ok: false, error: chiErr.message || "Không đọc được chi tiết học phí." };
+  }
+
+  const chiList = (chiRaw ?? []) as Record<string, unknown>[];
+  const truncated = chiList.length > MAX_GOI_HP_USAGE_ROWS;
+  const chiSlice = truncated ? chiList.slice(0, MAX_GOI_HP_USAGE_ROWS) : chiList;
+
+  if (chiSlice.length === 0) {
+    return { ok: true, rows: [], truncated: false };
+  }
+
+  const donIds = [...new Set(chiSlice.map((c) => nId(c.don_thu)).filter((x): x is number => x != null))];
+  const qlIds = [...new Set(chiSlice.map((c) => nId(c.khoa_hoc_vien)).filter((x): x is number => x != null))];
+
+  const [donRes, qlRes] = await Promise.all([
+    donIds.length
+      ? supabase
+          .from("hp_don_thu_hoc_phi")
+          .select("id, ma_don, ma_don_so, status, created_at, student")
+          .in("id", donIds)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    qlIds.length
+      ? supabase.from("ql_quan_ly_hoc_vien").select("id, lop_hoc").in("id", qlIds)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+  ]);
+
+  if (donRes.error || qlRes.error) {
+    return {
+      ok: false,
+      error: donRes.error?.message || qlRes.error?.message || "Không tải tham chiếu đơn.",
+    };
+  }
+
+  const donById = new Map<
+    number,
+    { ma_don: string | null; ma_don_so: string | null; status: string | null; created_at: string | null; student: number | null }
+  >();
+  const hvIds = new Set<number>();
+  for (const r of donRes.data ?? []) {
+    const row = r as {
+      id?: unknown;
+      ma_don?: unknown;
+      ma_don_so?: unknown;
+      status?: unknown;
+      created_at?: unknown;
+      student?: unknown;
+    };
+    const id = nId(row.id);
+    if (!id) continue;
+    const student = nId(row.student);
+    if (student) hvIds.add(student);
+    donById.set(id, {
+      ma_don: row.ma_don != null ? String(row.ma_don) : null,
+      ma_don_so: row.ma_don_so != null ? String(row.ma_don_so) : null,
+      status: row.status != null ? String(row.status) : null,
+      created_at: row.created_at != null ? String(row.created_at) : null,
+      student,
+    });
+  }
+
+  const qlLopById = new Map<number, number>();
+  for (const r of qlRes.data ?? []) {
+    const row = r as { id?: unknown; lop_hoc?: unknown };
+    const qid = nId(row.id);
+    const lid = nId(row.lop_hoc);
+    if (qid && lid) qlLopById.set(qid, lid);
+  }
+
+  const lopIds = [...new Set(qlLopById.values())];
+  const lopNameById = new Map<number, string>();
+  if (lopIds.length > 0) {
+    const { data: lopRows, error: lopErr } = await supabase
+      .from("ql_lop_hoc")
+      .select("id, class_full_name, class_name")
+      .in("id", lopIds);
+    if (lopErr) {
+      return { ok: false, error: lopErr.message || "Không đọc được lớp học." };
+    }
+    for (const r of lopRows ?? []) {
+      const row = r as { id?: unknown; class_full_name?: unknown; class_name?: unknown };
+      const id = nId(row.id);
+      if (!id) continue;
+      const name =
+        String(row.class_full_name ?? "").trim() || String(row.class_name ?? "").trim() || `Lớp #${id}`;
+      lopNameById.set(id, name);
+    }
+  }
+
+  const hvNameById = new Map<number, string>();
+  if (hvIds.size > 0) {
+    const { data: hvRows, error: hvErr } = await supabase
+      .from("ql_thong_tin_hoc_vien")
+      .select("id, full_name")
+      .in("id", [...hvIds]);
+    if (hvErr) {
+      return { ok: false, error: hvErr.message || "Không đọc được học viên." };
+    }
+    for (const r of hvRows ?? []) {
+      const row = r as { id?: unknown; full_name?: unknown };
+      const id = nId(row.id);
+      if (!id) continue;
+      hvNameById.set(id, String(row.full_name ?? "").trim() || `HV #${id}`);
+    }
+  }
+
+  const rows: GoiHpDonUsageRow[] = [];
+  for (const c of chiSlice) {
+    const chiId = nId(c.id);
+    const donId = nId(c.don_thu);
+    if (!chiId || !donId) continue;
+    const don = donById.get(donId);
+    const kcv = nId(c.khoa_hoc_vien);
+    const lopId = kcv != null ? qlLopById.get(kcv) ?? null : null;
+    const studentId = don?.student ?? null;
+    rows.push({
+      chiId,
+      donId,
+      ma_don: don?.ma_don ?? null,
+      ma_don_so: don?.ma_don_so ?? null,
+      donStatus: don?.status ?? null,
+      donCreatedAt: don?.created_at ?? null,
+      chiStatus: c.status != null ? String(c.status) : null,
+      ngay_dau_ky: c.ngay_dau_ky != null ? String(c.ngay_dau_ky).slice(0, 10) : null,
+      ngay_cuoi_ky: c.ngay_cuoi_ky != null ? String(c.ngay_cuoi_ky).slice(0, 10) : null,
+      studentId,
+      studentName:
+        studentId != null ? hvNameById.get(studentId) ?? `HV #${studentId}` : "—",
+      tenLop: lopId != null ? lopNameById.get(lopId) ?? `Lớp #${lopId}` : "—",
+    });
+  }
+
+  return { ok: true, rows, truncated };
+}
+
+/** Gỡ một dòng chi tiết học phí (để có thể xóa gói sau). */
+export async function deleteGoiHpChiTietLine(chiId: number): Promise<DeleteGoiHocPhiResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(chiId) || chiId <= 0) return { ok: false, error: "ID dòng chi tiết không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delOk.ok) return { ok: false, error: delOk.error };
+
+  const { error } = await supabase.from("hp_thu_hp_chi_tiet").delete().eq("id", chiId);
+  if (error) {
+    return { ok: false, error: error.message || "Không xóa được dòng chi tiết." };
+  }
+
+  revalidateGoiPages();
+  return { ok: true };
+}
+
+/** Xóa cả đơn thu học phí (chi tiết + đơn) từ popup gói học phí. */
+export async function deleteGoiHpDonFromUsage(donId: number): Promise<DeleteGoiHocPhiResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(donId) || donId <= 0) return { ok: false, error: "ID đơn không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const delOk = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!delOk.ok) return { ok: false, error: delOk.error };
+
+  const res = await deleteHpDonThu(donId);
+  if (!res.ok) return { ok: false, error: res.error };
   revalidateGoiPages();
   return { ok: true };
 }
@@ -250,7 +502,7 @@ export async function duplicateGoiHocPhi(goiId: number): Promise<DuplicateGoiHoc
 
   const selectCols =
     'mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi' +
-    (isLegacyGoiTable ? "" : ", special, note, post_title");
+    (isLegacyGoiTable ? "" : ", special, note, post_title, is_active");
 
   const { data: raw, error: fetchErr } = await supabase.from(tbl).select(selectCols).eq("id", goiId).maybeSingle();
 
@@ -271,6 +523,7 @@ export async function duplicateGoiHocPhi(goiId: number): Promise<DuplicateGoiHoc
     payload.special = row.special ?? null;
     payload.note = row.note ?? null;
     payload.post_title = row.post_title ?? null;
+    payload.is_active = parseGoiIsActive(row.is_active);
   }
 
   const { data: inserted, error: insertErr } = await supabase.from(tbl).insert(payload).select("id").single();
@@ -360,10 +613,13 @@ export async function saveGoiHocPhi(
     combo_id: isLegacyGoiTable ? primaryComboId : combo_ids,
     so_buoi,
   };
+  const is_active = formData.get("is_active") !== "false";
+
   if (!isLegacyGoiTable) {
     payload.special = special;
     payload.note = note;
     payload.post_title = post_title;
+    payload.is_active = is_active;
   }
 
   if (!Number.isFinite(id) || id <= 0) {
@@ -400,6 +656,7 @@ export type GoiHocPhiBulkRowInput = {
   special?: string | null;
   note?: string | null;
   post_title?: string | null;
+  is_active?: boolean;
 };
 
 export type GoiHocPhiBulkResult =
@@ -489,6 +746,9 @@ export async function saveGoiHocPhiBulk(rows: GoiHocPhiBulkRowInput[]): Promise<
       payload.special = special;
       payload.note = note;
       payload.post_title = post_title;
+      if (row.is_active !== undefined) {
+        payload.is_active = row.is_active !== false;
+      }
     }
 
     const { error } = await supabase.from(tbl).update(payload).eq("id", id);
@@ -499,6 +759,7 @@ export async function saveGoiHocPhiBulk(rows: GoiHocPhiBulkRowInput[]): Promise<
   }
 
   revalidateGoiPages();
+  revalidatePath("/donghocphi");
   return {
     ok: true,
     message: updated === 1 ? "Đã lưu 1 dòng." : `Đã lưu ${updated} dòng.`,

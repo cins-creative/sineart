@@ -1,6 +1,11 @@
 import { cache } from "react";
 
 import { countDangHocByLopIds } from "@/lib/data/class-seat-dang-hoc";
+import {
+  appendIsActiveToGoiSelect,
+  filterRawGoiRowsForPayment,
+  isSupabaseMissingColumnError,
+} from "@/lib/data/hp-goi-is-active";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import { isTenMonHinhHoa } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import { isHocPhiCapTocSpecial } from "@/lib/hocPhiDedupe";
@@ -1104,13 +1109,31 @@ export const getGlobalTeacherPortfolioSlides = cache(
 );
 
 function hocPhiBlockGoiSelectColumns(): string {
+  const table = hpGoiHocPhiTableName();
+  const base =
+    table === "hp_goi_hoc_phi"
+      ? 'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi'
+      : 'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi, special, note, post_title';
+  return appendIsActiveToGoiSelect(base, table);
+}
+
+/** Khi bảng không có cột `discount` (400). */
+function hocPhiBlockGoiSelectColumnsNoDiscount(): string {
+  const table = hpGoiHocPhiTableName();
+  const base =
+    table === "hp_goi_hoc_phi"
+      ? 'id, mon_hoc, "number", don_vi, gia_goc, combo_id, so_buoi'
+      : 'id, mon_hoc, "number", don_vi, gia_goc, combo_id, so_buoi, special, note, post_title';
+  return appendIsActiveToGoiSelect(base, table);
+}
+
+function hocPhiBlockGoiSelectColumnsLegacyNoIsActive(): string {
   return hpGoiHocPhiTableName() === "hp_goi_hoc_phi"
     ? 'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi'
     : 'id, mon_hoc, "number", don_vi, gia_goc, discount, combo_id, so_buoi, special, note, post_title';
 }
 
-/** Khi bảng không có cột `discount` (400). */
-function hocPhiBlockGoiSelectColumnsNoDiscount(): string {
+function hocPhiBlockGoiSelectColumnsNoDiscountLegacyNoIsActive(): string {
   return hpGoiHocPhiTableName() === "hp_goi_hoc_phi"
     ? 'id, mon_hoc, "number", don_vi, gia_goc, combo_id, so_buoi'
     : 'id, mon_hoc, "number", don_vi, gia_goc, combo_id, so_buoi, special, note, post_title';
@@ -1248,14 +1271,36 @@ export async function getHocPhiBlockData(
     .order("number", { ascending: true });
 
   if (e1) {
-    goiCols = hocPhiBlockGoiSelectColumnsNoDiscount();
-    const retry = await supabase
-      .from(goiTable)
-      .select(goiCols)
-      .eq("mon_hoc", monId)
-      .order("number", { ascending: true });
-    mainRows = retry.data;
-    e1 = retry.error;
+    if (isSupabaseMissingColumnError(e1.message, "is_active")) {
+      goiCols = hocPhiBlockGoiSelectColumnsLegacyNoIsActive();
+      const retry0 = await supabase
+        .from(goiTable)
+        .select(goiCols)
+        .eq("mon_hoc", monId)
+        .order("number", { ascending: true });
+      mainRows = retry0.data;
+      e1 = retry0.error;
+    }
+    if (e1) {
+      goiCols = hocPhiBlockGoiSelectColumnsNoDiscount();
+      const retry = await supabase
+        .from(goiTable)
+        .select(goiCols)
+        .eq("mon_hoc", monId)
+        .order("number", { ascending: true });
+      mainRows = retry.data;
+      e1 = retry.error;
+      if (e1 && isSupabaseMissingColumnError(e1.message, "is_active")) {
+        goiCols = hocPhiBlockGoiSelectColumnsNoDiscountLegacyNoIsActive();
+        const retry2 = await supabase
+          .from(goiTable)
+          .select(goiCols)
+          .eq("mon_hoc", monId)
+          .order("number", { ascending: true });
+        mainRows = retry2.data;
+        e1 = retry2.error;
+      }
+    }
   }
 
   if (e1) {
@@ -1280,7 +1325,9 @@ export async function getHocPhiBlockData(
     return { gois: [], combos: [], monMap, monSlugMap };
   }
 
-  const main = (mainRows ?? []) as unknown as Record<string, unknown>[];
+  const main = filterRawGoiRowsForPayment(
+    ((mainRows ?? []) as unknown) as Record<string, unknown>[],
+  );
   const mainGois = main.map(mapHocPhiGoiRow);
   const mainGoiIds = new Set(mainGois.map((g) => g.id));
 
@@ -1317,7 +1364,9 @@ export async function getHocPhiBlockData(
       .from(goiTable)
       .select(goiCols)
       .in("id", partnerGoiIds);
-    const extraRows = (extra ?? []) as unknown as Record<string, unknown>[];
+    const extraRows = filterRawGoiRowsForPayment(
+      ((extra ?? []) as unknown) as Record<string, unknown>[],
+    );
     if (extraRows.length) {
       const byId = new Map<number, HocPhiGoiRow>();
       for (const g of gois) byId.set(g.id, g);

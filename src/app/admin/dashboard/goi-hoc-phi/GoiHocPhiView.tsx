@@ -33,12 +33,14 @@ import type {
   GoiHocPhiBulkRowInput,
   GoiHocPhiFormState,
 } from "@/app/admin/dashboard/goi-hoc-phi/actions";
+import GoiHpDonUsageModal from "@/app/admin/dashboard/goi-hoc-phi/GoiHpDonUsageModal";
 import type {
   AdminComboOption,
   AdminGoiHocPhiBundle,
   AdminGoiHocPhiRow,
   AdminMonOption,
 } from "@/lib/data/admin-goi-hoc-phi";
+import { cn } from "@/lib/utils";
 
 type Props = {
   bundle: AdminGoiHocPhiBundle;
@@ -140,6 +142,7 @@ type EditableGoiDraft = {
   special: string;
   note: string;
   so_buoi: string;
+  is_active: boolean;
 };
 
 function buildTuDongTenGoiFromDraft(d: EditableGoiDraft, mons: AdminMonOption[]): string {
@@ -171,6 +174,7 @@ function rowToDraft(r: AdminGoiHocPhiRow): EditableGoiDraft {
     special: r.special ?? "",
     note: r.note ?? "",
     so_buoi: r.so_buoi != null ? String(r.so_buoi) : "",
+    is_active: r.is_active !== false,
   };
 }
 
@@ -217,6 +221,7 @@ function draftToBulkInput(
       special: specialTrim === "" ? null : specialTrim,
       note: noteTrim === "" ? null : noteTrim,
       post_title: postTitleTrim === "" ? null : postTitleTrim,
+      is_active: d.is_active,
     },
   };
 }
@@ -995,6 +1000,7 @@ function GoiModal({
     special: row?.special ?? "",
     note: row?.note ?? "",
     so_buoi: row?.so_buoi != null ? String(row.so_buoi) : "",
+    is_active: row?.is_active !== false,
   });
 
   const [saveState, saveAction, savePending] = useActionState(saveGoiHocPhi, null as GoiHocPhiFormState | null);
@@ -1037,6 +1043,7 @@ function GoiModal({
       special: row?.special ?? "",
       note: row?.note ?? "",
       so_buoi: row?.so_buoi != null ? String(row.so_buoi) : "",
+      is_active: row?.is_active !== false,
     });
     setModalError("");
   }, [row, isNew]);
@@ -1056,6 +1063,7 @@ function GoiModal({
         special: form.special,
         note: "",
         so_buoi: "",
+        is_active: true,
       },
       monOptions,
     );
@@ -1385,6 +1393,24 @@ function GoiModal({
             />
           </label>
 
+          {supportsSpecial ? (
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#EAEAEA] bg-[#FAFAFA] px-3 py-3">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#BC8AF9]"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-[#323232]">Hiển thị khi đóng học phí</span>
+                <span className="mt-0.5 block text-xs leading-snug text-black/55">
+                  Bỏ chọn để ẩn gói khỏi trang đóng học phí và modal admin đóng HP.
+                </span>
+              </span>
+              <input type="hidden" name="is_active" value={form.is_active ? "true" : "false"} />
+            </label>
+          ) : null}
+
           <div className="flex flex-wrap justify-end gap-2 border-t border-[#EAEAEA] pt-4">
             <button
               type="button"
@@ -1544,10 +1570,11 @@ export default function GoiHocPhiView({ bundle }: Props) {
   const [bulkSavePending, startBulkSave] = useTransition();
   const [deleteRowPendingId, setDeleteRowPendingId] = useState<number | null>(null);
   const [duplicateRowPendingId, setDuplicateRowPendingId] = useState<number | null>(null);
+  const [usageModalRow, setUsageModalRow] = useState<AdminGoiHocPhiRow | null>(null);
 
   const tableEditMode = editDraftById != null;
   const emptyTableColSpan =
-    (bundle.tableName !== "hp_goi_hoc_phi" ? 13 : 9) + (roleMayDeleteGoi ? 1 : 0);
+    (bundle.tableName !== "hp_goi_hoc_phi" ? 14 : 9) + (roleMayDeleteGoi ? 1 : 0);
 
   useEffect(() => {
     setBannerError(bundle.loadError ?? "");
@@ -1716,6 +1743,18 @@ export default function GoiHocPhiView({ bundle }: Props) {
         setBulkHint({ ok: false, text: res.error });
       }
     });
+  }
+
+  function openGoiUsageModal(row: AdminGoiHocPhiRow) {
+    if (tableEditMode) return;
+    setUsageModalRow(row);
+  }
+
+  function handleGoiRowClick(e: React.MouseEvent, row: AdminGoiHocPhiRow) {
+    if (tableEditMode) return;
+    const target = e.target;
+    if (target instanceof Element && target.closest("button")) return;
+    openGoiUsageModal(row);
   }
 
   async function handleDeleteGoiRow(id: number) {
@@ -1942,7 +1981,11 @@ export default function GoiHocPhiView({ bundle }: Props) {
               <strong className="font-semibold">Nhân bản</strong> tạo bản ghi mới và thoát chế độ chỉnh sửa bảng. Chuyển
               trang vẫn giữ bản nháp cho mọi dòng.
             </p>
-          ) : null}
+          ) : (
+            <p className="m-0 border-b border-[#EAEAEA] bg-[#FAFAFA] px-4 py-2 text-xs text-black/55">
+              Nhấn một dòng gói để xem đơn học phí đang gán gói đó — gỡ dòng hoặc xóa đơn trước khi xóa gói.
+            </p>
+          )}
           <div className="w-full min-w-0 overflow-x-auto">
             {bundle.tableName !== "hp_goi_hoc_phi" && tableEditMode ? (
               <datalist id={tableSpecialListId}>
@@ -1969,6 +2012,11 @@ export default function GoiHocPhiView({ bundle }: Props) {
               <thead>
                 <tr className="border-b border-[#EAEAEA] bg-[#FAFAFA] text-[11px] font-bold uppercase tracking-wide text-black/45">
                   <th className="w-[4.25rem] shrink-0 whitespace-nowrap px-3 py-3">ID</th>
+                  {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                    <th className="w-[5.5rem] shrink-0 px-2 py-3 text-center normal-case" title="Hiển thị khi đóng học phí">
+                      Đóng HP
+                    </th>
+                  ) : null}
                   {bundle.tableName !== "hp_goi_hoc_phi" ? (
                     <th className="min-w-[13rem] max-w-[18rem] px-3 py-3 normal-case">Tên gói</th>
                   ) : null}
@@ -2024,10 +2072,35 @@ export default function GoiHocPhiView({ bundle }: Props) {
                     const cellInput =
                       "min-w-0 max-w-[9.5rem] rounded-lg border border-[#EAEAEA] bg-white px-2 py-1 text-xs outline-none ring-[#BC8AF9] focus:ring-1";
                     return (
-                      <tr key={r.id} className="border-b border-[#F0F0F0] hover:bg-[#FFFBF8]/80">
+                      <tr
+                        key={r.id}
+                        className={
+                          tableEditMode
+                            ? "border-b border-[#F0F0F0] hover:bg-[#FFFBF8]/80"
+                            : cn(
+                                "cursor-pointer border-b border-[#F0F0F0] hover:bg-[#FFFBF8]/80",
+                                isNewGoiTable && !r.is_active && "opacity-55",
+                              )
+                        }
+                        onClick={(e) => handleGoiRowClick(e, r)}
+                        title={tableEditMode ? undefined : "Xem đơn đang gán gói học phí này"}
+                      >
                         <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-black/70">{r.id}</td>
                         {showRowEdit && draft ? (
                           <>
+                            {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                              <td className="px-2 py-2 text-center align-middle">
+                                <input
+                                  type="checkbox"
+                                  checked={draft.is_active}
+                                  onChange={(e) =>
+                                    patchEditDraft(r.id, { is_active: e.target.checked })
+                                  }
+                                  className="h-4 w-4 accent-[#BC8AF9]"
+                                  aria-label={`Hiển thị khi đóng học phí — gói #${r.id}`}
+                                />
+                              </td>
+                            ) : null}
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
                               <td
                                 className="min-w-0 max-w-[18rem] px-3 py-2 align-top text-xs leading-snug text-black/75"
@@ -2136,6 +2209,19 @@ export default function GoiHocPhiView({ bundle }: Props) {
                         ) : (
                           <>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
+                              <td className="px-2 py-3 text-center align-middle text-xs">
+                                {r.is_active ? (
+                                  <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800">
+                                    Bật
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex rounded-full bg-black/[0.06] px-2 py-0.5 font-semibold text-black/50">
+                                    Ẩn
+                                  </span>
+                                )}
+                              </td>
+                            ) : null}
+                            {bundle.tableName !== "hp_goi_hoc_phi" ? (
                               <td
                                 className="min-w-0 max-w-[18rem] px-3 py-3 align-top text-xs leading-snug text-black/80"
                                 title={buildTuDongTenGoiFromRow(r, bundle.monOptions)}
@@ -2188,7 +2274,10 @@ export default function GoiHocPhiView({ bundle }: Props) {
                               deleteRowPendingId !== null ||
                               duplicateRowPendingId !== null
                             }
-                            onClick={() => void handleDuplicateGoiRow(r.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDuplicateGoiRow(r.id);
+                            }}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-[#7a5bb0] hover:border-[#BC8AF9]/50 hover:bg-[#BC8AF9]/12 disabled:opacity-45"
                             title="Nhân bản gói (bản sao cùng dữ liệu)"
                             aria-label={`Nhân bản gói học phí #${r.id}`}
@@ -2205,7 +2294,10 @@ export default function GoiHocPhiView({ bundle }: Props) {
                                 deleteRowPendingId !== null ||
                                 duplicateRowPendingId !== null
                               }
-                              onClick={() => void handleDeleteGoiRow(r.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleDeleteGoiRow(r.id);
+                              }}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-45"
                               title="Xóa gói này"
                               aria-label={`Xóa gói học phí #${r.id}`}
@@ -2280,6 +2372,19 @@ export default function GoiHocPhiView({ bundle }: Props) {
             onUpsertCombo={mergeCombo}
             goiRows={bundle.rows}
             monOptions={bundle.monOptions}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {usageModalRow ? (
+          <GoiHpDonUsageModal
+            key={usageModalRow.id}
+            goiId={usageModalRow.id}
+            goiLabel={buildTuDongTenGoiFromRow(usageModalRow, bundle.monOptions)}
+            canDelete={roleMayDeleteGoi}
+            onClose={() => setUsageModalRow(null)}
+            onChanged={() => router.refresh()}
           />
         ) : null}
       </AnimatePresence>

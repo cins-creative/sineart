@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  appendIsActiveToGoiSelect,
+  goiTableSupportsIsActive,
+  isSupabaseMissingColumnError,
+  parseGoiIsActive,
+} from "@/lib/data/hp-goi-is-active";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 
 function parseNumericNullable(v: unknown): number | null {
@@ -66,6 +72,8 @@ export type AdminGoiHocPhiRow = {
   /** `hp_goi_hoc_phi_new.post_title` — hậu tố tên gói (null nếu bảng legacy / chưa có cột). */
   post_title: string | null;
   so_buoi: number | null;
+  /** `hp_goi_hoc_phi_new.is_active` — false = ẩn khi đóng học phí (admin vẫn thấy). */
+  is_active: boolean;
 };
 
 export type AdminMonOption = { id: number; ten_mon_hoc: string };
@@ -100,16 +108,22 @@ const GOI_SELECT_BASE_NO_DISC =
   'id, created_at, mon_hoc, "number", don_vi, gia_goc, combo_id, so_buoi';
 
 function goiSelectForTable(tableName: string): string {
-  if (tableName === "hp_goi_hoc_phi") return GOI_SELECT_BASE;
-  return `${GOI_SELECT_BASE}, special, note, post_title`;
+  const base =
+    tableName === "hp_goi_hoc_phi"
+      ? GOI_SELECT_BASE
+      : `${GOI_SELECT_BASE}, special, note, post_title`;
+  return appendIsActiveToGoiSelect(base, tableName);
 }
 
 function goiSelectForTableNoDiscount(tableName: string): string {
-  if (tableName === "hp_goi_hoc_phi") return GOI_SELECT_BASE_NO_DISC;
-  return `${GOI_SELECT_BASE_NO_DISC}, special, note, post_title`;
+  const base =
+    tableName === "hp_goi_hoc_phi"
+      ? GOI_SELECT_BASE_NO_DISC
+      : `${GOI_SELECT_BASE_NO_DISC}, special, note, post_title`;
+  return appendIsActiveToGoiSelect(base, tableName);
 }
 
-function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
+function mapRow(raw: Record<string, unknown>, tableName: string): AdminGoiHocPhiRow {
   const numRaw = raw.number ?? raw["number"];
   const specialRaw = raw.special;
   const noteRaw = raw.note;
@@ -139,6 +153,7 @@ function mapRow(raw: Record<string, unknown>): AdminGoiHocPhiRow {
         ? null
         : String(postTitleRaw).trim() || null,
     so_buoi: parseNumericNullable(raw.so_buoi),
+    is_active: goiTableSupportsIsActive(tableName) ? parseGoiIsActive(raw.is_active) : true,
   };
 }
 
@@ -148,18 +163,44 @@ export async function fetchAdminGoiHocPhiBundle(
   const tableName = hpGoiHocPhiTableName();
   let loadError: string | null = null;
 
-  let { data: goiRows, error: goiErr } = await supabase
+  let { data: goiRowsRaw, error: goiErr } = await supabase
     .from(tableName)
     .select(goiSelectForTable(tableName))
     .order("id", { ascending: false });
+  let goiRows = goiRowsRaw as Record<string, unknown>[] | null;
+
+  if (goiErr && isSupabaseMissingColumnError(goiErr.message, "is_active")) {
+    const r0 = await supabase
+      .from(tableName)
+      .select(
+        tableName === "hp_goi_hoc_phi"
+          ? GOI_SELECT_BASE
+          : `${GOI_SELECT_BASE}, special, note, post_title`,
+      )
+      .order("id", { ascending: false });
+    goiRows = r0.data as Record<string, unknown>[] | null;
+    goiErr = r0.error;
+  }
 
   if (goiErr) {
     const r2 = await supabase
       .from(tableName)
       .select(goiSelectForTableNoDiscount(tableName))
       .order("id", { ascending: false });
-    goiRows = r2.data;
+    goiRows = r2.data as Record<string, unknown>[] | null;
     goiErr = r2.error;
+    if (goiErr && isSupabaseMissingColumnError(goiErr.message, "is_active")) {
+      const r2b = await supabase
+        .from(tableName)
+        .select(
+          tableName === "hp_goi_hoc_phi"
+            ? GOI_SELECT_BASE_NO_DISC
+            : `${GOI_SELECT_BASE_NO_DISC}, special, note, post_title`,
+        )
+        .order("id", { ascending: false });
+      goiRows = r2b.data as Record<string, unknown>[] | null;
+      goiErr = r2b.error;
+    }
   }
 
   if (goiErr) {
@@ -188,7 +229,7 @@ export async function fetchAdminGoiHocPhiBundle(
     comboWarning = `Không đọc được hp_combo_mon (${msg}). Trang vẫn hoạt động: nhập ID combo thủ công. Trên Supabase chạy: GRANT SELECT, INSERT, UPDATE, DELETE ON public.hp_combo_mon TO service_role; (hoặc migration supabase/migrations/20260418120000_hp_combo_mon_service_grants.sql).`;
   }
 
-  const rows = (goiRows as Record<string, unknown>[] | null)?.map(mapRow) ?? [];
+  const rows = (goiRows as Record<string, unknown>[] | null)?.map((r) => mapRow(r, tableName)) ?? [];
   for (const row of rows) {
     row.combo_id = row.combo_ids[0] ?? null;
   }

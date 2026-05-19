@@ -111,6 +111,8 @@ export type HocPhiGoiRow = {
    * Dùng để group các gói theo nhóm trong `HocPhiBlock`.
    */
   post_title: string | null;
+  /** `hp_goi_hoc_phi_new.is_active` — false = ẩn khỏi đóng học phí. */
+  is_active?: boolean;
 };
 
 /** Một dòng `hp_combo_mon` */

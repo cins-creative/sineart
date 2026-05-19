@@ -747,14 +747,36 @@ export async function listHpGoiHocPhiForDhp(): Promise<
     return { ok: true, rows: deduped, canonicalMap };
   }
 
-  const { data, error } = await supabase
+  const goiSelectWithActive =
+    'id, mon_hoc, gia_goc, discount, "number", don_vi, so_buoi, combo_id, post_title, special, is_active';
+  const goiSelectBase =
+    'id, mon_hoc, gia_goc, discount, "number", don_vi, so_buoi, combo_id, post_title, special';
+
+  let { data: goiDataRaw, error } = await supabase
     .from(goiTable)
-    .select('id, mon_hoc, gia_goc, discount, "number", don_vi, so_buoi, combo_id, post_title, special')
+    .select(goiSelectWithActive)
+    .eq("is_active", true)
     .order("mon_hoc", { ascending: true })
     .order("id", { ascending: true });
+  let goiData = goiDataRaw as Record<string, unknown>[] | null;
+  if (error && /is_active/i.test(error.message ?? "")) {
+    const retry = await supabase
+      .from(goiTable)
+      .select(goiSelectBase)
+      .order("mon_hoc", { ascending: true })
+      .order("id", { ascending: true });
+    goiData = retry.data as Record<string, unknown>[] | null;
+    error = retry.error;
+  }
+  const data = goiData;
   if (error) return { ok: false, error: error.message };
 
-  const rawRows = (data ?? []) as Record<string, unknown>[];
+  const rawRows = ((data ?? []) as Record<string, unknown>[]).filter((row) => {
+    if (!("is_active" in row)) return true;
+    const v = row.is_active;
+    if (v === false || v === "false" || v === 0 || v === "0") return false;
+    return true;
+  });
   const monIds = [
     ...new Set(
       rawRows

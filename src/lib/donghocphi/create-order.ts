@@ -4,6 +4,7 @@ import {
   normalizeHocVienEmail,
   STUDENT_EMAIL_LOWERCASE_VI,
 } from "@/lib/donghocphi/profile-step1";
+import { appendIsActiveToGoiSelect, parseGoiIsActive } from "@/lib/data/hp-goi-is-active";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import {
   firstApplicableComboDiscountDong,
@@ -250,11 +251,24 @@ export async function createDongHocPhiOrder(
       return { ok: false, error: `Lớp ${ln.lopId} chưa gán môn học.`, code: "LOP" };
     }
 
-    const { data: goiRow, error: goiErr } = await supabase
+    const goiSelect = appendIsActiveToGoiSelect(
+      'id, mon_hoc, "number", don_vi, gia_goc, discount, so_buoi',
+      goiTable,
+    );
+    let { data: goiRow, error: goiErr } = await supabase
       .from(goiTable)
-      .select('id, mon_hoc, "number", don_vi, gia_goc, discount, so_buoi')
+      .select(goiSelect)
       .eq("id", ln.goiId)
       .maybeSingle();
+    if (goiErr && /is_active/i.test(goiErr.message ?? "")) {
+      const retry = await supabase
+        .from(goiTable)
+        .select('id, mon_hoc, "number", don_vi, gia_goc, discount, so_buoi')
+        .eq("id", ln.goiId)
+        .maybeSingle();
+      goiRow = retry.data as typeof goiRow;
+      goiErr = retry.error;
+    }
     if (goiErr) {
       return {
         ok: false,
@@ -269,7 +283,15 @@ export async function createDongHocPhiOrder(
         code: "GOI",
       };
     }
-    const gr = goiRow as {
+    const goiRecord = goiRow as unknown as { is_active?: unknown };
+    if (!parseGoiIsActive(goiRecord.is_active)) {
+      return {
+        ok: false,
+        error: `Gói học phí #${ln.goiId} đã tắt — không thể dùng để đóng học phí.`,
+        code: "GOI_INACTIVE",
+      };
+    }
+    const gr = goiRow as unknown as {
       mon_hoc: unknown;
       number?: unknown;
       don_vi?: unknown;

@@ -4,6 +4,7 @@ import { countDangHocByLopIds } from "@/lib/data/class-seat-dang-hoc";
 import {
   appendIsActiveToGoiSelect,
   filterRawGoiRowsForPayment,
+  goiTableSupportsIsActive,
   isSupabaseMissingColumnError,
 } from "@/lib/data/hp-goi-is-active";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
@@ -1250,58 +1251,101 @@ async function buildMonSlugMap(
   return out;
 }
 
+type GoiMonFetchResult = {
+  rows: Record<string, unknown>[] | null;
+  error: { message?: string } | null;
+  cols: string;
+  /** false khi DB chưa có cột `is_active` — không `.eq("is_active", true)`. */
+  activeFilterEnabled: boolean;
+};
+
+async function fetchGoiRowsForMonHoc(
+  supabase: SupabaseClient,
+  goiTable: string,
+  monId: number,
+): Promise<GoiMonFetchResult> {
+  let goiCols = hocPhiBlockGoiSelectColumns();
+  let activeFilterEnabled = goiTableSupportsIsActive(goiTable);
+
+  const run = (cols: string, filterActive: boolean) => {
+    let q = supabase
+      .from(goiTable)
+      .select(cols)
+      .eq("mon_hoc", monId)
+      .order("number", { ascending: true });
+    if (filterActive) q = q.eq("is_active", true);
+    return q;
+  };
+
+  let res = await run(goiCols, activeFilterEnabled);
+  let rows = res.data as Record<string, unknown>[] | null;
+  let error = res.error;
+
+  if (error) {
+    if (isSupabaseMissingColumnError(error.message, "is_active")) {
+      activeFilterEnabled = false;
+      goiCols = hocPhiBlockGoiSelectColumnsLegacyNoIsActive();
+      const retry0 = await run(goiCols, false);
+      rows = retry0.data as Record<string, unknown>[] | null;
+      error = retry0.error;
+    }
+    if (error) {
+      goiCols = hocPhiBlockGoiSelectColumnsNoDiscount();
+      const retry = await run(goiCols, activeFilterEnabled);
+      rows = retry.data as Record<string, unknown>[] | null;
+      error = retry.error;
+      if (error && isSupabaseMissingColumnError(error.message, "is_active")) {
+        activeFilterEnabled = false;
+        goiCols = hocPhiBlockGoiSelectColumnsNoDiscountLegacyNoIsActive();
+        const retry2 = await run(goiCols, false);
+        rows = retry2.data as Record<string, unknown>[] | null;
+        error = retry2.error;
+      }
+    }
+  }
+
+  return { rows, error, cols: goiCols, activeFilterEnabled };
+}
+
+async function fetchGoiRowsByIds(
+  supabase: SupabaseClient,
+  goiTable: string,
+  goiCols: string,
+  ids: number[],
+  filterActive: boolean,
+): Promise<Record<string, unknown>[]> {
+  if (!ids.length) return [];
+  let q = supabase.from(goiTable).select(goiCols).in("id", ids);
+  if (filterActive && goiTableSupportsIsActive(goiTable)) {
+    q = q.eq("is_active", true);
+  }
+  const { data, error } = await q;
+  if (error && process.env.NODE_ENV === "development") {
+    console.error("[getHocPhiBlockData] partner goi", error.message);
+  }
+  return ((data ?? []) as unknown) as Record<string, unknown>[];
+}
+
 /**
  * Gói học phí + combo cho `HocPhiBlock` (theo brief hoc-phi-block).
  * Lấy gói môn chính + các gói cùng `combo_id` để tính partner.
  */
 export async function getHocPhiBlockData(
-  monId: number
+  monId: number,
+  supabaseClient?: SupabaseClient | null,
 ): Promise<HocPhiBlockData> {
-  const supabase = createStaticClient();
+  const supabase = supabaseClient ?? createStaticClient();
   if (!supabase) {
     return { gois: [], combos: [], monMap: {}, monSlugMap: {} };
   }
 
   const goiTable = hpGoiHocPhiTableName();
-  let goiCols = hocPhiBlockGoiSelectColumns();
-  let { data: mainRows, error: e1 } = await supabase
-    .from(goiTable)
-    .select(goiCols)
-    .eq("mon_hoc", monId)
-    .order("number", { ascending: true });
-
-  if (e1) {
-    if (isSupabaseMissingColumnError(e1.message, "is_active")) {
-      goiCols = hocPhiBlockGoiSelectColumnsLegacyNoIsActive();
-      const retry0 = await supabase
-        .from(goiTable)
-        .select(goiCols)
-        .eq("mon_hoc", monId)
-        .order("number", { ascending: true });
-      mainRows = retry0.data;
-      e1 = retry0.error;
-    }
-    if (e1) {
-      goiCols = hocPhiBlockGoiSelectColumnsNoDiscount();
-      const retry = await supabase
-        .from(goiTable)
-        .select(goiCols)
-        .eq("mon_hoc", monId)
-        .order("number", { ascending: true });
-      mainRows = retry.data;
-      e1 = retry.error;
-      if (e1 && isSupabaseMissingColumnError(e1.message, "is_active")) {
-        goiCols = hocPhiBlockGoiSelectColumnsNoDiscountLegacyNoIsActive();
-        const retry2 = await supabase
-          .from(goiTable)
-          .select(goiCols)
-          .eq("mon_hoc", monId)
-          .order("number", { ascending: true });
-        mainRows = retry2.data;
-        e1 = retry2.error;
-      }
-    }
-  }
+  const {
+    rows: mainRows,
+    error: e1,
+    cols: goiCols,
+    activeFilterEnabled,
+  } = await fetchGoiRowsForMonHoc(supabase, goiTable, monId);
 
   if (e1) {
     if (process.env.NODE_ENV === "development") {
@@ -1360,13 +1404,14 @@ export async function getHocPhiBlockData(
 
   let gois: HocPhiGoiRow[] = [...mainGois];
   if (partnerGoiIds.length > 0) {
-    const { data: extra } = await supabase
-      .from(goiTable)
-      .select(goiCols)
-      .in("id", partnerGoiIds);
-    const extraRows = filterRawGoiRowsForPayment(
-      ((extra ?? []) as unknown) as Record<string, unknown>[],
+    const extraRaw = await fetchGoiRowsByIds(
+      supabase,
+      goiTable,
+      goiCols,
+      partnerGoiIds,
+      activeFilterEnabled,
     );
+    const extraRows = filterRawGoiRowsForPayment(extraRaw);
     if (extraRows.length) {
       const byId = new Map<number, HocPhiGoiRow>();
       for (const g of gois) byId.set(g.id, g);

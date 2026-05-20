@@ -642,6 +642,35 @@ export async function saveGoiHocPhi(
   return { ok: true, message: "Đã lưu thay đổi." };
 }
 
+/** Bật/tắt nhanh `is_active` từ bảng Gói học phí (không mở form). */
+export async function toggleGoiHocPhiIsActive(
+  goiId: number,
+  is_active: boolean,
+): Promise<GoiHocPhiFormState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(goiId) || goiId <= 0) return { ok: false, error: "ID gói không hợp lệ." };
+
+  const tbl = table();
+  if (tbl === "hp_goi_hoc_phi") {
+    return { ok: false, error: "Bảng legacy không hỗ trợ is_active." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { error } = await supabase.from(tbl).update({ is_active }).eq("id", goiId);
+  if (error) {
+    return { ok: false, error: error.message || "Không cập nhật được trạng thái gói." };
+  }
+
+  revalidateGoiPages();
+  return {
+    ok: true,
+    message: is_active ? "Đã bật gói trên đóng học phí." : "Đã ẩn gói khỏi đóng học phí.",
+  };
+}
+
 /** Một dòng cập nhật hàng loạt — map sang payload giống `saveGoiHocPhi` (update theo id). */
 export type GoiHocPhiBulkRowInput = {
   id: number;

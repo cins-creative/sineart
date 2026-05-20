@@ -74,7 +74,7 @@ export async function fetchPaymentFeeCatalog(
 
   const supabase = await createClient();
   const [blocks, allCombosResult] = await Promise.all([
-    Promise.all(unique.map((monId) => getHocPhiBlockData(monId))),
+    Promise.all(unique.map((monId) => getHocPhiBlockData(monId, supabase))),
     supabase
       ? supabase
           .from("hp_combo_mon")

@@ -26,6 +26,7 @@ import {
   duplicateGoiHocPhi,
   saveGoiHocPhi,
   saveGoiHocPhiBulk,
+  toggleGoiHocPhiIsActive,
   updateHpComboMon,
 } from "@/app/admin/dashboard/goi-hoc-phi/actions";
 import type {
@@ -127,6 +128,81 @@ function comboLabels(ids: number[], combos: AdminComboOption[]): string[] {
 /** Trả về danh sách combo chứa gói có ID `goiId` (dùng goi_ids mới). */
 function combosContainingGoi(goiId: number, combos: AdminComboOption[]): AdminComboOption[] {
   return combos.filter((c) => c.goi_ids && c.goi_ids.includes(goiId));
+}
+
+/** Toggle Đóng HP — xanh khi bật (knob phải), xám khi tắt (knob trái). */
+function GoiIsActiveToggle({
+  goiId,
+  active,
+  disabled,
+  draftOnly,
+  onDraftChange,
+  onLiveChange,
+  onLiveRevert,
+  onLiveSaved,
+}: {
+  goiId: number;
+  active: boolean;
+  disabled?: boolean;
+  /** Chỉ cập nhật bản nháp (chế độ sửa bảng), không gọi API. */
+  draftOnly?: boolean;
+  onDraftChange?: (next: boolean) => void;
+  /** Cập nhật UI ngay khi bấm (trước API). */
+  onLiveChange?: (next: boolean) => void;
+  onLiveRevert?: () => void;
+  onLiveSaved?: () => void;
+}) {
+  const flipLock = useRef(false);
+
+  async function flip(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (disabled || flipLock.current) return;
+    const next = !active;
+
+    if (draftOnly && onDraftChange) {
+      onDraftChange(next);
+      return;
+    }
+
+    flipLock.current = true;
+    onLiveChange?.(next);
+    try {
+      const res = await toggleGoiHocPhiIsActive(goiId, next);
+      if (res.ok) {
+        onLiveSaved?.();
+      } else {
+        onLiveRevert?.();
+        window.alert(res.error);
+      }
+    } catch {
+      onLiveRevert?.();
+      window.alert("Không cập nhật được trạng thái gói.");
+    } finally {
+      flipLock.current = false;
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      aria-label={active ? "Đang hiển thị khi đóng học phí — nhấn để tắt" : "Đang ẩn — nhấn để bật"}
+      disabled={disabled}
+      onClick={(e) => void flip(e)}
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BC8AF9] focus-visible:ring-offset-1 disabled:opacity-45",
+        active ? "bg-emerald-500" : "bg-zinc-300",
+      )}
+    >
+      <span
+        className={cn(
+          "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out",
+          active ? "translate-x-5" : "translate-x-0.5",
+        )}
+      />
+    </button>
+  );
 }
 
 /** Bản nháp một dòng khi chỉnh sửa cả bảng (chuỗi giống form modal). */
@@ -1568,6 +1644,8 @@ export default function GoiHocPhiView({ bundle }: Props) {
   const [editDraftById, setEditDraftById] = useState<Map<number, EditableGoiDraft> | null>(null);
   const [bulkHint, setBulkHint] = useState<{ ok: boolean; text: string } | null>(null);
   const [bulkSavePending, startBulkSave] = useTransition();
+  const [, startGoiDataRefresh] = useTransition();
+  const [isActiveLiveOverrides, setIsActiveLiveOverrides] = useState<Record<number, boolean>>({});
   const [deleteRowPendingId, setDeleteRowPendingId] = useState<number | null>(null);
   const [duplicateRowPendingId, setDuplicateRowPendingId] = useState<number | null>(null);
   const [usageModalRow, setUsageModalRow] = useState<AdminGoiHocPhiRow | null>(null);
@@ -1584,6 +1662,28 @@ export default function GoiHocPhiView({ bundle }: Props) {
   useEffect(() => {
     setExtraComboOptions([]);
   }, [bundle.comboOptions]);
+
+  useEffect(() => {
+    setIsActiveLiveOverrides((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      let changed = false;
+      const next = { ...prev };
+      for (const row of bundle.rows) {
+        const serverActive = row.is_active !== false;
+        if (next[row.id] === serverActive) {
+          delete next[row.id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [bundle.rows]);
+
+  const goiRowIsActive = (row: AdminGoiHocPhiRow): boolean => {
+    const override = isActiveLiveOverrides[row.id];
+    if (override !== undefined) return override;
+    return row.is_active !== false;
+  };
 
   const sorted = useMemo(
     () => [...bundle.rows].sort((a, b) => b.id - a.id),
@@ -2079,7 +2179,7 @@ export default function GoiHocPhiView({ bundle }: Props) {
                             ? "border-b border-[#F0F0F0] hover:bg-[#FFFBF8]/80"
                             : cn(
                                 "cursor-pointer border-b border-[#F0F0F0] hover:bg-[#FFFBF8]/80",
-                                isNewGoiTable && !r.is_active && "opacity-55",
+                                isNewGoiTable && !goiRowIsActive(r) && "opacity-55",
                               )
                         }
                         onClick={(e) => handleGoiRowClick(e, r)}
@@ -2090,14 +2190,14 @@ export default function GoiHocPhiView({ bundle }: Props) {
                           <>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
                               <td className="px-2 py-2 text-center align-middle">
-                                <input
-                                  type="checkbox"
-                                  checked={draft.is_active}
-                                  onChange={(e) =>
-                                    patchEditDraft(r.id, { is_active: e.target.checked })
+                                <GoiIsActiveToggle
+                                  goiId={r.id}
+                                  active={draft.is_active}
+                                  draftOnly
+                                  disabled={bulkSavePending}
+                                  onDraftChange={(next) =>
+                                    patchEditDraft(r.id, { is_active: next })
                                   }
-                                  className="h-4 w-4 accent-[#BC8AF9]"
-                                  aria-label={`Hiển thị khi đóng học phí — gói #${r.id}`}
                                 />
                               </td>
                             ) : null}
@@ -2209,16 +2309,30 @@ export default function GoiHocPhiView({ bundle }: Props) {
                         ) : (
                           <>
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (
-                              <td className="px-2 py-3 text-center align-middle text-xs">
-                                {r.is_active ? (
-                                  <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800">
-                                    Bật
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex rounded-full bg-black/[0.06] px-2 py-0.5 font-semibold text-black/50">
-                                    Ẩn
-                                  </span>
-                                )}
+                              <td className="px-2 py-3 text-center align-middle">
+                                <GoiIsActiveToggle
+                                  goiId={r.id}
+                                  active={goiRowIsActive(r)}
+                                  disabled={
+                                    bulkSavePending ||
+                                    deleteRowPendingId !== null ||
+                                    duplicateRowPendingId !== null
+                                  }
+                                  onLiveChange={(next) =>
+                                    setIsActiveLiveOverrides((m) => ({ ...m, [r.id]: next }))
+                                  }
+                                  onLiveRevert={() =>
+                                    setIsActiveLiveOverrides((m) => {
+                                      if (!(r.id in m)) return m;
+                                      const copy = { ...m };
+                                      delete copy[r.id];
+                                      return copy;
+                                    })
+                                  }
+                                  onLiveSaved={() =>
+                                    startGoiDataRefresh(() => router.refresh())
+                                  }
+                                />
                               </td>
                             ) : null}
                             {bundle.tableName !== "hp_goi_hoc_phi" ? (

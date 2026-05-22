@@ -4,6 +4,7 @@ import {
   NAV_ITEMS,
   type NavItem,
   type NavKhoaHocGroup,
+  type NavOpenClass,
   type NavSubItem,
 } from "@/constants/navigation";
 import Image from "next/image";
@@ -103,6 +104,133 @@ function pathMatches(href: string, pathname: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function NavOpenClassThumb({
+  thumbnailUrl,
+  size,
+}: {
+  thumbnailUrl?: string | null;
+  size: "desktop" | "mobile";
+}) {
+  const cls =
+    size === "desktop" ? "nav-dd-subitem-thumb" : "nav-m-lop-thumb";
+  if (!thumbnailUrl?.trim()) {
+    return <span className={`${cls} ${cls}--empty`} aria-hidden />;
+  }
+  const src = thumbnailUrl.trim();
+  return (
+    <span className={cls}>
+      <Image
+        src={src}
+        alt=""
+        width={size === "desktop" ? 44 : 36}
+        height={size === "desktop" ? 44 : 36}
+        className={`${cls}-img`}
+        loading="lazy"
+        decoding="async"
+        unoptimized={nextImageShouldUnoptimize(src)}
+      />
+    </span>
+  );
+}
+
+function NavOpenClassList({
+  classes,
+  variant,
+  onNavigate,
+}: {
+  classes: NavOpenClass[];
+  variant: "desktop" | "mobile";
+  onNavigate?: () => void;
+}) {
+  if (!classes.length) {
+    return (
+      <p
+        className={
+          variant === "desktop" ? "nav-dd-sub-empty" : "nav-m-lop-empty"
+        }
+      >
+        Chưa có lớp còn chỗ
+      </p>
+    );
+  }
+  return (
+    <ul
+      className={variant === "desktop" ? "nav-dd-sublist" : "nav-m-lop-list"}
+      role="group"
+      aria-label="Lớp đang mở"
+    >
+      {classes.map((lop) => (
+        <li key={lop.lopId}>
+          <Link
+            href={lop.href}
+            className={
+              variant === "desktop" ? "nav-dd-subitem" : "nav-m-lop-link"
+            }
+            role="menuitem"
+            onClick={onNavigate}
+          >
+            <NavOpenClassThumb thumbnailUrl={lop.thumbnailUrl} size={variant} />
+            <span className="nav-dd-subitem-body">
+              <span className="nav-dd-subitem-label">{lop.label}</span>
+              {lop.seatHint ? (
+                <span className="nav-dd-subitem-hint">{lop.seatHint}</span>
+              ) : null}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function NavKhoaHocDropdownLink({
+  item,
+  subActive,
+}: {
+  item: NavSubItem;
+  subActive: boolean;
+}) {
+  const openClasses = item.openClasses ?? [];
+  const hasLop = openClasses.length > 0;
+
+  if (!hasLop) {
+    return (
+      <Link
+        href={item.href}
+        className={`nav-dd-item${subActive ? " active" : ""}`}
+        role="menuitem"
+      >
+        <span className="nav-dd-emoji">{item.emoji}</span>
+        <NavSubItemLabel item={item} />
+      </Link>
+    );
+  }
+
+  return (
+    <div
+      className={`nav-dd-item-wrap nav-dd-item-wrap--has-lop${subActive ? " nav-dd-item-wrap--active" : ""}`}
+    >
+      <Link
+        href={item.href}
+        className={`nav-dd-item${subActive ? " active" : ""}`}
+        role="menuitem"
+        aria-haspopup="true"
+        aria-expanded="false"
+      >
+        <span className="nav-dd-emoji">{item.emoji}</span>
+        <NavSubItemLabel item={item} />
+        <span className="nav-dd-lop-caret" aria-hidden>
+          ›
+        </span>
+      </Link>
+      <div className="nav-dd-subpanel" role="group" aria-label={`Lớp — ${item.label}`}>
+        <div className="nav-dd-subpanel-title">Lớp đang mở</div>
+        <NavOpenClassList classes={openClasses} variant="desktop" />
+      </div>
+    </div>
+  );
+}
+
 function NavSubItemLabel({ item }: { item: NavSubItem }) {
   const tagText =
     (item.navHinhThucLabel != null && String(item.navHinhThucLabel).trim() !== ""
@@ -166,16 +294,11 @@ function NavDropdownView({
 
   const renderLink = (c: NavSubItem) => {
     const subActive = pathMatches(c.href, pathname);
+    const key = c.href + c.label + (c.navHinhThucLabel ?? c.hinhThucTag ?? "");
     return (
-      <Link
-        key={c.href + c.label + (c.navHinhThucLabel ?? c.hinhThucTag ?? "")}
-        href={c.href}
-        className={`nav-dd-item${subActive ? " active" : ""}`}
-        role="menuitem"
-      >
-        <span className="nav-dd-emoji">{c.emoji}</span>
-        <NavSubItemLabel item={c} />
-      </Link>
+      <div key={key}>
+        <NavKhoaHocDropdownLink item={c} subActive={subActive} />
+      </div>
     );
   };
 
@@ -277,16 +400,27 @@ function MobileNavContent({
                         <div className="nav-m-subgroup-title">{group.title}</div>
                         {group.items.map((c) => {
                           const subActive = pathMatches(c.href, pathname);
+                          const openClasses = c.openClasses ?? [];
+                          const key =
+                            c.href + c.label + (c.navHinhThucLabel ?? c.hinhThucTag ?? "");
                           return (
-                            <Link
-                              key={c.href + c.label + (c.navHinhThucLabel ?? c.hinhThucTag ?? "")}
-                              href={c.href}
-                              className={`nav-m-sublink${subActive ? " active" : ""}`}
-                              onClick={onNavigate}
-                            >
-                              <span className="nav-dd-emoji">{c.emoji}</span>
-                              <NavSubItemLabel item={c} />
-                            </Link>
+                            <div key={key} className="nav-m-khoa-block">
+                              <Link
+                                href={c.href}
+                                className={`nav-m-sublink${subActive ? " active" : ""}`}
+                                onClick={onNavigate}
+                              >
+                                <span className="nav-dd-emoji">{c.emoji}</span>
+                                <NavSubItemLabel item={c} />
+                              </Link>
+                              {openClasses.length > 0 ? (
+                                <NavOpenClassList
+                                  classes={openClasses}
+                                  variant="mobile"
+                                  onNavigate={onNavigate}
+                                />
+                              ) : null}
+                            </div>
                           );
                         })}
                       </div>

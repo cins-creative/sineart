@@ -6,8 +6,7 @@ import NavBar from "../_components/NavBar";
 import TraCuuListClient from "./TraCuuListClient";
 import { TraCuuStyles } from "./TraCuuStyles";
 import { fetchAllTraCuu, fetchTruongLookup } from "@/lib/data/tra-cuu";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 import {
   buildTraCuuListingBreadcrumbJsonLd,
   buildTraCuuListingCollectionJsonLd,
@@ -58,12 +57,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function TraCuuListPage() {
-  const [items, truongLookup, { courses }] = await Promise.all([
+  const [items, truongLookup, khoaHocGroups] = await Promise.all([
     fetchAllTraCuu(),
     fetchTruongLookup(),
-    getKhoaHocPageData(),
+    getKhoaHocNavGroups(),
   ]);
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 
   const totalTruong = new Set(items.flatMap((it) => it.truong_ids)).size;
   const totalTypes = new Set(items.flatMap((it) => it.type)).size;

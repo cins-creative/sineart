@@ -6,8 +6,7 @@ import NavBar from "../_components/NavBar";
 import DeThiListClient from "./DeThiListClient";
 import { DeThiStyles } from "./DeThiStyles";
 import { fetchAllDeThi, fetchTruongLookup } from "@/lib/data/de-thi";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 import {
   buildTongHopDeThiListingBreadcrumbJsonLd,
   buildTongHopDeThiListingCollectionJsonLd,
@@ -55,12 +54,11 @@ export const metadata: Metadata = {
 };
 
 export default async function TongHopDeThiPage() {
-  const [items, truongLookup, { courses }] = await Promise.all([
+  const [items, truongLookup, khoaHocGroups] = await Promise.all([
     fetchAllDeThi(),
     fetchTruongLookup(),
-    getKhoaHocPageData(),
+    getKhoaHocNavGroups(),
   ]);
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 
   const namSet = new Set<number>();
   const monSet = new Set<string>();

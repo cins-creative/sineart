@@ -155,7 +155,7 @@ function TickerSlide({
           alt=""
           width={1600}
           height={1200}
-          sizes="(max-width: 640px) 78vw, 450px"
+          sizes="(max-width: 767.98px) 78vw, (max-width: 991.98px) 55vw, 450px"
           className="classroom-real-slide-img"
           loading="lazy"
           unoptimized={nextImageShouldUnoptimize(thumb)}

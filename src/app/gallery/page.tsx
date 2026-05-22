@@ -6,8 +6,7 @@ import { GalleryStyles } from "./GalleryStyles";
 
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getGalleryPagePayload } from "@/lib/data/home";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 import { SITE_ORIGIN, SITE_OG_DEFAULT_IMAGE } from "@/lib/seo/site-jsonld";
 
 export const revalidate = 3600;
@@ -57,11 +56,10 @@ export const metadata: Metadata = {
 };
 
 export default async function GalleryPage() {
-  const [{ courses }, payload] = await Promise.all([
-    getKhoaHocPageData(),
+  const [khoaHocGroups, payload] = await Promise.all([
+    getKhoaHocNavGroups(),
     getGalleryPagePayload(),
   ]);
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 
   const total = payload.gallery.length;
   const totalMon = payload.galleryMonHocTabs.length;

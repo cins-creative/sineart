@@ -14,8 +14,7 @@ import {
 } from "@/lib/data/blog";
 import { sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 import { buildBlogDetailJsonLd } from "@/lib/seo/blog-jsonld";
 import NavBar from "../../_components/NavBar";
 import { BlogToc } from "./BlogToc";
@@ -91,13 +90,11 @@ export default async function BlogDetailPage({ params }: Props) {
   const post = await fetchBlogBySlug(slug);
   if (!post) notFound();
 
-  const [related, adjacent, { courses }] = await Promise.all([
+  const [related, adjacent, khoaHocGroups] = await Promise.all([
     fetchRelatedBlogs(post.id, 3),
     fetchAdjacentBlogs(post.id, post.created_at),
-    getKhoaHocPageData(),
+    getKhoaHocNavGroups(),
   ]);
-
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
 
   const { prev, next } = adjacent;
   const readMin = estimateReadMinutes(post.opening, post.content, post.ending);

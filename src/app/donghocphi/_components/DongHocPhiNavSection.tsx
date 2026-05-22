@@ -1,9 +1,7 @@
 import NavBar from "@/app/_components/NavBar";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 
 export async function DongHocPhiNavSection() {
-  const { courses } = await getKhoaHocPageData();
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
+  const khoaHocGroups = await getKhoaHocNavGroups();
   return <NavBar khoaHocGroups={khoaHocGroups} />;
 }

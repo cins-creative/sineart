@@ -1,12 +1,11 @@
 import { permanentRedirect } from "next/navigation";
 import NavBar from "@/app/_components/NavBar";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import {
   HVP_DEFAULT_PROFILE_SECTION,
   isHvpProfileSection,
   type HvpProfileSection,
 } from "@/lib/hoc-vien/profile-url";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 import { createClient } from "@/lib/supabase/server";
 import HocVienProfileClient from "../profile-client";
 
@@ -57,8 +56,7 @@ export default async function HocVienProfileSectionPage({ params }: PageProps) {
     permanentRedirect(`/hoc-vien/${encodeURIComponent(resolved)}/${section}`);
   }
 
-  const { courses } = await getKhoaHocPageData();
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
+  const khoaHocGroups = await getKhoaHocNavGroups();
 
   return (
     <div className="sa-root khoa-hoc-page">

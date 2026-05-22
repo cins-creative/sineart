@@ -259,7 +259,7 @@
   margin: 8px 0 0;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767.98px) {
   .dhp-nv-row {
     grid-template-columns: 1fr;
   }
@@ -287,6 +287,13 @@
 }
 
 .dhp-page {
+  /* Breakpoints: Bootstrap 5 — md↓ mobile · md–lg tablet · lg+ desktop · xxl large */
+  --dhp-bp-mobile-max: var(--bp-max-md);
+  --dhp-bp-tablet-min: var(--bp-md);
+  --dhp-bp-tablet-max: var(--bp-max-lg);
+  --dhp-bp-desktop-min: var(--bp-lg);
+  --dhp-bp-large-min: var(--bp-xxl);
+
   width: 100%;
   padding: 104px 20px 40px;
 }
@@ -600,7 +607,7 @@
   background: #fff7f1;
 }
 
-/* Bước 2 — thẻ chọn lớp: desktop 4 cột; mobile 2 cột (media) */
+/* Bước 2 — thẻ chọn lớp: desktop 4 cột; tablet/mobile ít cột hơn (media) */
 .dhp-oc-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2269,7 +2276,8 @@
   margin: 0 0 10px;
 }
 
-@media (max-width: 900px) {
+/* Mobile + tablet (<1024): stack layout chính */
+@media (max-width: 991.98px) {
   .dhp-grid,
   .dhp-class-list,
   .dhp-pay-grid {
@@ -2303,5 +2311,145 @@
   .dhp-step-line {
     min-width: 6px;
     margin: 0 4px;
+  }
+}
+
+/* Mobile <768 */
+@media (max-width: 767.98px) {
+  .dhp-page {
+    padding: 88px max(12px, env(safe-area-inset-left, 0px)) 28px
+      max(12px, env(safe-area-inset-right, 0px));
+  }
+
+  .dhp-flow {
+    max-width: none;
+  }
+
+  .dhp-head {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .dhp-oc-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dhp-gg {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dhp-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .dhp-actions .dhp-btn,
+  .dhp-actions .dhp-btn-ghost {
+    width: 100%;
+  }
+}
+
+/* Tablet 768–1024 */
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .dhp-page {
+    padding: 96px max(18px, env(safe-area-inset-left, 0px)) 32px
+      max(18px, env(safe-area-inset-right, 0px));
+  }
+
+  .dhp-wrap {
+    max-width: 100%;
+  }
+
+  .dhp-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dhp-field-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dhp-oc-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dhp-s3-right {
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* Desktop 1024–1440 */
+@media (min-width: 992px) {
+  .dhp-wrap {
+    max-width: 1120px;
+  }
+
+  .dhp-s3-main {
+    flex-direction: row;
+    max-width: 1020px;
+  }
+
+  .dhp-s3-right {
+    width: 296px;
+    flex-shrink: 0;
+  }
+
+  .dhp-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dhp-class-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dhp-oc-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .dhp-pay-grid {
+    grid-template-columns: 2fr 1fr;
+  }
+
+  .dhp-field-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dhp-gg {
+    grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  }
+
+  .dhp-pay-confirm {
+    max-width: 1020px;
+  }
+}
+
+/* Large desktop >1440 */
+@media (min-width: 1400px) {
+  .dhp-page {
+    padding-top: 108px;
+    padding-left: max(28px, env(safe-area-inset-left, 0px));
+    padding-right: max(28px, env(safe-area-inset-right, 0px));
+  }
+
+  .dhp-wrap {
+    max-width: 1280px;
+  }
+
+  .dhp-s3-main {
+    max-width: 1180px;
+    gap: 24px;
+  }
+
+  .dhp-s3-right {
+    width: 320px;
+  }
+
+  .dhp-pay-confirm {
+    max-width: 1180px;
+  }
+
+  .dhp-title {
+    font-size: clamp(28px, 2.2vw, 38px);
   }
 }

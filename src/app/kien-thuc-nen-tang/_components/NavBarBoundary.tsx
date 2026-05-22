@@ -1,8 +1,7 @@
 import "server-only";
 
 import NavBar from "../../_components/NavBar";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 
 /**
  * Async boundary tách việc fetch `courses` của NavBar khỏi critical render
@@ -12,7 +11,6 @@ import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
  * boundary để navbar stream vào sau hero.
  */
 export default async function NavBarBoundary() {
-  const { courses } = await getKhoaHocPageData();
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
+  const khoaHocGroups = await getKhoaHocNavGroups();
   return <NavBar khoaHocGroups={khoaHocGroups} />;
 }

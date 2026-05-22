@@ -1,15 +1,14 @@
 import Link from "next/link";
 import NavBar from "@/app/_components/NavBar";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 import "@/app/khoa-hoc/khoa-hoc-detail.css";
 import "../he-thong-bai-tap.css";
 
 export default async function HeThongBaiTapNotFound() {
-  const { courses } = await getKhoaHocPageData();
+  const khoaHocGroups = await getKhoaHocNavGroups();
   return (
     <>
-      <NavBar khoaHocGroups={buildKhoaHocNavFromCourses(courses)} />
+      <NavBar khoaHocGroups={khoaHocGroups} />
       <div className="sa-root khoa-hoc-page htbt-root">
         <div className="kd-page">
           <nav className="kd-bc" aria-label="Breadcrumb">

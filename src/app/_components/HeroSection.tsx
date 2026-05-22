@@ -243,18 +243,18 @@ export default function HeroSection({
           <HeroImageCard
             className="hero-card hero-card--top"
             card={content.cards.top}
-            sizes="(max-width: 860px) 32vw, 180px"
+            sizes="(max-width: 767.98px) 0px, (max-width: 991.98px) 28vw, (max-width: 1199.98px) 22vw, 180px"
           />
           <HeroImageCard
             className="hero-card hero-card--bottom"
             card={content.cards.bottom}
-            sizes="(max-width: 860px) 34vw, 190px"
+            sizes="(max-width: 767.98px) 0px, (max-width: 991.98px) 30vw, (max-width: 1199.98px) 24vw, 190px"
           />
           <HeroImageCard
             className="hero-card hero-card--main"
             card={content.cards.main}
             priority
-            sizes="(max-width: 860px) 82vw, 460px"
+            sizes="(max-width: 767.98px) 0px, (max-width: 991.98px) 42vw, (max-width: 1199.98px) 38vw, 460px"
           />
           <div className="hero-sticker hero-sticker--1">
             <span className="hero-sticker-emoji">{stickerOne.emoji}</span>

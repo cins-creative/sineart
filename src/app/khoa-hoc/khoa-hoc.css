@@ -1,4 +1,5 @@
-/* Trang /khoa-hoc — catalog theo design system Sine Art (sineart-home tokens) */
+/* Trang /khoa-hoc — catalog theo design system Sine Art (sineart-home tokens)
+ * Breakpoints Bootstrap 5: sm 576, md 768, lg 992, xl 1200, xxl 1400 */
 
 .kh-page {
   background: #fff;
@@ -37,7 +38,7 @@
   padding: 16px 20px 28px;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .sa-root.khoa-hoc-page .kh-wrap--editorial {
     padding: 20px 20px 32px;
   }
@@ -51,7 +52,7 @@
   padding: 12px 20px 18px;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 992px) {
   .kh-page {
     padding-bottom: 32px;
   }
@@ -121,7 +122,7 @@
   color: var(--ink2);
 }
 
-@media (min-width: 900px) {
+@media (min-width: 992px) {
   .kh-hero-lead {
     font-size: 16px;
   }
@@ -208,7 +209,7 @@
   box-shadow: 0 4px 22px rgba(45, 32, 32, 0.05);
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .kh-wrap--editorial {
     padding: 20px 20px 32px;
   }
@@ -231,7 +232,7 @@
   font-size: 11px;
 }
 
-/* Mobile: 2 cột; desktop (≥720px): lưới 6 cột bento */
+/* xs/sm: 2 cột; md+ (≥768px): lưới 6 cột bento */
 .kh-section {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -245,7 +246,7 @@
   column-gap: 12px;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .kh-section {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
@@ -374,7 +375,7 @@ button.kh-cell:hover {
   min-width: 0;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .kh-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -741,7 +742,7 @@ button.kh-cell:hover {
   transform: scale(0.98);
 }
 
-@media (min-width: 900px) {
+@media (min-width: 992px) {
   .kh-hero {
     padding: 36px 32px 16px;
     border-radius: 0 0 26px 26px;
@@ -761,6 +762,79 @@ button.kh-cell:hover {
     padding: 0 32px 40px;
     max-width: 960px;
     margin: 0 auto;
+  }
+}
+
+/* md (tablet): padding & gap giữa mobile và desktop */
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .kh-hero {
+    padding: 32px 24px 14px;
+  }
+
+  .kh-filters {
+    padding: 12px 24px 20px;
+  }
+
+  .sa-root.khoa-hoc-page .kh-wrap--editorial {
+    padding: 18px 24px 30px;
+  }
+
+  .kh-grid {
+    gap: 10px;
+  }
+
+  .kh-section--editorial {
+    row-gap: 14px;
+    column-gap: 10px;
+  }
+}
+
+/* xl / xxl — container catalog rộng dần */
+@media (min-width: 1200px) {
+  .sa-root.khoa-hoc-page.khoa-hoc-catalog {
+    max-width: 1040px;
+  }
+
+  .kh-filters,
+  .kh-wrap {
+    max-width: 1040px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .sa-root.khoa-hoc-page.khoa-hoc-catalog {
+    max-width: 1100px;
+  }
+
+  .kh-filters,
+  .kh-wrap {
+    max-width: 1100px;
+  }
+}
+
+/* xs: filter pill cuộn ngang + safe-area */
+@media (max-width: 575.98px) {
+  .sa-root.khoa-hoc-page .kh-wrap,
+  .kh-hero,
+  .kh-filters {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  .kh-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 14px;
+  }
+
+  .kh-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .kh-fp {
+    flex-shrink: 0;
   }
 }
 

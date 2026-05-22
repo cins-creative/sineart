@@ -23,9 +23,8 @@ import {
   buildTongHopDeThiLearningResourceJsonLd,
 } from "@/lib/seo/tong-hop-de-thi-jsonld";
 import { SITE_OG_DEFAULT_IMAGE, SITE_ORIGIN } from "@/lib/seo/site-jsonld";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
 import { getTopLuyenThiStudentWorks } from "@/lib/data/hv-bai-hoc-vien-gallery";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 
 export const revalidate = 600;
 
@@ -128,14 +127,12 @@ export default async function DeThiDetailPage({ params }: Props) {
     permanentRedirect(`/tong-hop-de-thi/${post.slug}`);
   }
 
-  const [truongLookup, related, { courses }, studentWorks] = await Promise.all([
+  const [truongLookup, related, khoaHocGroups, studentWorks] = await Promise.all([
     fetchTruongLookup(),
     fetchRelatedDeThi(post.id, post.mon, post.loai_mau_hinh_hoa, 6),
-    getKhoaHocPageData(),
+    getKhoaHocNavGroups(),
     getTopLuyenThiStudentWorks(20),
   ]);
-
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
   const truongNameById = new Map(truongLookup.map((t) => [t.id, t.ten]));
   const truongNames = post.truong_ids
     .map((id) => truongNameById.get(id))

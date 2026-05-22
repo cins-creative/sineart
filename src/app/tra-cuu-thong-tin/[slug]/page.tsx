@@ -11,8 +11,7 @@ import { TraCuuDetailStyles } from "./TraCuuDetailStyles";
 
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { sanitizeAdminRichHtml } from "@/lib/admin/sanitize-admin-html";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 import {
   buildTraCuuHref,
   estimateReadMinutes,
@@ -111,14 +110,12 @@ export default async function TraCuuDetailPage({ params }: Props) {
   const post = await fetchTraCuuBySlug(slug);
   if (!post) notFound();
 
-  const [truongLookup, related, adjacent, { courses }] = await Promise.all([
+  const [truongLookup, related, adjacent, khoaHocGroups] = await Promise.all([
     fetchTruongLookup(),
     fetchRelatedTraCuu(post.id, post.truong_ids, 4),
     fetchAdjacentTraCuu(post.id, post.published_at),
-    getKhoaHocPageData(),
+    getKhoaHocNavGroups(),
   ]);
-
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
   const truongNameById = new Map(truongLookup.map((t) => [t.id, t.ten]));
   const truongNames = post.truong_ids
     .map((id) => truongNameById.get(id))

@@ -1,6 +1,5 @@
 import NavBar from "@/app/_components/NavBar";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 
 export async function ThiThuNavBarSection({
   lichChamUrl,
@@ -11,8 +10,7 @@ export async function ThiThuNavBarSection({
   /** Reset state nav client khi đổi trang (vd `thi-thu-list` vs `id` phòng thi). */
   navKey?: string;
 } = {}) {
-  const { courses } = await getKhoaHocPageData();
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
+  const khoaHocGroups = await getKhoaHocNavGroups();
   return (
     <NavBar
       key={navKey ?? "thi-thu-nav"}

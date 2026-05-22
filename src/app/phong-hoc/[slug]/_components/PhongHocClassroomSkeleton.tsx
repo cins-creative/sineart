@@ -24,9 +24,9 @@ export function PhongHocClassroomSkeleton() {
 
       <div className="main">
         <div className="canvas-wrap">
-          <Skeleton className="min-h-[min(52vh,420px)] w-full flex-1 rounded-[16px]" />
+          <Skeleton className="min-h-[min(36vh,240px)] w-full flex-1 rounded-[16px] lg:min-h-0" />
         </div>
-        <aside className="sb gap-3 p-3">
+        <aside className="sb min-h-[min(42vh,380px)] gap-3 p-3 lg:min-h-0">
           <Skeleton className="h-9 w-full rounded-[12px]" />
           <Skeleton className="h-24 w-full rounded-[16px]" />
           <Skeleton className="min-h-[140px] w-full flex-1 rounded-[16px]" />

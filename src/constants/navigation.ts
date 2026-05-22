@@ -2,10 +2,25 @@
  * Cấu trúc navigation — slug khóa học = `/khoa-hoc/{slug}` với slug suy từ `ten_mon_hoc` (vd. Hình họa → hinh-hoa).
  */
 
+/** Một lớp đang tuyển / còn chỗ — hiện khi hover mục khóa học trên nav */
+export type NavOpenClass = {
+  lopId: number;
+  label: string;
+  href: string;
+  /** `ql_lop_hoc.avatar` (fallback thumbnail môn) — URL đã qua `cfImageForThumbnail` */
+  thumbnailUrl?: string | null;
+  /** Gợi ý chỗ trống — «Còn chỗ» | «Sắp hết» */
+  seatHint?: string;
+};
+
 export type NavSubItem = {
   label: string;
   href: string;
   emoji: string;
+  /** `ql_mon_hoc.id` — dùng khi gắn danh sách lớp từ server */
+  monId?: number;
+  /** Lớp đang mở (còn chỗ, `is_active`) — submenu hover desktop / accordion mobile */
+  openClasses?: NavOpenClass[];
   /** Thẻ hình thức — tách khỏi `label` để không lặp (vd. "Luyện thi tại lớp" + "Tại lớp") */
   hinhThucTag?: "Online" | "Tại lớp";
   /** Nhãn hiển thị trên thẻ — từ `ql_mon_hoc.hinh_thuc` khi có */

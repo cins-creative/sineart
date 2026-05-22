@@ -11,7 +11,7 @@ type Dismissal = "banner" | "pill" | "none";
 const STORAGE_KEY = "sa_home_ad_dismissal";
 
 /**
- * Banner quảng cáo nổi cho trang public (home + subpages).
+ * Banner quảng cáo nổi — chỉ mount trên trang chủ `/`.
  * - URL ảnh đến từ `mkt_home_content.ads`.
  * - Có nút ✕ để thu gọn thành pill; pill click lại để mở banner.
  * - Trạng thái dismissal lưu `sessionStorage` — reload tab trả về `banner`.
@@ -55,7 +55,7 @@ export default function HomeAdBanner({ imageUrl }: { imageUrl: string }) {
             alt="Quảng cáo Sine Art"
             width={360}
             height={176}
-            sizes="(max-width: 720px) min(360px, calc(100vw - 24px)), 360px"
+            sizes="(max-width: 767.98px) min(360px, calc(100vw - 24px)), 360px"
             loading="lazy"
             unoptimized={nextImageShouldUnoptimize(src)}
           />

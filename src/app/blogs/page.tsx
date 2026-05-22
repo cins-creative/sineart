@@ -13,8 +13,7 @@ import {
   type BlogListItem,
 } from "@/lib/data/blog";
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 import { buildBlogCatalogJsonLd } from "@/lib/seo/blog-jsonld";
 import NavBar from "../_components/NavBar";
 import { BlogSearchBar } from "./BlogSearchBar";
@@ -91,13 +90,13 @@ export default async function BlogPage({ searchParams }: PageProps) {
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const search = q?.trim() ?? "";
 
-  const [{ posts, total, totalPages }, featured, popular, { courses }] = await Promise.all([
-    fetchBlogList({ page, perPage: PER_PAGE, search }),
-    fetchFeaturedBlog(),
-    fetchPopularBlogs(5),
-    getKhoaHocPageData(),
-  ]);
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
+  const [{ posts, total, totalPages }, featured, popular, khoaHocGroups] =
+    await Promise.all([
+      fetchBlogList({ page, perPage: PER_PAGE, search }),
+      fetchFeaturedBlog(),
+      fetchPopularBlogs(5),
+      getKhoaHocNavGroups(),
+    ]);
 
   const catalogJsonLd = buildBlogCatalogJsonLd(posts, { page, search });
 

@@ -4,8 +4,8 @@ import ConditionalHomeAdBannerClient from "./ConditionalHomeAdBannerClient";
 
 /**
  * Server component: fetch cấu hình ad 1 lần / request, chỉ render banner nếu
- * `visible_where` cho phép ở "home" (hoặc "both"). Ẩn hoàn toàn trên
- * /admin và /phong-hoc (handle qua client component dựa vào pathname).
+ * `visible_where` = `home` hoặc `both` → banner nổi chỉ trên `/` (trang chủ).
+ * `class` / `both` → phòng học render banner riêng qua `ClassroomClient`.
  */
 export default async function ConditionalHomeAdBanner() {
   const cfg = await getHomeAdConfig();

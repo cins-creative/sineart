@@ -429,16 +429,17 @@ export default function StudentManageModal({
   /** Lọc học viên trong tab Điểm danh (heatmap). */
   const [ddStudentQuery, setDdStudentQuery] = useState("");
 
+  /** Bootstrap 5: md = 768px, lg = 992px */
   const [windowWidth, setWindowWidth] = useState(
-    typeof window !== "undefined" ? window.innerWidth : 1024
+    typeof window !== "undefined" ? window.innerWidth : 992
   );
   useEffect(() => {
     const h = () => setWindowWidth(window.innerWidth);
     window.addEventListener("resize", h);
     return () => window.removeEventListener("resize", h);
   }, []);
-  const isMobile = windowWidth < 640;
-  const isTablet = windowWidth >= 640 && windowWidth < 1024;
+  const isMobile = windowWidth < 768;
+  const isTablet = windowWidth >= 768 && windowWidth < 992;
   const isCompact = isMobile || isTablet;
 
   const fetchData = useCallback(async () => {

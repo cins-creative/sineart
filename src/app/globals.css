@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../styles/bootstrap-breakpoints.css";
 
 :root {
   /* Trùng nền thương hiệu (sineart-home --bg) — tránh “rãnh đen” hai bên khi .sa-root max 480px */
@@ -19,6 +20,12 @@ html {
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Bootstrap 5 — khớp screens Tailwind (sm/md/lg/xl/2xl) */
+  --breakpoint-sm: 576px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 992px;
+  --breakpoint-xl: 1200px;
+  --breakpoint-2xl: 1400px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -171,7 +178,7 @@ table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   Home Ad Banner — floating image ad ở góc trái trên homepage/subpages public.
+   Home Ad Banner — floating image ad góc trái, chỉ trang chủ `/` (không subpages).
    Image URL đến từ mkt_home_content.ads (admin dashboard). Size thiết kế: 360×176px.
    ═══════════════════════════════════════════════════════════════════════ */
 

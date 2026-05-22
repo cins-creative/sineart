@@ -1,4 +1,5 @@
-/* Trang chi tiết khóa học — theo mock sineart_course_detail_full, token gần khoa-hoc */
+/* Trang chi tiết khóa học — theo mock sineart_course_detail_full, token gần khoa-hoc
+ * Breakpoints Bootstrap 5: sm 576, md 768, lg 992, xl 1200, xxl 1400 */
 
 .kd-page {
   /* Đồng bộ palette trang chủ — gradient cam/hồng */
@@ -30,7 +31,7 @@
   box-sizing: border-box;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 992px) {
   .kd-page {
     padding: 0 32px 48px;
   }
@@ -84,7 +85,7 @@
   margin-top: 20px;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 992px) {
   .kd-body {
     grid-template-columns: 1fr 320px;
     gap: 0 28px;
@@ -392,7 +393,7 @@
   gap: 8px;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 576px) {
   .kd-learn-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -429,7 +430,7 @@
   gap: 9px;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .kd-mon-grid {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -599,7 +600,7 @@
   font-family: var(--font);
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .kd-stab {
     font-size: 12px;
     padding: 9px 10px;
@@ -799,7 +800,7 @@
   font-weight: 700;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .kd-tc {
     flex-basis: 210px;
   }
@@ -834,7 +835,7 @@
   gap: 14px;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .kd-ongoing-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
@@ -1086,7 +1087,7 @@
   margin-bottom: 14px;
 }
 
-@media (min-width: 560px) {
+@media (min-width: 576px) {
   .kd-rating-bar {
     flex-direction: row;
     align-items: center;
@@ -1341,7 +1342,7 @@
   text-align: center;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 576px) {
   .kd-cta {
     flex-direction: row;
     text-align: left;
@@ -1390,7 +1391,7 @@
   position: relative;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 992px) {
   .kd-sidebar {
     position: sticky;
     /* NavBar desktop fixed cao ~72px — chừa 16px thở để top của sidebar không bị che */
@@ -1436,7 +1437,7 @@
   margin-bottom: 12px;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 992px) {
   .kd-goi-top {
     grid-template-columns: 1fr;
   }
@@ -2298,9 +2299,9 @@
  * 3 grid items trực tiếp: .kd-page-title-row, .kd-page-main, .kd-sidebar
  * (xem KhoaHocDetailView.tsx — sidebar nằm sau main trong JSX).
  *
- * Mobile (< 900px): 1 cột, grid-row explicit:
+ * Mobile/tablet (< lg / 992px): 1 cột, grid-row explicit:
  *   Row 1 = title, Row 2 = sidebar (học phí ngay dưới title), Row 3 = main content.
- * Desktop (≥ 900px): 2 cột, sidebar ở cột phải span 2 hàng → sticky đúng.
+ * Desktop (≥ lg / 992px): 2 cột, sidebar ở cột phải span 2 hàng → sticky đúng.
  */
 .kd-page-grid {
   display: grid;
@@ -2314,7 +2315,7 @@
 .kd-page-grid > .kd-sidebar        { grid-row: 2; }
 .kd-page-grid > .kd-page-main      { grid-row: 3; }
 
-@media (min-width: 900px) {
+@media (min-width: 992px) {
   .kd-page-grid {
     grid-template-columns: 1fr 336px;
     gap: 0 28px;
@@ -2338,7 +2339,7 @@
 }
 
 /* Trên mobile, sidebar nằm giữa title và main → cần thở giữa sidebar và block đầu tiên của main */
-@media (max-width: 899px) {
+@media (max-width: 991.98px) {
   .kd-page-grid > .kd-page-main {
     margin-top: 32px;
   }
@@ -2462,7 +2463,7 @@
   color: #fff;
   background: linear-gradient(135deg, #f8a668, #ee5b9f);
 }
-@media (min-width: 900px) {
+@media (min-width: 992px) {
   .kd-curr-tab {
     margin-right: 20px;
     padding: 16px 4px;
@@ -2471,7 +2472,7 @@
     font-size: 16px;
   }
 }
-@media (max-width: 640px) {
+@media (max-width: 575.98px) {
   .kd-curr-tab {
     margin-right: 4px;
     padding: 12px 10px;
@@ -2593,7 +2594,7 @@
   max-width: 620px;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 575.98px) {
   .kd-page-title-row {
     grid-template-columns: 3px 1fr;
     gap: 14px;
@@ -2639,7 +2640,7 @@
   gap: 28px;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .kd-ov-grid {
     grid-template-columns: 2fr 1fr;
     gap: 32px;
@@ -2745,7 +2746,7 @@
   gap: 12px;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 576px) {
   .kd-out-grid {
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
@@ -2796,7 +2797,7 @@
   gap: 14px;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 576px) {
   .kd-sch-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
@@ -2925,7 +2926,7 @@
   gap: 28px;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .kd-cta-band-inner {
     flex-direction: row;
     align-items: center;
@@ -3145,5 +3146,56 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* md (tablet): padding trang, sidebar thở trước main */
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .kd-page,
+  .sa-root.khoa-hoc-page .kd-page {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .kd-page-grid > .kd-page-main {
+    margin-top: 28px;
+  }
+
+  .kd-sidebar {
+    padding: 22px 20px 20px;
+  }
+}
+
+/* xl / xxl — container chi tiết rộng hơn */
+@media (min-width: 1200px) {
+  .kd-page {
+    max-width: 1140px;
+  }
+
+  .kd-page-grid {
+    grid-template-columns: 1fr 360px;
+    gap: 0 32px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .kd-page {
+    max-width: 1180px;
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+
+  .sa-root.khoa-hoc-page .kd-page {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+}
+
+/* xs: safe-area */
+@media (max-width: 575.98px) {
+  .kd-page,
+  .sa-root.khoa-hoc-page .kd-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
 }
 

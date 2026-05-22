@@ -71,7 +71,7 @@ function GalleryCard({
           alt={artworkAlt}
           width={800}
           height={1000}
-          sizes="(max-width: 640px) 44vw, (max-width: 900px) 30vw, 22vw"
+          sizes="(max-width: 767.98px) 44vw, (max-width: 991.98px) 30vw, (max-width: 1199.98px) 24vw, 22vw"
           className="mi-ph-img"
           loading="lazy"
           unoptimized={nextImageShouldUnoptimize(thumbSrc)}

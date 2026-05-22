@@ -1199,7 +1199,7 @@ const QLE_CSS = `
   .qle-modal-backdrop{position:fixed;inset:0;background:rgba(45,32,32,.45);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;animation:qle-backdrop-in .18s ease}
   @keyframes qle-backdrop-in{from{opacity:0}to{opacity:1}}
   .qle-modal{background:#fff;border-radius:14px;box-shadow:0 24px 72px rgba(45,32,32,.3);width:100%;max-width:1260px;max-height:calc(100vh - 48px);display:flex;flex-direction:column;overflow:hidden;animation:qle-modal-in .22s ease;transition:max-width .3s ease}
-  .qle-modal:has(.qle-modal-grid.is-picker-wide){max-width:1440px}
+  .qle-modal:has(.qle-modal-grid.is-picker-wide){max-width:1399.98px}
   @keyframes qle-modal-in{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
   .qle-modal-head{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid rgba(45,32,32,.08);background:linear-gradient(180deg,#fffaf5,#fff)}
   .qle-modal-title{margin:0;font-size:16px;font-weight:700;color:#2d2020;letter-spacing:-.005em}

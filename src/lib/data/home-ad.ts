@@ -28,7 +28,12 @@ export const getHomeAdConfig = cache(async (): Promise<HomeAdConfig> => {
   });
 });
 
-/** Kiểm tra ad có được hiện ở `place` không (dựa theo visibleWhere + ads rỗng hay không). */
+/**
+ * Kiểm tra ad có được hiện ở `place` không.
+ * - `home`: banner nổi layout (`ConditionalHomeAdBanner`) — chỉ mount trên `/`.
+ * - `class`: banner trong `ClassroomClient` (.adb).
+ * - `both`: cả hai vị trí trên.
+ */
 export function shouldShowAd(
   cfg: HomeAdConfig,
   place: Exclude<AdVisibleWhere, "both">,

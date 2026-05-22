@@ -45,6 +45,20 @@ Sine Art có design system riêng được dựng từ Claude Design.
 - Không tự sáng tạo màu/spacing/radius mới — đề xuất thêm vào design system trước nếu cần
 - Component layout phải match pattern trong `README.md` của skill (card, button, form, modal)
 
+### Responsive — Bootstrap 5 breakpoints
+
+Nguồn: `src/styles/bootstrap-breakpoints.css` (import trong `globals.css`). **Không** dùng mốc tùy chỉnh 1024/1440.
+
+| Tier | Min-width | Max (down) | Tailwind |
+|------|-----------|------------|----------|
+| xs/sm | 0 | 575.98px | default / `sm:` |
+| md | 768px | 767.98px | `md:` |
+| lg | 992px | 991.98px | `lg:` |
+| xl | 1200px | 1199.98px | `xl:` |
+| xxl | 1400px | 1399.98px | `2xl:` |
+
+CSS: `@media (max-width: 991.98px)` = dưới lg; `@media (min-width: 992px)` = lg trở lên. Alias: `--bp-max-md`, `--bp-lg`, `--bp-xxl`, …
+
 ---
 
 ## Tech Stack

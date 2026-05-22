@@ -1,6 +1,5 @@
 import NavBar from "@/app/_components/NavBar";
-import { getKhoaHocPageData } from "@/lib/data/courses-page";
-import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
+import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 
 /**
  * Fetch Supabase (khóa học) cho NavBar — bọc riêng trong `<Suspense>` ở `page.tsx`
@@ -8,7 +7,6 @@ import { buildKhoaHocNavFromCourses } from "@/lib/nav/build-khoa-hoc-nav";
  * Logic query giữ nguyên so với trước refactor.
  */
 export async function KienThucLandingNav() {
-  const { courses } = await getKhoaHocPageData();
-  const khoaHocGroups = buildKhoaHocNavFromCourses(courses);
+  const khoaHocGroups = await getKhoaHocNavGroups();
   return <NavBar khoaHocGroups={khoaHocGroups} />;
 }

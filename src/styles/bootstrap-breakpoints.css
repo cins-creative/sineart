@@ -1,0 +1,41 @@
+/**
+ * Bootstrap 5 grid breakpoints — nguồn chung cho media query & Tailwind.
+ * https://getbootstrap.com/docs/5.3/layout/breakpoints/
+ *
+ * | Tier | Min-width | Max-width (down) |
+ * |------|-----------|------------------|
+ * | xs   | 0         | 575.98px         |
+ * | sm   | 576px     | 575.98px         |
+ * | md   | 768px     | 767.98px         |
+ * | lg   | 992px     | 991.98px         |
+ * | xl   | 1200px    | 1199.98px        |
+ * | xxl  | 1400px    | 1399.98px        |
+ */
+
+:root {
+  --bs-breakpoint-sm: 576px;
+  --bs-breakpoint-md: 768px;
+  --bs-breakpoint-lg: 992px;
+  --bs-breakpoint-xl: 1200px;
+  --bs-breakpoint-xxl: 1400px;
+
+  --bp-sm: 576px;
+  --bp-md: 768px;
+  --bp-lg: 992px;
+  --bp-xl: 1200px;
+  --bp-xxl: 1400px;
+
+  --bp-max-sm: 575.98px;
+  --bp-max-md: 767.98px;
+  --bp-max-lg: 991.98px;
+  --bp-max-xl: 1199.98px;
+  --bp-max-xxl: 1399.98px;
+
+  /* Alias tương thích code cũ (map sang Bootstrap) */
+  --bp-mobile-max: var(--bp-max-md);
+  --bp-tablet-min: var(--bp-md);
+  --bp-tablet-max: var(--bp-max-lg);
+  --bp-desktop-min: var(--bp-lg);
+  --bp-desktop-max: var(--bp-max-xxl);
+  --bp-large-min: var(--bp-xxl);
+}

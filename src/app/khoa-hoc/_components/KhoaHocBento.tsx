@@ -105,7 +105,7 @@ function CourseThumb({
           alt={`Khóa học ${course.tenMonHoc} tại Sine Art`}
           className="kh-thumb-img"
           fill
-          sizes="(max-width: 719px) 46vw, 30vw"
+          sizes="(max-width: 767.98px) 46vw, 30vw"
           priority={thumbPriority}
           loading={thumbPriority ? undefined : "lazy"}
           unoptimized={nextImageShouldUnoptimize(course.thumbnail)}

@@ -557,7 +557,7 @@ export default function KhoaHocDetailView({
                         alt=""
                         fill
                         className="kd-hv-main-img"
-                        sizes="(max-width: 900px) 100vw, min(640px, 55vw)"
+                        sizes="(max-width: 991.98px) 100vw, min(640px, 55vw)"
                         priority
                         unoptimized={nextImageShouldUnoptimize(hvMainSrc)}
                       />

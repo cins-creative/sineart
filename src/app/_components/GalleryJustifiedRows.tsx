@@ -17,7 +17,18 @@ import {
 } from "react";
 
 const BOX_GAP = 7;
-const TARGET_ROW_H = 200;
+const TARGET_ROW_H_DEFAULT = 200;
+
+/** Chiều cao hàng justified theo breakpoint trang /gallery. */
+function targetRowHeightForViewport(): number {
+  if (typeof window === "undefined") return TARGET_ROW_H_DEFAULT;
+  if (window.matchMedia("(max-width: 767.98px)").matches) return 160;
+  if (window.matchMedia("(min-width: 768px) and (max-width: 991.98px)").matches) {
+    return 180;
+  }
+  if (window.matchMedia("(min-width: 1400px)").matches) return 220;
+  return TARGET_ROW_H_DEFAULT;
+}
 
 type Props = {
   items: GalleryDisplayItem[];
@@ -39,6 +50,7 @@ export default function GalleryJustifiedRows({
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  const [targetRowH, setTargetRowH] = useState(TARGET_ROW_H_DEFAULT);
   const [aspectById, setAspectById] = useState<Record<string, number>>({});
   const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
   const lastAnimatedItemsKeyRef = useRef<string>("");
@@ -63,11 +75,11 @@ export default function GalleryJustifiedRows({
     if (width <= 0 || sortedItems.length === 0) return null;
     return justifiedLayout(aspectRatios, {
       containerWidth: width,
-      targetRowHeight: TARGET_ROW_H,
+      targetRowHeight: targetRowH,
       containerPadding: 0,
       boxSpacing: { horizontal: BOX_GAP, vertical: BOX_GAP },
     });
-  }, [width, aspectRatios, sortedItems.length]);
+  }, [width, aspectRatios, sortedItems.length, targetRowH]);
 
   useEffect(() => {
     const el = rootRef.current;
@@ -78,6 +90,24 @@ export default function GalleryJustifiedRows({
     ro.observe(el);
     setWidth(el.clientWidth);
     return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const sync = () => setTargetRowH(targetRowHeightForViewport());
+    sync();
+    const mqs = [
+      window.matchMedia("(max-width: 767.98px)"),
+      window.matchMedia("(min-width: 768px) and (max-width: 991.98px)"),
+      window.matchMedia("(min-width: 1400px)"),
+    ];
+    for (const mq of mqs) {
+      mq.addEventListener("change", sync);
+    }
+    return () => {
+      for (const mq of mqs) {
+        mq.removeEventListener("change", sync);
+      }
+    };
   }, []);
 
   useEffect(() => {

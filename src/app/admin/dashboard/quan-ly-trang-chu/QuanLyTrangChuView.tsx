@@ -868,17 +868,17 @@ const VISIBLE_WHERE_OPTIONS: {
   {
     value: "home",
     label: "Home",
-    desc: "Trang chủ và các trang con public (trừ phòng học).",
+    desc: "Chỉ trang chủ (/) — không hiện gallery, khóa học, v.v.",
   },
   {
     value: "class",
     label: "Class",
-    desc: "Chỉ hiển thị trong phòng học online (/phong-hoc).",
+    desc: "Chỉ phòng học online (/phong-hoc).",
   },
   {
     value: "both",
     label: "Both",
-    desc: "Hiển thị cả trang public lẫn phòng học.",
+    desc: "Trang chủ (/) và phòng học (/phong-hoc).",
   },
 ];
 

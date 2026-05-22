@@ -327,11 +327,16 @@ export async function fetchChatExerciseIndex(
   return { exMap, totalBySubject };
 }
 
+/** Hiển thị chat: `dd/mm/yyyy HH:mm` (giờ locale vi-VN). */
 export function formatChatTime(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const time = d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  return `${dd}/${mm}/${yyyy} ${time}`;
 }
 
 export function chatCacheKey(classId: number): string {

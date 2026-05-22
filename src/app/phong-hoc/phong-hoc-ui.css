@@ -3575,12 +3575,31 @@
    xs <576 · sm ≥576 · md 768–991.98 · lg ≥992 · xl ≥1200 · xxl ≥1400
    ═══════════════════════════════════════════════════════════════ */
 
-/* Dưới lg — mobile + tablet: canvas trên, sidebar dưới */
+/* Dưới lg — mobile + tablet: cuộn trang, canvas → sidebar, không giam 100dvh */
 @media (max-width: 991.98px) {
+  .phc {
+    --phc-mobile-gap: 14px;
+    --phc-mobile-pad-x: 12px;
+    --phc-mobile-canvas-h: clamp(240px, 44vh, 400px);
+    --phc-mobile-sidebar-min: clamp(560px, 82vh, 880px);
+    --phc-mobile-chat-min: clamp(380px, 62vh, 640px);
+    --phc-mobile-main-pad-b: max(88px, calc(env(safe-area-inset-bottom, 0px) + 72px));
+
+    max-height: none;
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .phc .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
     flex-wrap: wrap;
     gap: 10px;
-    padding: 12px 14px;
+    padding: 12px var(--phc-mobile-pad-x);
   }
 
   .phc .topbar-tools {
@@ -3603,28 +3622,74 @@
   }
 
   .phc .main {
+    flex: 0 0 auto;
     flex-direction: column;
-    padding: 12px;
-    gap: 12px;
-    min-height: 0;
+    align-items: stretch;
+    min-height: auto;
+    overflow: visible;
+    padding: var(--phc-mobile-gap) var(--phc-mobile-pad-x) var(--phc-mobile-main-pad-b);
+    gap: var(--phc-mobile-gap);
   }
 
   .phc .canvas-wrap {
-    min-height: min(38vh, 280px);
     flex: 0 0 auto;
     order: 1;
+    width: 100%;
+    min-height: var(--phc-mobile-canvas-h);
+    height: var(--phc-mobile-canvas-h);
+    max-height: none;
+  }
+
+  .phc .canvas-wrap .canvas-ph,
+  .phc .canvas-wrap .canvas-ph--meet {
+    flex: 1;
+    min-height: 0;
   }
 
   .phc .sb {
     width: 100%;
-    flex: 1 1 auto;
-    min-height: min(42vh, 420px);
-    height: auto;
+    flex: 0 0 auto;
     order: 2;
+    min-height: 0;
+    height: auto;
+    max-height: none;
+    align-self: stretch;
   }
 
   .phc .sb:not(.col) {
+    display: flex;
+    flex-direction: column;
+    min-height: var(--phc-mobile-sidebar-min);
+    height: auto;
     max-height: none;
+    overflow: hidden;
+  }
+
+  .phc .sb:not(.col) .sbody {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .phc .sb:not(.col) .tc.active {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .phc .sb:not(.col) .meet-area {
+    flex-shrink: 0;
+    margin-top: auto;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Nút mở bảng điều khiển — cố định viewport khi trang cuộn dài */
+  .phc .sb.col {
+    position: fixed;
+    z-index: 40;
   }
 
   .phc .rolesw {
@@ -3650,26 +3715,62 @@
   .phc .phc-bai-mau-row2 {
     grid-template-columns: 1fr;
   }
+
+  /* Mobile chat: ô nhập trên, tin mới nhất trên, danh sách cuộn trong khung cố định */
+  .phc .chat-wrap.chat-compose-top {
+    flex: 1 1 0;
+    min-height: clamp(280px, 46vh, 520px);
+    max-height: clamp(340px, 54vh, 600px);
+    overflow: hidden;
+  }
+
+  .phc .chat-compose-top .chat-save-toast {
+    order: 0;
+    flex-shrink: 0;
+  }
+
+  .phc .chat-compose-top .chat-input-row {
+    order: 1;
+    flex-shrink: 0;
+    border-top: none;
+    border-bottom: 1px solid var(--phc-line);
+  }
+
+  .phc .chat-compose-top .chat-preview-row {
+    order: 2;
+    flex-shrink: 0;
+    border-top: none;
+    border-bottom: 1px solid var(--phc-line);
+  }
+
+  .phc .chat-compose-top .chat-err-bar {
+    order: 3;
+    flex-shrink: 0;
+  }
+
+  .phc .chat-compose-top .chat-msgs {
+    order: 4;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    flex-direction: column;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* md — tablet portrait (768–991.98px) */
 @media (min-width: 768px) and (max-width: 991.98px) {
+  .phc {
+    --phc-mobile-gap: 16px;
+    --phc-mobile-pad-x: 16px;
+    --phc-mobile-canvas-h: clamp(280px, 46vh, 440px);
+    --phc-mobile-sidebar-min: clamp(600px, 80vh, 920px);
+    --phc-mobile-chat-min: clamp(420px, 64vh, 680px);
+  }
+
   .phc .topbar {
-    padding: 12px 16px;
+    padding: 12px var(--phc-mobile-pad-x);
     flex-wrap: nowrap;
-  }
-
-  .phc .main {
-    padding: 12px 16px;
-    gap: 14px;
-  }
-
-  .phc .canvas-wrap {
-    min-height: min(44vh, 400px);
-  }
-
-  .phc .sb {
-    min-height: min(46vh, 460px);
   }
 
   .phc .tab-row {
@@ -3692,16 +3793,20 @@
     padding: 0 10px;
     font-size: 10.5px;
   }
-
-  .phc .canvas-wrap {
-    min-height: min(40vh, 300px);
-  }
 }
 
-/* xs — dưới md (<768px) */
+/* xs — điện thoại (<768px) */
 @media (max-width: 767.98px) {
+  .phc {
+    --phc-mobile-gap: 12px;
+    --phc-mobile-pad-x: 10px;
+    --phc-mobile-canvas-h: clamp(220px, 40vh, 320px);
+    --phc-mobile-sidebar-min: clamp(520px, 85vh, 820px);
+    --phc-mobile-chat-min: clamp(360px, 65vh, 600px);
+  }
+
   .phc .topbar {
-    padding: 10px 12px;
+    padding: 10px var(--phc-mobile-pad-x);
     gap: 8px;
   }
 
@@ -3735,18 +3840,8 @@
     font-size: 10px;
   }
 
-  .phc .main {
-    padding: 10px;
-    gap: 10px;
-  }
-
-  .phc .canvas-wrap {
-    min-height: min(36vh, 240px);
-    border-radius: var(--phc-r-sm);
-  }
-
-  .phc .sb {
-    min-height: min(48vh, 380px);
+  .phc .canvas-wrap,
+  .phc .sb:not(.col) {
     border-radius: var(--phc-r-sm);
   }
 
@@ -3761,13 +3856,23 @@
   }
 }
 
-/* lg — desktop (≥992px): canvas + sidebar ngang */
+/* lg — desktop (≥992px): canvas + sidebar ngang, giam trong viewport */
 @media (min-width: 992px) {
   .phc {
     --phc-sw: clamp(300px, 27vw, 400px);
+    max-height: 100dvh;
+    height: auto;
+    overflow: hidden;
+  }
+
+  .phc .topbar {
+    position: static;
   }
 
   .phc .main {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
     flex-direction: row;
     padding: 14px 18px;
     gap: 14px;
@@ -3847,34 +3952,59 @@
   }
 }
 
-/* Dưới lg + landscape: meeting full height, ẩn topbar */
+/* Dưới lg + landscape: ngang, vẫn cuộn trang nếu cần */
 @media (max-width: 991.98px) and (orientation: landscape) {
+  .phc {
+    --phc-mobile-canvas-h: clamp(200px, 72vh, 520px);
+    --phc-mobile-sidebar-min: clamp(200px, 72vh, 520px);
+    --phc-mobile-chat-min: clamp(140px, 48vh, 400px);
+    --phc-mobile-main-pad-b: max(20px, env(safe-area-inset-bottom, 0px));
+  }
+
   .phc .topbar {
     display: none;
   }
 
   .phc .main {
     flex-direction: row;
-    flex: 1;
-    min-height: 0;
-    padding: max(6px, env(safe-area-inset-left, 0px)) max(8px, env(safe-area-inset-right, 0px))
-      max(6px, env(safe-area-inset-bottom, 0px));
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+    align-items: stretch;
+    padding: max(8px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px))
+      max(12px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
     gap: 10px;
   }
 
   .phc .canvas-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
+    flex: 1 1 58%;
+    order: unset;
+    width: auto;
     min-width: 0;
-    /* Ưu tiên chiều cao cho iframe / Daily */
-    max-height: 100%;
+    min-height: var(--phc-mobile-canvas-h);
+    height: var(--phc-mobile-canvas-h);
+    max-height: none;
+  }
+
+  .phc .sb {
+    order: unset;
+    flex: 0 0 min(var(--phc-sw), 42vw);
+    width: min(var(--phc-sw), 42vw);
+    max-width: min(100%, var(--phc-sw));
   }
 
   .phc .sb:not(.col) {
-    flex: 0 0 auto;
-    width: min(var(--phc-sw), 42vw);
-    max-width: min(100%, var(--phc-sw));
-    min-height: 0;
+    min-height: var(--phc-mobile-sidebar-min);
+    height: auto;
+    max-height: none;
+  }
+
+  .phc .sb:not(.col) .sbody {
+    min-height: var(--phc-mobile-chat-min);
+  }
+
+  .phc .sb:not(.col) .meet-area {
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
   }
 
   .phc .canvas-ph:not(.canvas-ph--meet) {

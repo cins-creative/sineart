@@ -722,7 +722,7 @@ export default function ClassroomClient({
   /** Lightbox lưu trực tiếp `Artwork` (không lưu index) — vì source có thể đổi giữa `artworks` và `globalSamples`. */
   const [lightbox, setLightbox] = useState<Artwork | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>(CHAT_SEED);
-  /** Tin nhắn thật từ `hv_chatbox` (mới nhất đầu mảng — khớp `column-reverse` trong CSS). */
+  /** Tin nhắn thật từ `hv_chatbox` (mới nhất đầu mảng; desktop `column-reverse`, mobile mới nhất trên). */
   const [hvChatRows, setHvChatRows] = useState<HvChatboxRow[]>([]);
   const [hvChatVisibleCount, setHvChatVisibleCount] = useState(HV_CHAT_INITIAL);
   const [hvChatLoadingMore, setHvChatLoadingMore] = useState(false);
@@ -807,6 +807,10 @@ export default function ClassroomClient({
   const hvLatestCreatedAtRef = useRef<string>("");
   const myQlhvIdRef = useRef<number | null>(null);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
+  const chatMsgsRef = useRef<HTMLDivElement>(null);
+  /** Dưới lg: chat cũ → mới từ trên xuống (desktop: column-reverse + mới nhất đầu mảng). */
+  const chatTopDownRef = useRef(false);
+  const [chatTopDown, setChatTopDown] = useState(false);
   const baiMauFileInputRef = useRef<HTMLInputElement>(null);
   /** Sentinel «Tải thêm» cho gallery samples — IntersectionObserver tự kích hoạt khi cuộn xuống. */
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
@@ -2127,6 +2131,28 @@ export default function ClassroomClient({
     return () => clearInterval(id);
   }, [teacherPresenceSidebar]);
 
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 991.98px)");
+    const sync = () => {
+      chatTopDownRef.current = mq.matches;
+      setChatTopDown(mq.matches);
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const newestHvChatId = hvChatRows[0]?.id ?? null;
+
+  useEffect(() => {
+    if (!chatTopDown || tab !== "chat") return;
+    const el = chatMsgsRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = 0;
+    });
+  }, [chatTopDown, tab, newestHvChatId]);
+
   /** GV: poll `last_seen_at` — online = heartbeat còn mới (HV còn mở Phòng học / tab hiển thị). */
   useEffect(() => {
     if (!mounted || !teacherPresenceSidebar || !Number.isFinite(lopHocIdForDb)) {
@@ -2731,8 +2757,41 @@ export default function ClassroomClient({
     [stuCurrExercises, stuCurrTienDo]
   );
 
-  const visibleHvChat = hvChatRows.slice(0, hvChatVisibleCount);
   const hvChatHasMore = hvChatRows.length > hvChatVisibleCount;
+  /** Mobile: mới nhất trên (cùng thứ tự mảng DB). Desktop: column-reverse. */
+  const visibleHvChatForRender = useMemo(
+    () => hvChatRows.slice(0, hvChatVisibleCount),
+    [hvChatRows, hvChatVisibleCount]
+  );
+  const chatMessagesForRender = useMemo(() => {
+    if (!chatTopDown || chatMessages.length < 2) return chatMessages;
+    const first = chatMessages[0]!;
+    const last = chatMessages[chatMessages.length - 1]!;
+    if (first.id > last.id) return chatMessages;
+    return [...chatMessages].reverse();
+  }, [chatTopDown, chatMessages]);
+
+  const hvChatLoadMoreBlock =
+    liveChatEnabled && hvChatHasMore ? (
+      <div className="chat-load-more-wrap">
+        <button
+          type="button"
+          className="chat-load-more"
+          disabled={hvChatLoadingMore}
+          onClick={() => {
+            setHvChatLoadingMore(true);
+            window.setTimeout(() => {
+              setHvChatVisibleCount((n) => n + HV_CHAT_LOAD_MORE);
+              setHvChatLoadingMore(false);
+            }, 180);
+          }}
+        >
+          {hvChatLoadingMore
+            ? "Đang tải…"
+            : `Xem thêm (còn ${hvChatRows.length - hvChatVisibleCount} tin)`}
+        </button>
+      </div>
+    ) : null;
 
   const daysRemaining = !isTeacher ? (d.days_remaining ?? null) : null;
   const daysColor =
@@ -3210,16 +3269,16 @@ export default function ClassroomClient({
             </div>
 
             <div className={cx("tc", tab === "chat" && "active")} role="tabpanel">
-              <div className="chat-wrap">
+              <div className={cx("chat-wrap", chatTopDown && "chat-compose-top")}>
                 {teacherSaveChatNotice ? (
                   <div className="chat-save-toast" role="status" aria-live="polite">
                     {teacherSaveChatNotice}
                   </div>
                 ) : null}
-                <div className="chat-msgs">
+                <div className="chat-msgs" ref={chatMsgsRef}>
                   {liveChatEnabled ? (
                     <>
-                      {visibleHvChat.map((m) => {
+                      {visibleHvChatForRender.map((m) => {
                         const qlhvKey = parseQlhvKey(m.name);
                         const isGV = m.usertype === "Teacher";
                         const isMe = isGV
@@ -3361,29 +3420,10 @@ export default function ClassroomClient({
                           </div>
                         );
                       })}
-                      {hvChatHasMore ? (
-                        <div className="chat-load-more-wrap">
-                          <button
-                            type="button"
-                            className="chat-load-more"
-                            disabled={hvChatLoadingMore}
-                            onClick={() => {
-                              setHvChatLoadingMore(true);
-                              window.setTimeout(() => {
-                                setHvChatVisibleCount((n) => n + HV_CHAT_LOAD_MORE);
-                                setHvChatLoadingMore(false);
-                              }, 180);
-                            }}
-                          >
-                            {hvChatLoadingMore
-                              ? "Đang tải…"
-                              : `Xem thêm (còn ${hvChatRows.length - hvChatVisibleCount} tin)`}
-                          </button>
-                        </div>
-                      ) : null}
+                      {hvChatLoadMoreBlock}
                     </>
                   ) : (
-                    chatMessages.map((m) => {
+                    chatMessagesForRender.map((m) => {
                       const isGV = m.usertype === "Teacher";
                       const isMe = isGV ? isTeacher : !isTeacher && m.name === d.full_name;
                       return (

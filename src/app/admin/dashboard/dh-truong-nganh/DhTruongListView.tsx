@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { GraduationCap, Loader2, Plus, School, Trash2, X } from "lucide-react";
+import { AlertTriangle, GraduationCap, Loader2, Plus, School, Trash2, X } from "lucide-react";
 
 import {
   addDhTruongDaiHoc,
@@ -302,16 +302,33 @@ function DeleteTruongConfirmModal({
   onDeleted: () => void;
 }) {
   const [err, setErr] = useState<string | null>(null);
+  const [confirmText, setConfirmText] = useState("");
   const [pending, startTransition] = useTransition();
+  const confirmInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (target) setErr(null);
+    if (target) {
+      setErr(null);
+      setConfirmText("");
+    }
   }, [target]);
 
   if (!target) return null;
 
+  const hasStudents = target.hocVienDangKyThi > 0;
+  const hasNganh = target.soNganhDaoTao > 0;
+  const expectedName = target.ten.trim();
+  const matchesName = confirmText.trim() === expectedName;
+  const canDelete = !pending && !hasStudents && matchesName;
+
   function handleDelete() {
     if (!target) return;
+    if (hasStudents) return;
+    if (!matchesName) {
+      setErr(`Nhập đúng tên trường "${expectedName}" để xác nhận.`);
+      confirmInputRef.current?.focus();
+      return;
+    }
     setErr(null);
     startTransition(async () => {
       const res = await deleteDhTruongDaiHoc({ id: target.id });
@@ -323,33 +340,40 @@ function DeleteTruongConfirmModal({
     });
   }
 
-  const hasStudents = target.hocVienDangKyThi > 0;
-  const hasNganh = target.soNganhDaoTao > 0;
-
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
       role="presentation"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="flex w-full max-w-[440px] flex-col overflow-hidden rounded-[20px] bg-white shadow-2xl"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-truong-title"
+        className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-[20px] border-2 border-red-300 bg-white shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-5 py-4">
-          <div>
-            <p className="m-0 text-[9px] font-extrabold uppercase tracking-widest text-red-600">
-              Xác nhận xóa
+        <div className="relative flex items-start gap-3 border-b border-red-200 bg-gradient-to-br from-red-50 to-red-100/70 px-5 py-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 ring-4 ring-red-50">
+            <AlertTriangle className="h-5 w-5 text-red-600" strokeWidth={2.4} aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="m-0 text-[9px] font-extrabold uppercase tracking-widest text-red-700">
+              Cảnh báo · Hành động không thể hoàn tác
             </p>
-            <h2 className="m-0 truncate text-base font-extrabold text-[#1a1a2e]" title={target.ten}>
-              {target.ten}
+            <h2
+              id="delete-truong-title"
+              className="m-0 mt-0.5 truncate text-[15px] font-extrabold text-[#1a1a2e]"
+              title={target.ten}
+            >
+              Xóa {target.ten}?
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={pending}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-500 disabled:opacity-50"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-white text-red-500 transition hover:bg-red-50 disabled:opacity-50"
             aria-label="Đóng"
           >
             <X size={16} />
@@ -358,33 +382,71 @@ function DeleteTruongConfirmModal({
 
         <div className="space-y-3 px-5 py-4 text-[13px] text-[#1a1a2e]">
           {hasStudents ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-900">
-              Trường này đang có <b>{target.hocVienDangKyThi}</b> học viên đăng ký dự thi. Hệ thống
-              sẽ chặn xóa — gỡ nguyện vọng học viên trước.
+            <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-[12px] font-semibold text-amber-900">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-600" strokeWidth={2.4} aria-hidden />
+              <span>
+                Trường này đang có <b>{target.hocVienDangKyThi}</b> học viên đăng ký dự thi. Hệ thống
+                sẽ chặn xóa — vui lòng gỡ nguyện vọng của các học viên trước.
+              </span>
             </div>
           ) : (
-            <p className="m-0">
-              Bạn sắp xóa <b>{target.ten}</b>. Hành động này sẽ:
-            </p>
+            <>
+              <p className="m-0 font-semibold text-red-700">
+                Bạn sắp xóa <b>{target.ten}</b>. Dữ liệu sẽ <u>biến mất vĩnh viễn</u>, không thể khôi phục:
+              </p>
+              <ul className="m-0 list-disc space-y-1 rounded-lg border border-red-200/60 bg-red-50/40 py-2 pl-9 pr-3 text-[12px] text-red-900/90">
+                <li>
+                  {target.soNganhDaoTao} dòng{" "}
+                  <code className="rounded bg-white px-1 font-bold">dh_truong_nganh</code>
+                  {hasNganh ? " (cặp trường–ngành)" : ""}
+                </li>
+                <li>
+                  Toàn bộ mốc lịch tuyển sinh (
+                  <code className="rounded bg-white px-1 font-bold">dh_moc_lich_tuyen_sinh</code>)
+                </li>
+                <li>
+                  Toàn bộ chỉ tiêu / điểm chuẩn theo năm (
+                  <code className="rounded bg-white px-1 font-bold">dh_truong_nganh_theo_nam</code>)
+                </li>
+                <li>
+                  Dòng{" "}
+                  <code className="rounded bg-white px-1 font-bold">dh_truong_dai_hoc</code>{" "}
+                  của trường
+                </li>
+              </ul>
+
+              <div className="space-y-1.5 pt-1">
+                <label
+                  htmlFor="delete-truong-confirm-input"
+                  className="block text-[11px] font-bold uppercase tracking-wide text-[#666]"
+                >
+                  Để xác nhận, nhập đúng tên trường:{" "}
+                  <span className="font-extrabold text-red-700">{expectedName}</span>
+                </label>
+                <input
+                  id="delete-truong-confirm-input"
+                  ref={confirmInputRef}
+                  value={confirmText}
+                  onChange={(e) => {
+                    setConfirmText(e.target.value);
+                    if (err) setErr(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && canDelete) handleDelete();
+                  }}
+                  autoComplete="off"
+                  placeholder="Nhập tên trường để mở khóa nút xóa"
+                  className={cn(
+                    "w-full rounded-[10px] border-[1.5px] bg-white px-3 py-2 text-[13px] outline-none transition focus:ring-[3px]",
+                    matchesName
+                      ? "border-emerald-400 focus:border-emerald-500 focus:ring-emerald-500/20"
+                      : "border-[#EAEAEA] focus:border-red-500 focus:ring-red-500/15",
+                  )}
+                />
+              </div>
+            </>
           )}
-          {!hasStudents ? (
-            <ul className="m-0 list-disc space-y-1 pl-5 text-[12px] text-black/70">
-              <li>
-                Xóa {target.soNganhDaoTao} dòng <code className="rounded bg-black/[0.04] px-1">dh_truong_nganh</code>
-                {hasNganh ? " (cặp trường–ngành)" : ""}
-              </li>
-              <li>
-                Xóa toàn bộ mốc lịch tuyển sinh (<code className="rounded bg-black/[0.04] px-1">dh_moc_lich_tuyen_sinh</code>)
-              </li>
-              <li>
-                Xóa toàn bộ chỉ tiêu / điểm chuẩn theo năm
-                (<code className="rounded bg-black/[0.04] px-1">dh_truong_nganh_theo_nam</code>)
-              </li>
-              <li>
-                Xóa dòng <code className="rounded bg-black/[0.04] px-1">dh_truong_dai_hoc</code>
-              </li>
-            </ul>
-          ) : null}
+
           {err ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
               {err}
@@ -397,18 +459,18 @@ function DeleteTruongConfirmModal({
             type="button"
             onClick={onClose}
             disabled={pending}
-            className="rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2 text-[13px] text-[#666] disabled:opacity-50"
+            className="rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2 text-[13px] font-semibold text-[#666] transition hover:bg-slate-50 disabled:opacity-50"
           >
-            Hủy
+            Hủy bỏ
           </button>
           <button
             type="button"
             onClick={handleDelete}
-            disabled={pending || hasStudents}
-            className="inline-flex items-center gap-1.5 rounded-[10px] bg-red-600 px-5 py-2 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-red-700 disabled:opacity-50"
+            disabled={!canDelete}
+            className="inline-flex items-center gap-1.5 rounded-[10px] bg-red-600 px-5 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-45"
           >
             {pending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-            {pending ? "Đang xóa…" : "Xóa trường"}
+            {pending ? "Đang xóa…" : "Xóa vĩnh viễn"}
           </button>
         </div>
       </div>

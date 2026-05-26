@@ -1,6 +1,7 @@
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export const ADMIN_HOA_DON_PAGE_SIZE = 15;
 const MAX_DONS = 2000;
 
 export type AdminHpDonRow = {
@@ -36,6 +37,16 @@ export type AdminHoaDonBundle = {
   chiByDonId: Record<string, AdminChiTietDisplay[]>;
   hvNameById: Record<string, string>;
   nsNameById: Record<string, string>;
+  /** Tổng số đơn theo bộ lọc `days` (không phụ thuộc phân trang). `null` = không đếm được. */
+  totalCount: number | null;
+  /** Số đơn đã trả lần này (= `dons.length`). */
+  loadedCount: number;
+  /** Vẫn còn đơn để tải tiếp. */
+  hasMore: boolean;
+  /** Offset (số đơn đã bỏ qua) ứng với batch hiện tại. */
+  offset: number;
+  /** Page size đã dùng. */
+  pageSize: number;
 };
 
 function sinceIsoForDays(days: number): string | null {
@@ -84,36 +95,57 @@ function goiHocPhiSelectForTable(table: string): string {
 
 /**
  * Gói dữ liệu trang admin «Quản lý hóa đơn» (`hp_don_thu_hoc_phi` + chi tiết + tên HV/NS/lớp; gói chỉ theo id + số tiền từ bảng gói).
- * `days`: số ngày lùi từ 0h hôm nay (0 = chỉ hôm nay), `-1` = không lọc theo ngày (vẫn giới hạn số đơn).
+ *
+ * `days`: số ngày lùi từ 0h hôm nay (0 = chỉ hôm nay), `-1` = không lọc theo ngày (vẫn giới hạn `MAX_DONS` tổng).
+ * `limit`/`offset`: phân trang server-side (mặc định `ADMIN_HOA_DON_PAGE_SIZE = 15`, offset 0).
  */
 export async function fetchAdminHoaDonBundle(
   supabase: SupabaseClient,
-  opts: { days: number }
+  opts: { days: number; limit?: number; offset?: number }
 ): Promise<{ ok: true; data: AdminHoaDonBundle } | { ok: false; error: string }> {
   const since = sinceIsoForDays(opts.days);
+  const pageSize = Math.max(1, Math.min(100, opts.limit ?? ADMIN_HOA_DON_PAGE_SIZE));
+  const offset = Math.max(0, opts.offset ?? 0);
+  const rangeFrom = offset;
+  const rangeTo = Math.min(MAX_DONS - 1, offset + pageSize - 1);
 
   let q = supabase
     .from("hp_don_thu_hoc_phi")
     .select(
-      "id, created_at, ma_don, ma_don_so, student, nguoi_tao, hinh_thuc_thu, status, ngay_thanh_toan, giam_gia, giam_gia_vnd"
+      "id, created_at, ma_don, ma_don_so, student, nguoi_tao, hinh_thuc_thu, status, ngay_thanh_toan, giam_gia, giam_gia_vnd",
+      { count: "exact" }
     )
     .order("created_at", { ascending: false })
-    .limit(MAX_DONS);
+    .range(rangeFrom, rangeTo);
 
   if (since != null) {
     q = q.gte("created_at", since);
   }
 
-  const { data: donRows, error: donErr } = await q;
+  const { data: donRows, error: donErr, count: donCount } = await q;
   if (donErr) {
     return { ok: false, error: donErr.message || "Không đọc được đơn thu học phí." };
   }
 
   const dons = (donRows ?? []) as unknown as AdminHpDonRow[];
+  const totalCount = typeof donCount === "number" ? Math.min(donCount, MAX_DONS) : null;
+  const loadedCount = dons.length;
+  const hasMore = totalCount != null ? offset + loadedCount < totalCount : loadedCount === pageSize;
+
   if (dons.length === 0) {
     return {
       ok: true,
-      data: { dons: [], chiByDonId: {}, hvNameById: {}, nsNameById: {} },
+      data: {
+        dons: [],
+        chiByDonId: {},
+        hvNameById: {},
+        nsNameById: {},
+        totalCount,
+        loadedCount: 0,
+        hasMore: false,
+        offset,
+        pageSize,
+      },
     };
   }
 
@@ -259,6 +291,11 @@ export async function fetchAdminHoaDonBundle(
       chiByDonId,
       hvNameById,
       nsNameById,
+      totalCount,
+      loadedCount,
+      hasMore,
+      offset,
+      pageSize,
     },
   };
 }

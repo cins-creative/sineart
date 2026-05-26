@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import QuanLyHoaDonView from "@/app/admin/dashboard/quan-ly-hoa-don/QuanLyHoaDonView";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
-import { fetchAdminHoaDonBundle } from "@/lib/data/admin-quan-ly-hoa-don";
+import { ADMIN_HOA_DON_PAGE_SIZE, fetchAdminHoaDonBundle } from "@/lib/data/admin-quan-ly-hoa-don";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const DAY_PRESETS = new Set([-1, 0, 7, 30, 90]);
@@ -34,7 +34,11 @@ export default async function QuanLyHoaDonPageData({
     );
   }
 
-  const bundle = await fetchAdminHoaDonBundle(supabase, { days });
+  const bundle = await fetchAdminHoaDonBundle(supabase, {
+    days,
+    limit: ADMIN_HOA_DON_PAGE_SIZE,
+    offset: 0,
+  });
   if (!bundle.ok) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">

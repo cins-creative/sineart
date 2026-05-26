@@ -1,16 +1,20 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   Check,
+  ChevronDown,
   ChevronLeft,
   Clock,
+  Copy,
   Edit2,
   FileText,
+  ImageIcon,
   Loader2,
+  QrCode,
   RefreshCw,
   Search,
   Trash2,
@@ -24,7 +28,10 @@ import {
   updateHpDonThu,
 } from "@/app/admin/dashboard/quan-ly-hoa-don/actions";
 import type { AdminChiTietDisplay, AdminHoaDonBundle, AdminHpDonRow } from "@/lib/data/admin-quan-ly-hoa-don";
+import { buildVietQrImageUrl, getTpBankQrRecipient } from "@/lib/payment/vietqr";
 import { calendarDaysRemainingInclusive, cn } from "@/lib/utils";
+
+const LOAD_MORE_SIZE = 15;
 
 const DATE_FILTERS: { label: string; days: number }[] = [
   { label: "Hôm nay", days: 0 },
@@ -59,6 +66,15 @@ function hinhBadge(raw: string | null): { bg: string; text: string } {
   if (low.includes("mat") || low.includes("mặt")) return { bg: "#dcfce7", text: "#16a34a" };
   if (low.includes("the") || low.includes("thẻ")) return { bg: "#f3e8ff", text: "#7c3aed" };
   return { bg: "#f3f4f6", text: "#4b5563" };
+}
+
+/** Đơn cần QR (chuyển khoản / thẻ) — bao gồm cả các biến thể không dấu trong DB. */
+function isTransferHinhThuc(raw: string | null): boolean {
+  if (!raw?.trim()) return false;
+  const t = raw.trim().toLowerCase();
+  return (
+    t.includes("chuyen") || t.includes("chuyển") || t.includes("the") || t.includes("thẻ")
+  );
 }
 
 function fmtDate(d: string | null): string {
@@ -338,12 +354,46 @@ type Props = {
   days: number;
 };
 
-export default function QuanLyHoaDonView({ bundle, days }: Props) {
+/** Gộp bundle bổ sung (load-more) vào bundle hiện tại — đơn mới đi sau, dedupe theo `id`. */
+function mergeBundle(prev: AdminHoaDonBundle, next: AdminHoaDonBundle): AdminHoaDonBundle {
+  const seen = new Set(prev.dons.map((d) => d.id));
+  const merged = [...prev.dons];
+  for (const d of next.dons) {
+    if (!seen.has(d.id)) {
+      merged.push(d);
+      seen.add(d.id);
+    }
+  }
+  return {
+    dons: merged,
+    chiByDonId: { ...prev.chiByDonId, ...next.chiByDonId },
+    hvNameById: { ...prev.hvNameById, ...next.hvNameById },
+    nsNameById: { ...prev.nsNameById, ...next.nsNameById },
+    totalCount: next.totalCount ?? prev.totalCount,
+    loadedCount: merged.length,
+    hasMore: next.hasMore,
+    offset: next.offset,
+    pageSize: next.pageSize,
+  };
+}
+
+export default function QuanLyHoaDonView({ bundle: initialBundle, days }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+
+  /** Bundle hoạt động — khởi tạo từ prop, sau đó append qua "Tải thêm". */
+  const [bundle, setBundle] = useState<AdminHoaDonBundle>(initialBundle);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreErr, setLoadMoreErr] = useState<string | null>(null);
+
+  /** Khi prop bundle đổi (sang filter `days` khác hoặc `router.refresh()`), reset state cục bộ. */
+  useEffect(() => {
+    setBundle(initialBundle);
+    setLoadMoreErr(null);
+  }, [initialBundle]);
 
   /** ID đơn đang chọn (có thể lệch bundle sau refresh — dùng `selectedIdValid` để bind UI). */
   const selectedIdValid = useMemo(() => {
@@ -401,6 +451,36 @@ export default function QuanLyHoaDonView({ bundle, days }: Props) {
   const refresh = useCallback(() => {
     startTransition(() => router.refresh());
   }, [router]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !bundle.hasMore) return;
+    setLoadingMore(true);
+    setLoadMoreErr(null);
+    try {
+      const nextOffset = bundle.offset + bundle.dons.length;
+      const params = new URLSearchParams({
+        days: String(days),
+        offset: String(nextOffset),
+        limit: String(LOAD_MORE_SIZE),
+      });
+      const res = await fetch(`/admin/api/quan-ly-hoa-don/load-more?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const json = (await res.json()) as
+        | { ok: true; bundle: AdminHoaDonBundle }
+        | { ok: false; error: string };
+      if (!res.ok || !json.ok) {
+        setLoadMoreErr(("error" in json && json.error) || "Không tải thêm được.");
+        return;
+      }
+      setBundle((prev) => mergeBundle(prev, json.bundle));
+    } catch (e) {
+      setLoadMoreErr(e instanceof Error ? e.message : "Lỗi mạng khi tải thêm.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [bundle.dons.length, bundle.hasMore, bundle.offset, days, loadingMore]);
 
   const STATUS_QUICK: { value: string; label: string; count: number }[] = [
     { value: "", label: "Tất cả", count: stats.total },
@@ -508,9 +588,19 @@ export default function QuanLyHoaDonView({ bundle, days }: Props) {
               <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-black/40">
                 {filtered.length} đơn{query.trim() || filterStatus ? " (đã lọc)" : ""}
               </p>
-              {filtered.length > 0 && bundle.dons.length > filtered.length ? (
-                <p className="m-0 text-[10px] font-semibold text-black/35">Tổng tải: {bundle.dons.length}</p>
-              ) : null}
+              <p className="m-0 text-[10px] font-semibold text-black/35">
+                {bundle.totalCount != null ? (
+                  <>
+                    Đã tải <span className="tabular-nums text-black/55">{bundle.dons.length}</span>
+                    {" / "}
+                    <span className="tabular-nums text-black/55">{bundle.totalCount}</span>
+                  </>
+                ) : (
+                  <>
+                    Đã tải <span className="tabular-nums text-black/55">{bundle.dons.length}</span>
+                  </>
+                )}
+              </p>
             </div>
             <div
               className="min-h-0 flex-1 overflow-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
@@ -627,6 +717,38 @@ export default function QuanLyHoaDonView({ bundle, days }: Props) {
                   )}
                 </tbody>
               </table>
+              {bundle.dons.length > 0 ? (
+                <div className="flex flex-col items-center gap-2 border-t border-black/[0.04] bg-white px-3 py-3 md:px-4">
+                  {loadMoreErr ? (
+                    <p className="m-0 flex items-center gap-1.5 rounded-md bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">
+                      <AlertCircle className="h-3.5 w-3.5" /> {loadMoreErr}
+                    </p>
+                  ) : null}
+                  {bundle.hasMore ? (
+                    <button
+                      type="button"
+                      onClick={() => void loadMore()}
+                      disabled={loadingMore}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3.5 py-2 text-[12px] font-bold text-black/70 shadow-sm transition",
+                        "hover:border-[#BC8AF9]/40 hover:bg-violet-50/50",
+                        loadingMore && "cursor-wait opacity-60"
+                      )}
+                    >
+                      {loadingMore ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {loadingMore ? "Đang tải…" : `Tải thêm ${LOAD_MORE_SIZE} đơn`}
+                    </button>
+                  ) : bundle.dons.length > 0 ? (
+                    <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-black/35">
+                      Đã tải hết
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </section>
 
@@ -673,6 +795,176 @@ export default function QuanLyHoaDonView({ bundle, days }: Props) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Tái tạo QR thanh toán cho đơn còn nợ — tư vấn viên dùng để gửi lại cho học viên
+ * khi quên copy QR lúc tạo đơn. Chỉ hiển thị nếu:
+ * - Hình thức là chuyển khoản / thẻ
+ * - Còn `Chờ thanh toán` (không hiển thị khi đã thanh toán / huỷ)
+ * - Có `ma_don_so` (hoặc `ma_don`) hợp lệ + tổng > 0
+ */
+function QrPaymentCard({ don, chi }: { don: AdminHpDonRow; chi: AdminChiTietDisplay[] }) {
+  const total = totalDon(don, chi);
+  const noiDungCk = (don.ma_don_so?.trim() || don.ma_don?.trim() || "").toUpperCase();
+  const transfer = isTransferHinhThuc(don.hinh_thuc_thu);
+  const status = String(don.status ?? "");
+  const recipient = useMemo(() => getTpBankQrRecipient(don.id), [don.id]);
+  const qrUrl = useMemo(() => {
+    if (!transfer || total <= 0 || !noiDungCk) return null;
+    return buildVietQrImageUrl(noiDungCk, total, don.id);
+  }, [transfer, total, noiDungCk, don.id]);
+
+  const [copied, setCopied] = useState<string | null>(null);
+  const [copyImgErr, setCopyImgErr] = useState<string | null>(null);
+  const [copyingImg, setCopyingImg] = useState(false);
+
+  const copy = useCallback((key: string, text: string) => {
+    if (!text) return;
+    try {
+      void navigator.clipboard.writeText(text).then(() => {
+        setCopied(key);
+        window.setTimeout(() => setCopied((c) => (c === key ? null : c)), 1600);
+      });
+    } catch {
+      /* trình duyệt cũ — bỏ qua */
+    }
+  }, []);
+
+  const copyImage = useCallback(async () => {
+    setCopyImgErr(null);
+    if (
+      typeof window === "undefined" ||
+      typeof window.ClipboardItem === "undefined" ||
+      !navigator.clipboard?.write
+    ) {
+      setCopyImgErr("Trình duyệt không hỗ trợ copy ảnh — dùng nút copy các trường bên dưới.");
+      return;
+    }
+    setCopyingImg(true);
+    try {
+      const proxyUrl = `/admin/api/quan-ly-hoa-don/qr-proxy?donId=${don.id}&maDonSo=${encodeURIComponent(noiDungCk)}&amount=${total}`;
+      // Safari yêu cầu Promise<Blob> truyền thẳng vào ClipboardItem trong user gesture.
+      const item = new ClipboardItem({
+        "image/png": (async () => {
+          const res = await fetch(proxyUrl, { cache: "no-store" });
+          if (!res.ok) throw new Error(`Tải ảnh QR thất bại (${res.status})`);
+          const blob = await res.blob();
+          return blob.type === "image/png"
+            ? blob
+            : new Blob([await blob.arrayBuffer()], { type: "image/png" });
+        })(),
+      });
+      await navigator.clipboard.write([item]);
+      setCopied("image");
+      window.setTimeout(() => setCopied((c) => (c === "image" ? null : c)), 1600);
+    } catch (e) {
+      setCopyImgErr(e instanceof Error ? e.message : "Không copy được ảnh QR.");
+    } finally {
+      setCopyingImg(false);
+    }
+  }, [don.id, noiDungCk, total]);
+
+  if (!transfer || total <= 0 || !noiDungCk || !qrUrl) return null;
+  if (status === "Đã thanh toán" || status === "Đã hủy") return null;
+
+  const rows: { k: string; label: string; value: string; copyValue?: string }[] = [
+    { k: "bank", label: "Ngân hàng", value: "TPBank" },
+    { k: "stk", label: "STK", value: recipient.stk },
+    { k: "name", label: "Chủ TK", value: recipient.accountName },
+    {
+      k: "amount",
+      label: "Số tiền",
+      value: fmtVnd(total),
+      copyValue: String(total),
+    },
+    { k: "content", label: "Nội dung CK", value: noiDungCk },
+  ];
+
+  return (
+    <div className="rounded-xl border border-[#F8A568]/30 bg-gradient-to-br from-[#FFF7F0] via-white to-[#FFF0F7]/50 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="m-0 inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#F8A568]">
+          <QrCode size={11} aria-hidden /> QR thanh toán · gửi lại
+        </p>
+        <button
+          type="button"
+          onClick={() => void copyImage()}
+          disabled={copyingImg}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md border border-[#F8A568]/30 bg-white px-2 py-0.5 text-[10px] font-bold text-[#c2410c] shadow-sm transition",
+            "hover:bg-orange-50",
+            copyingImg && "cursor-wait opacity-60"
+          )}
+          title="Copy ảnh QR vào bộ nhớ tạm (paste thẳng vào Zalo/Messenger)"
+        >
+          {copyingImg ? (
+            <>
+              <Loader2 size={10} className="animate-spin" /> Đang copy…
+            </>
+          ) : copied === "image" ? (
+            <>
+              <Check size={10} className="text-emerald-600" /> Đã copy ảnh
+            </>
+          ) : (
+            <>
+              <ImageIcon size={10} /> Copy ảnh
+            </>
+          )}
+        </button>
+      </div>
+
+      {copyImgErr ? (
+        <p className="mb-2 flex items-start gap-1.5 rounded-md bg-red-50 px-2 py-1 text-[10.5px] font-semibold text-red-700">
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+          {copyImgErr}
+        </p>
+      ) : null}
+
+      <div className="flex flex-col items-center gap-1.5">
+        {/* eslint-disable-next-line @next/next/no-img-element -- VietQR URL */}
+        <img
+          src={qrUrl}
+          alt={`Mã QR thanh toán đơn ${noiDungCk}`}
+          className="h-40 w-40 rounded-[10px] bg-white object-contain ring-1 ring-black/[0.05]"
+          loading="lazy"
+        />
+        <p className="m-0 text-center text-base font-black text-[#1a1a2e]">{fmtVnd(total)}</p>
+        <p className="m-0 text-center text-[10px] text-black/45">
+          Nội dung: <strong className="text-[#1a1a2e]">{noiDungCk}</strong>
+        </p>
+      </div>
+
+      <dl className="mt-2.5 space-y-0">
+        {rows.map((row) => (
+          <div
+            key={row.k}
+            className="flex items-center justify-between gap-2 border-b border-[#F8A568]/15 py-1.5 last:border-0"
+          >
+            <dt className="text-[10px] font-bold uppercase tracking-wide text-[#AAA]">{row.label}</dt>
+            <dd className="m-0 flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-[12px] font-bold text-[#1a1a2e]" title={row.value}>
+                {row.value}
+              </span>
+              <button
+                type="button"
+                onClick={() => copy(row.k, row.copyValue ?? row.value)}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#EAEAEA] bg-white text-black/45 transition hover:border-[#F8A568]/40 hover:bg-orange-50 hover:text-[#c2410c]"
+                aria-label={`Copy ${row.label}`}
+                title={`Copy ${row.label}`}
+              >
+                {copied === row.k ? (
+                  <Check className="h-3 w-3 text-emerald-600" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+              </button>
+            </dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -913,6 +1205,8 @@ function DonDetailPanel({
             <span className="text-sm font-black text-[#1a1a2e]">{editing ? fmtVnd(previewTotal) : fmtVnd(totalDon(don, chi))}</span>
           </div>
         </div>
+
+        <QrPaymentCard don={don} chi={chi} />
 
         <div>
           <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-black/40">Chi tiết kỳ học phí</p>

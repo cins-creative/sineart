@@ -8,7 +8,6 @@ import {
   isSupabaseMissingColumnError,
 } from "@/lib/data/hp-goi-is-active";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
-import { isTenMonHinhHoa } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import { isHocPhiCapTocSpecial } from "@/lib/hocPhiDedupe";
 import { createStaticClient } from "@/lib/supabase/static";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
@@ -918,7 +917,7 @@ export async function getOngoingClassesForMon(
 
   const [{ data: mon }, filledByLop, { data: teachers }, { data: branches }] =
     await Promise.all([
-      supabase.from("ql_mon_hoc").select("id, si_so, ten_mon_hoc").eq("id", monId).maybeSingle(),
+      supabase.from("ql_mon_hoc").select("id, si_so").eq("id", monId).maybeSingle(),
       countDangHocByLopIds(supabase, lopIds),
       teacherIds.length
         ? supabase
@@ -933,8 +932,6 @@ export async function getOngoingClassesForMon(
 
   const totalFromMon = Number((mon as Record<string, unknown> | null)?.si_so ?? 0);
   const totalSeat = Number.isFinite(totalFromMon) && totalFromMon > 0 ? totalFromMon : 20;
-  const courseTenMon = String((mon as Record<string, unknown> | null)?.ten_mon_hoc ?? "").trim() || null;
-  const showLevelHinhHoa = isTenMonHinhHoa(courseTenMon);
 
   const teacherMap = new Map<number, string>();
   const teacherPortfolioMap = new Map<number, string[]>();
@@ -983,8 +980,7 @@ export async function getOngoingClassesForMon(
     const branchLabel = Number.isFinite(branchId) ? branchMap.get(branchId) : undefined;
 
     const lvRaw = String(r.level_hinh_hoa ?? "").trim();
-    const levelHinhHoa =
-      showLevelHinhHoa && lvRaw.length > 0 ? lvRaw : undefined;
+    const levelHinhHoa = lvRaw.length > 0 ? lvRaw : undefined;
 
     return {
       id: `lop-${id}`,

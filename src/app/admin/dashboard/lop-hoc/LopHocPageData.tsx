@@ -7,6 +7,7 @@ import {
   parseLopHocListSearchParams,
 } from "@/lib/data/admin-lop-hoc-page";
 import { normalizePortfolioToUrls } from "@/lib/data/courses-page";
+import { fetchLoaiHinhHoaOptions } from "@/lib/data/ql-loai-hinh-hoa-options";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 type Props = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
@@ -24,18 +25,23 @@ export default async function LopHocPageData({ searchParams }: Props) {
   const sp = (await searchParams) ?? {};
   const { page, filters } = parseLopHocListSearchParams(sp);
 
-  const [lopPage, monRes, nsRes, cnRes, banRes, totalAll, allLopIds] = await Promise.all([
-    fetchLopHocPage(supabase, page, filters),
-    supabase.from("ql_mon_hoc").select("id, ten_mon_hoc").order("ten_mon_hoc", { ascending: true }),
-    supabase
-      .from("hr_nhan_su")
-      .select("id, full_name, avatar, ban, portfolio, email")
-      .order("full_name", { ascending: true }),
-    supabase.from("ql_chi_nhanh").select("id, ten").order("id", { ascending: true }),
-    supabase.from("hr_ban").select("id, ten_ban"),
-    fetchTotalLopCountUnfiltered(supabase),
-    fetchAllLopIds(supabase),
-  ]);
+  const [lopPage, monRes, nsRes, cnRes, banRes, totalAll, allLopIds, levelHinhHoaOptions] =
+    await Promise.all([
+      fetchLopHocPage(supabase, page, filters),
+      supabase
+        .from("ql_mon_hoc")
+        .select("id, ten_mon_hoc")
+        .order("ten_mon_hoc", { ascending: true }),
+      supabase
+        .from("hr_nhan_su")
+        .select("id, full_name, avatar, ban, portfolio, email")
+        .order("full_name", { ascending: true }),
+      supabase.from("ql_chi_nhanh").select("id, ten").order("id", { ascending: true }),
+      supabase.from("hr_ban").select("id, ten_ban"),
+      fetchTotalLopCountUnfiltered(supabase),
+      fetchAllLopIds(supabase),
+      fetchLoaiHinhHoaOptions(supabase),
+    ]);
 
   if (!lopPage.ok) {
     return (
@@ -160,6 +166,7 @@ export default async function LopHocPageData({ searchParams }: Props) {
       chiNhanhList={chiNhanhList}
       statsByLopId={statsByLopId}
       defaultChiNhanhId={defaultChiNhanhId}
+      levelHinhHoaOptions={levelHinhHoaOptions}
     />
   );
 }

@@ -11,6 +11,8 @@ export type NavOpenClass = {
   thumbnailUrl?: string | null;
   /** Gợi ý chỗ trống — «Còn chỗ» | «Sắp hết» */
   seatHint?: string;
+  /** Tag "Loại lớp" (CSV đã split) — hiển thị dạng chip dưới tên lớp */
+  loaiLopTags?: string[];
 };
 
 export type NavSubItem = {

@@ -79,10 +79,11 @@ import {
   type StudentProfileGalleryRow,
 } from "@/lib/phong-hoc/classroom-gallery";
 import ClassroomSignInOverlay from "@/app/_components/ClassroomSignInOverlay";
+import PhongHocLiveKitCanvas from "@/components/phong-hoc/PhongHocLiveKitCanvas";
 import StudentAvatarMenu from "@/components/StudentAvatarMenu";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import Link from "next/link";
-import { Copy, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Be_Vietnam_Pro, Quicksand } from "next/font/google";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
@@ -107,8 +108,8 @@ function cx(...parts: Array<string | false | undefined | null>): string {
 const PHC_SIDEBAR_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 const PHC_SIDEBAR_TWEEN = { type: "tween" as const, duration: 0.48, ease: PHC_SIDEBAR_EASE };
 
-const HV_CHAT_INITIAL = 30;
-const HV_CHAT_LOAD_MORE = 20;
+const HV_CHAT_INITIAL = 10;
+const HV_CHAT_LOAD_MORE = 10;
 const HV_CHAT_MAX_IMAGES = 12;
 
 /** Vòng tiến độ bài (theo prototype Class_Chatbox). GV có thể bấm để mở gán tiến độ. */
@@ -245,46 +246,6 @@ function normalizeMeetingRoomUrl(raw: string | null | undefined): string | null 
   if (/^https?:\/\//i.test(t)) return t;
   if (/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}/i.test(t)) return `https://${t}`;
   return null;
-}
-
-/** Mã hiển thị trên UI (URL đầy đủ vẫn dùng khi mở / sao chép). */
-function meetUrlDisplayCode(joinUrl: string): string {
-  const t = joinUrl.trim();
-  if (!t) return "";
-  try {
-    const u = new URL(t);
-    const host = u.hostname.replace(/^www\./i, "");
-    if (host === "meet.google.com") {
-      const parts = u.pathname.replace(/^\//, "").split("/").filter(Boolean);
-      if (parts[0] === "lookup" && parts[1]) return parts[1]!;
-      if (parts[0]) return parts[0]!;
-    }
-  } catch {
-    /* không phải URL chuẩn */
-  }
-  return t.length > 52 ? `${t.slice(0, 49)}…` : t;
-}
-
-async function copyTextToClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.setAttribute("readonly", "");
-      ta.style.position = "fixed";
-      ta.style.left = "-9999px";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
 }
 
 const fontBody = Be_Vietnam_Pro({
@@ -714,9 +675,6 @@ export default function ClassroomClient({
   const [gmeetInput, setGmeetInput] = useState("");
   const [gmeetSaving, setGmeetSaving] = useState(false);
   const [gmeetJustSaved, setGmeetJustSaved] = useState(false);
-  /** Sau khi HV/GV sao chép link Meet từ khung chính. */
-  const [meetLinkCopyHint, setMeetLinkCopyHint] = useState<string | null>(null);
-  const meetLinkCopyHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Quảng cáo: banner → thu gọn nút «Quảng cáo» → ẩn hẳn (reload trang = về banner). */
   const [adDismissal, setAdDismissal] = useState<"banner" | "pill" | "none">("banner");
   /** Lightbox lưu trực tiếp `Artwork` (không lưu index) — vì source có thể đổi giữa `artworks` và `globalSamples`. */
@@ -1970,10 +1928,6 @@ export default function ClassroomClient({
   useEffect(() => {
     return () => {
       if (gmeetSavedTimerRef.current) clearTimeout(gmeetSavedTimerRef.current);
-      if (meetLinkCopyHintTimerRef.current) {
-        clearTimeout(meetLinkCopyHintTimerRef.current);
-        meetLinkCopyHintTimerRef.current = null;
-      }
     };
   }, []);
 
@@ -1995,41 +1949,41 @@ export default function ClassroomClient({
     return normalizeMeetingRoomUrl(raw.trim()) ?? raw.trim();
   }, [googleMeetUrl, googleMeetSetAt, storedSession?.userType]);
 
-  /**
-   * Khung chính chỉ CTA Google Meet (`url_google_meet`): HV (theo ngày VN) / GV (URL đã lưu).
-   */
-  const canvasMeetJoinUrl = useMemo((): string | null => {
-    if (storedSession?.userType === "Student") return studentSidebarMeetUrl;
-    if (storedSession?.userType === "Teacher") {
-      const u = googleMeetUrl?.trim();
-      if (!u) return null;
-      return normalizeMeetingRoomUrl(u) ?? u;
-    }
-    return null;
-  }, [storedSession?.userType, studentSidebarMeetUrl, googleMeetUrl]);
-
-  const meetCanvasDisplayCode = useMemo(
-    () => (canvasMeetJoinUrl ? meetUrlDisplayCode(canvasMeetJoinUrl) : ""),
-    [canvasMeetJoinUrl]
+  /** Slug lớp dùng làm tên phòng LiveKit. */
+  const liveKitRoomName = useMemo(
+    () => normalizedPathSlug ?? sessionSlug ?? null,
+    [normalizedPathSlug, sessionSlug]
   );
 
-  const onCopyCanvasMeetLink = useCallback(async () => {
-    if (!canvasMeetJoinUrl) return;
-    const ok = await copyTextToClipboard(canvasMeetJoinUrl);
-    if (meetLinkCopyHintTimerRef.current != null) {
-      clearTimeout(meetLinkCopyHintTimerRef.current);
-      meetLinkCopyHintTimerRef.current = null;
+  const liveKitSessionReady = storedSession != null;
+
+  const liveKitCanJoin = useMemo(
+    () =>
+      mounted &&
+      liveKitSessionReady &&
+      hasRoomAccess &&
+      Number.isFinite(lopHocIdForDb) &&
+      liveKitRoomName != null &&
+      liveKitRoomName.length > 0,
+    [mounted, liveKitSessionReady, hasRoomAccess, lopHocIdForDb, liveKitRoomName]
+  );
+
+  const liveKitParticipantName = useMemo(
+    () =>
+      storedSession?.data.full_name?.trim() || (isTeacher ? "Giáo viên" : "Học viên"),
+    [storedSession?.data.full_name, isTeacher]
+  );
+  const liveKitIsHost = storedSession?.userType === "Teacher";
+
+  const liveKitAvatarUrl = useMemo(() => {
+    if (!storedSession) return null;
+    if (storedSession.userType === "Teacher") {
+      const av = storedSession.data.avatar?.trim();
+      return av || null;
     }
-    setMeetLinkCopyHint(
-      ok
-        ? "Đã sao chép link Google Meet vào bảng nhớ."
-        : "Không sao chép được — hãy chọn và copy link thủ công."
-    );
-    meetLinkCopyHintTimerRef.current = setTimeout(() => {
-      setMeetLinkCopyHint(null);
-      meetLinkCopyHintTimerRef.current = null;
-    }, 2800);
-  }, [canvasMeetJoinUrl]);
+    const av = storedSession.data.hv_avatar?.trim();
+    return av || null;
+  }, [storedSession]);
 
   /** Tiêu đề topbar — tên lớp (`class_name`), fallback tên đầy đủ / slug URL. */
   const topbarTitle = useMemo(() => {
@@ -2788,7 +2742,7 @@ export default function ClassroomClient({
         >
           {hvChatLoadingMore
             ? "Đang tải…"
-            : `Xem thêm (còn ${hvChatRows.length - hvChatVisibleCount} tin)`}
+            : `Xem thêm 10 tin (còn ${hvChatRows.length - hvChatVisibleCount} tin)`}
         </button>
       </div>
     ) : null;
@@ -2966,58 +2920,15 @@ export default function ClassroomClient({
 
       <div className="main">
         <LayoutGroup id="phc-main-layout">
-          <motion.div layout className="canvas-wrap" transition={PHC_SIDEBAR_TWEEN}>
-            {canvasMeetJoinUrl ? (
-              <motion.div
-                layout
-                className="canvas-ph canvas-ph--meet canvas-ph--meet-cta"
-                transition={PHC_SIDEBAR_TWEEN}
-              >
-                <div className="phc-meet-cta-card">
-                  <span className="phc-meet-cta-ico" aria-hidden>
-                    📹
-                  </span>
-                  <p className="phc-meet-cta-title">Buổi học trên Google Meet</p>
-                  <p className="phc-meet-cta-hint">Mở tab mới để bật camera và micro.</p>
-                  <a
-                    href={canvasMeetJoinUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="phc-meet-cta-btn"
-                  >
-                    Gia nhập Google Meet
-                  </a>
-                  <div className="phc-meet-cta-code-row">
-                    <code className="phc-meet-cta-code" title={canvasMeetJoinUrl}>
-                      {meetCanvasDisplayCode}
-                    </code>
-                    <button
-                      type="button"
-                      className="phc-meet-cta-copy"
-                      onClick={() => void onCopyCanvasMeetLink()}
-                      aria-label="Sao chép link Google Meet"
-                      title="Sao chép link Google Meet"
-                    >
-                      <Copy size={18} strokeWidth={2} aria-hidden />
-                    </button>
-                  </div>
-                  {meetLinkCopyHint ? (
-                    <p className="phc-meet-cta-copy-hint" role="status" aria-live="polite">
-                      {meetLinkCopyHint}
-                    </p>
-                  ) : null}
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div layout className="canvas-ph" transition={PHC_SIDEBAR_TWEEN}>
-                <span className="ico">🎨</span>
-                <p>Phòng học trực tuyến</p>
-                <small>
-                  Chưa có liên kết Google Meet cho hôm nay. Giáo viên lưu link Meet trong bảng điều khiển — link được cập
-                  nhật mỗi ngày như trước.
-                </small>
-              </motion.div>
-            )}
+          <motion.div className="canvas-wrap" transition={PHC_SIDEBAR_TWEEN}>
+            <PhongHocLiveKitCanvas
+              roomName={liveKitRoomName ?? "preview"}
+              participantName={liveKitParticipantName}
+              lopHocId={Number.isFinite(lopHocIdForDb) ? lopHocIdForDb : 0}
+              isHost={liveKitIsHost}
+              canJoin={liveKitCanJoin}
+              localAvatarUrl={liveKitAvatarUrl}
+            />
           </motion.div>
 
           <motion.aside

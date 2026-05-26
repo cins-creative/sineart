@@ -171,7 +171,18 @@ function NavOpenClassList({
           >
             <NavOpenClassThumb thumbnailUrl={lop.thumbnailUrl} size={variant} />
             <span className="nav-dd-subitem-body">
-              <span className="nav-dd-subitem-label">{lop.label}</span>
+              <span className="nav-dd-subitem-main">
+                <span className="nav-dd-subitem-label">{lop.label}</span>
+                {lop.loaiLopTags && lop.loaiLopTags.length > 0 ? (
+                  <span className="nav-dd-subitem-tags">
+                    {lop.loaiLopTags.map((tag) => (
+                      <span key={tag} className="nav-dd-subitem-tag">
+                        {tag}
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
+              </span>
               {lop.seatHint ? (
                 <span className="nav-dd-subitem-hint">{lop.seatHint}</span>
               ) : null}

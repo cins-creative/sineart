@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import {
   DH_MON_THI_ARRAY_MAX_COUNT,
   DH_MON_THI_ITEM_MAX_LEN,
@@ -11,6 +12,8 @@ import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const REV = "/admin/dashboard/dh-truong-nganh";
+
+const DH_TRUONG_TEN_MAX = 240;
 
 function revalidate(): void {
   revalidatePath(REV);
@@ -282,6 +285,139 @@ export async function updateQlHvTruongNganhMonThiChon(payload: {
 
   const { error } = await supabase.from("ql_hv_truong_nganh").update({ mon_thi_chon: value }).eq("id", rowId);
 
+  if (error) return { ok: false, error: error.message };
+
+  revalidateDhSlugRoutes();
+  return { ok: true };
+}
+
+/**
+ * Thêm một trường đại học mới (`dh_truong_dai_hoc`).
+ *
+ * - Validate `ten_truong_dai_hoc` không rỗng (đã trim) và <= 240 ký tự.
+ * - Chặn trùng tên (case-insensitive).
+ * - `score` (điểm chuẩn / ưu tiên) optional — số hữu hạn, không âm.
+ */
+export async function addDhTruongDaiHoc(payload: {
+  ten: string;
+  score: number | null;
+}): Promise<{ ok: true; id: number; ten: string } | { ok: false; error: string }> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const ten = String(payload.ten ?? "").trim();
+  if (!ten) return { ok: false, error: "Tên trường không được để trống." };
+  if (ten.length > DH_TRUONG_TEN_MAX) {
+    return { ok: false, error: `Tên trường quá dài (tối đa ${DH_TRUONG_TEN_MAX} ký tự).` };
+  }
+
+  let scoreToSave: number | null = null;
+  if (payload.score != null) {
+    if (!Number.isFinite(payload.score)) {
+      return { ok: false, error: "Điểm chuẩn phải là số." };
+    }
+    if (payload.score < 0) {
+      return { ok: false, error: "Điểm chuẩn không được âm." };
+    }
+    if (payload.score > 1000) {
+      return { ok: false, error: "Điểm chuẩn không hợp lệ (quá lớn)." };
+    }
+    scoreToSave = payload.score;
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { data: dup, error: dupErr } = await supabase
+    .from("dh_truong_dai_hoc")
+    .select("id, ten_truong_dai_hoc")
+    .ilike("ten_truong_dai_hoc", ten)
+    .limit(1);
+  if (dupErr) return { ok: false, error: dupErr.message };
+  if (dup && dup.length > 0) {
+    return { ok: false, error: `Trường "${ten}" đã tồn tại.` };
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("dh_truong_dai_hoc")
+    .insert({ ten_truong_dai_hoc: ten, score: scoreToSave })
+    .select("id, ten_truong_dai_hoc")
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  const row = inserted as { id?: unknown; ten_truong_dai_hoc?: unknown } | null;
+  const newId = Number(row?.id);
+  if (!Number.isFinite(newId) || newId <= 0) {
+    return { ok: false, error: "Không lấy được ID trường vừa thêm." };
+  }
+
+  revalidateDhSlugRoutes();
+  return {
+    ok: true,
+    id: newId,
+    ten: String(row?.ten_truong_dai_hoc ?? "").trim() || ten,
+  };
+}
+
+/**
+ * Xóa một trường đại học.
+ *
+ * - Chặn nếu còn dòng `ql_hv_truong_nganh` tham chiếu (học viên đã đăng ký dự thi).
+ *   Lý do: đây là dữ liệu hồ sơ học viên — không nên cascade tự động.
+ * - Cascade xóa các bảng config phụ thuộc:
+ *   `dh_truong_nganh_theo_nam`, `dh_moc_lich_tuyen_sinh`, `dh_truong_nganh`.
+ * - Cuối cùng xóa dòng `dh_truong_dai_hoc.id`.
+ *
+ * Quyền: dùng `assertStaffMayDeleteRecords` — chỉ vai trò được phép xóa mới gọi được.
+ */
+export async function deleteDhTruongDaiHoc(payload: {
+  id: number;
+}): Promise<DhTnUpdateState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const id = Math.trunc(payload.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    return { ok: false, error: "Mã trường không hợp lệ." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const perm = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!perm.ok) return { ok: false, error: perm.error };
+
+  const { count: hvCount, error: hvErr } = await supabase
+    .from("ql_hv_truong_nganh")
+    .select("id", { count: "exact", head: true })
+    .eq("truong_dai_hoc", id);
+  if (hvErr) return { ok: false, error: hvErr.message };
+  if ((hvCount ?? 0) > 0) {
+    return {
+      ok: false,
+      error: `Không xóa được — còn ${hvCount} học viên đã đăng ký thi trường này. Gỡ nguyện vọng học viên (ql_hv_truong_nganh) trước.`,
+    };
+  }
+
+  const { error: e1 } = await supabase
+    .from("dh_truong_nganh_theo_nam")
+    .delete()
+    .eq("truong_dai_hoc", id);
+  if (e1) return { ok: false, error: `dh_truong_nganh_theo_nam: ${e1.message}` };
+
+  const { error: e2 } = await supabase
+    .from("dh_moc_lich_tuyen_sinh")
+    .delete()
+    .eq("truong_dai_hoc", id);
+  if (e2) return { ok: false, error: `dh_moc_lich_tuyen_sinh: ${e2.message}` };
+
+  const { error: e3 } = await supabase
+    .from("dh_truong_nganh")
+    .delete()
+    .eq("truong_dai_hoc", id);
+  if (e3) return { ok: false, error: `dh_truong_nganh: ${e3.message}` };
+
+  const { error } = await supabase.from("dh_truong_dai_hoc").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
 
   revalidateDhSlugRoutes();

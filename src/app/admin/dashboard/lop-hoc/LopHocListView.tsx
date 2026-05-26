@@ -4,15 +4,17 @@ import { useActionState, useEffect, useMemo, useRef, useState, useTransition } f
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Copy, Flame, LayoutGrid, LayoutList, Loader2, Pencil, Plus, School, Search, Upload, X, Zap } from "lucide-react";
+import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Flame, LayoutGrid, LayoutList, Loader2, Pencil, Plus, School, Search, Upload, X, Zap } from "lucide-react";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import type { LopHocFormState } from "@/app/admin/dashboard/lop-hoc/actions";
 import {
+  addLoaiHinhHoaOption,
   createLopHoc,
   deleteLopHoc,
   duplicateLopHoc,
+  renameLoaiHinhHoaOption,
   toggleLopIsActive,
   toggleLopSpecial,
   toggleLopTinhTrang,
@@ -20,7 +22,7 @@ import {
   updateTeacherPortfolio,
 } from "@/app/admin/dashboard/lop-hoc/actions";
 import { uploadAdminCfImage } from "@/lib/admin/upload-cf-image-client";
-import { LEVEL_HINH_HOA_VALUES, isTenMonHinhHoa } from "@/lib/ql-lop-hoc/level-hinh-hoa";
+import { joinLevels, splitLevels } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import type { LopHocListFilters } from "@/lib/data/admin-lop-hoc-page";
 import { cn } from "@/lib/utils";
 import type { AdminLopRow } from "@/types/admin-lop-hoc";
@@ -64,6 +66,8 @@ type Props = {
   chiNhanhList: ChiOpt[];
   statsByLopId: Record<string, { dang_hoc: number; da_nghi: number }>;
   defaultChiNhanhId: number | null;
+  /** Options động cho dropdown "Loại lớp" (từ bảng `ql_loai_hinh_hoa_options`). */
+  levelHinhHoaOptions: string[];
 };
 
 type HvStats = { dang_hoc: number; da_nghi: number };
@@ -523,6 +527,402 @@ function TeacherMultiPicker({
   );
 }
 
+/**
+ * Bộ chọn nhiều "Loại lớp" — dropdown + checkbox + ô "Thêm mới" + sửa tên option.
+ *
+ * - Lưu CSV vào `value` (string, vd `"Chuyên tượng, Chuyên chân dung"`).
+ * - Khi user thêm option mới sẽ gọi server action `addLoaiHinhHoaOption`,
+ *   append vào danh sách local rồi tick chọn luôn.
+ * - Khi user nhấn icon Pencil bên cạnh 1 option → chuyển sang inline edit;
+ *   gọi `renameLoaiHinhHoaOption` (server tự đồng bộ CSV các lớp đang dùng tên cũ)
+ *   rồi update options + value CSV phía client cho UX phản hồi tức thì.
+ */
+function LevelHinhHoaMultiPicker({
+  options,
+  value,
+  onChange,
+  onOptionsChange,
+}: {
+  options: string[];
+  /** CSV — vd `"A, B"`. */
+  value: string;
+  onChange: (csv: string) => void;
+  /** Cha có thể đồng bộ danh sách option khi user vừa thêm mới hoặc sửa tên. */
+  onOptionsChange?: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [adding, setAdding] = useState("");
+  const [addErr, setAddErr] = useState<string | null>(null);
+  const [addBusy, setAddBusy] = useState(false);
+  const [editingOpt, setEditingOpt] = useState<string | null>(null);
+  const [editingVal, setEditingVal] = useState("");
+  const [editErr, setEditErr] = useState<string | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const selectedItems = useMemo(() => splitLevels(value), [value]);
+  const selectedSet = useMemo(() => new Set(selectedItems), [selectedItems]);
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => searchRef.current?.focus(), 50);
+    } else {
+      setSearch("");
+      setAdding("");
+      setAddErr(null);
+      setEditingOpt(null);
+      setEditingVal("");
+      setEditErr(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (editingOpt != null) {
+      setTimeout(() => {
+        editInputRef.current?.focus();
+        editInputRef.current?.select();
+      }, 30);
+    }
+  }, [editingOpt]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.toLowerCase().includes(q));
+  }, [options, search]);
+
+  function toggle(opt: string) {
+    const next = selectedSet.has(opt)
+      ? selectedItems.filter((v) => v !== opt)
+      : [...selectedItems, opt];
+    onChange(joinLevels(next));
+  }
+
+  async function handleAddOption() {
+    const name = adding.trim();
+    setAddErr(null);
+    if (!name) {
+      setAddErr("Nhập tên loại trước.");
+      return;
+    }
+    if (name.includes(",")) {
+      setAddErr('Tên không được chứa dấu phẩy ","');
+      return;
+    }
+    setAddBusy(true);
+    try {
+      const res = await addLoaiHinhHoaOption(name);
+      if (!res.ok) {
+        setAddErr(res.error);
+        return;
+      }
+      const newTen = res.ten;
+      if (!options.includes(newTen) && onOptionsChange) {
+        onOptionsChange([...options, newTen]);
+      }
+      if (!selectedSet.has(newTen)) {
+        onChange(joinLevels([...selectedItems, newTen]));
+      }
+      setAdding("");
+    } finally {
+      setAddBusy(false);
+    }
+  }
+
+  function startEditing(opt: string) {
+    setEditingOpt(opt);
+    setEditingVal(opt);
+    setEditErr(null);
+  }
+
+  function cancelEditing() {
+    setEditingOpt(null);
+    setEditingVal("");
+    setEditErr(null);
+  }
+
+  async function handleSaveEdit() {
+    const oldName = editingOpt;
+    if (!oldName) return;
+    const nextName = editingVal.trim();
+    setEditErr(null);
+    if (!nextName) {
+      setEditErr("Tên không được để trống.");
+      return;
+    }
+    if (nextName.includes(",")) {
+      setEditErr('Tên không được chứa dấu phẩy ","');
+      return;
+    }
+    if (nextName === oldName) {
+      cancelEditing();
+      return;
+    }
+    if (
+      options.some((o) => o.toLowerCase() === nextName.toLowerCase() && o !== oldName)
+    ) {
+      setEditErr(`Loại "${nextName}" đã tồn tại — chọn tên khác.`);
+      return;
+    }
+    setEditBusy(true);
+    try {
+      const res = await renameLoaiHinhHoaOption({ oldName, newName: nextName });
+      if (!res.ok) {
+        setEditErr(res.error);
+        return;
+      }
+      if (onOptionsChange) {
+        onOptionsChange(options.map((o) => (o === oldName ? nextName : o)));
+      }
+      if (selectedSet.has(oldName)) {
+        onChange(joinLevels(selectedItems.map((v) => (v === oldName ? nextName : v))));
+      }
+      cancelEditing();
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "flex min-h-[38px] w-full items-center rounded-[10px] border border-[#EAEAEA] bg-white px-3 py-1.5 text-left text-[13px] transition",
+          "shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] outline-none",
+          open
+            ? "border-[#BC8AF9] ring-[3px] ring-[#BC8AF9]/15"
+            : "hover:border-black/20 focus:border-[#BC8AF9] focus:ring-[3px] focus:ring-[#BC8AF9]/15",
+        )}
+      >
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          {selectedItems.length === 0 ? (
+            <span className="text-[#AAAAAA]">— Chọn loại lớp —</span>
+          ) : (
+            selectedItems.map((opt) => (
+              <span
+                key={opt}
+                className="flex items-center gap-1 rounded-full border border-[#BC8AF9]/25 bg-[#BC8AF9]/10 px-2 py-0.5"
+              >
+                <span className="text-[11px] font-semibold text-[#4a1d96]">{opt}</span>
+              </span>
+            ))
+          )}
+        </span>
+        <ChevronDown
+          size={15}
+          className={cn(
+            "ml-2 shrink-0 text-[#AAAAAA] transition-transform duration-200",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-[10px] border border-[#EAEAEA] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.12)]">
+          <div className="border-b border-[#EAEAEA] p-2">
+            <div className="flex items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-[#fafafa] px-2 py-1.5">
+              <Search size={12} className="shrink-0 text-[#AAAAAA]" />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm loại lớp…"
+                className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[#BBBBBB]"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="text-[#AAAAAA] hover:text-[#666]"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="max-h-[220px] overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-4 py-3 text-center text-[12px] text-[#BBBBBB]">
+                Không tìm thấy loại lớp phù hợp
+              </div>
+            ) : (
+              filtered.map((opt) => {
+                const checked = selectedSet.has(opt);
+                const isEditing = editingOpt === opt;
+                if (isEditing) {
+                  return (
+                    <div
+                      key={opt}
+                      className="flex flex-col gap-1 border-y border-[#BC8AF9]/20 bg-[#BC8AF9]/05 px-3 py-2"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          ref={editInputRef}
+                          value={editingVal}
+                          onChange={(e) => {
+                            setEditingVal(e.target.value);
+                            if (editErr) setEditErr(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void handleSaveEdit();
+                            } else if (e.key === "Escape") {
+                              e.preventDefault();
+                              cancelEditing();
+                            }
+                          }}
+                          disabled={editBusy}
+                          placeholder="Tên loại mới…"
+                          className="min-w-0 flex-1 rounded-md border border-[#BC8AF9]/50 bg-white px-2 py-1 text-[12px] outline-none focus:border-[#BC8AF9] focus:ring-2 focus:ring-[#BC8AF9]/20 disabled:opacity-60"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleSaveEdit()}
+                          disabled={editBusy || !editingVal.trim()}
+                          title="Lưu (Enter)"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#BC8AF9] text-white transition hover:bg-[#a570f0] disabled:opacity-40"
+                        >
+                          {editBusy ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Check size={13} />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEditing}
+                          disabled={editBusy}
+                          title="Huỷ (Esc)"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#EAEAEA] bg-white text-[#666] transition hover:bg-[#fafafa] disabled:opacity-40"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                      {editErr && (
+                        <p className="text-[10.5px] text-[#dc2626]">{editErr}</p>
+                      )}
+                      <p className="text-[10px] text-[#888]">
+                        Đổi tên sẽ tự cập nhật trên mọi lớp đang dùng giá trị
+                        cũ.
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <div
+                    key={opt}
+                    className={cn(
+                      "group flex items-center gap-2.5 px-3 py-2 transition-colors",
+                      checked ? "bg-[#BC8AF9]/08" : "hover:bg-[#fafafa]",
+                    )}
+                  >
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggle(opt)}
+                        className="h-3.5 w-3.5 cursor-pointer rounded accent-[#BC8AF9]"
+                      />
+                      <span
+                        className={cn(
+                          "min-w-0 flex-1 truncate text-[12px]",
+                          checked ? "font-semibold text-[#1a1a2e]" : "text-[#323232]",
+                        )}
+                      >
+                        {opt}
+                      </span>
+                    </label>
+                    {checked && (
+                      <span className="text-[10px] font-bold text-[#BC8AF9]">✓</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditing(opt);
+                      }}
+                      disabled={editBusy}
+                      title={`Sửa tên "${opt}"`}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#AAAAAA] opacity-0 transition hover:bg-[#BC8AF9]/15 hover:text-[#7c3aed] focus:opacity-100 group-hover:opacity-100 disabled:opacity-30"
+                    >
+                      <Pencil size={11} />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Thêm option mới */}
+          <div className="border-t border-[#EAEAEA] bg-[#fafafa] p-2">
+            <div className="flex gap-1.5">
+              <input
+                value={adding}
+                onChange={(e) => {
+                  setAdding(e.target.value);
+                  if (addErr) setAddErr(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleAddOption();
+                  }
+                }}
+                placeholder="Thêm loại lớp mới…"
+                disabled={addBusy}
+                className="min-w-0 flex-1 rounded-md border border-[#EAEAEA] bg-white px-2 py-1.5 text-[11px] outline-none focus:border-[#BC8AF9] disabled:opacity-60"
+              />
+              <button
+                type="button"
+                onClick={() => void handleAddOption()}
+                disabled={addBusy || !adding.trim()}
+                className="inline-flex shrink-0 items-center gap-1 rounded-md bg-gradient-to-r from-[#BC8AF9] to-[#ED5C9D] px-2.5 py-1.5 text-[11px] font-bold text-white disabled:opacity-50"
+              >
+                {addBusy ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                Thêm
+              </button>
+            </div>
+            {addErr ? (
+              <p className="m-0 mt-1 text-[10px] font-semibold text-red-600">{addErr}</p>
+            ) : null}
+          </div>
+
+          <div className="flex items-center justify-between border-t border-[#EAEAEA] bg-white px-3 py-2">
+            <span className="text-[11px] text-[#AAAAAA]">
+              {selectedItems.length > 0 ? `${selectedItems.length} đã chọn` : "Chưa chọn"}
+            </span>
+            {selectedItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onChange("")}
+                className="text-[11px] text-red-400 transition-colors hover:text-red-600"
+              >
+                Xóa tất cả
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LopHocCard({
   item,
   monList,
@@ -708,7 +1108,7 @@ function LopHocCard({
           </button>
           <button
             type="button"
-            title={item.is_active ? "Tạm dừng khai giảng" : "Bật khai giảng"}
+            title={item.is_active ? "Đóng đăng ký" : "Mở đăng ký"}
             disabled={qBusy !== null || toggling}
             onClick={handleIsActiveFlip}
             className={cn(
@@ -719,7 +1119,7 @@ function LopHocCard({
             )}
           >
             {qBusy === "ia" ? <Loader2 className="h-3 w-3 shrink-0 animate-spin" strokeWidth={2.5} /> : null}
-            <span className="truncate">{item.is_active ? "Đang khai giảng" : "Tạm dừng"}</span>
+            <span className="truncate">{item.is_active ? "Mở đăng ký" : "Đóng đăng ký"}</span>
           </button>
         </div>
         <p className="m-0 line-clamp-2 pr-[7.5rem] text-sm font-bold text-[#1a1a2e]">
@@ -748,7 +1148,7 @@ function LopHocCard({
         <p className="mt-1 pr-[7.5rem] text-[11px] tabular-nums text-[#AAAAAA]">{subTitle}</p>
         {!item.is_active ? (
           <p className="mt-1.5 rounded-lg border border-amber-200/90 bg-amber-50 px-2 py-1.5 pr-[7.5rem] text-[10px] font-semibold leading-snug text-amber-950">
-            Lớp hiện tạm dừng hoạt động
+            Lớp đã đóng đăng ký HV mới
           </p>
         ) : null}
       </div>
@@ -919,14 +1319,14 @@ function LopHocListRow({
             <option value="0">Tạm dừng</option>
           </select>
           <select
-            aria-label="Khai giảng"
+            aria-label="Đăng ký HV mới"
             className="h-6 max-w-[calc(50%-2px)] min-w-0 flex-1 rounded-md border border-[#EAEAEA] bg-white py-0 pl-1.5 pr-1 text-[9px] font-semibold text-[#444] shadow-sm disabled:opacity-50"
             value={item.is_active ? "1" : "0"}
             disabled={toggling || qBusy !== null}
             onChange={(e) => void applyIsActiveRow(e.target.value === "1")}
           >
-            <option value="1">Đang khai giảng</option>
-            <option value="0">Tạm dừng</option>
+            <option value="1">Mở đăng ký</option>
+            <option value="0">Đóng đăng ký</option>
           </select>
         </div>
         {item.class_full_name && item.class_name ? (
@@ -992,9 +1392,9 @@ function LopHocListRow({
       {!item.is_active ? (
         <span
           className="hidden max-w-[140px] shrink-0 truncate rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-semibold text-amber-900 sm:inline-block"
-          title="Lớp hiện tạm dừng hoạt động"
+          title="Lớp đã đóng đăng ký HV mới"
         >
-          Tạm dừng
+          Đóng đăng ký
         </span>
       ) : null}
 
@@ -1018,9 +1418,9 @@ type DetailForm = {
   group_chat_messenger: string;
   special: boolean;
   tinh_trang: boolean;
-  /** Đang khai giảng / nhận HV mới — `ql_lop_hoc.is_active`. */
+  /** Lớp có đang mở đăng ký / nhận HV mới hay không — `ql_lop_hoc.is_active`. */
   is_active: boolean;
-  /** Form string — rỗng hoặc một trong `LEVEL_HINH_HOA_VALUES`. */
+  /** Form string CSV — rỗng hoặc danh sách loại Hình họa (vd `"Chuyên tượng, Chuyên chân dung"`). */
   level_hinh_hoa: string;
 };
 
@@ -1050,6 +1450,8 @@ function LopDetailPanel({
   chiNhanhList,
   hvStats,
   onClose,
+  levelHinhHoaOptions,
+  onLevelHinhHoaOptionsChange,
 }: {
   item: AdminLopRow;
   monList: MonOpt[];
@@ -1058,6 +1460,8 @@ function LopDetailPanel({
   chiNhanhList: ChiOpt[];
   hvStats: HvStats | null;
   onClose: () => void;
+  levelHinhHoaOptions: string[];
+  onLevelHinhHoaOptionsChange: (next: string[]) => void;
 }) {
   const { canDelete } = useAdminDashboardAbilities();
   const router = useRouter();
@@ -1077,16 +1481,7 @@ function LopDetailPanel({
     setConfirmDel(false);
   }, [item]);
 
-  useEffect(() => {
-    const ten = monList.find((m) => String(m.id) === form.mon_hoc)?.ten_mon_hoc ?? null;
-    if (!isTenMonHinhHoa(ten)) {
-      setForm((f) => (f.level_hinh_hoa ? { ...f, level_hinh_hoa: "" } : f));
-    }
-  }, [form.mon_hoc, monList]);
-
   const tenMon = monList.find((m) => m.id === item.mon_hoc)?.ten_mon_hoc ?? null;
-  const tenMonForm = monList.find((m) => String(m.id) === form.mon_hoc)?.ten_mon_hoc ?? null;
-  const showLevelHinhHoaField = isTenMonHinhHoa(tenMonForm);
   const gvList = item.teacher
     .map((id) => nhanSuList.find((n) => n.id === id))
     .filter(Boolean) as NsOpt[];
@@ -1112,7 +1507,7 @@ function LopDetailPanel({
     fd.set("special", form.special ? "1" : "");
     fd.set("tinh_trang", form.tinh_trang ? "1" : "");
     fd.set("is_active", form.is_active ? "1" : "0");
-    fd.set("level_hinh_hoa", showLevelHinhHoaField ? form.level_hinh_hoa : "");
+    fd.set("level_hinh_hoa", form.level_hinh_hoa);
     startTransition(async () => {
       const r = await updateLopHoc(null, fd);
       if (r.ok) {
@@ -1241,9 +1636,9 @@ function LopDetailPanel({
             {!item.is_active ? (
               <span
                 className="max-w-[min(100%,220px)] truncate rounded-full border border-amber-200 bg-amber-50 px-2 py-px text-[10px] font-semibold text-amber-900"
-                title="Lớp hiện tạm dừng hoạt động"
+                title="Lớp đã đóng đăng ký HV mới"
               >
-                Lớp hiện tạm dừng hoạt động
+                Đã đóng đăng ký
               </span>
             ) : null}
           </div>
@@ -1275,7 +1670,7 @@ function LopDetailPanel({
             <div className="relative flex items-center">
               <select
                 id={`lop-panel-ia-${item.id}`}
-                aria-label="Khai giảng"
+                aria-label="Đăng ký HV mới"
                 className={cn(
                   "h-[30px] min-w-[7.5rem] appearance-none rounded-lg border py-0 pl-2 pr-7 text-[11px] font-semibold shadow-sm disabled:opacity-50",
                   item.is_active
@@ -1286,8 +1681,8 @@ function LopDetailPanel({
                 disabled={quickBusy !== null}
                 onChange={(e) => void applyIsActivePanel(e.target.value === "1")}
               >
-                <option value="1">Đang khai giảng</option>
-                <option value="0">Tạm dừng</option>
+                <option value="1">Mở đăng ký</option>
+                <option value="0">Đóng đăng ký</option>
               </select>
               <ChevronDown
                 className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#888]"
@@ -1333,7 +1728,7 @@ function LopDetailPanel({
         ) : null}
         {!item.is_active ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
-            Lớp hiện tạm dừng hoạt động
+            Lớp đã đóng đăng ký HV mới
           </div>
         ) : null}
 
@@ -1375,23 +1770,15 @@ function LopDetailPanel({
                   ))}
                 </select>
               </div>
-              {showLevelHinhHoaField ? (
-                <div>
-                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Loại Hình họa</div>
-                  <select
-                    className={inpClass()}
-                    value={form.level_hinh_hoa}
-                    onChange={(e) => setK("level_hinh_hoa", e.target.value)}
-                  >
-                    <option value="">— Chọn —</option>
-                    {LEVEL_HINH_HOA_VALUES.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
+              <div>
+                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Loại lớp</div>
+                <LevelHinhHoaMultiPicker
+                  options={levelHinhHoaOptions}
+                  value={form.level_hinh_hoa}
+                  onChange={(csv) => setK("level_hinh_hoa", csv)}
+                  onOptionsChange={onLevelHinhHoaOptionsChange}
+                />
+              </div>
               <div>
                 <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Chi nhánh</div>
                 <select className={inpClass()} value={form.chi_nhanh_id} onChange={(e) => setK("chi_nhanh_id", e.target.value)}>
@@ -1492,7 +1879,7 @@ function LopDetailPanel({
                       : "border-amber-300/70 bg-amber-50 text-amber-900",
                   )}
                 >
-                  <span>{form.is_active ? "Đang khai giảng" : "Tạm dừng khai giảng"}</span>
+                  <span>{form.is_active ? "Mở đăng ký" : "Đóng đăng ký"}</span>
                   <span className={cn(
                     "ml-2 h-4 w-4 shrink-0 rounded-full border-2 transition-colors",
                     form.is_active ? "border-sky-500 bg-sky-500" : "border-amber-500 bg-amber-500",
@@ -1516,10 +1903,10 @@ function LopDetailPanel({
                   {tenMon ?? "—"}
                 </dd>
               </div>
-              {isTenMonHinhHoa(tenMon) ? (
+              {item.level_hinh_hoa ? (
                 <div className="flex justify-between gap-2 border-b border-[#f0f0f0] py-1">
-                  <dt className="text-[10px] font-bold uppercase text-[#AAA]">Loại Hình họa</dt>
-                  <dd className="m-0 text-right font-semibold text-gray-800">{item.level_hinh_hoa ?? "—"}</dd>
+                  <dt className="text-[10px] font-bold uppercase text-[#AAA]">Loại lớp</dt>
+                  <dd className="m-0 text-right font-semibold text-gray-800">{item.level_hinh_hoa}</dd>
                 </div>
               ) : null}
               <div className="flex items-start justify-between gap-2 border-b border-[#f0f0f0] py-1">
@@ -1605,15 +1992,15 @@ function LopDetailPanel({
                 </dd>
               </div>
               <div className="flex justify-between gap-2 border-t border-[#f0f0f0] py-1">
-                <dt className="text-[10px] font-bold uppercase text-[#AAA]">Khai giảng</dt>
+                <dt className="text-[10px] font-bold uppercase text-[#AAA]">Đăng ký HV mới</dt>
                 <dd className="m-0">
                   {item.is_active ? (
                     <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-800">
-                      Đang mở lớp
+                      Đang mở đăng ký
                     </span>
                   ) : (
                     <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
-                      Lớp hiện tạm dừng hoạt động
+                      Đã đóng đăng ký
                     </span>
                   )}
                 </dd>
@@ -1699,6 +2086,8 @@ function CreateLopModal({
   pickerNhanSuList,
   chiNhanhList,
   defaultChiNhanhId,
+  levelHinhHoaOptions,
+  onLevelHinhHoaOptionsChange,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1706,6 +2095,8 @@ function CreateLopModal({
   pickerNhanSuList: NsOpt[];
   chiNhanhList: ChiOpt[];
   defaultChiNhanhId: number | null;
+  levelHinhHoaOptions: string[];
+  onLevelHinhHoaOptionsChange: (next: string[]) => void;
 }) {
   const router = useRouter();
   const [state, action, pending] = useActionState(createLopHoc, null as LopHocFormState | null);
@@ -1715,11 +2106,6 @@ function CreateLopModal({
   const [createIsActive, setCreateIsActive] = useState(true);
   const [createMonHoc, setCreateMonHoc] = useState("");
   const [createLevelHinhHoa, setCreateLevelHinhHoa] = useState("");
-
-  const createShowLevelHinhHoa = useMemo(
-    () => isTenMonHinhHoa(monList.find((m) => String(m.id) === createMonHoc)?.ten_mon_hoc ?? null),
-    [createMonHoc, monList],
-  );
 
   useEffect(() => {
     if (!open) return;
@@ -1777,10 +2163,7 @@ function CreateLopModal({
                 name="mon_hoc"
                 className={inpClass()}
                 value={createMonHoc}
-                onChange={(e) => {
-                  setCreateMonHoc(e.target.value);
-                  setCreateLevelHinhHoa("");
-                }}
+                onChange={(e) => setCreateMonHoc(e.target.value)}
               >
                 <option value="">— Chọn môn học —</option>
                 {monList.map((m) => (
@@ -1790,24 +2173,16 @@ function CreateLopModal({
                 ))}
               </select>
             </div>
-            {createShowLevelHinhHoa ? (
-              <div>
-                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Loại Hình họa</div>
-                <select
-                  name="level_hinh_hoa"
-                  className={inpClass()}
-                  value={createLevelHinhHoa}
-                  onChange={(e) => setCreateLevelHinhHoa(e.target.value)}
-                >
-                  <option value="">— Chọn —</option>
-                  {LEVEL_HINH_HOA_VALUES.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
+            <div>
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Loại lớp</div>
+              <LevelHinhHoaMultiPicker
+                options={levelHinhHoaOptions}
+                value={createLevelHinhHoa}
+                onChange={setCreateLevelHinhHoa}
+                onOptionsChange={onLevelHinhHoaOptionsChange}
+              />
+              <input type="hidden" name="level_hinh_hoa" value={createLevelHinhHoa} />
+            </div>
             <div>
               <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#AAA]">Chi nhánh</div>
               <select name="chi_nhanh_id" className={inpClass()} defaultValue={defaultChiNhanhId != null ? String(defaultChiNhanhId) : ""}>
@@ -1902,7 +2277,7 @@ function CreateLopModal({
                     : "border-amber-300/70 bg-amber-50 text-amber-900",
                 )}
               >
-                <span>{createIsActive ? "Đang khai giảng" : "Tạm dừng khai giảng"}</span>
+                <span>{createIsActive ? "Mở đăng ký" : "Đóng đăng ký"}</span>
                 <span className={cn(
                   "ml-2 h-4 w-4 shrink-0 rounded-full border-2 transition-colors",
                   createIsActive ? "border-sky-500 bg-sky-500" : "border-amber-500 bg-amber-500",
@@ -1943,6 +2318,7 @@ export default function LopHocListView({
   chiNhanhList,
   statsByLopId,
   defaultChiNhanhId,
+  levelHinhHoaOptions,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(960);
@@ -1950,8 +2326,23 @@ export default function LopHocListView({
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "row">("grid");
+  const [lhhOptions, setLhhOptions] = useState<string[]>(levelHinhHoaOptions);
   const router = useRouter();
   const qDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setLhhOptions((prev) => {
+      const seen = new Set(prev);
+      const merged = [...prev];
+      for (const opt of levelHinhHoaOptions) {
+        if (!seen.has(opt)) {
+          seen.add(opt);
+          merged.push(opt);
+        }
+      }
+      return merged.length === prev.length ? prev : merged;
+    });
+  }, [levelHinhHoaOptions]);
 
   useEffect(() => {
     setQDraft(listState.filters.q);
@@ -2304,6 +2695,8 @@ export default function LopHocListView({
                 chiNhanhList={chiNhanhList}
                 hvStats={statsByLopId[String(selected.id)] ?? null}
                 onClose={() => setSelectedId(null)}
+                levelHinhHoaOptions={lhhOptions}
+                onLevelHinhHoaOptionsChange={setLhhOptions}
               />
             </motion.div>
           </>
@@ -2319,6 +2712,8 @@ export default function LopHocListView({
             pickerNhanSuList={pickerNhanSuList}
             chiNhanhList={chiNhanhList}
             defaultChiNhanhId={defaultChiNhanhId}
+            levelHinhHoaOptions={lhhOptions}
+            onLevelHinhHoaOptionsChange={setLhhOptions}
           />
         ) : null}
       </AnimatePresence>

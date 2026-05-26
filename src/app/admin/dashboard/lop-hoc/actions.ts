@@ -6,8 +6,25 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
-import { parseLevelHinhHoaFromForm } from "@/lib/ql-lop-hoc/level-hinh-hoa";
+import { joinLevels, parseLevelHinhHoaFromForm, splitLevels } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+
+/**
+ * Phát hiện lỗi PostgREST khi bảng chưa tồn tại / chưa nằm trong schema cache.
+ * Dùng chung cho mọi action liên quan bảng `ql_loai_hinh_hoa_options`.
+ */
+function isMissingLoaiHinhHoaOptionsTable(rawCode: unknown, rawMsg: unknown): boolean {
+  const msg = `${rawCode ?? ""} ${rawMsg ?? ""}`.toLowerCase();
+  return (
+    msg.includes("42p01") ||
+    msg.includes("does not exist") ||
+    msg.includes("could not find the table") ||
+    msg.includes("schema cache")
+  );
+}
+
+const MISSING_LOAI_HINH_HOA_OPTIONS_ERROR =
+  "Bảng ql_loai_hinh_hoa_options chưa tồn tại — chạy file sql/ql_loai_hinh_hoa_options.sql trên Supabase SQL Editor trước khi thêm/sửa loại mới.";
 
 export type LopHocFormState =
   | { ok: true; message: string }
@@ -93,7 +110,7 @@ function readLopPayload(fd: FormData): { ok: true; data: LopPayload } | { ok: fa
   }
 
   const level_hinh_hoa = parseLevelHinhHoaFromForm(
-    String(fd.get("level_hinh_hoa") ?? "")
+    fd.getAll("level_hinh_hoa").map((v) => String(v)),
   );
 
   return {
@@ -297,6 +314,197 @@ export async function toggleLopIsActive(id: number, value: boolean): Promise<Lop
 
   revalidateLopHocPublic();
   return { ok: true, message: value ? "Đã bật khai giảng." : "Đã tạm dừng khai giảng." };
+}
+
+/**
+ * Thêm một giá trị "Loại Hình họa" mới vào bảng `ql_loai_hinh_hoa_options`.
+ * Idempotent — nếu đã tồn tại thì trả về luôn (không duplicate).
+ */
+export async function addLoaiHinhHoaOption(
+  rawName: string,
+): Promise<{ ok: true; ten: string } | { ok: false; error: string }> {
+  const session = await getAdminSessionOrNull();
+  if (!session) {
+    return { ok: false, error: "Phiên đăng nhập không hợp lệ. Đăng nhập lại." };
+  }
+
+  const ten = String(rawName ?? "").trim();
+  if (!ten) {
+    return { ok: false, error: "Tên loại không được để trống." };
+  }
+  if (ten.length > 80) {
+    return { ok: false, error: "Tên loại quá dài (tối đa 80 ký tự)." };
+  }
+  if (ten.includes(",")) {
+    return {
+      ok: false,
+      error: 'Tên loại không được chứa dấu phẩy "," (đang dùng làm dấu phân cách CSV).',
+    };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) {
+    return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
+  }
+
+  const { data: existing, error: selErr } = await supabase
+    .from("ql_loai_hinh_hoa_options")
+    .select("ten")
+    .ilike("ten", ten)
+    .limit(1);
+
+  if (selErr) {
+    if (isMissingLoaiHinhHoaOptionsTable(selErr.code, selErr.message)) {
+      return { ok: false, error: MISSING_LOAI_HINH_HOA_OPTIONS_ERROR };
+    }
+    return { ok: false, error: selErr.message };
+  }
+
+  if (existing && existing.length > 0) {
+    const found = String((existing[0] as { ten?: unknown }).ten ?? "").trim() || ten;
+    revalidateLopHocPublic();
+    return { ok: true, ten: found };
+  }
+
+  const { error: insErr } = await supabase
+    .from("ql_loai_hinh_hoa_options")
+    .insert({ ten });
+
+  if (insErr) {
+    if (isMissingLoaiHinhHoaOptionsTable(insErr.code, insErr.message)) {
+      return { ok: false, error: MISSING_LOAI_HINH_HOA_OPTIONS_ERROR };
+    }
+    const msg = `${insErr.code ?? ""} ${insErr.message ?? ""}`.toLowerCase();
+    if (msg.includes("duplicate") || msg.includes("unique")) {
+      revalidateLopHocPublic();
+      return { ok: true, ten };
+    }
+    return { ok: false, error: insErr.message || "Không thêm được loại lớp." };
+  }
+
+  revalidateLopHocPublic();
+  return { ok: true, ten };
+}
+
+/**
+ * Đổi tên một option "Loại lớp" trong bảng `ql_loai_hinh_hoa_options` và đồng bộ
+ * giá trị CSV trên `ql_lop_hoc.level_hinh_hoa` của tất cả lớp đang dùng tên cũ.
+ *
+ * Quy tắc:
+ *   - `oldName` / `newName` đều trim. Nếu giống hệt nhau → no-op, trả ok ngay.
+ *   - `newName` tuân thủ ràng buộc: không rỗng, ≤ 80 ký tự, không chứa dấu phẩy.
+ *   - Chặn trùng với option khác (case-insensitive, trừ chính nó).
+ *   - Sau khi update bảng options, scan các lớp có CSV `level_hinh_hoa` chứa
+ *     `oldName` (so khớp `ilike '%oldName%'`), tách CSV bằng `splitLevels`, thay
+ *     đúng giá trị, rejoin bằng `joinLevels` rồi update.
+ *   - Idempotent về phía DB (đã update rồi chạy lại không thay đổi gì).
+ */
+export async function renameLoaiHinhHoaOption(payload: {
+  oldName: string;
+  newName: string;
+}): Promise<{ ok: true; oldName: string; newName: string } | { ok: false; error: string }> {
+  const session = await getAdminSessionOrNull();
+  if (!session) {
+    return { ok: false, error: "Phiên đăng nhập không hợp lệ. Đăng nhập lại." };
+  }
+
+  const oldName = String(payload.oldName ?? "").trim();
+  const newName = String(payload.newName ?? "").trim();
+  if (!oldName) return { ok: false, error: "Thiếu tên cũ cần đổi." };
+  if (!newName) return { ok: false, error: "Tên mới không được để trống." };
+  if (newName.length > 80) {
+    return { ok: false, error: "Tên mới quá dài (tối đa 80 ký tự)." };
+  }
+  if (newName.includes(",")) {
+    return {
+      ok: false,
+      error: 'Tên không được chứa dấu phẩy "," (đang dùng làm dấu phân cách CSV).',
+    };
+  }
+
+  if (oldName === newName) {
+    return { ok: true, oldName, newName };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) {
+    return { ok: false, error: "Thiếu cấu hình Supabase trên server." };
+  }
+
+  const { data: dup, error: dupErr } = await supabase
+    .from("ql_loai_hinh_hoa_options")
+    .select("ten")
+    .ilike("ten", newName)
+    .neq("ten", oldName)
+    .limit(1);
+  if (dupErr) {
+    if (isMissingLoaiHinhHoaOptionsTable(dupErr.code, dupErr.message)) {
+      return { ok: false, error: MISSING_LOAI_HINH_HOA_OPTIONS_ERROR };
+    }
+    return { ok: false, error: dupErr.message };
+  }
+  if (dup && dup.length > 0) {
+    return { ok: false, error: `Loại "${newName}" đã tồn tại — chọn tên khác.` };
+  }
+
+  const { error: updErr } = await supabase
+    .from("ql_loai_hinh_hoa_options")
+    .update({ ten: newName })
+    .eq("ten", oldName);
+  if (updErr) {
+    if (isMissingLoaiHinhHoaOptionsTable(updErr.code, updErr.message)) {
+      return { ok: false, error: MISSING_LOAI_HINH_HOA_OPTIONS_ERROR };
+    }
+    return { ok: false, error: updErr.message || "Không cập nhật được tên loại." };
+  }
+
+  const { data: affected, error: scanErr } = await supabase
+    .from("ql_lop_hoc")
+    .select("id, level_hinh_hoa")
+    .ilike("level_hinh_hoa", `%${oldName}%`);
+  if (scanErr) {
+    revalidateLopHocPublic();
+    return {
+      ok: false,
+      error: `Đã đổi tên trong bảng options, nhưng không scan được lớp dùng tên cũ: ${scanErr.message}. Hãy thử lại để đồng bộ.`,
+    };
+  }
+
+  let syncFailCount = 0;
+  let syncedCount = 0;
+  for (const raw of (affected ?? []) as { id?: unknown; level_hinh_hoa?: unknown }[]) {
+    const id = Number(raw.id);
+    if (!Number.isFinite(id) || id <= 0) continue;
+    const csv = String(raw.level_hinh_hoa ?? "");
+    const items = splitLevels(csv);
+    let changed = false;
+    const next = items.map((it) => {
+      if (it === oldName) {
+        changed = true;
+        return newName;
+      }
+      return it;
+    });
+    if (!changed) continue;
+    const nextCsv = joinLevels(next);
+    const { error: rowErr } = await supabase
+      .from("ql_lop_hoc")
+      .update({ level_hinh_hoa: nextCsv || null })
+      .eq("id", id);
+    if (rowErr) syncFailCount += 1;
+    else syncedCount += 1;
+  }
+
+  revalidateLopHocPublic();
+
+  if (syncFailCount > 0) {
+    return {
+      ok: false,
+      error: `Đã đổi tên options + đồng bộ ${syncedCount} lớp, nhưng ${syncFailCount} lớp lỗi. Mở Supabase Logs để kiểm tra.`,
+    };
+  }
+
+  return { ok: true, oldName, newName };
 }
 
 export async function deleteLopHoc(id: number): Promise<LopHocFormState> {

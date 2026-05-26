@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { countDangHocByLopIds } from "@/lib/data/class-seat-dang-hoc";
-import { isTenMonHinhHoa } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 
 export type EnrichedPaymentClass = {
@@ -13,7 +12,7 @@ export type EnrichedPaymentClass = {
   avatar: string | null;
   /** `ql_lop_hoc.special` — nhận «cấp tốc» giống gói học phí / `HocPhiBlock`. */
   special: string | null;
-  /** `ql_lop_hoc.level_hinh_hoa` — chỉ khi tên môn là Hình họa. */
+  /** `ql_lop_hoc.level_hinh_hoa` — CSV "Loại lớp" (hiển thị cho mọi môn). */
   levelHinhHoa: string | null;
   filled: number;
   total: number;
@@ -72,7 +71,7 @@ export async function fetchEnrichedPaymentClasses(
 
   const [{ data: mons }, { data: teachers }, filledByLop] = await Promise.all([
     monIds.length
-      ? supabase.from("ql_mon_hoc").select("id, si_so, ten_mon_hoc").in("id", monIds)
+      ? supabase.from("ql_mon_hoc").select("id, si_so").in("id", monIds)
       : Promise.resolve({ data: [] as Record<string, unknown>[] }),
     teacherIds.length
       ? supabase.from("hr_nhan_su").select("id, full_name").in("id", teacherIds)
@@ -81,14 +80,11 @@ export async function fetchEnrichedPaymentClasses(
   ]);
 
   const monSeat = new Map<number, number>();
-  const monTenById = new Map<number, string | null>();
   for (const m of mons ?? []) {
     const id = Number((m as Record<string, unknown>).id);
     if (!Number.isFinite(id)) continue;
     const si = Number((m as Record<string, unknown>).si_so ?? 0);
     monSeat.set(id, Number.isFinite(si) && si > 0 ? si : 20);
-    const tn = (m as Record<string, unknown>).ten_mon_hoc;
-    monTenById.set(id, tn != null ? String(tn).trim() || null : null);
   }
 
   const teacherMap = new Map<number, string>();
@@ -122,10 +118,8 @@ export async function fetchEnrichedPaymentClasses(
       `Lớp ${id}`;
     const lichHoc = String(r.lich_hoc ?? "").trim() || "Liên hệ tư vấn lịch học";
 
-    const tenMon = monTenById.get(monHocId) ?? null;
     const levelRaw = String(r.level_hinh_hoa ?? "").trim();
-    const levelHinhHoa =
-      isTenMonHinhHoa(tenMon) && levelRaw.length > 0 ? levelRaw : null;
+    const levelHinhHoa = levelRaw.length > 0 ? levelRaw : null;
     const isActive = r.is_active !== false;
 
     return {

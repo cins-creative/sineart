@@ -2,7 +2,7 @@ import { cache } from "react";
 
 import { cfImageForThumbnail } from "@/lib/cfImageUrl";
 import { countDangHocByLopIds } from "@/lib/data/class-seat-dang-hoc";
-import { isTenMonHinhHoa } from "@/lib/ql-lop-hoc/level-hinh-hoa";
+import { splitLevels } from "@/lib/ql-lop-hoc/level-hinh-hoa";
 import { createStaticClient } from "@/lib/supabase/static";
 import type { NavOpenClass } from "@/constants/navigation";
 import type { KhoaHocCourseCard } from "@/types/khoa-hoc";
@@ -80,18 +80,16 @@ async function fetchNavOpenClassesByMonIdUncached(
     .filter((id) => Number.isFinite(id) && id > 0);
 
   const [{ data: monRows }, filledByLop] = await Promise.all([
-    supabase.from("ql_mon_hoc").select("id, si_so, ten_mon_hoc").in("id", monIds),
+    supabase.from("ql_mon_hoc").select("id, si_so").in("id", monIds),
     countDangHocByLopIds(supabase, lopIds),
   ]);
 
   const seatByMon = new Map<number, number>();
-  const tenMonById = new Map<number, string>();
-  for (const m of (monRows ?? []) as { id?: unknown; si_so?: unknown; ten_mon_hoc?: unknown }[]) {
+  for (const m of (monRows ?? []) as { id?: unknown; si_so?: unknown }[]) {
     const id = Number(m.id);
     if (!Number.isFinite(id)) continue;
     const si = Number(m.si_so ?? 0);
     seatByMon.set(id, Number.isFinite(si) && si > 0 ? si : 20);
-    tenMonById.set(id, String(m.ten_mon_hoc ?? "").trim());
   }
 
   for (const monId of monIds) {
@@ -114,16 +112,12 @@ async function fetchNavOpenClassesByMonIdUncached(
     const baseHref = slug ? `/khoa-hoc/${slug}` : "/khoa-hoc";
     const scheduleHref = `${baseHref}#schedule`;
 
-    let label =
+    const label =
       String(r.class_full_name ?? "").trim() ||
       String(r.class_name ?? "").trim() ||
       "Lớp đang mở";
 
-    const showLevel = isTenMonHinhHoa(tenMonById.get(monId) ?? null);
-    const lv = String(r.level_hinh_hoa ?? "").trim();
-    if (showLevel && lv) {
-      label = `${label} · ${lv}`;
-    }
+    const loaiLopTags = splitLevels(r.level_hinh_hoa);
 
     const item: NavOpenClass = {
       lopId: Number(r.id),
@@ -131,6 +125,7 @@ async function fetchNavOpenClassesByMonIdUncached(
       href: `${scheduleHref}`,
       thumbnailUrl: resolveNavLopThumbnail(r.avatar, monThumbById.get(monId)),
       seatHint,
+      loaiLopTags: loaiLopTags.length > 0 ? loaiLopTags : undefined,
     };
 
     const list = out.get(monId);

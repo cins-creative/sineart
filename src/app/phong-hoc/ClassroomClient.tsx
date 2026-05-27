@@ -80,6 +80,8 @@ import {
 } from "@/lib/phong-hoc/classroom-gallery";
 import ClassroomSignInOverlay from "@/app/_components/ClassroomSignInOverlay";
 import PhongHocLiveKitCanvas from "@/components/phong-hoc/PhongHocLiveKitCanvas";
+import PhongHocCanvasMeetOverlay from "@/components/phong-hoc/PhongHocCanvasMeetOverlay";
+import { PHONG_HOC_LIVEKIT_DISABLED } from "@/lib/phong-hoc/livekit-feature-flag";
 import StudentAvatarMenu from "@/components/StudentAvatarMenu";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import Link from "next/link";
@@ -2920,15 +2922,45 @@ export default function ClassroomClient({
 
       <div className="main">
         <LayoutGroup id="phc-main-layout">
-          <motion.div className="canvas-wrap" transition={PHC_SIDEBAR_TWEEN}>
-            <PhongHocLiveKitCanvas
-              roomName={liveKitRoomName ?? "preview"}
-              participantName={liveKitParticipantName}
-              lopHocId={Number.isFinite(lopHocIdForDb) ? lopHocIdForDb : 0}
-              isHost={liveKitIsHost}
-              canJoin={liveKitCanJoin}
-              localAvatarUrl={liveKitAvatarUrl}
-            />
+          <motion.div
+            className={cx("canvas-wrap", PHONG_HOC_LIVEKIT_DISABLED && "canvas-wrap--maint")}
+            transition={PHC_SIDEBAR_TWEEN}
+          >
+            {!PHONG_HOC_LIVEKIT_DISABLED ? (
+              <PhongHocLiveKitCanvas
+                roomName={liveKitRoomName ?? "preview"}
+                participantName={liveKitParticipantName}
+                lopHocId={Number.isFinite(lopHocIdForDb) ? lopHocIdForDb : 0}
+                isHost={liveKitIsHost}
+                canJoin={liveKitCanJoin}
+                localAvatarUrl={liveKitAvatarUrl}
+              />
+            ) : (
+              <div className="canvas-ph canvas-ph--livekit canvas-ph--maint-bg" aria-hidden />
+            )}
+            {PHONG_HOC_LIVEKIT_DISABLED ? (
+              <PhongHocCanvasMeetOverlay
+                isTeacher={isTeacher}
+                gmeetFormOpen={gmeetFormOpen}
+                gmeetInput={gmeetInput}
+                gmeetSaving={gmeetSaving}
+                gmeetJustSaved={gmeetJustSaved}
+                gmeetRowReady={gmeetRowReady}
+                googleMeetUrl={googleMeetUrl}
+                studentMeetUrl={studentSidebarMeetUrl}
+                onGmeetInputChange={setGmeetInput}
+                onOpenGmeetForm={() => {
+                  setGmeetInput(googleMeetUrl?.trim() ?? "");
+                  setGmeetFormOpen(true);
+                }}
+                onCloseGmeetForm={() => {
+                  setGmeetFormOpen(false);
+                  setGmeetInput("");
+                }}
+                onSaveGmeet={() => void saveGoogleMeetUrl()}
+                onClearGmeet={() => void clearGoogleMeetUrl()}
+              />
+            ) : null}
           </motion.div>
 
           <motion.aside
@@ -3823,94 +3855,6 @@ export default function ClassroomClient({
             </div>
           </div>
 
-          {lopDevice === "Laptop" ? null : (
-            <div className="meet-area">
-              {isTeacher ? (
-                <>
-                  {gmeetFormOpen ? (
-                    <>
-                      <input
-                        className="meet-input"
-                        placeholder="Paste link Meet vào đây..."
-                        value={gmeetInput}
-                        onChange={(e) => setGmeetInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") void saveGoogleMeetUrl();
-                        }}
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        className="phc-btn-green phc-btn-block"
-                        disabled={gmeetSaving}
-                        onClick={() => void saveGoogleMeetUrl()}
-                      >
-                        {gmeetSaving ? "Đang lưu…" : "Lưu link"}
-                      </button>
-                      <button
-                        type="button"
-                        className="dhp-btn-ghost phc-btn-block"
-                        disabled={gmeetSaving}
-                        onClick={() => {
-                          setGmeetFormOpen(false);
-                          setGmeetInput("");
-                        }}
-                      >
-                        Huỷ
-                      </button>
-                      {googleMeetUrl?.trim() ? (
-                        <button
-                          type="button"
-                          className="meet-clear-link"
-                          disabled={gmeetSaving}
-                          onClick={() => void clearGoogleMeetUrl()}
-                        >
-                          {gmeetSaving ? "Đang chuyển…" : "Học trong phòng học Sine Art"}
-                        </button>
-                      ) : null}
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="dhp-btn phc-btn-block"
-                        onClick={() => {
-                          window.open("https://meet.new", "_blank", "noopener,noreferrer");
-                          setGmeetFormOpen(true);
-                        }}
-                      >
-                        {gmeetJustSaved ? "✓ Đã lưu link!" : "📹 Tạo Google Meet"}
-                      </button>
-                      {googleMeetUrl?.trim() ? (
-                        <button
-                          type="button"
-                          className="meet-clear-link"
-                          disabled={gmeetSaving}
-                          onClick={() => void clearGoogleMeetUrl()}
-                        >
-                          {gmeetSaving ? "Đang chuyển…" : "Học trong phòng học Sine Art"}
-                        </button>
-                      ) : null}
-                    </>
-                  )}
-                </>
-              ) : studentSidebarMeetUrl ? (
-                <button
-                  type="button"
-                  className="dhp-btn phc-btn-block"
-                  onClick={() =>
-                    window.open(studentSidebarMeetUrl, "_blank", "noopener,noreferrer")
-                  }
-                >
-                  Tham gia lớp học
-                </button>
-              ) : (
-                <button type="button" className="meet-wait" disabled>
-                  {gmeetRowReady ? "Chờ giáo viên tạo Meet..." : "Đang tải..."}
-                </button>
-              )}
-            </div>
-          )}
           </motion.aside>
         </LayoutGroup>
       </div>

@@ -124,10 +124,13 @@ function subtotalChi(chi: AdminChiTietDisplay[]): number {
 }
 
 function totalDon(don: AdminHpDonRow, chi: AdminChiTietDisplay[]): number {
-  return Math.max(
+  const computed = Math.max(
     0,
     Math.round(subtotalChi(chi) - parseMoney(don.giam_gia) - parseMoney(don.giam_gia_vnd)),
   );
+  if (computed > 0) return computed;
+  const paidAmount = parseMoney(don.paid_amount);
+  return paidAmount > 0 ? Math.round(paidAmount) : 0;
 }
 
 function daysRemaining(ngayCuoi: string | null): number | null {

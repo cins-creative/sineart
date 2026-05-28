@@ -17,6 +17,8 @@ export type AdminHpDonRow = {
   giam_gia: number | string | null;
   /** Trừ thêm VND (sau KM %/combo) — tư vấn viên. */
   giam_gia_vnd: number | string | null;
+  /** Số tiền SePay đã ghi nhận, dùng làm fallback nếu đơn bị thiếu dòng chi tiết. */
+  paid_amount: number | null;
 };
 
 export type AdminChiTietDisplay = {
@@ -127,12 +129,12 @@ export async function fetchAdminHoaDonBundle(
     return { ok: false, error: donErr.message || "Không đọc được đơn thu học phí." };
   }
 
-  const dons = (donRows ?? []) as unknown as AdminHpDonRow[];
+  const donsRaw = (donRows ?? []) as unknown as Omit<AdminHpDonRow, "paid_amount">[];
   const totalCount = typeof donCount === "number" ? Math.min(donCount, MAX_DONS) : null;
-  const loadedCount = dons.length;
+  const loadedCount = donsRaw.length;
   const hasMore = totalCount != null ? offset + loadedCount < totalCount : loadedCount === pageSize;
 
-  if (dons.length === 0) {
+  if (donsRaw.length === 0) {
     return {
       ok: true,
       data: {
@@ -148,6 +150,42 @@ export async function fetchAdminHoaDonBundle(
       },
     };
   }
+
+  const paymentCodeToDonId = new Map<string, number>();
+  for (const d of donsRaw) {
+    const id = nId(d.id);
+    if (!id) continue;
+    for (const raw of [d.ma_don_so, d.ma_don]) {
+      const code = String(raw ?? "").trim().toUpperCase();
+      if (code) paymentCodeToDonId.set(code, id);
+    }
+  }
+
+  const paidAmountByDonId = new Map<number, number>();
+  const paymentCodes = [...paymentCodeToDonId.keys()];
+  if (paymentCodes.length > 0) {
+    const { data: txRows, error: txErr } = await supabase
+      .from("hp_giao_dich_thanh_toan")
+      .select("ma_don_trich_xuat, transfer_amount")
+      .in("ma_don_trich_xuat", paymentCodes);
+    if (txErr) {
+      return { ok: false, error: txErr.message || "Không đọc được giao dịch thanh toán." };
+    }
+    for (const tx of txRows ?? []) {
+      const row = tx as { ma_don_trich_xuat?: unknown; transfer_amount?: unknown };
+      const code = String(row.ma_don_trich_xuat ?? "").trim().toUpperCase();
+      const donId = paymentCodeToDonId.get(code);
+      if (!donId) continue;
+      const amount = parseMoney(row.transfer_amount);
+      if (amount <= 0) continue;
+      paidAmountByDonId.set(donId, (paidAmountByDonId.get(donId) ?? 0) + amount);
+    }
+  }
+
+  const dons: AdminHpDonRow[] = donsRaw.map((d) => ({
+    ...d,
+    paid_amount: paidAmountByDonId.get(d.id) ?? null,
+  }));
 
   const donIds = dons.map((d) => d.id).filter((id) => Number.isFinite(id) && id > 0);
   const hvIds = [...new Set(dons.map((d) => nId(d.student)).filter((x): x is number => x != null))];

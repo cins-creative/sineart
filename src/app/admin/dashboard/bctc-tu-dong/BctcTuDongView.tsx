@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react";
 
 import type {
   BctcTuDongBundle,
+  BctcTuDongDetail,
   BctcTuDongMatrixRow,
   BctcTuDongSource,
 } from "@/lib/data/bctc-tu-dong";
@@ -153,6 +154,11 @@ function sumRowForDisplayCol(row: BctcTuDongMatrixRow, col: TuDongDisplayCol): n
   return col.monthKeysInQuarter.reduce((s, mk) => s + (row.byMonth[mk] ?? 0), 0);
 }
 
+function detailsForDisplayCol(row: BctcTuDongMatrixRow, col: TuDongDisplayCol): BctcTuDongDetail[] {
+  if (col.kind === "month") return row.detailsByMonth?.[col.monthKey] ?? [];
+  return col.monthKeysInQuarter.flatMap((mk) => row.detailsByMonth?.[mk] ?? []);
+}
+
 function sourceLabel(source: BctcTuDongSource): string {
   switch (source) {
     case "hoc_phi":
@@ -163,6 +169,10 @@ function sourceLabel(source: BctcTuDongSource): string {
       return "Bán họa cụ";
     case "hoa_cu_nhap":
       return "Nhập họa cụ";
+    case "luong_nhan_su":
+      return "Lương nhân sự";
+    case "bctc_thu_cong":
+      return "BCTC thủ công";
     case "khau_hao_tscd":
       return "Khấu hao TSCĐ (tc_tai_san_rong)";
     default:
@@ -171,7 +181,13 @@ function sourceLabel(source: BctcTuDongSource): string {
 }
 
 const THU_SOURCES_ORDER: BctcTuDongSource[] = ["hoc_phi", "thu_chi_khac", "hoa_cu_ban"];
-const CHI_SOURCES_ORDER: BctcTuDongSource[] = ["thu_chi_khac", "hoa_cu_nhap", "khau_hao_tscd"];
+const CHI_SOURCES_ORDER: BctcTuDongSource[] = [
+  "luong_nhan_su",
+  "bctc_thu_cong",
+  "thu_chi_khac",
+  "hoa_cu_nhap",
+  "khau_hao_tscd",
+];
 
 type Layer1Key = "thu" | "chi";
 
@@ -232,6 +248,12 @@ type Props = {
 
 export default function BctcTuDongView({ bundle }: Props) {
   const { nam, monthKeys, rows } = bundle;
+  const [detailModal, setDetailModal] = useState<{
+    rowLabel: string;
+    colLabel: string;
+    total: number;
+    details: BctcTuDongDetail[];
+  } | null>(null);
 
   const displayCols = useMemo(() => buildTuDongDisplayCols(nam, monthKeys), [nam, monthKeys]);
 
@@ -320,15 +342,19 @@ export default function BctcTuDongView({ bundle }: Props) {
 
   function renderNumCells(
     row: BctcTuDongMatrixRow,
+    rowLabel: string,
     rowBg: string | null,
     variant: "body" | "formula" | "result",
     bold?: boolean,
   ) {
     return displayCols.map((col) => {
       const val = sumRowForDisplayCol(row, col);
+      const details = detailsForDisplayCol(row, col);
       const isQ = col.kind === "quarter";
       const cw = getColW(col.id);
       const isNeg = val < 0;
+      const colLabel = col.kind === "quarter" ? col.quarterLabel : `${col.shortLabel} ${col.nam}`;
+      const clickable = val !== 0 && details.length > 0;
       return (
         <td
           key={col.id}
@@ -355,9 +381,24 @@ export default function BctcTuDongView({ bundle }: Props) {
             color: isNeg ? "#dc2626" : val === 0 && isQ ? "#b4b4b4" : "#323232",
           }}
         >
-          <span className="inline-flex flex-col items-end gap-0">
+          <button
+            type="button"
+            disabled={!clickable}
+            onMouseDown={(e) => {
+              if (clickable) e.preventDefault();
+            }}
+            onClick={() => {
+              if (!clickable) return;
+              setDetailModal({ rowLabel, colLabel, total: val, details });
+            }}
+            className={cn(
+              "inline-flex select-none flex-col items-end gap-0 rounded px-1 py-0.5 text-right tabular-nums",
+              clickable && "cursor-pointer hover:bg-[#F8A568]/10 hover:text-[#b45309]",
+              !clickable && "cursor-default",
+            )}
+          >
             <span>{val !== 0 ? fmtNum(val) : isQ ? <span className="opacity-30">—</span> : "—"}</span>
-          </span>
+          </button>
         </td>
       );
     });
@@ -441,7 +482,7 @@ export default function BctcTuDongView({ bundle }: Props) {
             </span>
           </div>
         </td>
-        {renderNumCells(params.dataRow, rowBg, variant, params.bold)}
+        {renderNumCells(params.dataRow, String(params.label), rowBg, variant, params.bold)}
       </tr>
     );
   }
@@ -546,6 +587,28 @@ export default function BctcTuDongView({ bundle }: Props) {
         }),
       );
       if (!open) return;
+      if (key === "chi") {
+        let detailIndex = 0;
+        for (const g of groups) {
+          for (const r of g.rows) {
+            detailIndex += 1;
+            nodes.push(
+              renderLabelRow({
+                reactKey: `chi_flat_${r.key}`,
+                padLeft: 28,
+                label: r.ten,
+                subtitle: r.ma ? r.ma : sourceLabel(g.source),
+                variant: "body",
+                rowBg: detailIndex % 2 === 0 ? "#fff" : "#FAFAFA",
+                bold: false,
+                dataRow: r,
+                chevron: { open: false, onToggle: () => {}, visible: false },
+              }),
+            );
+          }
+        }
+        return;
+      }
       for (const g of groups) {
         nodes.push(renderSourceBlock(key, g));
       }
@@ -615,8 +678,9 @@ export default function BctcTuDongView({ bundle }: Props) {
   ]);
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col pb-6">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+    <>
+      <div className="mx-auto flex h-[calc(100dvh-5.75rem)] min-h-[420px] w-full max-w-[1600px] flex-col pb-6">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
         <div className="flex shrink-0 flex-col gap-3 border-b border-[#EAEAEA] bg-gradient-to-b from-[#fafafa] to-white px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:px-5 sm:py-4">
           <div className="min-w-0">
             <p className="m-0 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#BC8AF9]">Kế toán</p>
@@ -726,7 +790,59 @@ export default function BctcTuDongView({ bundle }: Props) {
             </div>
           )}
         </div>
+        </div>
       </div>
-    </div>
+      {detailModal ? (
+        <div
+          className="fixed inset-0 z-[160] flex select-none items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Chi tiết ô BCTC"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setDetailModal(null);
+          }}
+        >
+          <div className="flex max-h-[88dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-2xl bg-white shadow-[0_24px_64px_rgba(0,0,0,0.18)] sm:rounded-2xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EAEAEA] px-5 py-4">
+              <div className="min-w-0">
+                <p className="m-0 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#BC8AF9]">
+                  Chi tiết phát sinh
+                </p>
+                <h2 className="m-0 mt-1 text-base font-extrabold text-[#1a1a2e]">{detailModal.rowLabel}</h2>
+                <p className="m-0 mt-1 text-[12px] font-semibold text-black/50">{detailModal.colLabel}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailModal(null)}
+                className="rounded-lg border border-[#EAEAEA] bg-white px-3 py-1.5 text-[12px] font-bold text-black/55 hover:bg-[#fafafa]"
+              >
+                Đóng
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              <div className="mb-3 flex items-center justify-between rounded-xl bg-[#F5F7F7] px-3 py-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-black/45">Tổng ô</span>
+                <span className="text-base font-black tabular-nums text-[#1a1a2e]">{fmtNum(detailModal.total)}</span>
+              </div>
+              <div className="space-y-2">
+                {detailModal.details.map((d, idx) => (
+                  <div key={`${d.label}-${idx}`} className="rounded-xl border border-[#EAEAEA] bg-white px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="m-0 text-[13px] font-bold text-[#323232]">{d.label}</p>
+                        {d.note ? <p className="m-0 mt-0.5 text-[11px] font-semibold text-black/45">{d.note}</p> : null}
+                      </div>
+                      <span className="shrink-0 text-[13px] font-black tabular-nums text-[#1a1a2e]">
+                        {fmtNum(d.amount)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

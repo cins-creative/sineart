@@ -188,6 +188,7 @@ table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
   bottom: 16px;
   z-index: 80;
   width: min(360px, calc(100vw - 24px));
+  pointer-events: none;
   filter: drop-shadow(0 8px 28px rgba(26, 26, 46, 0.12));
   transition: opacity 0.22s ease, transform 0.22s ease;
   font-family: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
@@ -214,6 +215,7 @@ table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
   position: absolute;
   top: 8px;
   right: 8px;
+  pointer-events: auto;
   width: 26px;
   height: 26px;
   border-radius: 50%;
@@ -243,12 +245,14 @@ table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
   display: none;
   gap: 6px;
   align-items: center;
+  pointer-events: none;
   font-family: 'Be Vietnam Pro', system-ui, sans-serif;
 }
 .sa-adbanner-pill-wrap.is-vis {
   display: inline-flex;
 }
 .sa-adbanner-pill {
+  pointer-events: auto;
   padding: 8px 14px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.98);
@@ -265,6 +269,7 @@ table.bcc-fin-table tbody tr:hover td.bcc-fin-num-quarter {
   transform: translateY(-1px);
 }
 .sa-adbanner-pill-dismiss {
+  pointer-events: auto;
   width: 26px;
   height: 26px;
   border-radius: 50%;

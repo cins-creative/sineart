@@ -11,6 +11,7 @@ import {
   BCTC_TU_DONG_HREF,
   DASHBOARD_OVERVIEW_HREF,
   NAV_MAIN,
+  NAV_TRAINING,
   NAV_HR,
   NAV_MARKETING,
   ORDER_MEDIA_HREF,
@@ -108,6 +109,7 @@ function AdminDashboardNavPanel({
   searchParams,
   showOrderMedia,
   navMainVisible,
+  navTrainingVisible,
   navHrVisible,
   navMarketingVisible,
   onNavigate,
@@ -122,6 +124,7 @@ function AdminDashboardNavPanel({
   searchParams: URLSearchParams;
   showOrderMedia: boolean;
   navMainVisible: NavMainItem[];
+  navTrainingVisible: NavMainItem[];
   navHrVisible: NavItem[];
   navMarketingVisible: NavItem[];
   onNavigate?: () => void;
@@ -192,6 +195,34 @@ function AdminDashboardNavPanel({
           <AdminNavSection sectionId="admin-nav-dieu-hanh" title="Điều hành">
             <ul className="space-y-0.5">
               {navMainVisible.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <li key={item.href}>
+                    {item.disabled ? (
+                      <span className="flex cursor-not-allowed items-center gap-2 rounded-lg px-2 py-2 text-black/35">
+                        {Icon ? <Icon size={16} className="shrink-0 opacity-55" aria-hidden /> : null}
+                        <span>{item.label}</span>
+                      </span>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        className={`flex items-center gap-2 ${navItemClass(item.href, pathname, searchParams)}`}
+                        onClick={onNavigate}
+                      >
+                        {Icon ? <Icon size={16} className="shrink-0 opacity-70" aria-hidden /> : null}
+                        <span className="min-w-0 truncate">{item.label}</span>
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </AdminNavSection>
+        ) : null}
+        {navTrainingVisible.length > 0 ? (
+          <AdminNavSection sectionId="admin-nav-dao-tao" title="Đào tạo">
+            <ul className="space-y-0.5">
+              {navTrainingVisible.map((item) => {
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>
@@ -294,6 +325,14 @@ export default function AdminShell({
       return canAccessDashboardHref(allowed, i.href);
     });
   }, [allowed, staffRole]);
+  const navTrainingVisible = useMemo(() => {
+    const r = (staffRole ?? "").trim().toLowerCase();
+    return NAV_TRAINING.filter((i) => {
+      if (i.disabled) return false;
+      if (i.visibleForRoles?.length && !i.visibleForRoles.includes(r)) return false;
+      return canAccessDashboardHref(allowed, i.href);
+    });
+  }, [allowed, staffRole]);
   const navHrVisible = useMemo(() => {
     let items = NAV_HR.filter((i) => !i.disabled && canAccessDashboardHref(allowed, i.href));
     const isAdmin = (staffRole ?? "").trim().toLowerCase() === "admin";
@@ -323,10 +362,11 @@ export default function AdminShell({
     if (showOrderMedia) out.push(ORDER_MEDIA_HREF);
     if ((staffRole ?? "").trim().toLowerCase() === "admin") out.push(BCTC_TU_DONG_HREF);
     for (const i of navMainVisible) out.push(i.href);
+    for (const i of navTrainingVisible) out.push(i.href);
     for (const i of navHrVisible) out.push(i.href);
     for (const i of navMarketingVisible) out.push(i.href);
     return [...new Set(out)];
-  }, [showOrderMedia, navMainVisible, navHrVisible, navMarketingVisible, staffRole, staffProfileHref]);
+  }, [showOrderMedia, navMainVisible, navTrainingVisible, navHrVisible, navMarketingVisible, staffRole, staffProfileHref]);
 
   useEffect(() => {
     for (const href of prefetchTargets) {
@@ -376,6 +416,7 @@ export default function AdminShell({
     searchParams,
     showOrderMedia,
     navMainVisible,
+    navTrainingVisible,
     navHrVisible,
     navMarketingVisible,
   };

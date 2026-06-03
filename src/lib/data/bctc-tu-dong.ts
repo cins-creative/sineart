@@ -4,6 +4,7 @@ import {
   fetchAdminTaiSanRows,
   type TaiSanDbRow,
 } from "@/lib/data/admin-gia-tri-tai-san";
+import { THANG_FULL_TO_SHORT } from "@/lib/data/bao-cao-tai-chinh-config";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type BctcTuDongSource =
@@ -11,7 +12,15 @@ export type BctcTuDongSource =
   | "thu_chi_khac"
   | "hoa_cu_ban"
   | "hoa_cu_nhap"
+  | "luong_nhan_su"
+  | "bctc_thu_cong"
   | "khau_hao_tscd";
+
+export type BctcTuDongDetail = {
+  label: string;
+  amount: number;
+  note?: string;
+};
 
 /** Một dòng báo cáo — gộp theo danh mục + nguồn + loại thu/chi. */
 export type BctcTuDongMatrixRow = {
@@ -23,6 +32,8 @@ export type BctcTuDongMatrixRow = {
   source: BctcTuDongSource;
   /** `YYYY-MM` → số tiền (luôn dương; loại chi hiển thị trong nhóm chi). */
   byMonth: Record<string, number>;
+  /** Breakdown chi tiết khi click ô số trong bảng. */
+  detailsByMonth?: Record<string, BctcTuDongDetail[]>;
 };
 
 export type BctcTuDongBundle = {
@@ -101,6 +112,75 @@ function monthKeyFromIso(iso: string | null | undefined, nam: number): string | 
   return `${nam}-${m}`;
 }
 
+function monthKeyFromPayrollPeriod(thang: unknown, namRaw: unknown, fallbackIso: unknown, nam: number): string | null {
+  const y = String(namRaw ?? "").trim();
+  const monthText = String(thang ?? "").trim();
+  const monthMatch = /(\d{1,2})/.exec(monthText);
+  const yy = Number(y);
+  const mm = monthMatch ? Number(monthMatch[1]) : NaN;
+  if (Number.isFinite(yy) && yy === nam && Number.isFinite(mm) && mm >= 1 && mm <= 12) {
+    return `${nam}-${String(mm).padStart(2, "0")}`;
+  }
+  return monthKeyFromIso(fallbackIso != null ? String(fallbackIso) : null, nam);
+}
+
+function monthKeyFromBctcPeriod(thang: unknown, namRaw: unknown, nam: number): string | null {
+  const yy = Number(String(namRaw ?? "").trim());
+  if (!Number.isFinite(yy) || yy !== nam) return null;
+  const raw = String(thang ?? "").trim();
+  const short = THANG_FULL_TO_SHORT[raw] ?? raw;
+  const monthMatch = /^T?(\d{1,2})$/i.exec(short);
+  const mm = monthMatch ? Number(monthMatch[1]) : NaN;
+  return Number.isFinite(mm) && mm >= 1 && mm <= 12 ? `${nam}-${String(mm).padStart(2, "0")}` : null;
+}
+
+function payrollNetSalary(args: {
+  hinhThuc: unknown;
+  luongCoBan: unknown;
+  troCap: unknown;
+  tamUng: unknown;
+  thuong: unknown;
+  soBuoiLam: unknown;
+}): number {
+  const isTheoBuoi = String(args.hinhThuc ?? "").trim() === "Theo buổi";
+  const lcb = parseMoney(args.luongCoBan);
+  const troCap = parseMoney(args.troCap);
+  const tamUng = parseMoney(args.tamUng);
+  const thuong = parseMoney(args.thuong);
+  const soBuoiLam = parseMoney(args.soBuoiLam);
+  if (isTheoBuoi) return Math.round(lcb * soBuoiLam + thuong - tamUng);
+  return Math.round(lcb + troCap + thuong - tamUng);
+}
+
+function tonelessVi(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+function payrollGroupFromPhongNames(phongNames: readonly string[]): {
+  ma: string;
+  ten: string;
+  discriminator: string;
+} {
+  for (const raw of phongNames) {
+    const p = tonelessVi(raw);
+    if (
+      p.includes("hanh chinh") ||
+      p.includes("hanhchinh") ||
+      p.includes("van hanh") ||
+      p.includes("vanhanh") ||
+      p.includes("media") ||
+      p.includes("marketing")
+    ) {
+      return { ma: "LƯƠNG-VH", ten: "Lương Vận hành", discriminator: "van_hanh" };
+    }
+  }
+  return { ma: "LƯƠNG-ĐT", ten: "Lương Đào tạo", discriminator: "dao_tao" };
+}
+
 function mergeAmount(map: Record<string, number>, mk: string | null, delta: number) {
   if (!mk || !Number.isFinite(delta) || delta === 0) return;
   map[mk] = (map[mk] ?? 0) + delta;
@@ -121,15 +201,21 @@ function upsertRow(
   amount: number,
   /** Nhiều dòng cùng danh mục + nguồn (vd. từng TSCĐ). */
   rowDiscriminator?: string,
+  detail?: BctcTuDongDetail,
 ) {
   const base = rowKey(dmId, loai, source);
   const key = rowDiscriminator ? `${base}__${rowDiscriminator}` : base;
   let r = pool.get(key);
   if (!r) {
-    r = { key, danhMucId: dmId, ma, ten, loai, source, byMonth: {} };
+    r = { key, danhMucId: dmId, ma, ten, loai, source, byMonth: {}, detailsByMonth: {} };
     pool.set(key, r);
   }
   mergeAmount(r.byMonth, mk, amount);
+  if (mk && detail) {
+    const details = r.detailsByMonth ?? {};
+    details[mk] = [...(details[mk] ?? []), detail];
+    r.detailsByMonth = details;
+  }
 }
 
 /** Gắn nhẹ với chỉ tiêu «Khấu hao TSCĐ» / cột DB `cp_khauhao_tscd` khi có danh mục chi phù hợp. */
@@ -283,7 +369,11 @@ export async function fetchBctcTuDongBundle(
         const alloc = Math.round(amt * factor);
         if (alloc <= 0) continue;
         const lb = labelForDm(dmId);
-        upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "hoc_phi", mk, alloc);
+        upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "hoc_phi", mk, alloc, undefined, {
+          label: `Đơn học phí #${donId}`,
+          amount: alloc,
+          note: lb.ten,
+        });
         monthKeysSet.add(mk);
       }
     }
@@ -312,11 +402,19 @@ export async function fetchBctcTuDongBundle(
     const lb = labelForDm(dmId);
 
     if (thu > 0) {
-      upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "thu_chi_khac", mk, thu);
+      upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "thu_chi_khac", mk, thu, undefined, {
+        label: `Thu chi khác #${r.id ?? "?"}`,
+        amount: thu,
+        note: lb.ten,
+      });
       monthKeysSet.add(mk);
     }
     if (chi > 0) {
-      upsertRow(pool, dmId, lb.ma, lb.ten, "chi", "thu_chi_khac", mk, chi);
+      upsertRow(pool, dmId, lb.ma, lb.ten, "chi", "thu_chi_khac", mk, chi, undefined, {
+        label: `Thu chi khác #${r.id ?? "?"}`,
+        amount: chi,
+        note: lb.ten,
+      });
       monthKeysSet.add(mk);
     }
   }
@@ -339,7 +437,11 @@ export async function fetchBctcTuDongBundle(
     const tong = parseMoney(r.tong_tien);
     if (tong <= 0) continue;
     const lb = labelForDm(dmId);
-    upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "hoa_cu_ban", mk, tong);
+    upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "hoa_cu_ban", mk, tong, undefined, {
+      label: `Đơn bán họa cụ #${r.id ?? "?"}`,
+      amount: tong,
+      note: lb.ten,
+    });
     monthKeysSet.add(mk);
   }
 
@@ -361,8 +463,159 @@ export async function fetchBctcTuDongBundle(
     const tong = parseMoney(r.tong_tien);
     if (tong <= 0) continue;
     const lb = labelForDm(dmId);
-    upsertRow(pool, dmId, lb.ma, lb.ten, "chi", "hoa_cu_nhap", mk, tong);
+    upsertRow(pool, dmId, lb.ma, lb.ten, "chi", "hoa_cu_nhap", mk, tong, undefined, {
+      label: `Đơn nhập họa cụ #${r.id ?? "?"}`,
+      amount: tong,
+      note: lb.ten,
+    });
     monthKeysSet.add(mk);
+  }
+
+  const { data: payrollRows, error: payrollErr } = await supabase
+    .from("hr_bang_tinh_luong")
+    .select("id, created_at, nhan_vien, tam_ung, thuong");
+
+  if (payrollErr) {
+    return { ok: false, error: payrollErr.message || "Không đọc được bảng lương nhân sự." };
+  }
+
+  const payrollList = (payrollRows ?? []) as Record<string, unknown>[];
+  const payrollIds = payrollList.map((r) => nId(r.id)).filter((x): x is number => x != null);
+  const payrollStaffIds = payrollList.map((r) => nId(r.nhan_vien)).filter((x): x is number => x != null);
+
+  const [payrollStaffRes, payrollLichRes, payrollPhongRes] = await Promise.all([
+    payrollStaffIds.length > 0
+      ? supabase
+          .from("hr_nhan_su")
+          .select("id, full_name, hinh_thuc_tinh_luong, luong_co_ban, tro_cap")
+          .in("id", [...new Set(payrollStaffIds)])
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    payrollIds.length > 0
+      ? supabase
+          .from("hr_lich_diem_danh")
+          .select("id, bang_tinh_luong, thang, nam, so_buoi_lam_viec")
+          .in("bang_tinh_luong", payrollIds)
+          .order("id", { ascending: true })
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    payrollStaffIds.length > 0
+      ? supabase
+          .from("hr_nhan_su_phong")
+          .select("nhan_su_id, hr_phong!inner(ten_phong)")
+          .in("nhan_su_id", [...new Set(payrollStaffIds)])
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+  ]);
+
+  if (payrollStaffRes.error || payrollLichRes.error || payrollPhongRes.error) {
+    return {
+      ok: false,
+      error:
+        payrollStaffRes.error?.message ||
+        payrollLichRes.error?.message ||
+        payrollPhongRes.error?.message ||
+        "Không đọc được dữ liệu kỳ lương nhân sự.",
+    };
+  }
+
+  const staffById = new Map<number, Record<string, unknown>>();
+  for (const raw of payrollStaffRes.data ?? []) {
+    const row = raw as Record<string, unknown>;
+    const id = nId(row.id);
+    if (id) staffById.set(id, row);
+  }
+
+  const lichByPayrollId = new Map<number, Record<string, unknown>>();
+  for (const raw of payrollLichRes.data ?? []) {
+    const row = raw as Record<string, unknown>;
+    const bangId = nId(row.bang_tinh_luong);
+    if (bangId && !lichByPayrollId.has(bangId)) lichByPayrollId.set(bangId, row);
+  }
+
+  const phongNamesByStaffId = new Map<number, string[]>();
+  for (const raw of payrollPhongRes.data ?? []) {
+    const row = raw as Record<string, unknown>;
+    const staffId = nId(row.nhan_su_id);
+    if (!staffId) continue;
+    const phongRaw = row.hr_phong;
+    const phong = Array.isArray(phongRaw)
+      ? (phongRaw[0] as Record<string, unknown> | undefined)
+      : (phongRaw as Record<string, unknown> | null | undefined);
+    const name = String(phong?.ten_phong ?? "").trim();
+    if (!name) continue;
+    const cur = phongNamesByStaffId.get(staffId) ?? [];
+    cur.push(name);
+    phongNamesByStaffId.set(staffId, cur);
+  }
+
+  for (const raw of payrollList) {
+    const r = raw as Record<string, unknown>;
+    const bangId = nId(r.id);
+    const staffId = nId(r.nhan_vien);
+    const staff = staffId != null ? staffById.get(staffId) : undefined;
+    const lich = bangId != null ? lichByPayrollId.get(bangId) : undefined;
+    const mk = monthKeyFromPayrollPeriod(lich?.thang, lich?.nam, r.created_at, nam);
+    if (!mk) continue;
+
+    const net = payrollNetSalary({
+      hinhThuc: staff?.hinh_thuc_tinh_luong,
+      luongCoBan: staff?.luong_co_ban,
+      troCap: staff?.tro_cap,
+      tamUng: r.tam_ung,
+      thuong: r.thuong,
+      soBuoiLam: lich?.so_buoi_lam_viec,
+    });
+    if (net <= 0) continue;
+
+    const payrollGroup = payrollGroupFromPhongNames(staffId != null ? phongNamesByStaffId.get(staffId) ?? [] : []);
+    upsertRow(
+      pool,
+      null,
+      payrollGroup.ma,
+      payrollGroup.ten,
+      "chi",
+      "luong_nhan_su",
+      mk,
+      net,
+      payrollGroup.discriminator,
+      {
+        label: String(staff?.full_name ?? "").trim() || `Nhân sự #${r.nhan_vien ?? "?"}`,
+        amount: net,
+        note: `Bảng lương #${bangId ?? "?"}`,
+      },
+    );
+    monthKeysSet.add(mk);
+  }
+
+  const { data: manualBctcRows, error: manualBctcErr } = await supabase
+    .from("tc_bao_cao_tai_chinh")
+    .select("nam, thang, cp_trich_truoc, cp_matbang")
+    .eq("nam", String(nam));
+
+  if (manualBctcErr) {
+    return { ok: false, error: manualBctcErr.message || "Không đọc được chi phí từ Báo cáo tài chính." };
+  }
+
+  for (const raw of manualBctcRows ?? []) {
+    const r = raw as Record<string, unknown>;
+    const mk = monthKeyFromBctcPeriod(r.thang, r.nam, nam);
+    if (!mk) continue;
+    const cpTrichTruoc = parseMoney(r.cp_trich_truoc);
+    if (cpTrichTruoc > 0) {
+      upsertRow(pool, null, "CP-TRÍCH", "Trích trước", "chi", "bctc_thu_cong", mk, cpTrichTruoc, "cp_trich_truoc", {
+        label: "Báo cáo tài chính: Trích trước",
+        amount: cpTrichTruoc,
+        note: String(r.thang ?? ""),
+      });
+      monthKeysSet.add(mk);
+    }
+    const cpMatBang = parseMoney(r.cp_matbang);
+    if (cpMatBang > 0) {
+      upsertRow(pool, null, "CP-MB", "Mặt bằng", "chi", "bctc_thu_cong", mk, cpMatBang, "cp_matbang", {
+        label: "Báo cáo tài chính: Mặt bằng",
+        amount: cpMatBang,
+        note: String(r.thang ?? ""),
+      });
+      monthKeysSet.add(mk);
+    }
   }
 
   const dmKhauHaoId = resolveKhauHaoDanhMucChiId(dmById);
@@ -375,8 +628,12 @@ export async function fetchBctcTuDongBundle(
       const mk = `${nam}-${String(mo).padStart(2, "0")}`;
       const exp = depreciationExpenseForCalendarMonth(raw, mk);
       if (!exp) continue;
-      const { ma, ten } = assetRowLabel(dmKhauHaoId, dmById, raw);
-      upsertRow(pool, dmKhauHaoId, ma, ten, "chi", "khau_hao_tscd", mk, exp, `ts_${raw.id}`);
+      const { ma } = assetRowLabel(dmKhauHaoId, dmById, raw);
+      upsertRow(pool, dmKhauHaoId, ma, "Khấu hao TSCĐ", "chi", "khau_hao_tscd", mk, exp, undefined, {
+        label: raw.ten_tai_san.trim() || `Tài sản #${raw.id}`,
+        amount: exp,
+        note: `TS${raw.id}`,
+      });
       monthKeysSet.add(mk);
     }
   }
@@ -389,7 +646,6 @@ export async function fetchBctcTuDongBundle(
     return a.source.localeCompare(b.source);
   });
 
-  const monthKeys = [...monthKeysSet].sort();
   for (let m = 1; m <= 12; m++) {
     monthKeysSet.add(`${nam}-${String(m).padStart(2, "0")}`);
   }

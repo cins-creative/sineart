@@ -184,8 +184,7 @@
   border: none;
   background: transparent;
   box-shadow: none;
-  /* Không dùng pointer-events:none + bật lại trên con — một số WebKit cũ (Android 7)
-     không hit-test touch đúng vào nút «Vào học». */
+  pointer-events: none;
 }
 .nav-cta-fixed .nav-cta-lich-stack {
   pointer-events: auto;
@@ -274,6 +273,7 @@
   object-fit: contain;
 }
 .nav-cta-btn {
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;

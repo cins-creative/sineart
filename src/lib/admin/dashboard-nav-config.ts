@@ -40,6 +40,9 @@ export const NAV_MAIN: NavMainItem[] = [
     label: "Trường & ngành thi ĐH",
     href: "/admin/dashboard/dh-truong-nganh",
   },
+];
+
+export const NAV_TRAINING: NavMainItem[] = [
   { label: "Hệ thống bài tập", href: "/admin/dashboard/he-thong-bai-tap" },
 ];
 
@@ -65,6 +68,7 @@ export const NAV_MARKETING: { label: string; href: string; disabled?: boolean }[
 ];
 
 export const HREFS_DIEU_HANH_ALL = NAV_MAIN.map((n) => n.href);
+export const HREFS_DAO_TAO_ALL = NAV_TRAINING.map((n) => n.href);
 /** Gồm cả base `/ho-so-ca-nhan` (không còn trong sidebar — vào qua avatar/header). */
 export const HREFS_NHAN_SU_TC_ALL = [...NAV_HR.map((n) => n.href), STAFF_PERSONAL_DASHBOARD_HREF];
 export const HREFS_MARKETING_ALL = NAV_MARKETING.map((n) => n.href);

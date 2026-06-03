@@ -6,6 +6,7 @@
 import {
   AGENT_CONSULT_HREF,
   DASHBOARD_OVERVIEW_HREF,
+  HREFS_DAO_TAO_ALL,
   HREFS_DIEU_HANH_ALL,
   HREFS_MARKETING_ALL,
   HREFS_NHAN_SU_TC_ALL,
@@ -97,6 +98,7 @@ function hrefsForPhongRule(rule: PhongRule): Set<string> {
     case "tu_van":
     case "van_hanh":
       HREFS_DIEU_HANH_ALL.forEach((h) => s.add(h));
+      HREFS_DAO_TAO_ALL.forEach((h) => s.add(h));
       break;
     case "marketing_phong":
       HREFS_MARKETING_ALL.forEach((h) => s.add(h));
@@ -112,6 +114,7 @@ function hrefsForPhongRule(rule: PhongRule): Set<string> {
       break;
     case "nhan_su_phong":
       HREFS_DIEU_HANH_ALL.forEach((h) => s.add(h));
+      HREFS_DAO_TAO_ALL.forEach((h) => s.add(h));
       HREFS_NHAN_SU_TC_ALL.forEach((h) => s.add(h));
       break;
     case "graphic_design":

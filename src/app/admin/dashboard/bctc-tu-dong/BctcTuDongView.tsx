@@ -22,6 +22,8 @@ const DEFAULT_LABEL_W = 260;
 const DEFAULT_COL_W = 132;
 const MIN_LABEL_W = 140;
 const MIN_COL_W = 90;
+/** Giới hạn thẻ trong popup — tránh DOM quá lớn (DevTools / Cursor select-element hay treo). */
+const DETAIL_LIST_PAGE = 48;
 
 function useTuDongColumnResize(colIds: string[]) {
   const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_W);
@@ -255,6 +257,9 @@ export default function BctcTuDongView({ bundle }: Props) {
     details: BctcTuDongDetail[];
   } | null>(null);
   const [orderDetailModal, setOrderDetailModal] = useState<BctcTuDongDetail | null>(null);
+  const [detailListLimit, setDetailListLimit] = useState(DETAIL_LIST_PAGE);
+
+  const anyModalOpen = detailModal != null || orderDetailModal != null;
 
   const displayCols = useMemo(() => buildTuDongDisplayCols(nam, monthKeys), [nam, monthKeys]);
 
@@ -390,6 +395,7 @@ export default function BctcTuDongView({ bundle }: Props) {
             }}
             onClick={() => {
               if (!clickable) return;
+              setDetailListLimit(DETAIL_LIST_PAGE);
               setDetailModal({ rowLabel, colLabel, total: val, details });
             }}
             className={cn(
@@ -722,7 +728,14 @@ export default function BctcTuDongView({ bundle }: Props) {
               </p>
             </div>
           ) : (
-            <div className="bcc-fin-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain">
+            <div
+              className={cn(
+                "bcc-fin-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain",
+                anyModalOpen && "hidden",
+              )}
+              aria-hidden={anyModalOpen || undefined}
+              {...(anyModalOpen ? { inert: true as const } : {})}
+            >
               <table className="bcc-fin-table w-max min-w-full border-separate border-spacing-0 text-[13px]">
                 <thead>
                   <tr>
@@ -795,7 +808,8 @@ export default function BctcTuDongView({ bundle }: Props) {
       </div>
       {detailModal ? (
         <div
-          className="fixed inset-0 z-[160] flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+          data-bctc-modal="cell-detail"
+          className="fixed inset-0 z-[160] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-5"
           role="dialog"
           aria-modal="true"
           aria-label="Chi tiết ô BCTC"
@@ -826,12 +840,12 @@ export default function BctcTuDongView({ bundle }: Props) {
                 <span className="text-base font-black tabular-nums text-[#1a1a2e]">{fmtNum(detailModal.total)}</span>
               </div>
               <div className="space-y-2">
-                {detailModal.details.map((d, idx) => {
+                {detailModal.details.slice(0, detailListLimit).map((d, idx) => {
                   const canOpenOrder = d.sourceType === "hoc_phi" && d.fields?.length;
                   const CardTag = canOpenOrder ? "button" : "div";
                   return (
                   <CardTag
-                    key={`${d.label}-${idx}`}
+                    key={`${d.label}-${idx}-${d.amount}`}
                     type={canOpenOrder ? "button" : undefined}
                     onClick={canOpenOrder ? () => setOrderDetailModal(d) : undefined}
                     className={cn(
@@ -851,6 +865,19 @@ export default function BctcTuDongView({ bundle }: Props) {
                   </CardTag>
                 );
                 })}
+                {detailModal.details.length > detailListLimit ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDetailListLimit((n) =>
+                        Math.min(detailModal.details.length, n + DETAIL_LIST_PAGE),
+                      )
+                    }
+                    className="w-full rounded-xl border border-dashed border-[#EAEAEA] bg-[#fafafa] px-3 py-2.5 text-[12px] font-bold text-[#BC8AF9] hover:bg-white"
+                  >
+                    Xem thêm ({detailModal.details.length - detailListLimit} mục)
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
@@ -858,7 +885,8 @@ export default function BctcTuDongView({ bundle }: Props) {
       ) : null}
       {orderDetailModal ? (
         <div
-          className="fixed inset-0 z-[180] flex items-end justify-center bg-black/45 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+          data-bctc-modal="order-detail"
+          className="fixed inset-0 z-[180] flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-5"
           role="dialog"
           aria-modal="true"
           aria-label="Chi tiết đơn học phí"

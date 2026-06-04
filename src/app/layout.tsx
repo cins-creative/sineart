@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Analytics } from "@vercel/analytics/react";
 import localFont from "next/font/local";
 import ConditionalCta from "./_components/ConditionalCta";
@@ -102,6 +103,14 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex w-full min-w-0 flex-col overflow-x-hidden" suppressHydrationWarning>
+        <Script
+          id="eruda"
+          src="https://cdn.jsdelivr.net/npm/eruda"
+          strategy="beforeInteractive"
+        />
+        <Script id="eruda-init" strategy="beforeInteractive">
+          {`if(location.search.indexOf('debug=1')>-1){var t=setInterval(function(){if(window.eruda){clearInterval(t);eruda.init();}},50);}`}
+        </Script>
         <SeoOrganizationJsonLd />
         <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
         <ConditionalCta />

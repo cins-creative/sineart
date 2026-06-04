@@ -134,16 +134,11 @@ type Props = {
 
 export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: Props) {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState("");
   const [records, setRecords] = useState<ClassroomSessionRecord[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [needsCreateAccount, setNeedsCreateAccount] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const resetFormState = () => {
     setRecords([]);
@@ -300,7 +295,7 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
     }
   };
 
-  if (!mounted) return null;
+  if (typeof document === "undefined") return null;
 
   return createPortal(
     <AnimatePresence>

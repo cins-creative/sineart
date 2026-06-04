@@ -44,7 +44,6 @@ function readStudentSession(): ClassroomStudentSessionData | null {
  */
 export default function LuuBaiHocVienFab(): React.ReactElement | null {
   const [student, setStudent] = useState<ClassroomStudentSessionData | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -74,7 +73,6 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setMounted(true);
     const sync = () => setStudent(readStudentSession());
     sync();
     const onStorage = (e: StorageEvent) => {
@@ -325,7 +323,7 @@ export default function LuuBaiHocVienFab(): React.ReactElement | null {
     }
   };
 
-  if (!mounted || !student) return null;
+  if (!student) return null;
 
   const hasClasses = classes.length > 0;
   const exDisabled = !classId || exercises.length === 0;

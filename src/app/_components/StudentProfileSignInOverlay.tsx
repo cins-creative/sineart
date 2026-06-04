@@ -15,12 +15,9 @@ type Props = {
 
 export default function StudentProfileSignInOverlay({ open, onClose }: Props) {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-
-  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!open) return;
@@ -71,7 +68,7 @@ export default function StudentProfileSignInOverlay({ open, onClose }: Props) {
     }
   };
 
-  if (!mounted || !open) return null;
+  if (!open || typeof document === "undefined") return null;
 
   return createPortal(
     <div

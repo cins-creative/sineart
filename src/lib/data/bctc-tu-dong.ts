@@ -20,6 +20,9 @@ export type BctcTuDongDetail = {
   label: string;
   amount: number;
   note?: string;
+  sourceType?: "hoc_phi";
+  sourceId?: number;
+  fields?: { label: string; value: string }[];
 };
 
 /** Một dòng báo cáo — gộp theo danh mục + nguồn + loại thu/chi. */
@@ -59,6 +62,65 @@ function parseMoney(v: unknown): number {
   return 0;
 }
 
+const VND_ALLOC_UNIT = 1000;
+
+function roundVndThousand(v: number): number {
+  return Math.round(v / VND_ALLOC_UNIT) * VND_ALLOC_UNIT;
+}
+
+function allocatePayableByThousand(lineAmounts: readonly number[], payableTotal: number): number[] {
+  const positive = lineAmounts.map((amt) => Math.max(0, amt));
+  const subtotal = positive.reduce((sum, amt) => sum + amt, 0);
+  if (subtotal <= 0) return positive.map(() => 0);
+
+  const target = roundVndThousand(Math.max(0, payableTotal));
+  const rawAllocated = positive.map((amt) => (amt * target) / subtotal);
+  const rounded = rawAllocated.map(roundVndThousand);
+
+  let delta = target - rounded.reduce((sum, amt) => sum + amt, 0);
+  let guard = 0;
+  while (delta !== 0 && guard < rounded.length * 20) {
+    const step = delta > 0 ? VND_ALLOC_UNIT : -VND_ALLOC_UNIT;
+    const candidates = rawAllocated
+      .map((raw, idx) => ({ idx, remainder: raw - rounded[idx]! }))
+      .filter(({ idx }) => step > 0 || rounded[idx]! + step >= 0)
+      .sort((a, b) => (step > 0 ? b.remainder - a.remainder : a.remainder - b.remainder));
+
+    const pick = candidates[0];
+    if (!pick) break;
+    rounded[pick.idx] = rounded[pick.idx]! + step;
+    delta -= step;
+    guard += 1;
+  }
+
+  return rounded;
+}
+
+function allocateEvenByThousand(total: number, bucketCount: number): number[] {
+  if (!Number.isFinite(total) || total <= 0 || bucketCount <= 0) return [];
+  const target = roundVndThousand(total);
+  const raw = target / bucketCount;
+  const rounded = Array.from({ length: bucketCount }, () => roundVndThousand(raw));
+
+  let delta = target - rounded.reduce((sum, amt) => sum + amt, 0);
+  let guard = 0;
+  while (delta !== 0 && guard < bucketCount * 20) {
+    const step = delta > 0 ? VND_ALLOC_UNIT : -VND_ALLOC_UNIT;
+    const candidates = rounded
+      .map((amt, idx) => ({ idx, remainder: raw - amt }))
+      .filter(({ idx }) => step > 0 || rounded[idx]! + step >= 0)
+      .sort((a, b) => (step > 0 ? b.remainder - a.remainder : a.remainder - b.remainder));
+
+    const pick = candidates[0];
+    if (!pick) break;
+    rounded[pick.idx] = rounded[pick.idx]! + step;
+    delta -= step;
+    guard += 1;
+  }
+
+  return rounded;
+}
+
 function discountToPayable(giaGoc: number, discountPct: number): number {
   const g = Math.max(0, giaGoc);
   const d = Math.min(100, Math.max(0, discountPct));
@@ -77,14 +139,6 @@ function payableFromGoiRow(row: Record<string, unknown>): number | null {
 
 function goiHocPhiSelectForTable(table: string): string {
   return table === "hp_goi_hoc_phi" ? "id, hoc_phi, gia_giam" : 'id, "number", don_vi, gia_goc, discount';
-}
-
-function yearFromDonLike(ngayThanhToan: string | null | undefined, createdAt: string | null | undefined): number | null {
-  const raw = ngayThanhToan?.trim();
-  if (raw && /^\d{4}-\d{2}-\d{2}/.test(raw)) return parseInt(raw.slice(0, 4), 10);
-  const c = createdAt?.trim();
-  if (c) return new Date(c).getFullYear();
-  return null;
 }
 
 function monthKeyFromDonLike(
@@ -132,6 +186,44 @@ function monthKeyFromBctcPeriod(thang: unknown, namRaw: unknown, nam: number): s
   const monthMatch = /^T?(\d{1,2})$/i.exec(short);
   const mm = monthMatch ? Number(monthMatch[1]) : NaN;
   return Number.isFinite(mm) && mm >= 1 && mm <= 12 ? `${nam}-${String(mm).padStart(2, "0")}` : null;
+}
+
+function parseDateOnly(raw: unknown): Date | null {
+  const value = String(raw ?? "").trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return null;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  return new Date(Date.UTC(y, m - 1, d, 12));
+}
+
+function monthIndex(d: Date): number {
+  return d.getUTCFullYear() * 12 + d.getUTCMonth();
+}
+
+function monthKeyFromIndex(idx: number): string {
+  const y = Math.floor(idx / 12);
+  const m = (idx % 12) + 1;
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+function monthKeysBetweenDates(startRaw: unknown, endRaw: unknown): string[] {
+  const start = parseDateOnly(startRaw);
+  const end = parseDateOnly(endRaw);
+  if (!start || !end) return [];
+
+  const startIdx = monthIndex(start);
+  const endIdx = monthIndex(end);
+  if (endIdx < startIdx) return [];
+
+  const out: string[] = [];
+  for (let idx = startIdx; idx <= endIdx && out.length < 600; idx += 1) {
+    out.push(monthKeyFromIndex(idx));
+  }
+  return out;
 }
 
 function payrollNetSalary(args: {
@@ -287,7 +379,7 @@ export async function fetchBctcTuDongBundle(
 
   const { data: donRows, error: donErr } = await supabase
     .from("hp_don_thu_hoc_phi")
-    .select("id, created_at, ngay_thanh_toan, giam_gia, giam_gia_vnd, status")
+    .select("id, created_at, ma_don, ma_don_so, student, hinh_thuc_thu, ngay_thanh_toan, giam_gia, giam_gia_vnd, status")
     .eq("status", STATUS_PAID);
 
   if (donErr) {
@@ -295,13 +387,12 @@ export async function fetchBctcTuDongBundle(
   }
 
   const donsAll = (donRows ?? []) as Record<string, unknown>[];
-  const donsInYear = donsAll.filter((d) => yearFromDonLike(String(d.ngay_thanh_toan ?? ""), String(d.created_at ?? "")) === nam);
-  const donIds = donsInYear.map((d) => nId(d.id)).filter((x): x is number => x != null);
+  const donIds = donsAll.map((d) => nId(d.id)).filter((x): x is number => x != null);
 
   if (donIds.length > 0) {
     const { data: chiRaw, error: chiErr } = await supabase
       .from("hp_thu_hp_chi_tiet")
-      .select("id, don_thu, khoa_hoc_vien, goi_hoc_phi, status, danh_muc_thu_chi_id")
+      .select("id, don_thu, khoa_hoc_vien, goi_hoc_phi, status, danh_muc_thu_chi_id, ngay_dau_ky, ngay_cuoi_ky")
       .in("don_thu", donIds)
       .eq("status", STATUS_PAID);
 
@@ -326,7 +417,7 @@ export async function fetchBctcTuDongBundle(
     }
 
     const donById = new Map<number, Record<string, unknown>>();
-    for (const d of donsInYear) {
+    for (const d of donsAll) {
       const id = nId(d.id);
       if (id) donById.set(id, d);
     }
@@ -342,15 +433,22 @@ export async function fetchBctcTuDongBundle(
     for (const donId of donIds) {
       const don = donById.get(donId);
       const lines = chiByDon.get(donId) ?? [];
-      const mk = monthKeyFromDonLike(
+      const fallbackPaymentMonthKey = monthKeyFromDonLike(
         don?.ngay_thanh_toan != null ? String(don.ngay_thanh_toan) : null,
         don?.created_at != null ? String(don.created_at) : null,
         nam,
       );
-      if (!mk) continue;
 
       let subtotal = 0;
-      const lineAmts: { dmId: number | null; amt: number }[] = [];
+      const lineAmts: {
+        chiTietId: number | null;
+        dmId: number | null;
+        goiId: number | null;
+        amt: number;
+        kyMonthKeys: string[];
+        ngayDauKy: string;
+        ngayCuoiKy: string;
+      }[] = [];
       for (const ln of lines) {
         const goiId = nId(ln.goi_hoc_phi);
         const goiRow = goiId != null ? goiRowById.get(goiId) : undefined;
@@ -358,23 +456,66 @@ export async function fetchBctcTuDongBundle(
         const amt = hoc ?? 0;
         subtotal += amt;
         const dmId = ln.danh_muc_thu_chi_id != null ? nId(ln.danh_muc_thu_chi_id) : null;
-        lineAmts.push({ dmId, amt });
+        const kyMonthKeys = monthKeysBetweenDates(ln.ngay_dau_ky, ln.ngay_cuoi_ky);
+        lineAmts.push({
+          chiTietId: nId(ln.id),
+          dmId,
+          goiId,
+          amt,
+          kyMonthKeys,
+          ngayDauKy: String(ln.ngay_dau_ky ?? "—").slice(0, 10),
+          ngayCuoiKy: String(ln.ngay_cuoi_ky ?? "—").slice(0, 10),
+        });
       }
 
       const discount = parseMoney(don?.giam_gia) + parseMoney(don?.giam_gia_vnd);
       const payableTotal = Math.max(0, Math.round(subtotal - discount));
-      const factor = subtotal > 0 ? payableTotal / subtotal : 0;
+      const allocatedAmounts = allocatePayableByThousand(
+        lineAmts.map((line) => line.amt),
+        payableTotal,
+      );
 
-      for (const { dmId, amt } of lineAmts) {
-        const alloc = Math.round(amt * factor);
+      for (const [idx, { chiTietId, dmId, goiId, amt, kyMonthKeys, ngayDauKy, ngayCuoiKy }] of lineAmts.entries()) {
+        const alloc = allocatedAmounts[idx] ?? 0;
         if (alloc <= 0) continue;
         const lb = labelForDm(dmId);
-        upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "hoc_phi", mk, alloc, undefined, {
-          label: `Đơn học phí #${donId}`,
-          amount: alloc,
-          note: lb.ten,
-        });
-        monthKeysSet.add(mk);
+        const hasKyHoc = kyMonthKeys.length > 0;
+        const revenueMonthKeys = hasKyHoc ? kyMonthKeys : fallbackPaymentMonthKey ? [fallbackPaymentMonthKey] : [];
+        const monthAmounts = allocateEvenByThousand(alloc, revenueMonthKeys.length);
+
+        for (const [monthIdx, mk] of revenueMonthKeys.entries()) {
+          if (!mk.startsWith(`${nam}-`)) continue;
+          const monthAlloc = monthAmounts[monthIdx] ?? 0;
+          if (monthAlloc <= 0) continue;
+          upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "hoc_phi", mk, monthAlloc, undefined, {
+            label: `Đơn học phí #${donId}`,
+            amount: monthAlloc,
+            note: lb.ten,
+            sourceType: "hoc_phi",
+            sourceId: donId,
+            fields: [
+              { label: "Mã đơn", value: String(don?.ma_don ?? "—") },
+              { label: "Mã CK", value: String(don?.ma_don_so ?? "—") },
+              { label: "Trạng thái", value: String(don?.status ?? "—") },
+              { label: "Hình thức", value: String(don?.hinh_thuc_thu ?? "—") },
+              { label: "Ngày thanh toán", value: String(don?.ngay_thanh_toan ?? "—").slice(0, 10) },
+              { label: "Học viên ID", value: String(don?.student ?? "—") },
+              { label: "Dòng chi tiết", value: chiTietId != null ? `#${chiTietId}` : "—" },
+              { label: "Gói học phí", value: goiId != null ? `#${goiId}` : "—" },
+              { label: "Danh mục", value: `${lb.ten}${lb.ma ? ` · ${lb.ma}` : ""}` },
+              { label: "Ngày đầu kỳ", value: ngayDauKy },
+              { label: "Ngày cuối kỳ", value: ngayCuoiKy },
+              { label: "Cách phân bổ", value: hasKyHoc ? "Theo tháng kỳ học" : "Theo tháng thanh toán do thiếu kỳ học" },
+              { label: "Số tháng kỳ học", value: hasKyHoc ? String(revenueMonthKeys.length) : "—" },
+              { label: "Học phí dòng gốc", value: Math.round(amt).toLocaleString("vi-VN") },
+              { label: "Giảm giá đơn", value: Math.round(parseMoney(don?.giam_gia)).toLocaleString("vi-VN") },
+              { label: "Giảm thêm", value: Math.round(parseMoney(don?.giam_gia_vnd)).toLocaleString("vi-VN") },
+              { label: "Phân bổ sau giảm của dòng", value: Math.round(alloc).toLocaleString("vi-VN") },
+              { label: "Phân bổ vào tháng", value: Math.round(monthAlloc).toLocaleString("vi-VN") },
+            ],
+          });
+          monthKeysSet.add(mk);
+        }
       }
     }
   }

@@ -254,6 +254,7 @@ export default function BctcTuDongView({ bundle }: Props) {
     total: number;
     details: BctcTuDongDetail[];
   } | null>(null);
+  const [orderDetailModal, setOrderDetailModal] = useState<BctcTuDongDetail | null>(null);
 
   const displayCols = useMemo(() => buildTuDongDisplayCols(nam, monthKeys), [nam, monthKeys]);
 
@@ -794,7 +795,7 @@ export default function BctcTuDongView({ bundle }: Props) {
       </div>
       {detailModal ? (
         <div
-          className="fixed inset-0 z-[160] flex select-none items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+          className="fixed inset-0 z-[160] flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-5"
           role="dialog"
           aria-modal="true"
           aria-label="Chi tiết ô BCTC"
@@ -802,7 +803,7 @@ export default function BctcTuDongView({ bundle }: Props) {
             if (e.target === e.currentTarget) setDetailModal(null);
           }}
         >
-          <div className="flex max-h-[88dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-2xl bg-white shadow-[0_24px_64px_rgba(0,0,0,0.18)] sm:rounded-2xl">
+          <div className="flex max-h-[88dvh] w-full max-w-[560px] select-text flex-col overflow-hidden rounded-t-2xl bg-white shadow-[0_24px_64px_rgba(0,0,0,0.18)] sm:rounded-2xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EAEAEA] px-5 py-4">
               <div className="min-w-0">
                 <p className="m-0 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#BC8AF9]">
@@ -814,7 +815,7 @@ export default function BctcTuDongView({ bundle }: Props) {
               <button
                 type="button"
                 onClick={() => setDetailModal(null)}
-                className="rounded-lg border border-[#EAEAEA] bg-white px-3 py-1.5 text-[12px] font-bold text-black/55 hover:bg-[#fafafa]"
+                className="select-none rounded-lg border border-[#EAEAEA] bg-white px-3 py-1.5 text-[12px] font-bold text-black/55 hover:bg-[#fafafa]"
               >
                 Đóng
               </button>
@@ -825,8 +826,19 @@ export default function BctcTuDongView({ bundle }: Props) {
                 <span className="text-base font-black tabular-nums text-[#1a1a2e]">{fmtNum(detailModal.total)}</span>
               </div>
               <div className="space-y-2">
-                {detailModal.details.map((d, idx) => (
-                  <div key={`${d.label}-${idx}`} className="rounded-xl border border-[#EAEAEA] bg-white px-3 py-2.5">
+                {detailModal.details.map((d, idx) => {
+                  const canOpenOrder = d.sourceType === "hoc_phi" && d.fields?.length;
+                  const CardTag = canOpenOrder ? "button" : "div";
+                  return (
+                  <CardTag
+                    key={`${d.label}-${idx}`}
+                    type={canOpenOrder ? "button" : undefined}
+                    onClick={canOpenOrder ? () => setOrderDetailModal(d) : undefined}
+                    className={cn(
+                      "w-full rounded-xl border border-[#EAEAEA] bg-white px-3 py-2.5 text-left",
+                      canOpenOrder && "cursor-pointer transition hover:border-[#f8a668]/45 hover:bg-[#fff8f0]",
+                    )}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="m-0 text-[13px] font-bold text-[#323232]">{d.label}</p>
@@ -836,6 +848,53 @@ export default function BctcTuDongView({ bundle }: Props) {
                         {fmtNum(d.amount)}
                       </span>
                     </div>
+                  </CardTag>
+                );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {orderDetailModal ? (
+        <div
+          className="fixed inset-0 z-[180] flex items-end justify-center bg-black/45 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Chi tiết đơn học phí"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setOrderDetailModal(null);
+          }}
+        >
+          <div className="flex max-h-[86dvh] w-full max-w-[520px] select-text flex-col overflow-hidden rounded-t-2xl bg-white shadow-[0_24px_64px_rgba(0,0,0,0.2)] sm:rounded-2xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EAEAEA] px-5 py-4">
+              <div className="min-w-0">
+                <p className="m-0 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#BC8AF9]">
+                  Chi tiết đơn thu học phí
+                </p>
+                <h3 className="m-0 mt-1 text-base font-extrabold text-[#1a1a2e]">{orderDetailModal.label}</h3>
+                {orderDetailModal.note ? (
+                  <p className="m-0 mt-1 text-[12px] font-semibold text-black/50">{orderDetailModal.note}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setOrderDetailModal(null)}
+                className="select-none rounded-lg border border-[#EAEAEA] bg-white px-3 py-1.5 text-[12px] font-bold text-black/55 hover:bg-[#fafafa]"
+              >
+                Đóng
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              <div className="mb-3 flex items-center justify-between rounded-xl bg-[#F5F7F7] px-3 py-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-black/45">Số tiền phân bổ</span>
+                <span className="text-base font-black tabular-nums text-[#1a1a2e]">{fmtNum(orderDetailModal.amount)}</span>
+              </div>
+              <div className="overflow-hidden rounded-xl border border-[#EAEAEA]">
+                {orderDetailModal.fields?.map((field) => (
+                  <div key={field.label} className="flex items-start justify-between gap-3 border-b border-[#EAEAEA] px-3 py-2.5 last:border-b-0">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-black/45">{field.label}</span>
+                    <span className="max-w-[62%] text-right text-[12px] font-bold text-[#1a1a2e]">{field.value}</span>
                   </div>
                 ))}
               </div>

@@ -42,8 +42,9 @@ export async function GET(req: Request) {
   const days = parseDays(url.searchParams.get("days"));
   const offset = parseNonNegInt(url.searchParams.get("offset"), 0);
   const limit = Math.min(50, parseNonNegInt(url.searchParams.get("limit"), ADMIN_HOA_DON_PAGE_SIZE));
+  const query = url.searchParams.get("q")?.trim() ?? "";
 
-  const res = await fetchAdminHoaDonBundle(supabase, { days, limit, offset });
+  const res = await fetchAdminHoaDonBundle(supabase, { days, limit, offset, query });
   if (!res.ok) {
     return NextResponse.json({ ok: false, error: res.error }, { status: 502 });
   }

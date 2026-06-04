@@ -391,12 +391,54 @@ export default function QuanLyHoaDonView({ bundle: initialBundle, days }: Props)
   const [bundle, setBundle] = useState<AdminHoaDonBundle>(initialBundle);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreErr, setLoadMoreErr] = useState<string | null>(null);
+  const [serverSearching, setServerSearching] = useState(false);
 
   /** Khi prop bundle đổi (sang filter `days` khác hoặc `router.refresh()`), reset state cục bộ. */
   useEffect(() => {
     setBundle(initialBundle);
     setLoadMoreErr(null);
   }, [initialBundle]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 3) return;
+    const ctrl = new AbortController();
+    const t = window.setTimeout(async () => {
+      setServerSearching(true);
+      setLoadMoreErr(null);
+      try {
+        const params = new URLSearchParams({
+          days: String(days),
+          offset: "0",
+          limit: "50",
+          q,
+        });
+        const res = await fetch(`/admin/api/quan-ly-hoa-don/load-more?${params.toString()}`, {
+          method: "GET",
+          cache: "no-store",
+          signal: ctrl.signal,
+        });
+        const json = (await res.json()) as
+          | { ok: true; bundle: AdminHoaDonBundle }
+          | { ok: false; error: string };
+        if (!res.ok || !json.ok) {
+          setLoadMoreErr(("error" in json && json.error) || "Không tìm được đơn trên server.");
+          return;
+        }
+        setBundle((prev) => mergeBundle(prev, json.bundle));
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        setLoadMoreErr(e instanceof Error ? e.message : "Lỗi mạng khi tìm đơn.");
+      } finally {
+        if (!ctrl.signal.aborted) setServerSearching(false);
+      }
+    }, 350);
+    return () => {
+      ctrl.abort();
+      window.clearTimeout(t);
+      setServerSearching(false);
+    };
+  }, [days, query]);
 
   /** ID đơn đang chọn (có thể lệch bundle sau refresh — dùng `selectedIdValid` để bind UI). */
   const selectedIdValid = useMemo(() => {
@@ -466,6 +508,7 @@ export default function QuanLyHoaDonView({ bundle: initialBundle, days }: Props)
         offset: String(nextOffset),
         limit: String(LOAD_MORE_SIZE),
       });
+      if (query.trim()) params.set("q", query.trim());
       const res = await fetch(`/admin/api/quan-ly-hoa-don/load-more?${params.toString()}`, {
         method: "GET",
         cache: "no-store",
@@ -483,7 +526,7 @@ export default function QuanLyHoaDonView({ bundle: initialBundle, days }: Props)
     } finally {
       setLoadingMore(false);
     }
-  }, [bundle.dons.length, bundle.hasMore, bundle.offset, days, loadingMore]);
+  }, [bundle.dons.length, bundle.hasMore, bundle.offset, days, loadingMore, query]);
 
   const STATUS_QUICK: { value: string; label: string; count: number }[] = [
     { value: "", label: "Tất cả", count: stats.total },
@@ -592,6 +635,12 @@ export default function QuanLyHoaDonView({ bundle: initialBundle, days }: Props)
                 {filtered.length} đơn{query.trim() || filterStatus ? " (đã lọc)" : ""}
               </p>
               <p className="m-0 text-[10px] font-semibold text-black/35">
+                {serverSearching ? (
+                  <span className="mr-2 inline-flex items-center gap-1 text-[#BC8AF9]">
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                    Đang tìm
+                  </span>
+                ) : null}
                 {bundle.totalCount != null ? (
                   <>
                     Đã tải <span className="tabular-nums text-black/55">{bundle.dons.length}</span>
@@ -756,7 +805,7 @@ export default function QuanLyHoaDonView({ bundle: initialBundle, days }: Props)
           </section>
 
           {/* Panel phải: chi tiết hoặc placeholder (desktop) */}
-          <div className="flex min-h-0 w-full shrink-0 flex-col bg-[#fafafa] lg:w-[min(100%,420px)] lg:max-w-[40%] xl:max-w-[400px]">
+          <div className="flex max-h-[72dvh] min-h-[320px] w-full shrink-0 flex-col overflow-hidden bg-[#fafafa] lg:h-full lg:max-h-full lg:min-h-0 lg:w-[min(100%,420px)] lg:max-w-[40%] xl:max-w-[400px]">
             <AnimatePresence mode="wait" initial={false}>
               {selected ? (
                 <motion.aside
@@ -765,7 +814,7 @@ export default function QuanLyHoaDonView({ bundle: initialBundle, days }: Props)
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 6 }}
                   transition={{ duration: 0.18 }}
-                  className="flex h-full min-h-0 flex-1 flex-col overflow-hidden border-t border-black/[0.06] bg-white lg:min-h-0 lg:border-t-0"
+                  className="flex h-full max-h-full min-h-0 flex-1 flex-col overflow-hidden border-t border-black/[0.06] bg-white lg:min-h-0 lg:border-t-0"
                 >
                   <DonDetailPanel
                     don={selected}
@@ -1045,7 +1094,7 @@ function DonDetailPanel({
   const title = don.ma_don?.trim() || don.ma_don_so?.trim() || `#${don.id}`;
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex h-full max-h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-black/[0.06] bg-gradient-to-r from-[#f8a668]/12 via-white to-[#ee5b9f]/10 px-3 py-2.5 sm:px-4 sm:py-3">
         <button
           type="button"
@@ -1103,7 +1152,7 @@ function DonDetailPanel({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-4 sm:py-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch] sm:px-4 sm:py-4">
         {err ? (
           <p className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-700">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />

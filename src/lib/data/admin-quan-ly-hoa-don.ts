@@ -103,13 +103,14 @@ function goiHocPhiSelectForTable(table: string): string {
  */
 export async function fetchAdminHoaDonBundle(
   supabase: SupabaseClient,
-  opts: { days: number; limit?: number; offset?: number }
+  opts: { days: number; limit?: number; offset?: number; query?: string }
 ): Promise<{ ok: true; data: AdminHoaDonBundle } | { ok: false; error: string }> {
   const since = sinceIsoForDays(opts.days);
   const pageSize = Math.max(1, Math.min(100, opts.limit ?? ADMIN_HOA_DON_PAGE_SIZE));
   const offset = Math.max(0, opts.offset ?? 0);
   const rangeFrom = offset;
   const rangeTo = Math.min(MAX_DONS - 1, offset + pageSize - 1);
+  const query = opts.query?.trim() ?? "";
 
   let q = supabase
     .from("hp_don_thu_hoc_phi")
@@ -122,6 +123,10 @@ export async function fetchAdminHoaDonBundle(
 
   if (since != null) {
     q = q.gte("created_at", since);
+  }
+  if (query) {
+    const safe = query.replace(/[%_,]/g, "\\$&");
+    q = q.or(`ma_don.ilike.%${safe}%,ma_don_so.ilike.%${safe}%`);
   }
 
   const { data: donRows, error: donErr, count: donCount } = await q;

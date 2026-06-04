@@ -16,6 +16,7 @@ import { HomeReviewsSectionSkeleton } from "./_components/home/HomeReviewsSectio
 import { HomeClassroomPhotosSection } from "./_components/home/HomeClassroomPhotosSection";
 import { HomeTeachersSection } from "./_components/home/HomeTeachersSection";
 import { HomeTeachersSectionSkeleton } from "./_components/home/HomeTeachersSection.skeleton";
+import { HomeSectionErrorBoundary } from "./_components/home/HomeSectionErrorBoundary";
 import "./sineart-home.css";
 import { SITE_OG_DEFAULT_IMAGE } from "@/lib/seo/site-jsonld";
 
@@ -49,35 +50,53 @@ export default function Home() {
     <div className="sa-root">
       <HomePageJsonLd />
       <Suspense fallback={<HomeNavSectionSkeleton />}>
-        <HomeNavSection />
+        <HomeSectionErrorBoundary label="HomeNavSection">
+          <HomeNavSection />
+        </HomeSectionErrorBoundary>
       </Suspense>
 
       <Suspense fallback={<HomeLeadLoadingFallback />}>
-        <HomeLeadSections>
-          <Suspense fallback={<HomeReviewsSectionSkeleton />}>
-            <HomeReviewsSection />
-          </Suspense>
-          <Suspense fallback={<HomeGallerySectionSkeleton />}>
-            <HomeGallerySection />
-          </Suspense>
-        </HomeLeadSections>
+        <HomeSectionErrorBoundary label="HomeLeadSections">
+          <HomeLeadSections>
+            <Suspense fallback={<HomeReviewsSectionSkeleton />}>
+              <HomeSectionErrorBoundary label="HomeReviewsSection">
+                <HomeReviewsSection />
+              </HomeSectionErrorBoundary>
+            </Suspense>
+            <Suspense fallback={<HomeGallerySectionSkeleton />}>
+              <HomeSectionErrorBoundary label="HomeGallerySection">
+                <HomeGallerySection />
+              </HomeSectionErrorBoundary>
+            </Suspense>
+          </HomeLeadSections>
+        </HomeSectionErrorBoundary>
       </Suspense>
 
       <Suspense fallback={<HomeCareerSectionSkeleton />}>
-        <HomeCareerSection />
+        <HomeSectionErrorBoundary label="HomeCareerSection">
+          <HomeCareerSection />
+        </HomeSectionErrorBoundary>
       </Suspense>
 
       <Suspense fallback={<HomeTeachersSectionSkeleton />}>
-        <HomeTeachersSection />
+        <HomeSectionErrorBoundary label="HomeTeachersSection">
+          <HomeTeachersSection />
+        </HomeSectionErrorBoundary>
       </Suspense>
 
       <Suspense fallback={null}>
-        <HomeClassroomPhotosSection />
+        <HomeSectionErrorBoundary label="HomeClassroomPhotosSection">
+          <HomeClassroomPhotosSection />
+        </HomeSectionErrorBoundary>
       </Suspense>
 
-      <CtaBandSection />
+      <HomeSectionErrorBoundary label="CtaBandSection">
+        <CtaBandSection />
+      </HomeSectionErrorBoundary>
 
-      <LuuBaiHocVienFab />
+      <HomeSectionErrorBoundary label="LuuBaiHocVienFab">
+        <LuuBaiHocVienFab />
+      </HomeSectionErrorBoundary>
     </div>
   );
 }

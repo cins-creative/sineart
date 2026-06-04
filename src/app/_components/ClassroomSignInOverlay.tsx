@@ -139,6 +139,7 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [needsCreateAccount, setNeedsCreateAccount] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const resetFormState = () => {
     setRecords([]);
@@ -250,6 +251,10 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
     }
   }, [open, records, router]);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const enterClass = (item: ClassroomSessionRecord) => {
     const slug = phongHocSlugFromClassName(item.data.class_name);
     if (!slug) {
@@ -295,12 +300,11 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
     }
   };
 
-  if (typeof document === "undefined") return null;
+  if (!mounted || !open) return null;
 
   return createPortal(
     <AnimatePresence>
-      {open ? (
-        <motion.div
+      <motion.div
           key="cso-root"
           className="cso-overlay-outer"
           initial={{ opacity: 0 }}
@@ -535,7 +539,6 @@ export default function ClassroomSignInOverlay({ open, onClose, initialEmail }: 
             onClick={closeOverlay}
           />
         </motion.div>
-      ) : null}
     </AnimatePresence>,
     document.body
   );

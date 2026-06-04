@@ -418,6 +418,15 @@
   isolation: isolate;
   min-height: unset; /* override base */
   background: #ffffff;
+  /* Ghi đè `.hero` legacy trong sineart-home.css (flex + justify-end) — tránh đẩy CTA xuống vùng bị stat-strip đè */
+  display: block;
+  flex-direction: unset;
+  justify-content: unset;
+  margin-bottom: 0;
+}
+.sa-root .hero-grid {
+  position: relative;
+  z-index: 2;
 }
 .sa-root .hero-cover,
 .sa-root .hero-ov {
@@ -798,6 +807,8 @@
   box-shadow: 0 18px 48px rgba(45, 32, 32, 0.1) !important;
   position: relative;
   z-index: 4;
+  /* Chỉ trang trí — không chặn tap hero/CTA phía dưới (iOS WebKit hay nuốt touch ở lớp đè) */
+  pointer-events: none;
 }
 .sa-root .stat-strip.stat-strip--4 {
   grid-template-columns: repeat(4, 1fr);
@@ -1559,6 +1570,9 @@
 
 /* xs/sm — mobile dưới md */
 @media (max-width: 767.98px) {
+  .sa-root .stat-strip {
+    margin-top: -32px !important;
+  }
   .hero-grid {
     grid-template-columns: 1fr;
     gap: 48px;

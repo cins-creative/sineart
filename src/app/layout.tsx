@@ -101,7 +101,7 @@ export default function RootLayout({
       className={`${quicksand.variable} ${beVietnamPro.variable} ${quicksand.className} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex w-full min-w-0 flex-col overflow-x-clip" suppressHydrationWarning>
+      <body className="min-h-full flex w-full min-w-0 flex-col overflow-x-hidden" suppressHydrationWarning>
         <SeoOrganizationJsonLd />
         <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
         <ConditionalCta />

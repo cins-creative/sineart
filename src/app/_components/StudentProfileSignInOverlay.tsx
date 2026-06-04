@@ -18,6 +18,11 @@ export default function StudentProfileSignInOverlay({ open, onClose }: Props) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -68,7 +73,7 @@ export default function StudentProfileSignInOverlay({ open, onClose }: Props) {
     }
   };
 
-  if (!open || typeof document === "undefined") return null;
+  if (!mounted || !open) return null;
 
   return createPortal(
     <div

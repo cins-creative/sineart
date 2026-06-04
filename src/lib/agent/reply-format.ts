@@ -21,6 +21,26 @@ export function stripMarkdownImages(text: string): string {
 
 const DEFAULT_MAX_CHUNK = 300;
 
+/** Tách sau dấu câu + khoảng trắng — không dùng lookbehind (Safari < 16.4). */
+function splitOnSentenceWhitespace(text: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (!/[.!?…]/.test(ch)) continue;
+    let j = i + 1;
+    while (j < text.length && /\s/.test(text[j]!)) j++;
+    if (j === i + 1) continue;
+    const piece = text.slice(start, j).trim();
+    if (piece) parts.push(piece);
+    start = j;
+    i = j - 1;
+  }
+  const tail = text.slice(start).trim();
+  if (tail) parts.push(tail);
+  return parts.filter(Boolean);
+}
+
 /** 60% → 1 tin, 30% → 2 tin, 10% → 3 tin (mỗi lần gọi độc lập). */
 export function rollReplyBubbleCount(): 1 | 2 | 3 {
   const r = Math.random();
@@ -47,7 +67,7 @@ export function splitAgentReplyIntoChatParts(
       segments.push(block);
       continue;
     }
-    const sentences = block.split(/(?<=[.!?…])\s+/u).filter(Boolean);
+    const sentences = splitOnSentenceWhitespace(block);
     let buf = "";
     for (const s of sentences) {
       const next = buf ? `${buf} ${s}` : s;

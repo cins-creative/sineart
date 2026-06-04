@@ -52,6 +52,25 @@ function nId(v: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+type HvRef = { full_name: string; email_prefix: string | null };
+
+function hvCodeLabel(hv: HvRef | undefined, studentId: number): string {
+  const ep = hv?.email_prefix?.trim();
+  return ep || `#${studentId}`;
+}
+
+function hvDisplayName(hv: HvRef | undefined, studentId: number): string {
+  const name = hv?.full_name?.trim();
+  return name || `HV #${studentId}`;
+}
+
+/** Dòng phụ trong popup chi tiết ô — tên · mã học viên. */
+function studentNoteLine(hvById: Map<number, HvRef>, studentId: number | null): string {
+  if (studentId == null) return "—";
+  const hv = hvById.get(studentId);
+  return `${hvDisplayName(hv, studentId)} · ${hvCodeLabel(hv, studentId)}`;
+}
+
 function parseMoney(v: unknown): number {
   if (v == null) return 0;
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -389,6 +408,32 @@ export async function fetchBctcTuDongBundle(
   const donsAll = (donRows ?? []) as Record<string, unknown>[];
   const donIds = donsAll.map((d) => nId(d.id)).filter((x): x is number => x != null);
 
+  const hvById = new Map<number, HvRef>();
+  const studentIds = [
+    ...new Set(donsAll.map((d) => nId(d.student)).filter((x): x is number => x != null)),
+  ];
+  if (studentIds.length > 0) {
+    const { data: hvRows, error: hvErr } = await supabase
+      .from("ql_thong_tin_hoc_vien")
+      .select("id, full_name, email_prefix")
+      .in("id", studentIds);
+    if (hvErr) {
+      return { ok: false, error: hvErr.message || "Không đọc được học viên." };
+    }
+    for (const raw of hvRows ?? []) {
+      const row = raw as Record<string, unknown>;
+      const id = nId(row.id);
+      if (!id) continue;
+      hvById.set(id, {
+        full_name: String(row.full_name ?? "").trim(),
+        email_prefix:
+          row.email_prefix != null && String(row.email_prefix).trim() !== ""
+            ? String(row.email_prefix).trim()
+            : null,
+      });
+    }
+  }
+
   if (donIds.length > 0) {
     const { data: chiRaw, error: chiErr } = await supabase
       .from("hp_thu_hp_chi_tiet")
@@ -432,6 +477,8 @@ export async function fetchBctcTuDongBundle(
 
     for (const donId of donIds) {
       const don = donById.get(donId);
+      const studentId = nId(don?.student);
+      const hvRef = studentId != null ? hvById.get(studentId) : undefined;
       const lines = chiByDon.get(donId) ?? [];
       const fallbackPaymentMonthKey = monthKeyFromDonLike(
         don?.ngay_thanh_toan != null ? String(don.ngay_thanh_toan) : null,
@@ -490,7 +537,7 @@ export async function fetchBctcTuDongBundle(
           upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "hoc_phi", mk, monthAlloc, undefined, {
             label: `Đơn học phí #${donId}`,
             amount: monthAlloc,
-            note: lb.ten,
+            note: studentNoteLine(hvById, studentId),
             sourceType: "hoc_phi",
             sourceId: donId,
             fields: [
@@ -499,7 +546,14 @@ export async function fetchBctcTuDongBundle(
               { label: "Trạng thái", value: String(don?.status ?? "—") },
               { label: "Hình thức", value: String(don?.hinh_thuc_thu ?? "—") },
               { label: "Ngày thanh toán", value: String(don?.ngay_thanh_toan ?? "—").slice(0, 10) },
-              { label: "Học viên ID", value: String(don?.student ?? "—") },
+              {
+                label: "Học viên",
+                value: studentId != null ? hvDisplayName(hvRef, studentId) : "—",
+              },
+              {
+                label: "Mã học viên",
+                value: studentId != null ? hvCodeLabel(hvRef, studentId) : "—",
+              },
               { label: "Dòng chi tiết", value: chiTietId != null ? `#${chiTietId}` : "—" },
               { label: "Gói học phí", value: goiId != null ? `#${goiId}` : "—" },
               { label: "Danh mục", value: `${lb.ten}${lb.ma ? ` · ${lb.ma}` : ""}` },

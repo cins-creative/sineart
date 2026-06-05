@@ -658,22 +658,22 @@ export async function deleteHrNhanSuAsAdmin(nhan_su_id: number): Promise<DeleteH
 export type UpdateHrPayrollPayslipFieldsResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Cập nhật phiếu lương: `hr_nhan_su` (lương / trợ cấp / BHXH / nghỉ tối đa),
- * `hr_bang_tinh_luong` (tạm ứng / thưởng), `hr_lich_diem_danh` (buổi điểm danh — dòng đầu theo `bang_tinh_luong`).
+ * Cập nhật phiếu lương: snapshot LCB/trợ cấp/BHXH trên `hr_bang_tinh_luong`,
+ * `hr_nhan_su` (chỉ nghỉ tối đa / năm), `hr_lich_diem_danh` (buổi điểm danh).
  */
 export async function updateHrPayrollPayslipFields(payload: {
   nhan_vien_id: number;
   bang_tinh_luong_id: number;
   nhan_su: {
-    luong_co_ban: number | null;
-    tro_cap: number | null;
     so_buoi_nghi_toi_da: number | null;
-    /** Chỉ gửi khi phiếu có khối BHXH (Fulltime có trích). */
-    bhxh?: number | null;
   };
   bang_tinh_luong: {
+    luong_co_ban: number | null;
+    tro_cap: number | null;
     tam_ung: number | null;
     thuong: number | null;
+    /** Chỉ gửi khi phiếu có khối BHXH (Fulltime có trích). */
+    bhxh?: number | null;
   };
   lich_diem_danh: {
     tong_buoi_lam_viec_trong_thang: number | null;
@@ -715,32 +715,30 @@ export async function updateHrPayrollPayslipFields(payload: {
   }
 
   const ns = payload.nhan_su;
-  const nhanPatch: Record<string, unknown> = {
-    luong_co_ban: ns.luong_co_ban,
-    tro_cap: ns.tro_cap,
-    so_buoi_nghi_toi_da: ns.so_buoi_nghi_toi_da,
-  };
-  if ("bhxh" in ns && ns.bhxh !== undefined) {
-    nhanPatch.BHXH = ns.bhxh;
-  }
-
-  let nhanErr = (await supabase.from("hr_nhan_su").update(nhanPatch).eq("id", nvId)).error;
-  if (nhanErr && "BHXH" in nhanPatch) {
-    const { BHXH: _omit, ...rest } = nhanPatch;
-    nhanErr = (await supabase.from("hr_nhan_su").update(rest).eq("id", nvId)).error;
-  }
+  const { error: nhanErr } = await supabase
+    .from("hr_nhan_su")
+    .update({ so_buoi_nghi_toi_da: ns.so_buoi_nghi_toi_da })
+    .eq("id", nvId);
   if (nhanErr) {
     return { ok: false, error: nhanErr.message || "Không cập nhật được hồ sơ nhân viên." };
   }
 
   const bl = payload.bang_tinh_luong;
-  const { error: bangUpErr } = await supabase
-    .from("hr_bang_tinh_luong")
-    .update({
-      tam_ung: bl.tam_ung,
-      thuong: bl.thuong,
-    })
-    .eq("id", bangId);
+  const bangPatch: Record<string, unknown> = {
+    luong_co_ban: bl.luong_co_ban,
+    tro_cap: bl.tro_cap,
+    tam_ung: bl.tam_ung,
+    thuong: bl.thuong,
+  };
+  if ("bhxh" in bl && bl.bhxh !== undefined) {
+    bangPatch.BHXH = bl.bhxh;
+  }
+
+  let bangUpErr = (await supabase.from("hr_bang_tinh_luong").update(bangPatch).eq("id", bangId)).error;
+  if (bangUpErr && "BHXH" in bangPatch) {
+    const { BHXH: _omit, ...rest } = bangPatch;
+    bangUpErr = (await supabase.from("hr_bang_tinh_luong").update(rest).eq("id", bangId)).error;
+  }
   if (bangUpErr) {
     return { ok: false, error: bangUpErr.message || "Không cập nhật được bảng lương." };
   }

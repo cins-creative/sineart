@@ -951,6 +951,7 @@ export async function adminCreateHpDonThu(payload: {
   const seenQl = new Set<number>();
   const goiTable = hpGoiHocPhiTableName();
   let subtotal = 0;
+  const payableByQlhv = new Map<number, number>();
 
   for (const ln of lines) {
     const qlhvId = Math.trunc(ln.qlhvId);
@@ -1008,6 +1009,7 @@ export async function adminCreateHpDonThu(payload: {
           })();
     if (payable <= 0) return { ok: false, error: `Gói ${goiId} có học phí = 0.` };
     subtotal += payable;
+    payableByQlhv.set(qlhvId, payable);
   }
 
   const discountDong = Math.round(subtotal * (pct / 100));
@@ -1090,6 +1092,7 @@ export async function adminCreateHpDonThu(payload: {
         nguoi_tao: nguoiTaoId,
         khoa_hoc_vien: Math.trunc(ln.qlhvId),
         goi_hoc_phi: Math.trunc(ln.goiId),
+        hoc_phi_dong: payableByQlhv.get(Math.trunc(ln.qlhvId)) ?? 0,
         ngay_dau_ky: dau,
         ngay_cuoi_ky: cuoi,
         status: "Chờ thanh toán",

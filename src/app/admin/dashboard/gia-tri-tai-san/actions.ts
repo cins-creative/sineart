@@ -2,14 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 
+import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { TC_TAI_SAN_TABLE } from "@/lib/data/admin-gia-tri-tai-san";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const PATH = "/admin/dashboard/gia-tri-tai-san";
 const OVERVIEW_PATH = "/admin/dashboard/overview";
+const BCTC_TU_DONG_PATH = "/admin/dashboard/bctc-tu-dong";
 
 export type AddTaiSanResult = { ok: true } | { ok: false; error: string };
+export type DeleteTaiSanResult = { ok: true } | { ok: false; error: string };
 
 function parseMoneyVND(raw: string): { value: number; ok: true } | { ok: false } {
   const cleaned = raw.replace(/\s/g, "").replace(/\./g, "").replace(/,/g, "");
@@ -67,5 +70,49 @@ export async function addTaiSanAsset(formData: FormData): Promise<AddTaiSanResul
 
   revalidatePath(PATH);
   revalidatePath(OVERVIEW_PATH);
+  revalidatePath(BCTC_TU_DONG_PATH);
+  return { ok: true };
+}
+
+export async function deleteTaiSanAsset(id: number): Promise<DeleteTaiSanResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const assetId = Number(id);
+  if (!Number.isFinite(assetId) || assetId <= 0) {
+    return { ok: false, error: "ID tài sản không hợp lệ." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const perm = await assertStaffMayDeleteRecords(supabase, session.staffId);
+  if (!perm.ok) return { ok: false, error: perm.error };
+
+  const { data: existing, error: readErr } = await supabase
+    .from(TC_TAI_SAN_TABLE)
+    .select("id")
+    .eq("id", assetId)
+    .maybeSingle();
+
+  if (readErr) {
+    return { ok: false, error: readErr.message || "Không đọc được tài sản." };
+  }
+  if (!existing) {
+    return { ok: false, error: "Không tìm thấy tài sản." };
+  }
+
+  const { error } = await supabase.from(TC_TAI_SAN_TABLE).delete().eq("id", assetId);
+
+  if (error) {
+    return {
+      ok: false,
+      error: error.message || `Không xóa được tài sản trong ${TC_TAI_SAN_TABLE}.`,
+    };
+  }
+
+  revalidatePath(PATH);
+  revalidatePath(OVERVIEW_PATH);
+  revalidatePath(BCTC_TU_DONG_PATH);
   return { ok: true };
 }

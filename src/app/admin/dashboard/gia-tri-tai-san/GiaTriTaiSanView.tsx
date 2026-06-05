@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronDown, Plus } from "lucide-react";
+import { AlertTriangle, ChevronDown, Loader2, Plus, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState, useTransition } from "react";
 
-import { addTaiSanAsset } from "@/app/admin/dashboard/gia-tri-tai-san/actions";
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
+import { addTaiSanAsset, deleteTaiSanAsset } from "@/app/admin/dashboard/gia-tri-tai-san/actions";
 import {
   computeTaiSanDepreciation,
   depreciationExpenseForCalendarMonth,
@@ -182,15 +183,51 @@ type Props = {
 };
 
 export default function GiaTriTaiSanView({ rows, embedded = false }: Props) {
+  const router = useRouter();
+  const { canDelete } = useAdminDashboardAbilities();
   const assets = useMemo(() => rows.map(computeTaiSanDepreciation), [rows]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<TaiSanComputed | null>(null);
+  const [deletePendingId, setDeletePendingId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [khFilterMonth, setKhFilterMonth] = useState(defaultMonthKey);
+  const [, startDeleteTransition] = useTransition();
 
   const tongGiaTri = assets.reduce((s, a) => s + a.gia_tri_moi_mua, 0);
   const tongConLai = assets.reduce((s, a) => s + a.conLai, 0);
   const tongDaKhauHao = assets.reduce((s, a) => s + a.daKhauHao, 0);
   const tongKhauHaoThang = assets.reduce((s, a) => s + a.khauHaoThang, 0);
+
+  function requestDeleteAsset(a: TaiSanComputed) {
+    if (!canDelete || deletePendingId != null) return;
+    setDeleteError(null);
+    setDeleteTarget(a);
+  }
+
+  function closeDeleteModal() {
+    if (deletePendingId != null) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  }
+
+  function confirmDeleteAsset() {
+    if (!deleteTarget || !canDelete || deletePendingId != null) return;
+    const targetId = deleteTarget.id;
+    setDeleteError(null);
+    setDeletePendingId(targetId);
+    startDeleteTransition(async () => {
+      const res = await deleteTaiSanAsset(targetId);
+      setDeletePendingId(null);
+      if (res.ok) {
+        setDeleteTarget(null);
+        if (expandedId === targetId) setExpandedId(null);
+        router.refresh();
+      } else {
+        setDeleteError(res.error);
+      }
+    });
+  }
 
   /** Chi phí KH phát sinh trong tháng chọn — cùng công thức BCTC tự động. */
   const { tongKhauHaoPhatSinh, countCoPhatSinhKh } = useMemo(() => {
@@ -237,6 +274,13 @@ export default function GiaTriTaiSanView({ rows, embedded = false }: Props) {
       </div>
 
       <AddTaiSanModal open={addOpen} onClose={() => setAddOpen(false)} />
+      <DeleteTaiSanConfirmModal
+        target={deleteTarget}
+        pending={deletePendingId != null}
+        error={deleteError}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteAsset}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 px-[10px] pb-6 pt-3 md:gap-3 md:px-6 md:pt-4">
         <div className="flex flex-wrap gap-2 md:gap-3">
@@ -292,6 +336,9 @@ export default function GiaTriTaiSanView({ rows, embedded = false }: Props) {
                   a={a}
                   expanded={expandedId === a.id}
                   onToggle={() => setExpandedId(expandedId === a.id ? null : a.id)}
+                  canDelete={canDelete}
+                  deletePending={deletePendingId === a.id}
+                  onDelete={() => requestDeleteAsset(a)}
                 />
               ))}
             </div>
@@ -318,6 +365,133 @@ export default function GiaTriTaiSanView({ rows, embedded = false }: Props) {
 }
 
 const LOAI_OPTIONS = Object.keys(LOAI_BADGE);
+
+function DeleteTaiSanConfirmModal({
+  target,
+  pending,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  target: TaiSanComputed | null;
+  pending: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    if (!target) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !pending) onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [target, pending, onClose]);
+
+  if (!target) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-900/50 p-4 backdrop-blur-[2px] sm:items-center"
+      role="presentation"
+      onMouseDown={(ev) => {
+        if (ev.target === ev.currentTarget && !pending) onClose();
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-tai-san-title"
+        className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-[20px] border-2 border-red-300 bg-white shadow-2xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="relative flex items-start gap-3 border-b border-red-200 bg-gradient-to-br from-red-50 to-red-100/70 px-5 py-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 ring-4 ring-red-50">
+            <AlertTriangle className="h-5 w-5 text-red-600" strokeWidth={2.4} aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="m-0 text-[9px] font-extrabold uppercase tracking-widest text-red-700">
+              Cảnh báo · Hành động không thể hoàn tác
+            </p>
+            <h2
+              id="delete-tai-san-title"
+              className="m-0 mt-0.5 truncate text-[15px] font-extrabold text-[#1a1a2e]"
+              title={target.ten_tai_san}
+            >
+              Xóa «{target.ten_tai_san}»?
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-white text-red-500 transition hover:bg-red-50 disabled:opacity-50"
+            aria-label="Đóng"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-3 px-5 py-4 text-[13px] text-[#1a1a2e]">
+          <p className="m-0 font-semibold text-red-700">
+            Bạn sắp xóa tài sản <b>{target.ten_tai_san}</b>. Dữ liệu sẽ{" "}
+            <u>biến mất vĩnh viễn</u>, không thể khôi phục.
+          </p>
+
+          <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-[#fafafa]">
+            <div className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] px-3 py-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF]">Nguyên giá</span>
+              <span className="text-[13px] font-bold tabular-nums text-[#1a1a2e]">{fmtVND(target.gia_tri_moi_mua)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] px-3 py-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF]">Đã khấu hao</span>
+              <span className="text-[13px] font-bold tabular-nums text-[#BC8AF9]">{fmtVND(target.daKhauHao)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF]">Giá trị còn lại</span>
+              <span className="text-[13px] font-bold tabular-nums text-emerald-700">{fmtVND(target.conLai)}</span>
+            </div>
+          </div>
+
+          <ul className="m-0 list-disc space-y-1 rounded-lg border border-red-200/60 bg-red-50/40 py-2 pl-9 pr-3 text-[12px] text-red-900/90">
+            <li>
+              Xóa dòng trong{" "}
+              <code className="rounded bg-white px-1 font-bold">tc_tai_san_rong</code>
+            </li>
+            <li>Khấu hao trên BCTC tự động sẽ không còn tính tài sản này</li>
+            <li>Tổng giá trị tài sản và thống kê khấu hao trên trang này sẽ thay đổi ngay</li>
+          </ul>
+
+          {error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" role="alert">
+              {error}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-[#f0f0f0] px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2 text-[13px] font-semibold text-[#666] transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            Hủy bỏ
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={pending}
+            className="inline-flex items-center gap-1.5 rounded-[10px] border border-red-300 bg-red-600 px-4 py-2 text-[13px] font-bold text-white transition hover:bg-red-700 disabled:opacity-60"
+          >
+            {pending ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <Trash2 size={13} aria-hidden />}
+            {pending ? "Đang xóa…" : "Xóa vĩnh viễn"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AddTaiSanModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -528,10 +702,16 @@ function AssetRow({
   a,
   expanded,
   onToggle,
+  canDelete,
+  deletePending,
+  onDelete,
 }: {
   a: TaiSanComputed;
   expanded: boolean;
   onToggle: () => void;
+  canDelete: boolean;
+  deletePending: boolean;
+  onDelete: () => void;
 }) {
   const pc = pctColor(a);
   const elapsed = monthsElapsedSincePurchase(a.ngay_mua);
@@ -542,46 +722,71 @@ function AssetRow({
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={onToggle}
+      <div
         className={cn(
-          "grid w-full grid-cols-[minmax(0,1fr)_100px_108px_108px_112px] items-center gap-3 px-4 py-3 text-left transition-colors md:grid-cols-[minmax(0,1fr)_110px_120px_120px_120px] md:px-5",
+          "flex w-full items-stretch transition-colors",
           expanded ? "bg-sky-50/80" : "hover:bg-[#F8FAFF]",
         )}
       >
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate text-[13px] font-bold text-[#1a1a2e]">{a.ten_tai_san}</span>
-            <ChevronDown
-              className={cn("h-3.5 w-3.5 shrink-0 text-[#9CA3AF] transition-transform", expanded && "rotate-180")}
-              strokeWidth={2.5}
-              aria-hidden
-            />
-          </div>
-          <div className="mt-1.5 max-w-md">
-            <ProgressBar pct={a.pctConLai} color={pc} />
-          </div>
-        </div>
-        <div className="flex justify-center">
-          <LoaiBadge value={(a.loai_tai_san ?? "").trim()} />
-        </div>
-        <div className="text-right text-[12px] font-bold tabular-nums text-[#1a1a2e]">{fmtVNDShort(a.gia_tri_moi_mua)}</div>
-        <div className="text-right">
-          <div className="text-[12px] font-bold tabular-nums" style={{ color: pc }}>
-            {fmtVNDShort(a.conLai)}
-          </div>
-          <div className="text-[10px] text-[#9CA3AF]">{a.pctConLai}% còn lại</div>
-        </div>
-        <div
-          className={cn(
-            "text-right text-[12px] font-semibold tabular-nums",
-            a.khauHaoThang > 0 ? "text-amber-600" : "text-[#9CA3AF]",
-          )}
+        <button
+          type="button"
+          onClick={onToggle}
+          className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_100px_108px_108px_112px] items-center gap-3 px-4 py-3 text-left md:grid-cols-[minmax(0,1fr)_110px_120px_120px_120px] md:px-5"
         >
-          {a.khauHaoThang > 0 ? `${fmtVNDShort(a.khauHaoThang)} ₫` : "—"}
-        </div>
-      </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-[13px] font-bold text-[#1a1a2e]">{a.ten_tai_san}</span>
+              <ChevronDown
+                className={cn("h-3.5 w-3.5 shrink-0 text-[#9CA3AF] transition-transform", expanded && "rotate-180")}
+                strokeWidth={2.5}
+                aria-hidden
+              />
+            </div>
+            <div className="mt-1.5 max-w-md">
+              <ProgressBar pct={a.pctConLai} color={pc} />
+            </div>
+          </div>
+          <div className="flex justify-center">
+            <LoaiBadge value={(a.loai_tai_san ?? "").trim()} />
+          </div>
+          <div className="text-right text-[12px] font-bold tabular-nums text-[#1a1a2e]">
+            {fmtVNDShort(a.gia_tri_moi_mua)}
+          </div>
+          <div className="text-right">
+            <div className="text-[12px] font-bold tabular-nums" style={{ color: pc }}>
+              {fmtVNDShort(a.conLai)}
+            </div>
+            <div className="text-[10px] text-[#9CA3AF]">{a.pctConLai}% còn lại</div>
+          </div>
+          <div
+            className={cn(
+              "text-right text-[12px] font-semibold tabular-nums",
+              a.khauHaoThang > 0 ? "text-amber-600" : "text-[#9CA3AF]",
+            )}
+          >
+            {a.khauHaoThang > 0 ? `${fmtVNDShort(a.khauHaoThang)} ₫` : "—"}
+          </div>
+        </button>
+        {canDelete ? (
+          <button
+            type="button"
+            disabled={deletePending}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            title={`Xóa ${a.ten_tai_san}`}
+            aria-label={`Xóa tài sản ${a.ten_tai_san}`}
+            className="flex w-11 shrink-0 items-center justify-center border-l border-[#E5E7EB] text-red-500 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 md:w-12"
+          >
+            {deletePending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Trash2 className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+            )}
+          </button>
+        ) : null}
+      </div>
 
       {expanded ? (
         <div className="border-b border-[#E5E7EB] bg-[#F8FBFF] px-4 py-3 md:px-5">
@@ -603,6 +808,23 @@ function AssetRow({
               value={monthsLeft != null ? `${monthsLeft} tháng` : "—"}
             />
           </div>
+          {canDelete ? (
+            <div className="mt-3 flex justify-end border-t border-[#E5E7EB] pt-3">
+              <button
+                type="button"
+                disabled={deletePending}
+                onClick={onDelete}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-[12px] font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+              >
+                {deletePending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                )}
+                Xóa tài sản
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

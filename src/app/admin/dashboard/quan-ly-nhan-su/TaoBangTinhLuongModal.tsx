@@ -176,8 +176,10 @@ export function TaoBangTinhLuongModal({ row, onClose, onSuccess }: Props) {
       created_at: null,
       tam_ung: parseOptInt(tamUngInput),
       thuong: parseOptInt(thuongInput),
-      luong_co_ban: null,
-      tro_cap: null,
+      luong_co_ban: row.luong_co_ban,
+      tro_cap: row.tro_cap,
+      hinh_thuc_tinh_luong: row.hinh_thuc_tinh_luong,
+      bhxh: row.bhxh,
       lich_diem_danh: null,
       ky_thang: thang,
       ky_nam: nam,
@@ -186,7 +188,7 @@ export function TaoBangTinhLuongModal({ row, onClose, onSuccess }: Props) {
       tong_buoi_lam_viec_trong_thang: parseOptInt(buoiQuyDinh),
       tong_so_buoi_nghi_trong_nam: doneYearLeaveTong,
     };
-  }, [buoiLam, buoiNghi, buoiQuyDinh, done, doneYearLeaveTong, nam, newLuongId, nvId, tamUngInput, thang, thuongInput]);
+  }, [buoiLam, buoiNghi, buoiQuyDinh, done, doneYearLeaveTong, nam, newLuongId, nvId, row, tamUngInput, thang, thuongInput]);
 
   useEffect(() => {
     if (!done) {

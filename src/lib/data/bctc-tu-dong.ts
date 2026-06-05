@@ -1,4 +1,5 @@
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
+import { hpGoiHocPhiSelectForTable, hpResolveHocPhiDong } from "@/lib/data/hp-goi-payable";
 import {
   depreciationExpenseForCalendarMonth,
   fetchAdminTaiSanRows,
@@ -138,26 +139,6 @@ function allocateEvenByThousand(total: number, bucketCount: number): number[] {
   }
 
   return rounded;
-}
-
-function discountToPayable(giaGoc: number, discountPct: number): number {
-  const g = Math.max(0, giaGoc);
-  const d = Math.min(100, Math.max(0, discountPct));
-  return Math.round((g * (100 - d)) / 100);
-}
-
-function payableFromGoiRow(row: Record<string, unknown>): number | null {
-  const giaGoc = parseMoney(row.gia_goc);
-  const disc = parseMoney(row.discount);
-  if (giaGoc > 0) return discountToPayable(giaGoc, disc);
-  const giaGiam = parseMoney(row.gia_giam);
-  if (giaGiam > 0) return Math.round(giaGiam);
-  const hp = parseMoney(row.hoc_phi);
-  return hp > 0 ? hp : null;
-}
-
-function goiHocPhiSelectForTable(table: string): string {
-  return table === "hp_goi_hoc_phi" ? "id, hoc_phi, gia_giam" : 'id, "number", don_vi, gia_goc, discount';
 }
 
 function monthKeyFromDonLike(
@@ -336,10 +317,23 @@ function resolveKhauHaoDanhMucChiId(dmById: Map<number, { ma: string; ten: strin
     const ma = j.ma.toLowerCase();
     const ten = j.ten.toLowerCase();
     if (ma.includes("khauhao") || ma.includes("khau_hao") || ma.includes("khấu")) return id;
-    if (ten.includes("khấu hao") && ten.includes("tscđ")) return id;
-    if (ten.includes("khấu hao") && ten.includes("tscd")) return id;
+    if (ten.includes("khấu hao") && (ten.includes("tscđ") || ten.includes("tscd") || ten.includes("ccdc"))) {
+      return id;
+    }
   }
   return null;
+}
+
+function isKhauHaoDanhMuc(
+  dmId: number | null,
+  lb: { ma: string; ten: string },
+  dmKhauHaoId: number | null,
+): boolean {
+  if (dmKhauHaoId != null && dmId === dmKhauHaoId) return true;
+  const ma = lb.ma.toLowerCase();
+  const ten = lb.ten.toLowerCase();
+  if (ma.includes("khauhao") || ma.includes("khau_hao") || ma.includes("khấu")) return true;
+  return ten.includes("khấu hao") && (ten.includes("tscđ") || ten.includes("tscd") || ten.includes("ccdc"));
 }
 
 function assetRowLabel(dmKhauHaoId: number | null, dmById: Map<number, { ma: string; ten: string }>, row: TaiSanDbRow) {
@@ -394,6 +388,8 @@ export async function fetchBctcTuDongBundle(
     return { ma: j.ma, ten: j.ten, loai: j.loai === "chi" ? "chi" : "thu" };
   }
 
+  const dmKhauHaoId = resolveKhauHaoDanhMucChiId(dmById);
+
   const STATUS_PAID = "Đã thanh toán";
 
   const { data: donRows, error: donErr } = await supabase
@@ -437,7 +433,7 @@ export async function fetchBctcTuDongBundle(
   if (donIds.length > 0) {
     const { data: chiRaw, error: chiErr } = await supabase
       .from("hp_thu_hp_chi_tiet")
-      .select("id, don_thu, khoa_hoc_vien, goi_hoc_phi, status, danh_muc_thu_chi_id, ngay_dau_ky, ngay_cuoi_ky")
+      .select("id, don_thu, khoa_hoc_vien, goi_hoc_phi, status, danh_muc_thu_chi_id, ngay_dau_ky, ngay_cuoi_ky, hoc_phi_dong")
       .in("don_thu", donIds)
       .eq("status", STATUS_PAID);
 
@@ -451,7 +447,7 @@ export async function fetchBctcTuDongBundle(
 
     const { data: goiRes } =
       goiIds.length > 0
-        ? await supabase.from(goiTable).select(goiHocPhiSelectForTable(goiTable)).in("id", goiIds)
+        ? await supabase.from(goiTable).select(hpGoiHocPhiSelectForTable(goiTable)).in("id", goiIds)
         : { data: [] as unknown[] };
 
     const goiRowById = new Map<number, Record<string, unknown>>();
@@ -499,8 +495,7 @@ export async function fetchBctcTuDongBundle(
       for (const ln of lines) {
         const goiId = nId(ln.goi_hoc_phi);
         const goiRow = goiId != null ? goiRowById.get(goiId) : undefined;
-        const hoc = goiRow != null ? payableFromGoiRow(goiRow) : null;
-        const amt = hoc ?? 0;
+        const amt = hpResolveHocPhiDong(ln, goiRow);
         subtotal += amt;
         const dmId = ln.danh_muc_thu_chi_id != null ? nId(ln.danh_muc_thu_chi_id) : null;
         const kyMonthKeys = monthKeysBetweenDates(ln.ngay_dau_ky, ln.ngay_cuoi_ky);
@@ -605,11 +600,19 @@ export async function fetchBctcTuDongBundle(
       monthKeysSet.add(mk);
     }
     if (chi > 0) {
-      upsertRow(pool, dmId, lb.ma, lb.ten, "chi", "thu_chi_khac", mk, chi, undefined, {
-        label: `Thu chi khác #${r.id ?? "?"}`,
-        amount: chi,
-        note: lb.ten,
-      });
+      if (isKhauHaoDanhMuc(dmId, lb, dmKhauHaoId)) {
+        upsertRow(pool, dmKhauHaoId, lb.ma, "Khấu hao TSCĐ", "chi", "khau_hao_tscd", mk, chi, undefined, {
+          label: `Thu chi khác #${r.id ?? "?"}`,
+          amount: chi,
+          note: lb.ten,
+        });
+      } else {
+        upsertRow(pool, dmId, lb.ma, lb.ten, "chi", "thu_chi_khac", mk, chi, undefined, {
+          label: `Thu chi khác #${r.id ?? "?"}`,
+          amount: chi,
+          note: lb.ten,
+        });
+      }
       monthKeysSet.add(mk);
     }
   }
@@ -668,7 +671,7 @@ export async function fetchBctcTuDongBundle(
 
   const { data: payrollRows, error: payrollErr } = await supabase
     .from("hr_bang_tinh_luong")
-    .select("id, created_at, nhan_vien, tam_ung, thuong");
+    .select("id, created_at, nhan_vien, tam_ung, thuong, luong_co_ban, tro_cap, hinh_thuc_tinh_luong");
 
   if (payrollErr) {
     return { ok: false, error: payrollErr.message || "Không đọc được bảng lương nhân sự." };
@@ -751,9 +754,9 @@ export async function fetchBctcTuDongBundle(
     if (!mk) continue;
 
     const net = payrollNetSalary({
-      hinhThuc: staff?.hinh_thuc_tinh_luong,
-      luongCoBan: staff?.luong_co_ban,
-      troCap: staff?.tro_cap,
+      hinhThuc: r.hinh_thuc_tinh_luong ?? staff?.hinh_thuc_tinh_luong,
+      luongCoBan: r.luong_co_ban ?? staff?.luong_co_ban,
+      troCap: r.tro_cap ?? staff?.tro_cap,
       tamUng: r.tam_ung,
       thuong: r.thuong,
       soBuoiLam: lich?.so_buoi_lam_viec,
@@ -813,7 +816,6 @@ export async function fetchBctcTuDongBundle(
     }
   }
 
-  const dmKhauHaoId = resolveKhauHaoDanhMucChiId(dmById);
   const khauHaoRes = await fetchAdminTaiSanRows(supabase);
   if (!khauHaoRes.ok) {
     return { ok: false, error: khauHaoRes.error };

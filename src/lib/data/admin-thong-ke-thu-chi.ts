@@ -2,6 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminChiTietDisplay, AdminHpDonRow } from "@/lib/data/admin-quan-ly-hoa-don";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
+import {
+  hpGoiHocPhiSelectForTable,
+  hpParseMoney,
+  hpResolveHocPhiDong,
+} from "@/lib/data/hp-goi-payable";
 
 const MAX_HP_DONS = 4000;
 const MAX_HC_DONS = 2000;
@@ -32,33 +37,7 @@ function nId(v: unknown): number | null {
 }
 
 function parseMoney(v: unknown): number {
-  if (v == null) return 0;
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  if (typeof v === "string") {
-    const n = Number(v.replace(/\s/g, "").replace(/,/g, ""));
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-}
-
-function discountToPayable(giaGoc: number, discountPct: number): number {
-  const g = Math.max(0, giaGoc);
-  const d = Math.min(100, Math.max(0, discountPct));
-  return Math.round((g * (100 - d)) / 100);
-}
-
-function payableFromGoiRow(row: Record<string, unknown>): number | null {
-  const giaGoc = parseMoney(row.gia_goc);
-  const disc = parseMoney(row.discount);
-  if (giaGoc > 0) return discountToPayable(giaGoc, disc);
-  const giaGiam = parseMoney(row.gia_giam);
-  if (giaGiam > 0) return Math.round(giaGiam);
-  const hp = parseMoney(row.hoc_phi);
-  return hp > 0 ? hp : null;
-}
-
-function goiHocPhiSelectForTable(table: string): string {
-  return table === "hp_goi_hoc_phi" ? "id, hoc_phi, gia_giam" : 'id, "number", don_vi, gia_goc, discount';
+  return hpParseMoney(v);
 }
 
 function subtotalChi(chi: AdminChiTietDisplay[]): number {
@@ -194,7 +173,7 @@ export async function fetchAdminThongKeThuChiBundle(
 
     const { data: chiRaw, error: chiErr } = await supabase
       .from("hp_thu_hp_chi_tiet")
-      .select("id, don_thu, khoa_hoc_vien, goi_hoc_phi, ngay_dau_ky, ngay_cuoi_ky, status")
+      .select("id, don_thu, khoa_hoc_vien, goi_hoc_phi, ngay_dau_ky, ngay_cuoi_ky, status, hoc_phi_dong")
       .in("don_thu", donIds)
       .order("created_at", { ascending: true });
 
@@ -219,7 +198,7 @@ export async function fetchAdminThongKeThuChiBundle(
         ? supabase.from("ql_quan_ly_hoc_vien").select("id, lop_hoc").in("id", qlIds)
         : Promise.resolve({ data: [] as unknown[], error: null }),
       goiIds.length
-        ? supabase.from(goiTable).select(goiHocPhiSelectForTable(goiTable)).in("id", goiIds)
+        ? supabase.from(goiTable).select(hpGoiHocPhiSelectForTable(goiTable)).in("id", goiIds)
         : Promise.resolve({ data: [] as unknown[], error: null }),
     ]);
 
@@ -295,7 +274,7 @@ export async function fetchAdminThongKeThuChiBundle(
       const tenLop = lopId != null ? lopNameById.get(lopId) ?? `Lớp #${lopId}` : "—";
 
       const goiRow = goiId != null ? goiRowById.get(goiId) : undefined;
-      const hocPhiDisplay = goiRow != null ? payableFromGoiRow(goiRow) : null;
+      const hocPhiDisplay = hpResolveHocPhiDong(c, goiRow);
 
       const row: AdminChiTietDisplay = {
         id,

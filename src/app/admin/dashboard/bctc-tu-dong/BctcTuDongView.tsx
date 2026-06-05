@@ -176,7 +176,7 @@ function sourceLabel(source: BctcTuDongSource): string {
     case "bctc_thu_cong":
       return "BCTC thủ công";
     case "khau_hao_tscd":
-      return "Khấu hao TSCĐ (tc_tai_san_rong)";
+      return "Khấu hao TSCĐ";
     default:
       return source;
   }

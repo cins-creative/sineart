@@ -170,6 +170,10 @@ export type AdminBangTinhLuongListItem = {
   thuong: number | null;
   luong_co_ban: number | null;
   tro_cap: number | null;
+  /** Snapshot hình thức tính lương tại kỳ (Fulltime / Theo buổi). */
+  hinh_thuc_tinh_luong: string | null;
+  /** Snapshot BHXH trích trên phiếu. */
+  bhxh: number | null;
   lich_diem_danh: number | null;
   ky_thang: string | null;
   ky_nam: string | null;
@@ -461,6 +465,11 @@ function mapBangListRow(
     thuong: nNumBang(raw.thuong),
     luong_co_ban: nNumBang(raw.luong_co_ban),
     tro_cap: nNumBang(raw.tro_cap),
+    hinh_thuc_tinh_luong:
+      raw.hinh_thuc_tinh_luong != null && String(raw.hinh_thuc_tinh_luong).trim() !== ""
+        ? String(raw.hinh_thuc_tinh_luong).trim()
+        : null,
+    bhxh: nNumBang(raw.BHXH ?? raw.bhxh),
     lich_diem_danh: raw.lich_diem_danh != null && Number.isFinite(Number(raw.lich_diem_danh)) ? Number(raw.lich_diem_danh) : null,
     ky_thang: lich?.thang ?? null,
     ky_nam: lich?.nam ?? null,
@@ -484,6 +493,7 @@ export async function fetchBangTinhLuongByStaffId(
   if (!staffIds.length) return empty;
 
   const selects = [
+    'id, created_at, nhan_vien, tam_ung, thuong, luong_co_ban, tro_cap, hinh_thuc_tinh_luong, "BHXH", lich_diem_danh',
     "id, created_at, nhan_vien, tam_ung, thuong, luong_co_ban, tro_cap, lich_diem_danh",
     "id, created_at, nhan_vien, tam_ung, thuong",
   ];

@@ -5,6 +5,12 @@ import { Calendar, DollarSign, Loader2, Save, User } from "lucide-react";
 
 import { updateHrPayrollPayslipFields } from "@/app/admin/dashboard/quan-ly-nhan-su/actions";
 import type { AdminBangTinhLuongListItem, AdminNhanSuRow } from "@/lib/data/admin-quan-ly-nhan-su";
+import {
+  computePayrollNetSalary,
+  isPayrollTheoBuoi,
+  resolvePayslipSnapshot,
+  type PayslipSnapshot,
+} from "@/lib/payroll-snapshot";
 import { cn } from "@/lib/utils";
 
 function payslipFmtVnd(n: number | null | undefined): string {
@@ -71,18 +77,6 @@ export function bangHasLichDiemDanh(bl: AdminBangTinhLuongListItem): boolean {
   return false;
 }
 
-/** Cùng công thức Framer `VH_Bang_tinh_luong`: Fulltime = CB + trợ cấp + thưởng − tạm ứng; Theo buổi = CB×buổi + thưởng − tạm ứng. */
-function computePayrollNetSalary(nv: AdminNhanSuRow, bl: AdminBangTinhLuongListItem): number {
-  const isTheoBuoi = nv.hinh_thuc_tinh_luong?.trim() === "Theo buổi";
-  const lcb = nv.luong_co_ban ?? 0;
-  const tc = nv.tro_cap ?? 0;
-  const tu = bl.tam_ung ?? 0;
-  const th = bl.thuong ?? 0;
-  const soBuoi = bl.so_buoi_lam_viec ?? 0;
-  if (isTheoBuoi) return Math.round(lcb * soBuoi + th - tu);
-  return Math.round(lcb + tc + th - tu);
-}
-
 type NetOverrides = {
   luong_co_ban: number | null;
   tro_cap: number | null;
@@ -91,15 +85,23 @@ type NetOverrides = {
   so_buoi_lam_viec: number | null;
 };
 
-function computePayrollNetSalaryDraft(nv: AdminNhanSuRow, bl: AdminBangTinhLuongListItem, o: NetOverrides): number {
-  const isTheoBuoi = nv.hinh_thuc_tinh_luong?.trim() === "Theo buổi";
-  const lcb = o.luong_co_ban ?? nv.luong_co_ban ?? 0;
-  const tc = o.tro_cap ?? nv.tro_cap ?? 0;
-  const tu = o.tam_ung ?? bl.tam_ung ?? 0;
-  const th = o.thuong ?? bl.thuong ?? 0;
-  const soBuoi = o.so_buoi_lam_viec ?? bl.so_buoi_lam_viec ?? 0;
-  if (isTheoBuoi) return Math.round(lcb * soBuoi + th - tu);
-  return Math.round(lcb + tc + th - tu);
+function computePayrollNetSalaryDraft(
+  snap: PayslipSnapshot,
+  bl: AdminBangTinhLuongListItem,
+  o: NetOverrides,
+): number {
+  return computePayrollNetSalary(
+    {
+      ...snap,
+      luong_co_ban: o.luong_co_ban ?? snap.luong_co_ban,
+      tro_cap: o.tro_cap ?? snap.tro_cap,
+    },
+    {
+      tam_ung: o.tam_ung ?? bl.tam_ung,
+      thuong: o.thuong ?? bl.thuong,
+      so_buoi_lam_viec: o.so_buoi_lam_viec ?? bl.so_buoi_lam_viec,
+    },
+  );
 }
 
 function PayrollPayslipKpi({
@@ -135,14 +137,14 @@ type PayslipDraft = {
   nghiToiDa: string;
 };
 
-function buildDraft(nv: AdminNhanSuRow, bl: AdminBangTinhLuongListItem, showBhxh: boolean): PayslipDraft {
+function buildDraft(snap: PayslipSnapshot, bl: AdminBangTinhLuongListItem, showBhxh: boolean, nv: AdminNhanSuRow): PayslipDraft {
   const bhxh =
-    showBhxh && nv.bhxh != null && Number.isFinite(Number(nv.bhxh)) && Number(nv.bhxh) > 0
-      ? fmtVndDigits(nv.bhxh)
+    showBhxh && snap.bhxh != null && Number.isFinite(Number(snap.bhxh)) && Number(snap.bhxh) > 0
+      ? fmtVndDigits(snap.bhxh)
       : "";
   return {
-    lcb: fmtVndDigits(nv.luong_co_ban),
-    troCap: fmtVndDigits(nv.tro_cap),
+    lcb: fmtVndDigits(snap.luong_co_ban),
+    troCap: fmtVndDigits(snap.tro_cap),
     bhxh,
     thuong: fmtVndDigits(bl.thuong),
     tamUng: fmtVndDigits(bl.tam_ung),
@@ -169,8 +171,9 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, PayrollPayslipCardP
   { nv, bl, editable = false, onSaved },
   ref
 ) {
-  const isTheoBuoi = nv.hinh_thuc_tinh_luong?.trim() === "Theo buổi";
-  const bhxhVal = nv.bhxh != null && nv.bhxh > 0 ? nv.bhxh : null;
+  const snap = useMemo(() => resolvePayslipSnapshot(bl, nv), [bl, nv]);
+  const isTheoBuoi = isPayrollTheoBuoi(snap.hinh_thuc_tinh_luong);
+  const bhxhVal = snap.bhxh != null && snap.bhxh > 0 ? snap.bhxh : null;
   const showBhxh = !isTheoBuoi && bhxhVal != null;
 
   const payslipDataSig = useMemo(
@@ -178,9 +181,10 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, PayrollPayslipCardP
       [
         nv.id,
         bl.id,
-        nv.luong_co_ban ?? "",
-        nv.tro_cap ?? "",
-        nv.bhxh ?? "",
+        snap.luong_co_ban ?? "",
+        snap.tro_cap ?? "",
+        snap.bhxh ?? "",
+        snap.hinh_thuc_tinh_luong ?? "",
         nv.so_buoi_nghi_toi_da ?? "",
         bl.tam_ung ?? "",
         bl.thuong ?? "",
@@ -191,9 +195,10 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, PayrollPayslipCardP
     [
       nv.id,
       bl.id,
-      nv.luong_co_ban,
-      nv.tro_cap,
-      nv.bhxh,
+      snap.luong_co_ban,
+      snap.tro_cap,
+      snap.bhxh,
+      snap.hinh_thuc_tinh_luong,
       nv.so_buoi_nghi_toi_da,
       bl.tam_ung,
       bl.thuong,
@@ -203,16 +208,16 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, PayrollPayslipCardP
     ]
   );
 
-  const [draft, setDraft] = useState<PayslipDraft>(() => buildDraft(nv, bl, showBhxh));
+  const [draft, setDraft] = useState<PayslipDraft>(() => buildDraft(snap, bl, showBhxh, nv));
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const baselineDraft = useMemo(() => buildDraft(nv, bl, showBhxh), [payslipDataSig, showBhxh]);
+  const baselineDraft = useMemo(() => buildDraft(snap, bl, showBhxh, nv), [payslipDataSig, showBhxh, snap, bl, nv]);
 
   useEffect(() => {
-    setDraft(buildDraft(nv, bl, showBhxh));
+    setDraft(buildDraft(snap, bl, showBhxh, nv));
     setSaveErr(null);
-  }, [payslipDataSig, showBhxh, nv, bl]);
+  }, [payslipDataSig, showBhxh, snap, bl, nv]);
 
   const netOverrides: NetOverrides = useMemo(() => {
     const plcb = parseVndDigits(draft.lcb);
@@ -230,8 +235,8 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, PayrollPayslipCardP
   }, [draft.lcb, draft.troCap, draft.tamUng, draft.thuong, draft.soBuoiLam]);
 
   const net = editable
-    ? computePayrollNetSalaryDraft(nv, bl, netOverrides)
-    : computePayrollNetSalary(nv, bl);
+    ? computePayrollNetSalaryDraft(snap, bl, netOverrides)
+    : computePayrollNetSalary(snap, bl);
 
   const ky = bl.ky_thang || bl.ky_nam ? [bl.ky_thang, bl.ky_nam].filter(Boolean).join(" ") : "—";
 
@@ -363,14 +368,14 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, PayrollPayslipCardP
         nhan_vien_id: nv.id,
         bang_tinh_luong_id: bl.id,
         nhan_su: {
-          luong_co_ban: lcb.value,
-          tro_cap: troCap.value,
           so_buoi_nghi_toi_da: nghiMax.value,
-          ...(showBhxh ? { bhxh: bhxhPayload ?? null } : {}),
         },
         bang_tinh_luong: {
+          luong_co_ban: lcb.value,
+          tro_cap: troCap.value,
           tam_ung: tamUng.value,
           thuong: thuong.value,
+          ...(showBhxh ? { bhxh: bhxhPayload ?? null } : {}),
         },
         lich_diem_danh: {
           tong_buoi_lam_viec_trong_thang: tongBuoi.value ?? 0,
@@ -403,7 +408,7 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, PayrollPayslipCardP
         <div className="min-w-0 flex-1">
           <div className="truncate text-[14px] font-bold text-[#323232]">{nv.full_name?.trim() || "—"}</div>
           <div className="truncate text-[11px] font-medium text-[#AAA]">
-            {nv.hinh_thuc_tinh_luong?.trim() || "—"}
+            {snap.hinh_thuc_tinh_luong?.trim() || "—"}
             {ky !== "—" ? ` · ${ky}` : ""}
           </div>
         </div>
@@ -435,7 +440,7 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, PayrollPayslipCardP
             <PayslipReadField value={nv.full_name?.trim() ?? ""} />
           </PayslipFieldRow>
           <PayslipFieldRow label="Hình thức">
-            <PayslipReadField value={nv.hinh_thuc_tinh_luong?.trim() ?? ""} />
+            <PayslipReadField value={snap.hinh_thuc_tinh_luong?.trim() ?? ""} />
           </PayslipFieldRow>
           <PayslipFieldRow label="Tháng / Năm">
             <PayslipReadField value={ky} />
@@ -451,7 +456,7 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, PayrollPayslipCardP
                 onChange={(e) => setField("lcb", e.target.value)}
               />
             ) : (
-              <PayslipReadField value={payslipFmtVnd(nv.luong_co_ban)} />
+              <PayslipReadField value={payslipFmtVnd(snap.luong_co_ban)} />
             )}
           </PayslipFieldRow>
           {!isTheoBuoi ? (
@@ -466,7 +471,7 @@ export const PayrollPayslipCard = forwardRef<HTMLDivElement, PayrollPayslipCardP
                   onChange={(e) => setField("troCap", e.target.value)}
                 />
               ) : (
-                <PayslipReadField value={payslipFmtVnd(nv.tro_cap)} />
+                <PayslipReadField value={payslipFmtVnd(snap.tro_cap)} />
               )}
             </PayslipFieldRow>
           ) : null}

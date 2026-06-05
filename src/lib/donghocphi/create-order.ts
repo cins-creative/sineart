@@ -525,6 +525,7 @@ export async function createDongHocPhiOrder(
           nguoi_tao: null,
           khoa_hoc_vien: khoaHocVienId,
           goi_hoc_phi: v.goiId,
+          hoc_phi_dong: v.payableDong,
           ngay_dau_ky: ngayDau,
           ngay_cuoi_ky: ngayCuoi,
           status: "Chờ thanh toán",

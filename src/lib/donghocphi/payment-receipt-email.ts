@@ -1,4 +1,5 @@
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
+import { hpParseMoney, hpResolveHocPhiDong } from "@/lib/data/hp-goi-payable";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 function formatVnd(n: number): string {
@@ -28,21 +29,8 @@ function formatViDateFromIso(raw: string | null | undefined): string {
   return s;
 }
 
-function discountToPayable(giaGoc: number, discountPct: number): number {
-  const g = Math.max(0, giaGoc);
-  const d = Math.min(100, Math.max(0, discountPct));
-  return Math.round((g * (100 - d)) / 100);
-}
-
 function parseMoney(v: unknown): number {
-  if (v == null) return 0;
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  if (typeof v === "string") {
-    const n = Number(v.replace(/\s/g, "").replace(/,/g, ""));
-    return Number.isFinite(n) ? n : 0;
-  }
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+  return hpParseMoney(v);
 }
 
 function escapeHtml(s: string): string {
@@ -251,7 +239,7 @@ export async function sendPaymentReceiptEmail(
 
   const { data: chiRows, error: chiErr } = await supabase
     .from("hp_thu_hp_chi_tiet")
-    .select("khoa_hoc_vien, goi_hoc_phi, ngay_dau_ky, ngay_cuoi_ky")
+    .select("khoa_hoc_vien, goi_hoc_phi, ngay_dau_ky, ngay_cuoi_ky, hoc_phi_dong")
     .eq("don_thu", donId);
 
   if (chiErr || !chiRows?.length) {
@@ -359,17 +347,14 @@ export async function sendPaymentReceiptEmail(
       goi_hoc_phi?: unknown;
       ngay_dau_ky?: string | null;
       ngay_cuoi_ky?: string | null;
+      hoc_phi_dong?: unknown;
     };
     const qlId = Number(r.khoa_hoc_vien);
     const goiId = Number(r.goi_hoc_phi);
     if (!Number.isFinite(goiId) || goiId <= 0) continue;
 
     const gr = goiById.get(goiId);
-    if (!gr) continue;
-
-    const giaGoc = parseMoney(gr?.gia_goc);
-    const disc = parseMoney(gr?.discount);
-    const payable = discountToPayable(giaGoc, disc);
+    const payable = hpResolveHocPhiDong(r, gr ?? undefined);
     subtotal += payable;
 
     const num = gr?.number != null && gr.number !== "" ? Number(gr.number) : 0;

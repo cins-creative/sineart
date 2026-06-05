@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 
-import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -132,35 +131,22 @@ export async function updateHpChiTietLine(
 
   const st = payload.status != null && String(payload.status).trim() !== "" ? String(payload.status).trim() : null;
 
-  const { error: uChi } = await supabase
-    .from("hp_thu_hp_chi_tiet")
-    .update({
-      ngay_dau_ky: dau,
-      ngay_cuoi_ky: cuoi,
-      status: st,
-    })
-    .eq("id", chiId);
-
-  if (uChi) return { ok: false, error: uChi.message || "Không lưu được dòng chi tiết." };
-
-  const goiId = payload.goi_hoc_phi_id;
+  const chiPatch: Record<string, unknown> = {
+    ngay_dau_ky: dau,
+    ngay_cuoi_ky: cuoi,
+    status: st,
+  };
   if (
-    goiId != null &&
-    Number.isFinite(goiId) &&
-    goiId > 0 &&
     payload.hoc_phi_goi_dong != null &&
     Number.isFinite(payload.hoc_phi_goi_dong) &&
     payload.hoc_phi_goi_dong >= 0
   ) {
-    const goiTable = hpGoiHocPhiTableName();
-    const dong = Math.round(payload.hoc_phi_goi_dong);
-    const goiPatch =
-      goiTable === "hp_goi_hoc_phi"
-        ? { hoc_phi: dong }
-        : { gia_goc: dong, discount: 0 };
-    const { error: uGoi } = await supabase.from(goiTable).update(goiPatch).eq("id", goiId);
-    if (uGoi) return { ok: false, error: uGoi.message || "Không cập nhật được gói học phí." };
+    chiPatch.hoc_phi_dong = Math.round(payload.hoc_phi_goi_dong);
   }
+
+  const { error: uChi } = await supabase.from("hp_thu_hp_chi_tiet").update(chiPatch).eq("id", chiId);
+
+  if (uChi) return { ok: false, error: uChi.message || "Không lưu được dòng chi tiết." };
 
   revalidate();
   return { ok: true };

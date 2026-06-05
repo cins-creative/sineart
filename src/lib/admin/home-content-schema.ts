@@ -277,7 +277,7 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
       {
         label: "📡 Lớp Online",
         desc: "📡 Học qua website chính thức của Sine Art hoặc Google Meet",
-        youtubeId: "6LKT_E8XGu0",
+        youtubeId: "tiUBpOVqHGs",
       },
       {
         label: "🏫 Lớp Offline",

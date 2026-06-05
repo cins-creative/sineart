@@ -849,7 +849,7 @@ function VideoTabCard({
           onBlur={(e) =>
             onChange({ ...data, youtubeId: parseYoutubeVideoId(e.target.value) })
           }
-          placeholder="https://www.youtube.com/watch?v=6LKT_E8XGu0 hoặc 6LKT_E8XGu0"
+          placeholder="https://www.youtube.com/watch?v=tiUBpOVqHGs hoặc tiUBpOVqHGs"
         />
       </label>
     </div>

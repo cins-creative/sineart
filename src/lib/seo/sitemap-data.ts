@@ -65,6 +65,7 @@ const KIEN_THUC_STATIC_SEGMENTS = [
   "shading-la-gi",
   "thuoc-tinh-mau-sac",
   "ti-le-co-the-nguoi",
+  "vai-tro-cua-giai-phau",
 ] as const;
 
 type PriorityCfg = { priority: number; changeFrequency: MetadataRoute.Sitemap[0]["changeFrequency"] };

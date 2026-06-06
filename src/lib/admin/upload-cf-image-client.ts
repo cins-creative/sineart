@@ -7,8 +7,19 @@ function safeImageFilename(filename: string): string {
 }
 
 function parseXhrUploadJson(xhr: XMLHttpRequest): { ok: boolean; url?: string; error?: string } {
+  const raw = xhr.responseText || "";
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html") || trimmed.startsWith("<HTML")) {
+    return {
+      ok: false,
+      error:
+        xhr.status === 401 || xhr.status === 403
+          ? "Phiên đăng nhập admin không hợp lệ. Tải lại trang và đăng nhập lại."
+          : "Máy chủ trả HTML thay vì JSON — thử tải lại trang hoặc đăng nhập lại admin.",
+    };
+  }
   try {
-    const json: unknown = JSON.parse(xhr.responseText || "{}");
+    const json: unknown = JSON.parse(trimmed || "{}");
     if (typeof json !== "object" || json === null) return { ok: false, error: "Phản hồi không hợp lệ." };
     const ok = (json as { ok?: unknown }).ok === true;
     const url = (json as { url?: unknown }).url;
@@ -20,7 +31,13 @@ function parseXhrUploadJson(xhr: XMLHttpRequest): { ok: boolean; url?: string; e
       error,
     };
   } catch {
-    return { ok: false, error: "Phản hồi không hợp lệ từ máy chủ." };
+    const preview = trimmed.replace(/\s+/g, " ").slice(0, 120);
+    return {
+      ok: false,
+      error: preview
+        ? `Phản hồi không hợp lệ từ máy chủ (${xhr.status || "?"}): ${preview}`
+        : "Phản hồi không hợp lệ từ máy chủ.",
+    };
   }
 }
 
@@ -100,7 +117,25 @@ export async function uploadAdminCfImage(
   const fd = new FormData();
   fd.append("file", blob, safeImageFilename(filename));
   const res = await fetch("/admin/api/upload-cf-image", { method: "POST", body: fd, credentials: "same-origin" });
-  const json: unknown = await res.json().catch(() => ({}));
+  const rawText = await res.text();
+  const trimmed = rawText.trim();
+  if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html") || trimmed.startsWith("<HTML")) {
+    throw new Error(
+      res.status === 401 || res.status === 403
+        ? "Phiên đăng nhập admin không hợp lệ. Tải lại trang và đăng nhập lại."
+        : "Máy chủ trả HTML thay vì JSON — thử tải lại trang hoặc đăng nhập lại admin.",
+    );
+  }
+  let json: unknown = {};
+  try {
+    json = trimmed ? JSON.parse(trimmed) : {};
+  } catch {
+    throw new Error(
+      trimmed
+        ? `Phản hồi không hợp lệ từ máy chủ (HTTP ${res.status}).`
+        : "Phản hồi không hợp lệ từ máy chủ.",
+    );
+  }
   if (!res.ok || typeof json !== "object" || json === null || (json as { ok?: unknown }).ok !== true) {
     const err =
       typeof json === "object" && json !== null && "error" in json && String((json as { error?: unknown }).error).trim()

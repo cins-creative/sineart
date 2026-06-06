@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { getGvHrIdFromSyncedCookie } from "@/lib/phong-hoc/gv-session-cookie";
 import { getHvIdFromSyncedCookie } from "@/lib/phong-hoc/hv-session-cookie";
+import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 import { AccessToken, TrackSource } from "livekit-server-sdk";
 import { NextResponse } from "next/server";
 
@@ -31,10 +32,10 @@ async function resolveRoleForLop(
     .maybeSingle();
   if (error || !lop) return null;
 
-  const teacherId = Number((lop as { teacher?: unknown }).teacher);
-  if (!Number.isFinite(teacherId) || teacherId <= 0) return null;
+  const teacherIds = parseTeacherIds((lop as { teacher?: unknown }).teacher);
+  if (teacherIds.length === 0) return null;
 
-  if (gvHrId != null && gvHrId > 0 && gvHrId === teacherId) return "host";
+  if (gvHrId != null && gvHrId > 0 && teacherIds.includes(gvHrId)) return "host";
 
   if (hvPk != null && hvPk > 0) {
     const { data: en, error: eEn } = await sb

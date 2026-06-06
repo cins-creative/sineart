@@ -53,6 +53,11 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
 
   if (!path.startsWith("/admin")) return NextResponse.next();
 
+  /** Route handlers dưới `/admin/api/*` tự trả JSON 401 — tránh redirect POST → HTML login (XHR/fetch parse lỗi). */
+  if (path.startsWith("/admin/api/")) {
+    return NextResponse.next();
+  }
+
   if (PUBLIC_ADMIN_PATHS.has(path)) {
     return NextResponse.next();
   }

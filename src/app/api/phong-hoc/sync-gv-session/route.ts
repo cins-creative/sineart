@@ -93,7 +93,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  const res = NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true, gvSyncToken: token });
   const cookieBase = {
     path: "/" as const,
     httpOnly: true,

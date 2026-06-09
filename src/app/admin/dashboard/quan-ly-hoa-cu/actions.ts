@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { fetchAllHoaCuSanPham, fetchTonKhoTheoPhieuForIds, type AdminHoaCuSanPham } from "@/lib/data/admin-hoa-cu";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -9,6 +10,13 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 const ADMIN_PATH = "/admin/dashboard/quan-ly-hoa-cu";
 
 export type HoaCuActionResult = { ok: true; message?: string } | { ok: false; error: string };
+
+async function gateHoaCuDonMutate(
+  supabase: NonNullable<ReturnType<typeof createServiceRoleClient>>,
+  staffId: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return assertStaffMayDeleteRecords(supabase, staffId);
+}
 
 function numMoney(v: unknown): number {
   if (v == null) return 0;
@@ -545,4 +553,61 @@ export async function createHoaCuDonBan(input: {
   // ton_kho: DB trigger trên INSERT hc_ban_hc_chi_tiet — không trừ thêm ở app.
   revalidatePath(ADMIN_PATH, "layout");
   return { ok: true, message: "Đã lưu đơn bán." };
+}
+
+export async function updateHoaCuDonBanMeta(input: {
+  id: number;
+  khach_hang: number;
+  hinh_thuc_thu?: string | null;
+}): Promise<HoaCuActionResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(input.id) || input.id <= 0) return { ok: false, error: "Đơn bán không hợp lệ." };
+  if (!Number.isFinite(input.khach_hang) || input.khach_hang <= 0) {
+    return { ok: false, error: "Chọn khách hàng (học viên)." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const perm = await gateHoaCuDonMutate(supabase, session.staffId);
+  if (!perm.ok) return { ok: false, error: perm.error };
+
+  const { error } = await supabase
+    .from("hc_don_ban_hoa_cu")
+    .update({
+      khach_hang: input.khach_hang,
+      hinh_thuc_thu: input.hinh_thuc_thu?.trim() || "Tiền mặt",
+    })
+    .eq("id", input.id);
+
+  if (error) return { ok: false, error: error.message || "Không cập nhật được đơn bán." };
+
+  revalidatePath(ADMIN_PATH, "layout");
+  return { ok: true, message: "Đã cập nhật đơn bán." };
+}
+
+/**
+ * Xoá đơn bán: xoá `hc_ban_hc_chi_tiet` rồi `hc_don_ban_hoa_cu`.
+ * `ton_kho` do trigger DB khi DELETE chi tiết — không cộng thêm ở app.
+ */
+export async function deleteHoaCuDonBan(donId: number): Promise<HoaCuActionResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(donId) || donId <= 0) return { ok: false, error: "Đơn bán không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const perm = await gateHoaCuDonMutate(supabase, session.staffId);
+  if (!perm.ok) return { ok: false, error: perm.error };
+
+  const { data: exists, error: fe } = await supabase.from("hc_don_ban_hoa_cu").select("id").eq("id", donId).maybeSingle();
+  if (fe) return { ok: false, error: fe.message };
+  if (!exists) return { ok: false, error: "Không tìm thấy đơn bán." };
+
+  await rollbackBanDon(supabase, donId);
+
+  revalidatePath(ADMIN_PATH, "layout");
+  return { ok: true, message: "Đã xoá đơn bán." };
 }

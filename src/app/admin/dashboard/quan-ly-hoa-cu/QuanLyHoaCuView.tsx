@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  AlertTriangle,
   ChevronDown,
   ClipboardList,
   Loader2,
@@ -22,15 +23,18 @@ import {
 } from "lucide-react";
 
 import { AdminCfImageInput } from "@/app/admin/_components/AdminCfImageInput";
+import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import {
   createHoaCuDonBan,
   createHoaCuDonNhap,
   createHoaCuSanPham,
+  deleteHoaCuDonBan,
   deleteHoaCuDonNhap,
   deleteHoaCuSanPham,
   loadHoaCuDonBanChiTietAction,
   loadHoaCuDonNhapChiTietAction,
   loadHoaCuSanPhamCatalogAction,
+  updateHoaCuDonBanMeta,
   updateHoaCuDonNhapMeta,
   updateHoaCuSanPham,
 } from "@/app/admin/dashboard/quan-ly-hoa-cu/actions";
@@ -195,6 +199,7 @@ export default function QuanLyHoaCuView({
   banPage,
 }: Props) {
   const router = useRouter();
+  const { canDelete: canMutateBanDon } = useAdminDashboardAbilities();
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [modal, setModal] = useState<"sp" | "nhap" | "ban" | null>(null);
   /** `null` = thêm mới; có giá trị = sửa mặt hàng đó. */
@@ -356,7 +361,16 @@ export default function QuanLyHoaCuView({
             }}
           />
         ) : activeSection === "ban" && banPage ? (
-          <BanTab rows={banPage.rows} pagination={{ ...banPage, basePath: HOA_CU_BAN_PATH }} />
+          <BanTab
+            rows={banPage.rows}
+            pagination={{ ...banPage, basePath: HOA_CU_BAN_PATH }}
+            students={studentOptions}
+            canMutate={canMutateBanDon}
+            onListChanged={(msg, ok) => {
+              notify(msg, ok);
+              if (ok) router.refresh();
+            }}
+          />
         ) : null}
       </div>
 
@@ -713,6 +727,95 @@ function ModalSuaDonNhap({
           <select
             value={hinhThucChi}
             onChange={(e) => setHinhThucChi(e.target.value)}
+            className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+          >
+            {HINH_THUC.map((h) => (
+              <option key={h} value={h}>
+                {h}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ModalSuaDonBan({
+  don,
+  students,
+  onClose,
+  onDone,
+}: {
+  don: AdminHoaCuBanDon;
+  students: AdminHoaCuHvOpt[];
+  onClose: () => void;
+  onDone: (msg: string, ok: boolean) => void;
+}) {
+  const [khach, setKhach] = useState(don.khach_hang != null ? String(don.khach_hang) : "");
+  const [hinhThucThu, setHinhThucThu] = useState(don.hinh_thuc_thu?.trim() || HINH_THUC[0]);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    const khachId = Number(khach);
+    if (!Number.isFinite(khachId) || khachId <= 0) {
+      onDone("Chọn khách hàng (học viên).", false);
+      return;
+    }
+    setBusy(true);
+    const r = await updateHoaCuDonBanMeta({
+      id: don.id,
+      khach_hang: khachId,
+      hinh_thuc_thu: hinhThucThu.trim() || HINH_THUC[0],
+    });
+    setBusy(false);
+    if (r.ok) onDone(r.message ?? "Đã cập nhật.", true);
+    else onDone(r.error, false);
+  }
+
+  return (
+    <ModalShell
+      subtitle="Đơn bán"
+      title="Sửa đơn bán"
+      maxWidthClassName="max-w-[min(96vw,520px)]"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2 text-[13px] text-[#666]">
+            Hủy
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void save()}
+            className="flex items-center gap-2 rounded-[10px] bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-5 py-2 text-[13px] font-bold text-white disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="animate-spin" size={16} /> : null}
+            Lưu
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-3">
+        <p className="m-0 text-[11px] leading-snug text-[#888]">
+          Chỉnh <span className="font-semibold text-[#555]">khách hàng</span> và{" "}
+          <span className="font-semibold text-[#555]">hình thức thu</span>. Dòng hàng và số lượng giữ nguyên — muốn đổi hãy xoá đơn rồi tạo đơn bán mới.
+        </p>
+        <div className="rounded-[10px] border border-[#EAEAEA] bg-[#fafafa] px-3 py-2 text-[12px] text-[#555]">
+          <p className="m-0 font-semibold text-[#1a1a2e]">{fmtDt(don.created_at)}</p>
+          <p className="m-0 mt-1">
+            Người bán: <span className="font-medium">{don.nguoi_ban_name}</span> · {don.so_mat_hang} dòng · {fmtVnd(don.tong_tien)}
+          </p>
+        </div>
+        <label className="block">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Khách hàng *</span>
+          <HoaCuKhachPicker students={students} value={khach} onChange={setKhach} />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Hình thức thu *</span>
+          <select
+            value={hinhThucThu}
+            onChange={(e) => setHinhThucThu(e.target.value)}
             className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
           >
             {HINH_THUC.map((h) => (
@@ -1123,14 +1226,174 @@ function NhapTab({
   );
 }
 
+function DeleteDonBanConfirmModal({
+  target,
+  pending,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  target: AdminHoaCuBanDon | null;
+  pending: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    if (!target) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !pending) onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [target, pending, onClose]);
+
+  if (!target) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-900/50 p-4 backdrop-blur-[2px] sm:items-center"
+      role="presentation"
+      onMouseDown={(ev) => {
+        if (ev.target === ev.currentTarget && !pending) onClose();
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-don-ban-title"
+        className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-[20px] border-2 border-red-300 bg-white shadow-2xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="relative flex items-start gap-3 border-b border-red-200 bg-gradient-to-br from-red-50 to-red-100/70 px-5 py-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 ring-4 ring-red-50">
+            <AlertTriangle className="h-5 w-5 text-red-600" strokeWidth={2.4} aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="m-0 text-[9px] font-extrabold uppercase tracking-widest text-red-700">
+              Cảnh báo · Hành động không thể hoàn tác
+            </p>
+            <h2 id="delete-don-ban-title" className="m-0 mt-0.5 text-[15px] font-extrabold text-[#1a1a2e]">
+              Xóa đơn bán {fmtDt(target.created_at)}?
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-white text-red-500 transition hover:bg-red-50 disabled:opacity-50"
+            aria-label="Đóng"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-3 px-5 py-4 text-[13px] text-[#1a1a2e]">
+          <p className="m-0 font-semibold text-red-700">
+            Bạn sắp xóa đơn bán cho khách <b>{target.khach_hang_name}</b>. Dữ liệu sẽ{" "}
+            <u>biến mất vĩnh viễn</u>, không thể khôi phục.
+          </p>
+
+          <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-[#fafafa]">
+            <div className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] px-3 py-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF]">Người bán</span>
+              <span className="text-[13px] font-semibold text-[#1a1a2e]">{target.nguoi_ban_name}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] px-3 py-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF]">Hình thức thu</span>
+              <span className="text-[13px] font-semibold text-[#1a1a2e]">{target.hinh_thuc_thu?.trim() || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] px-3 py-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF]">Số dòng</span>
+              <span className="text-[13px] font-bold tabular-nums text-[#1a1a2e]">{target.so_mat_hang}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF]">Tổng tiền</span>
+              <span className="text-[13px] font-bold tabular-nums text-[#1a1a2e]">{fmtVnd(target.tong_tien)}</span>
+            </div>
+          </div>
+
+          <ul className="m-0 list-disc space-y-1 rounded-lg border border-red-200/60 bg-red-50/40 py-2 pl-9 pr-3 text-[12px] text-red-900/90">
+            <li>Tồn kho các mặt hàng trên đơn sẽ được cộng lại tự động</li>
+            <li>Thống kê doanh thu họa cụ và BCTC có thể thay đổi theo kỳ</li>
+          </ul>
+
+          {error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" role="alert">
+              {error}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-[#f0f0f0] px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2 text-[13px] font-semibold text-[#666] transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            Hủy bỏ
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={pending}
+            className="inline-flex items-center gap-1.5 rounded-[10px] border border-red-300 bg-red-600 px-4 py-2 text-[13px] font-bold text-white transition hover:bg-red-700 disabled:opacity-60"
+          >
+            {pending ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <Trash2 size={13} aria-hidden />}
+            {pending ? "Đang xóa…" : "Xóa vĩnh viễn"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BanTab({
   rows,
   pagination,
+  students,
+  canMutate,
+  onListChanged,
 }: {
   rows: AdminHoaCuBanDon[];
   pagination: { page: number; pageSize: number; total: number; basePath: string };
+  students: AdminHoaCuHvOpt[];
+  canMutate: boolean;
+  onListChanged: (msg: string, ok: boolean) => void;
 }) {
+  const [editDon, setEditDon] = useState<AdminHoaCuBanDon | null>(null);
   const [detailDon, setDetailDon] = useState<AdminHoaCuBanDon | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminHoaCuBanDon | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  function requestDelete(r: AdminHoaCuBanDon) {
+    setDeleteError(null);
+    setDeleteTarget(r);
+  }
+
+  function closeDeleteModal() {
+    if (deletingId != null) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || deletingId != null) return;
+    setDeletingId(deleteTarget.id);
+    setDeleteError(null);
+    const res = await deleteHoaCuDonBan(deleteTarget.id);
+    setDeletingId(null);
+    if (res.ok) {
+      setDeleteTarget(null);
+      onListChanged(res.message ?? "Đã xoá.", true);
+    } else {
+      setDeleteError(res.error);
+    }
+  }
+
+  const colCount = canMutate ? 7 : 6;
 
   return (
     <>
@@ -1138,12 +1401,13 @@ function BanTab({
         <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
           <table className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
             <colgroup>
-              <col style={{ width: "16%" }} />
-              <col style={{ width: "16%" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "26%" }} />
+              <col style={{ width: canMutate ? "14%" : "16%" }} />
+              <col style={{ width: canMutate ? "14%" : "16%" }} />
+              <col style={{ width: canMutate ? "16%" : "18%" }} />
+              <col style={{ width: canMutate ? "12%" : "14%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: canMutate ? "18%" : "26%" }} />
+              {canMutate ? <col style={{ width: "18%" }} /> : null}
             </colgroup>
             <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
               <tr>
@@ -1153,39 +1417,73 @@ function BanTab({
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Hình thức</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Dòng</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Tổng (theo giá bán)</th>
+                {canMutate ? (
+                  <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Thao tác</th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={colCount}
                     className="border-b border-[#f8fafc] px-4 py-10 text-center align-middle text-sm text-[#888] min-h-[min(50dvh,520px)]"
                   >
                     Chưa có đơn bán.
                   </td>
                 </tr>
               ) : (
-                rows.map((r) => (
-                  <tr
-                    key={r.id}
-                    onClick={() => setDetailDon(r)}
-                    className="cursor-pointer hover:bg-[#fafafa]"
-                  >
-                    <td className="border-b border-[#f8fafc] px-2 py-2 align-middle whitespace-nowrap text-[#666] sm:px-3">
-                      {fmtDt(r.created_at)}
-                    </td>
-                    <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">{r.nguoi_ban_name}</td>
-                    <td className="border-b border-[#f8fafc] px-2 py-2 align-middle break-words sm:px-3">{r.khach_hang_name}</td>
-                    <td className="border-b border-[#f8fafc] px-2 py-2 align-middle text-[#555] sm:px-3">
-                      {r.hinh_thuc_thu?.trim() || "—"}
-                    </td>
-                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle tabular-nums sm:px-3">{r.so_mat_hang}</td>
-                    <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle font-semibold tabular-nums sm:px-3">
-                      {fmtVnd(r.tong_tien)}
-                    </td>
-                  </tr>
-                ))
+                rows.map((r) => {
+                  const busy = deletingId === r.id;
+                  return (
+                    <tr
+                      key={r.id}
+                      onClick={() => setDetailDon(r)}
+                      className="cursor-pointer hover:bg-[#fafafa]"
+                    >
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle whitespace-nowrap text-[#666] sm:px-3">
+                        {fmtDt(r.created_at)}
+                      </td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">{r.nguoi_ban_name}</td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle break-words sm:px-3">{r.khach_hang_name}</td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle text-[#555] sm:px-3">
+                        {r.hinh_thuc_thu?.trim() || "—"}
+                      </td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle tabular-nums sm:px-3">{r.so_mat_hang}</td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle font-semibold tabular-nums sm:px-3">
+                        {fmtVnd(r.tong_tien)}
+                      </td>
+                      {canMutate ? (
+                        <td className="border-b border-[#f8fafc] px-1 py-2 text-right align-middle sm:px-2">
+                          <div className="flex flex-wrap items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              title="Sửa"
+                              onClick={() => {
+                                setDetailDon(null);
+                                setEditDon(r);
+                              }}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#EAEAEA] text-[#555] transition hover:border-[#BC8AF9]/50 hover:bg-[#BC8AF9]/8 hover:text-[#1a1a2e]"
+                            >
+                              <Pencil size={15} strokeWidth={2} aria-hidden />
+                              <span className="sr-only">Sửa</span>
+                            </button>
+                            <button
+                              type="button"
+                              title="Xoá"
+                              disabled={busy}
+                              onClick={() => requestDelete(r)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Trash2 size={15} strokeWidth={2} aria-hidden />}
+                              <span className="sr-only">Xoá</span>
+                            </button>
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -1197,9 +1495,28 @@ function BanTab({
           basePath={pagination.basePath}
         />
       </div>
+      <DeleteDonBanConfirmModal
+        target={deleteTarget}
+        pending={deletingId != null}
+        error={deleteError}
+        onClose={closeDeleteModal}
+        onConfirm={() => void confirmDelete()}
+      />
       <AnimatePresence>
         {detailDon ? (
           <ModalChiTietDonBan key={`chi-ban-${detailDon.id}`} don={detailDon} onClose={() => setDetailDon(null)} />
+        ) : null}
+        {editDon ? (
+          <ModalSuaDonBan
+            key={`sua-ban-${editDon.id}`}
+            don={editDon}
+            students={students}
+            onClose={() => setEditDon(null)}
+            onDone={(msg, ok) => {
+              onListChanged(msg, ok);
+              if (ok) setEditDon(null);
+            }}
+          />
         ) : null}
       </AnimatePresence>
     </>

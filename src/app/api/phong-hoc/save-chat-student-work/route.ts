@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 import { isWrongLopFkColumnError } from "@/app/api/phong-hoc/hv-chatbox/lop-column";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -102,8 +103,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       { status: 500 }
     );
   }
-  const assignedTeacher = Number((lopForTeacher as { teacher?: unknown } | null)?.teacher);
-  if (!Number.isFinite(assignedTeacher) || assignedTeacher !== teacherHrId) {
+  const teacherIds = parseTeacherIds((lopForTeacher as { teacher?: unknown } | null)?.teacher);
+  if (!teacherIds.includes(teacherHrId)) {
     return NextResponse.json(
       { error: "Chỉ giáo viên chủ nhiệm lớp mới được lưu bài từ chat.", code: "FORBIDDEN" },
       { status: 403 }

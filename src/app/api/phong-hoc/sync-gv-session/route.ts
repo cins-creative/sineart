@@ -1,10 +1,15 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { GV_SYNC_COOKIE, signGvSessionToken } from "@/lib/phong-hoc/gv-session-cookie";
 import { HV_SYNC_COOKIE } from "@/lib/phong-hoc/hv-session-cookie";
+import { phongHocJsonResponse, phongHocOptionsResponse } from "@/lib/phong-hoc/mobile-api-cors";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+
+export function OPTIONS(): NextResponse {
+  return phongHocOptionsResponse();
+}
 
 /**
  * Đặt cookie httpOnly để SSR (vd. `/he-thong-bai-tap/[slug]`) nhận diện GV đã
@@ -18,7 +23,7 @@ export const runtime = "nodejs";
 export async function POST(req: Request): Promise<NextResponse> {
   const sb = createServiceRoleClient();
   if (!sb) {
-    return NextResponse.json(
+    return phongHocJsonResponse(
       { ok: false, error: "Thiếu SUPABASE_SERVICE_ROLE_KEY hoặc URL.", code: "NO_SERVICE" },
       { status: 503 }
     );
@@ -28,7 +33,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     body = (await req.json()) as typeof body;
   } catch {
-    return NextResponse.json(
+    return phongHocJsonResponse(
       { ok: false, error: "Body JSON không hợp lệ.", code: "JSON" },
       { status: 400 }
     );
@@ -36,7 +41,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const hrId = Number(body.hr_id);
   if (!Number.isFinite(hrId) || hrId <= 0) {
-    return NextResponse.json(
+    return phongHocJsonResponse(
       { ok: false, error: "hr_id không hợp lệ.", code: "BAD_BODY" },
       { status: 400 }
     );
@@ -54,7 +59,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       .eq("id", lopHocId)
       .maybeSingle();
     if (eLop || !lopRow) {
-      return NextResponse.json(
+      return phongHocJsonResponse(
         { ok: false, error: "Không tìm thấy lớp.", code: "NO_LOP" },
         { status: 403 }
       );
@@ -62,7 +67,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     const teacherIds = parseTeacherIds((lopRow as { teacher?: unknown }).teacher);
     if (!teacherIds.includes(hrId)) {
-      return NextResponse.json(
+      return phongHocJsonResponse(
         { ok: false, error: "GV không phải chủ nhiệm lớp này.", code: "FORBIDDEN" },
         { status: 403 }
       );
@@ -75,7 +80,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     .eq("id", hrId)
     .maybeSingle();
   if (eNs || !nsRow) {
-    return NextResponse.json(
+    return phongHocJsonResponse(
       { ok: false, error: "Không tìm thấy nhân sự.", code: "NO_HR" },
       { status: 403 }
     );
@@ -83,7 +88,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const token = signGvSessionToken(hrId);
   if (!token) {
-    return NextResponse.json(
+    return phongHocJsonResponse(
       {
         ok: false,
         error: "Chưa cấp biên bản ký phiên (HV_SESSION_SIGNING_SECRET hoặc SERVICE_ROLE).",
@@ -93,7 +98,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  const res = NextResponse.json({ ok: true, gvSyncToken: token });
+  const res = phongHocJsonResponse({ ok: true, gvSyncToken: token });
   const cookieBase = {
     path: "/" as const,
     httpOnly: true,

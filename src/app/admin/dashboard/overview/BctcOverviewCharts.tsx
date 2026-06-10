@@ -356,24 +356,6 @@ export default function BctcOverviewCharts({
     <div className="space-y-4">
       <div>
         <h2 className="m-0 text-lg font-bold tracking-tight text-[#323232]">BCTC tổng quan</h2>
-        <p className="mt-1 text-[13px] leading-snug text-black/50">
-          So sánh <strong className="font-semibold text-[#323232]">năm hiện tại</strong>
-          {currentYear ? (
-            <span className="font-semibold text-[#323232]"> ({currentYear})</span>
-          ) : null}{" "}
-          với <strong className="font-semibold text-[#323232]">năm trước</strong>
-          {previousYear ? (
-            <span className="font-semibold text-[#323232]"> ({previousYear})</span>
-          ) : (
-            <span> (chưa có đủ dữ liệu năm liền trước)</span>
-          )}
-          . % tính trên tổng các tháng đã có đủ dữ liệu ở cả hai năm; biểu đồ: xám = năm trước, màu = năm hiện tại; riêng{" "}
-          <strong className="font-semibold text-black/55">Doanh thu thuần</strong> thêm đường{" "}
-          <strong className="font-semibold text-black/55">KPI</strong> (tím, nét đứt) theo +{KPI_TARGET_GROWTH_PCT}% cùng
-          kỳ từng tháng.{" "}
-          <strong className="font-semibold text-black/55">KPI kỳ vọng</strong> = tổng năm trước ×{" "}
-          {100 + KPI_TARGET_GROWTH_PCT}% (chi phí: đạt khi không vượt mức đó).
-        </p>
       </div>
 
       {currentYear && previousYear && maxPairedMonths > 0 ? (

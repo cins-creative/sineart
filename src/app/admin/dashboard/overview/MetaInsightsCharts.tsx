@@ -129,7 +129,7 @@ function CompareKpi({
     (format === "money" ? fMoney(value) : format === "pct" ? `${value.toFixed(1)}%` : fNum(value));
   return (
     <div
-      className="relative min-w-[130px] flex-1 overflow-visible rounded-2xl border border-[#EDE8E9] bg-white px-4 py-3 shadow-[0_1px_8px_rgba(0,0,0,0.05)]"
+      className="min-w-[130px] flex-1 rounded-2xl border border-[#EDE8E9] bg-white px-4 py-3 shadow-[0_1px_8px_rgba(0,0,0,0.05)]"
       style={{ borderTopColor: color, borderTopWidth: 3 }}
     >
       <KpiHelpTip label={label} description={help} />

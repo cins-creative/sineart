@@ -343,11 +343,6 @@ export default function HvEnrollmentTrackingCharts({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="m-0 text-lg font-bold tracking-tight text-[#323232]">Theo dõi học viên</h2>
-          <p className="mt-1 max-w-xl text-[12px] leading-snug text-black/55">
-            Theo dõi <strong className="font-semibold text-black/70">ghi danh mới</strong> và{" "}
-            <strong className="font-semibold text-black/70">nghỉ</strong> theo khoảng thời gian (kỳ hiện tại, giống
-            Quản lý học viên). «Ghi danh còn hạn» là snapshot hôm nay — không phải số mới trong kỳ.
-          </p>
         </div>
         <Link
           href="/admin/dashboard/quan-ly-hoc-vien"

@@ -1,9 +1,13 @@
-import { toPng, type Options as HtmlToImageOptions } from "html-to-image";
+import { toPng } from "html-to-image";
+
+type CopyDomPngOptions = {
+  filter?: (node: HTMLElement) => boolean;
+};
 
 /** Chụp DOM → PNG → clipboard (Zalo/Messenger: dán ảnh). */
 export async function copyDomAsPngToClipboard(
   node: HTMLElement,
-  options?: Pick<HtmlToImageOptions, "filter">,
+  options?: CopyDomPngOptions,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (typeof navigator === "undefined" || !navigator.clipboard?.write) {
     return { ok: false, error: "Trình duyệt không hỗ trợ ghi ảnh vào clipboard (cần HTTPS và quyền trang)." };

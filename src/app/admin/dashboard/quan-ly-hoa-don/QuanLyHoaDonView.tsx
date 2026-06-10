@@ -922,7 +922,7 @@ function QrPaymentCard({
         ),
       );
       const r = await copyDomAsPngToClipboard(el, {
-        filter: (node) => !(node instanceof HTMLButtonElement),
+        filter: (node: HTMLElement) => !(node instanceof HTMLButtonElement),
       });
       if (!r.ok) {
         setCopyImgErr(r.error);

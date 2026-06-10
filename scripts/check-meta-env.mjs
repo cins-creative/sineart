@@ -38,6 +38,8 @@ if (!token) issues.push("META_ACCESS_TOKEN missing");
 else {
   if (!token.startsWith("EAA")) issues.push("token should start with EAA");
   if (token.length < 100) issues.push(`token too short (${token.length} chars) — likely truncated`);
+  if (token.length > 320) issues.push(`token too long (${token.length} chars) — có thể dán 2 token dính liền`);
+  if ((token.match(/EAA/g) ?? []).length > 1) issues.push("token contains EAA twice — dán chồng token cũ + mới");
   if (/\s/.test(vars.META_ACCESS_TOKEN || "")) issues.push("token contains whitespace/newline in raw env");
   if (token.includes("access_token")) issues.push("looks like JSON fragment, not raw token");
 }
@@ -67,21 +69,32 @@ console.log("META API: OK");
 console.log("  page:", json.name);
 console.log("  fan_count:", json.fan_count ?? "(n/a)");
 
-const insightsUrl = `https://graph.facebook.com/v22.0/${pageId}/insights?metric=page_post_engagements&period=day&date_preset=last_28d&access_token=${encodeURIComponent(token)}`;
+const insightsUrl = `https://graph.facebook.com/v22.0/${pageId}/insights?metric=page_messages_new_conversations_unique&period=day&date_preset=last_28d&access_token=${encodeURIComponent(token)}`;
 const insightsRes = await fetch(insightsUrl);
 const insightsJson = await insightsRes.json();
 const insightBlocks = insightsJson.data?.length ?? 0;
+const msgPoints = insightsJson.data?.[0]?.values?.length ?? 0;
 const debugUrl = `https://graph.facebook.com/v22.0/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(token)}`;
 const debugJson = await (await fetch(debugUrl)).json();
 const scopes = debugJson.data?.scopes ?? [];
 console.log("  scopes:", scopes.join(", ") || "(none)");
 console.log("  insights blocks (28d):", insightBlocks);
+console.log("  inbox new conv points (28d):", msgPoints);
 if (!scopes.includes("read_insights")) {
   console.log("WARN: thiếu read_insights — dashboard Meta sẽ toàn 0. Thêm quyền trong App + Generate token lại.");
   process.exit(2);
 }
+if (!scopes.includes("pages_messaging")) {
+  console.log("WARN: thiếu pages_messaging — thêm use case “Engage with customers on Messenger” trong App Dashboard, rồi generate token lại.");
+}
+const postsUrl = `https://graph.facebook.com/v22.0/${pageId}/published_posts?fields=created_time&since=${Math.floor(Date.now()/1000 - 28*86400)}&limit=5&summary=total_count&access_token=${encodeURIComponent(token)}`;
+const postsJson = await (await fetch(postsUrl)).json();
+console.log("  published_posts sample:", postsJson.error?.message ?? `${postsJson.data?.length ?? 0} rows (API OK)`);
 if (insightBlocks === 0) {
   console.log("WARN: insights trả về rỗng — kiểm tra read_insights hoặc kỳ dữ liệu.");
   process.exit(2);
 }
+const unreadUrl = `https://graph.facebook.com/v22.0/${pageId}?fields=unread_message_count&access_token=${encodeURIComponent(token)}`;
+const unreadJson = await (await fetch(unreadUrl)).json();
+console.log("  unread inbox:", unreadJson.unread_message_count ?? "(n/a)");
 console.log("INSIGHTS: OK");

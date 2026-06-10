@@ -17,7 +17,23 @@ export function normalizeMetaAccessToken(raw: string | undefined): string | null
   const jsonMatch = token.match(/"access_token"\s*:\s*"([^"]+)"/);
   if (jsonMatch?.[1]) token = jsonMatch[1];
   token = token.replace(/\s+/g, "");
+  token = dedupeConcatenatedMetaToken(token);
   return token.length > 0 ? token : null;
+}
+
+/** Graph API Explorer đôi khi dán chồng token cũ + mới (2 lần EAA...) — lấy đoạn cuối. */
+function dedupeConcatenatedMetaToken(token: string): string {
+  const segments: string[] = [];
+  let searchFrom = 0;
+  while (searchFrom < token.length) {
+    const start = token.indexOf("EAA", searchFrom);
+    if (start === -1) break;
+    const next = token.indexOf("EAA", start + 3);
+    segments.push(next === -1 ? token.slice(start) : token.slice(start, next));
+    searchFrom = start + 3;
+  }
+  if (segments.length <= 1) return token;
+  return segments[segments.length - 1] ?? token;
 }
 
 export function getMetaServerConfig(): MetaServerConfig | null {

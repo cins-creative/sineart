@@ -1,4 +1,5 @@
 import { cache } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { DEFAULT_HOME_CONTENT, HERO_HOC_THU_FACEBOOK_URL } from "@/lib/admin/home-content-schema";
 import { buildCourseSlugIndex } from "@/lib/data/courses-page";
@@ -301,12 +302,64 @@ const MATCHER_FALLBACK: HomeMockupMatcherOption[] = [
     rows: [
       { label: "Môn thi năng khiếu", value: "Hình họa + Bố cục màu" },
       { label: "Thời lượng thi", value: "4 tiếng / bài" },
+      { label: "Điểm chuẩn các năm", value: "Chưa có số liệu" },
       { label: "Khóa nên học", value: "Hình họa + Bố cục màu" },
       { label: "Lộ trình đề xuất", value: "3–6 tháng" },
     ],
     ctaHref: "/tra-cuu-thong-tin",
   },
 ];
+
+type MatcherDiemChuanLatest = { nam: number; diem: number };
+
+function matcherPairKey(truongId: number, nganhId: number): string {
+  return `${truongId}-${nganhId}`;
+}
+
+function formatMatcherDiemChuanValue(latest: MatcherDiemChuanLatest | undefined): string {
+  if (!latest) return "Chưa có số liệu";
+  return `${latest.diem} · năm ${latest.nam}`;
+}
+
+/** Năm gần nhất có `diem_chuan` cho từng cặp trường–ngành. */
+async function fetchMatcherLatestDiemChuanByPair(
+  supabase: SupabaseClient,
+): Promise<Map<string, MatcherDiemChuanLatest>> {
+  const map = new Map<string, MatcherDiemChuanLatest>();
+  const PAGE = 500;
+  let from = 0;
+
+  for (;;) {
+    const { data, error } = await supabase
+      .from("dh_truong_nganh_theo_nam")
+      .select("truong_dai_hoc, nganh_dao_tao, nam_tuyen_sinh, diem_chuan")
+      .not("diem_chuan", "is", null)
+      .order("nam_tuyen_sinh", { ascending: false })
+      .range(from, from + PAGE - 1);
+
+    if (error || !data?.length) break;
+
+    for (const raw of data as Record<string, unknown>[]) {
+      const tid = Number(raw.truong_dai_hoc);
+      const nid = Number(raw.nganh_dao_tao);
+      const nam = Number(raw.nam_tuyen_sinh);
+      const diemRaw = raw.diem_chuan;
+      const diem =
+        typeof diemRaw === "number" ? diemRaw : diemRaw != null && diemRaw !== "" ? Number(diemRaw) : NaN;
+      if (!Number.isFinite(tid) || !Number.isFinite(nid) || !Number.isFinite(nam) || !Number.isFinite(diem)) {
+        continue;
+      }
+
+      const key = matcherPairKey(tid, nid);
+      if (!map.has(key)) map.set(key, { nam, diem });
+    }
+
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+
+  return map;
+}
 
 async function fetchMatcherPayload(): Promise<{
   schools: HomeMockupMatcherSchool[];
@@ -322,9 +375,10 @@ async function fetchMatcherPayload(): Promise<{
     };
   }
 
-  const [profiles, catalogRes] = await Promise.all([
+  const [profiles, catalogRes, diemChuanByPair] = await Promise.all([
     fetchDhExamProfilesSafe(supabase),
     fetchDhNguyenVongCatalog(supabase),
+    fetchMatcherLatestDiemChuanByPair(supabase),
   ]);
 
   const catalog = catalogRes.catalog;
@@ -344,6 +398,12 @@ async function fetchMatcherPayload(): Promise<{
           resultTitle: `${ng.ten} · ${school.name}`,
           rows: [
             { label: "Môn thi năng khiếu", value: "Hình họa + Bố cục màu" },
+            {
+              label: "Điểm chuẩn các năm",
+              value: formatMatcherDiemChuanValue(
+                diemChuanByPair.get(matcherPairKey(school.id, ng.id)),
+              ),
+            },
             { label: "Khóa nên học", value: "Theo môn thi năng khiếu" },
             { label: "Lộ trình đề xuất", value: "3–6 tháng" },
           ],
@@ -364,7 +424,6 @@ async function fetchMatcherPayload(): Promise<{
   const options: HomeMockupMatcherOption[] = profiles.map((p) => {
     const monThi =
       p.mon_thi.length > 0 ? p.mon_thi.join(" · ") : "Hình họa + Bố cục màu";
-    const details = p.details?.trim();
     return {
       schoolId: p.truong_id,
       majorKey: `${p.truong_id}-${p.nganh_id}`,
@@ -373,8 +432,10 @@ async function fetchMatcherPayload(): Promise<{
       rows: [
         { label: "Môn thi năng khiếu", value: monThi },
         {
-          label: "Ghi chú đề thi",
-          value: details ? details.slice(0, 100) : "Theo quy chế trường",
+          label: "Điểm chuẩn các năm",
+          value: formatMatcherDiemChuanValue(
+            diemChuanByPair.get(matcherPairKey(p.truong_id, p.nganh_id)),
+          ),
         },
         { label: "Khóa nên học", value: "Hình họa · Trang trí màu · Bố cục màu" },
         { label: "Lộ trình đề xuất", value: "3–6 tháng" },
@@ -440,7 +501,7 @@ function mapBaiTapPreviewSteps(items: BaiTap[]): { n: string; text: string; last
   const mid = Math.floor(sorted.length / 2);
   const nearEnd = Math.max(1, sorted.length - 2);
   const milestoneIdx = [...new Set([0, mid, nearEnd])].sort((a, b) => a - b);
-  const steps = milestoneIdx.map((i) => {
+  const steps: { n: string; text: string; last?: boolean }[] = milestoneIdx.map((i) => {
     const b = sorted[i]!;
     return { n: `B${b.bai_so}`, text: b.ten_bai_tap };
   });

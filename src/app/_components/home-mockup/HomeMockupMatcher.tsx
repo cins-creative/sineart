@@ -106,7 +106,7 @@ export function HomeMockupMatcher({ schools, options, defaultOptionKey }: Props)
                 className="btn btn-primary"
                 style={{ marginTop: 18, width: "100%", justifyContent: "center" }}
               >
-                Nhận lộ trình chi tiết <ArrowRight className="feather" aria-hidden />
+                Xem thông tin chi tiết <ArrowRight className="feather" aria-hidden />
               </Link>
             </div>
           ) : null}

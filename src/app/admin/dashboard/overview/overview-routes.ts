@@ -1,22 +1,30 @@
 import type { MkDatePreset } from "./marketing-date-range";
 
-/** Segment URL — tab Marketing */
+/** @deprecated Redirect → traffic-web. Tab nhập tay đã gỡ. */
 export const OVERVIEW_SECTION_MARKETING = "marketing-data-analysis" as const;
 /** Segment URL — tab BCTC */
 export const OVERVIEW_SECTION_BCTC = "bctc-tong-quan" as const;
 /** Segment URL — theo dõi HV từ DB */
 export const OVERVIEW_SECTION_HV_TRACKING = "theo-doi-hoc-vien" as const;
-/** Segment URL — traffic web GA4 */
+/** MKT — traffic web GA4 */
 export const OVERVIEW_SECTION_WEB_TRAFFIC = "traffic-web" as const;
-/** Segment URL — Meta Fanpage + Ads */
+/** MKT — Google Search Console */
+export const OVERVIEW_SECTION_SEARCH_CONSOLE = "search-console" as const;
+/** MKT — Meta Fanpage + Ads */
 export const OVERVIEW_SECTION_META_INSIGHTS = "meta-insights" as const;
 
+export const MKT_OVERVIEW_SECTIONS = [
+  OVERVIEW_SECTION_WEB_TRAFFIC,
+  OVERVIEW_SECTION_SEARCH_CONSOLE,
+  OVERVIEW_SECTION_META_INSIGHTS,
+] as const;
+
+export type MktOverviewSectionSlug = (typeof MKT_OVERVIEW_SECTIONS)[number];
+
 export type OverviewSectionSlug =
-  | typeof OVERVIEW_SECTION_MARKETING
   | typeof OVERVIEW_SECTION_BCTC
   | typeof OVERVIEW_SECTION_HV_TRACKING
-  | typeof OVERVIEW_SECTION_WEB_TRAFFIC
-  | typeof OVERVIEW_SECTION_META_INSIGHTS;
+  | MktOverviewSectionSlug;
 
 export const OVERVIEW_PERIOD_WEEK = "tuan" as const;
 export const OVERVIEW_PERIOD_MONTH = "thang" as const;
@@ -34,11 +42,9 @@ export type OverviewPeriodSlug =
   | typeof OVERVIEW_PERIOD_CUSTOM;
 
 const SECTIONS = new Set<string>([
-  OVERVIEW_SECTION_MARKETING,
   OVERVIEW_SECTION_BCTC,
   OVERVIEW_SECTION_HV_TRACKING,
-  OVERVIEW_SECTION_WEB_TRAFFIC,
-  OVERVIEW_SECTION_META_INSIGHTS,
+  ...MKT_OVERVIEW_SECTIONS,
 ]);
 
 const PERIODS = new Set<string>([
@@ -50,7 +56,11 @@ const PERIODS = new Set<string>([
   OVERVIEW_PERIOD_CUSTOM,
 ]);
 
-export const OVERVIEW_DEFAULT_PATH = `/admin/dashboard/overview/${OVERVIEW_SECTION_MARKETING}/${OVERVIEW_PERIOD_MONTH}`;
+export const OVERVIEW_DEFAULT_PATH = `/admin/dashboard/overview/${OVERVIEW_SECTION_WEB_TRAFFIC}/${OVERVIEW_PERIOD_MONTH}`;
+
+export function isMktOverviewSection(v: string): v is MktOverviewSectionSlug {
+  return (MKT_OVERVIEW_SECTIONS as readonly string[]).includes(v);
+}
 
 export function isOverviewSectionSlug(v: string): v is OverviewSectionSlug {
   return SECTIONS.has(v);

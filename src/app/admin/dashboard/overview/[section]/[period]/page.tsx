@@ -5,10 +5,10 @@ import { OverviewBctcPanel } from "@/app/admin/dashboard/overview/_components/Ov
 import { OverviewBctcPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewBctcPanel.skeleton";
 import { OverviewHvTrackingPanel } from "@/app/admin/dashboard/overview/_components/OverviewHvTrackingPanel";
 import { OverviewHvTrackingPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewHvTrackingPanel.skeleton";
-import { OverviewMarketingPanel } from "@/app/admin/dashboard/overview/_components/OverviewMarketingPanel";
-import { OverviewMarketingPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewMarketingPanel.skeleton";
 import { OverviewMetaInsightsPanel } from "@/app/admin/dashboard/overview/_components/OverviewMetaInsightsPanel";
 import { OverviewMetaInsightsPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewMetaInsightsPanel.skeleton";
+import { OverviewSearchConsolePanel } from "@/app/admin/dashboard/overview/_components/OverviewSearchConsolePanel";
+import { OverviewSearchConsolePanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewSearchConsolePanel.skeleton";
 import { OverviewWebTrafficPanel } from "@/app/admin/dashboard/overview/_components/OverviewWebTrafficPanel";
 import { OverviewWebTrafficPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewWebTrafficPanel.skeleton";
 import DashboardOverviewClient from "@/app/admin/dashboard/overview/DashboardOverviewClient";
@@ -16,6 +16,9 @@ import {
   isOverviewPeriodSlug,
   isOverviewSectionSlug,
   OVERVIEW_DEFAULT_PATH,
+  OVERVIEW_SECTION_MARKETING,
+  OVERVIEW_SECTION_WEB_TRAFFIC,
+  OVERVIEW_PERIOD_MONTH,
   type OverviewPeriodSlug,
   type OverviewSectionSlug,
 } from "@/app/admin/dashboard/overview/overview-routes";
@@ -30,6 +33,10 @@ type PageProps = {
 export default async function AdminDashboardOverviewSegmentPage({ params, searchParams }: PageProps) {
   const { section: secRaw, period: perRaw } = await params;
   const sp = await searchParams;
+
+  if (secRaw === OVERVIEW_SECTION_MARKETING) {
+    redirect(`/admin/dashboard/overview/${OVERVIEW_SECTION_WEB_TRAFFIC}/${perRaw || OVERVIEW_PERIOD_MONTH}`);
+  }
 
   if (!isOverviewSectionSlug(secRaw) || !isOverviewPeriodSlug(perRaw)) {
     redirect(OVERVIEW_DEFAULT_PATH);
@@ -46,11 +53,6 @@ export default async function AdminDashboardOverviewSegmentPage({ params, search
       <DashboardOverviewClient
         section={section}
         period={period}
-        marketingContent={
-          <Suspense fallback={<OverviewMarketingPanelSkeleton />}>
-            <OverviewMarketingPanel period={period} customFrom={customFrom} customTo={customTo} />
-          </Suspense>
-        }
         bctcContent={
           <Suspense fallback={<OverviewBctcPanelSkeleton />}>
             <OverviewBctcPanel period={period} />
@@ -64,6 +66,11 @@ export default async function AdminDashboardOverviewSegmentPage({ params, search
         webTrafficContent={
           <Suspense fallback={<OverviewWebTrafficPanelSkeleton />}>
             <OverviewWebTrafficPanel period={period} customFrom={customFrom} customTo={customTo} />
+          </Suspense>
+        }
+        searchConsoleContent={
+          <Suspense fallback={<OverviewSearchConsolePanelSkeleton />}>
+            <OverviewSearchConsolePanel period={period} customFrom={customFrom} customTo={customTo} />
           </Suspense>
         }
         metaInsightsContent={

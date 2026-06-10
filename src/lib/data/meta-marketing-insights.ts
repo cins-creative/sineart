@@ -180,7 +180,32 @@ async function fetchPageInsights(range: DateRangeYmd): Promise<{
     }
   }
 
+  const hasAny =
+    pageMediaViews.size > 0 || pageEngagements.size > 0 || pageFollows.size > 0 || (json.data?.length ?? 0) > 0;
+  if (!hasAny) {
+    await throwIfMissingReadInsights(cfg.accessToken);
+  }
+
   return { pageMediaViews, pageEngagements, pageFollows };
+}
+
+const META_READ_INSIGHTS_HELP =
+  "Token thiếu quyền read_insights — Meta trả về rỗng (dashboard toàn 0). Vào developers.facebook.com → App Sine Art Analytics → Use cases / Quyền → thêm read_insights → Graph API Explorer Generate token lại (read_insights + pages_read_engagement + pages_show_list + business_management) → me/accounts → copy access_token Page → .env.local → restart.";
+
+async function throwIfMissingReadInsights(accessToken: string): Promise<void> {
+  try {
+    const debug = await graphGet<{ data?: { scopes?: string[]; is_valid?: boolean } }>(`/debug_token`, {
+      input_token: accessToken,
+      access_token: accessToken,
+    });
+    const scopes = debug.data?.scopes ?? [];
+    if (!scopes.includes("read_insights")) {
+      throw new Error(META_READ_INSIGHTS_HELP);
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message === META_READ_INSIGHTS_HELP) throw e;
+  }
+  throw new Error("Không có dữ liệu Fanpage insights trong khoảng đã chọn — thử kỳ dài hơn hoặc kiểm tra quyền read_insights trên token.");
 }
 
 function extractMessageCount(actions: { action_type?: string; value?: string }[] | undefined): number {
@@ -432,6 +457,10 @@ export async function fetchMetaInsightsReport(opts: {
       },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Lỗi Meta Graph API." };
+    const raw = e instanceof Error ? e.message : "Lỗi Meta Graph API.";
+    const error = raw.toLowerCase().includes("malformed access token")
+      ? "Token Meta không hợp lệ — copy lại access_token của Page từ Graph API Explorer (me/accounts), dán một dòng trong .env.local, không dấu ngoặc, rồi restart server."
+      : raw.replace(/EAA[A-Za-z0-9+/=_-]{20,}/g, "[token]");
+    return { ok: false, error };
   }
 }

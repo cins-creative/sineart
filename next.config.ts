@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+/** Tránh Next chọn nhầm `C:\Users\DELL\` khi có nhiều lockfile — route admin overview bị 404. */
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: projectRoot,
+  turbopack: {
+    root: projectRoot,
+  },
   /** Bật nén phản hồi (gzip) — mặc định thường true; ghi rõ theo cấu hình dự án. */
   compress: true,
   /** Giây — tránh fail build khi nhiều trang SSG + DB chậm (mặc định 60). */

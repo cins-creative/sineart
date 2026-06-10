@@ -4,7 +4,7 @@ import { OVERVIEW_DEFAULT_PATH } from "@/app/admin/dashboard/overview/overview-r
 
 export const dynamic = "force-dynamic";
 
-/** Mặc định: tab Marketing + kỳ tháng (`/marketing-data-analysis/thang`). */
+/** Mặc định: MKT → Traffic web, kỳ tháng. */
 export default function AdminDashboardOverviewPage() {
   redirect(OVERVIEW_DEFAULT_PATH);
 }

@@ -18,7 +18,7 @@ import {
   YAxis,
 } from "recharts";
 
-import type { WebTrafficReport } from "@/lib/data/web-traffic-ga4";
+import type { SearchConsoleReport } from "@/lib/data/search-console-gsc";
 import { cn } from "@/lib/utils";
 
 import {
@@ -41,6 +41,14 @@ const C = {
 
 function fNum(v: number): string {
   return Math.round(v).toLocaleString("vi-VN");
+}
+
+function fPct(v: number): string {
+  return `${(v * 100).toFixed(1)}%`;
+}
+
+function fPos(v: number): string {
+  return v.toFixed(1);
 }
 
 function fK(n: number): string {
@@ -110,7 +118,7 @@ type Props = {
   hrefPrefix: string;
 };
 
-export default function WebTrafficCharts({
+export function SearchConsoleCharts({
   overviewPeriodSlug,
   customFromInitial,
   customToInitial,
@@ -122,7 +130,7 @@ export default function WebTrafficCharts({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notConfigured, setNotConfigured] = useState(false);
-  const [payload, setPayload] = useState<WebTrafficReport | null>(null);
+  const [payload, setPayload] = useState<SearchConsoleReport | null>(null);
 
   useEffect(() => {
     setCustomFrom(customFromInitial);
@@ -139,8 +147,8 @@ export default function WebTrafficCharts({
         qs.set("tu", customFrom);
         qs.set("den", customTo);
       }
-      const res = await fetch(`/admin/api/overview/web-traffic?${qs.toString()}`);
-      const json = (await res.json()) as WebTrafficReport & {
+      const res = await fetch(`/admin/api/overview/search-console?${qs.toString()}`);
+      const json = (await res.json()) as SearchConsoleReport & {
         ok?: boolean;
         error?: string;
         code?: string;
@@ -151,13 +159,15 @@ export default function WebTrafficCharts({
         return;
       }
       if (!res.ok || json.ok === false || !json.timeSeries) {
-        throw new Error(json.error ?? "Không tải được dữ liệu traffic.");
+        throw new Error(json.error ?? "Không tải được dữ liệu Search Console.");
       }
       setPayload({
         rangeLabel: json.rangeLabel,
         granularity: json.granularity,
+        dataLagNote: json.dataLagNote,
         totals: json.totals,
         timeSeries: json.timeSeries,
+        topQueries: json.topQueries,
         topPages: json.topPages,
       });
     } catch (e) {
@@ -181,12 +191,33 @@ export default function WebTrafficCharts({
     [payload],
   );
 
-  const topPagesChart = useMemo(() => {
-    return (payload?.topPages ?? []).slice(0, 12).map((p) => ({
-      ...p,
-      shortPath: p.path.length > 36 ? `${p.path.slice(0, 34)}…` : p.path,
-    }));
-  }, [payload]);
+  const topQueriesChart = useMemo(
+    () =>
+      (payload?.topQueries ?? []).slice(0, 12).map((q) => ({
+        ...q,
+        shortQuery: q.query.length > 32 ? `${q.query.slice(0, 30)}…` : q.query,
+      })),
+    [payload],
+  );
+
+  const topPagesChart = useMemo(
+    () =>
+      (payload?.topPages ?? []).slice(0, 12).map((p) => {
+        let path = p.page;
+        try {
+          const u = new URL(p.page);
+          path = u.pathname || p.page;
+        } catch {
+          /* giữ nguyên */
+        }
+        return {
+          ...p,
+          path,
+          shortPath: path.length > 36 ? `${path.slice(0, 34)}…` : path,
+        };
+      }),
+    [payload],
+  );
 
   const isMonthly = payload?.granularity === "month";
   const denseDaily = !isMonthly && chartData.length > 14;
@@ -204,7 +235,7 @@ export default function WebTrafficCharts({
   return (
     <div className="flex flex-col gap-4 pb-2">
       <div>
-        <h2 className="m-0 text-lg font-bold tracking-tight text-[#323232]">Traffic web</h2>
+        <h2 className="m-0 text-lg font-bold tracking-tight text-[#323232]">Google Search</h2>
       </div>
 
       <div className="flex flex-col gap-2 rounded-[14px] border border-[#EDE8E9] bg-white/80 px-3 py-2.5 shadow-[0_1px_6px_rgba(0,0,0,0.04)] md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3">
@@ -272,7 +303,8 @@ export default function WebTrafficCharts({
 
       {notConfigured ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-950">
-          Chưa cấu hình GA4 trên server — thêm biến môi trường rồi restart / redeploy.
+          Chưa cấu hình GSC — thêm <code className="rounded bg-black/[0.04] px-1">GSC_SITE_URL</code> và{" "}
+          <code className="rounded bg-black/[0.04] px-1">GSC_OAUTH_*</code> rồi restart / redeploy.
         </div>
       ) : null}
 
@@ -285,7 +317,7 @@ export default function WebTrafficCharts({
       {loading && !payload && !notConfigured ? (
         <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-black/50">
           <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-          Đang tải traffic từ GA4…
+          Đang tải dữ liệu Search Console…
         </div>
       ) : null}
 
@@ -293,50 +325,49 @@ export default function WebTrafficCharts({
         <>
           <div className="flex flex-wrap gap-2.5">
             <KpiCard
-              label="Lượt xem trang"
-              value={fNum(payload.totals.pageviews)}
-              sub="từ Google Analytics"
+              label="Lượt bấm"
+              value={fNum(payload.totals.clicks)}
+              sub="từ Google Search"
               color={C.blue}
-              tip="Tổng số lần trang được xem trong kỳ — một người có thể xem nhiều trang."
+              tip="Số lần người dùng bấm vào website từ kết quả tìm kiếm Google."
             />
             <KpiCard
-              label="Người dùng"
-              value={fNum(payload.totals.users)}
-              sub="người truy cập"
+              label="Lượt hiển thị"
+              value={fNum(payload.totals.impressions)}
+              sub="trên trang kết quả"
               color={C.pink}
-              tip="Số người dùng hoạt động (active users) — mỗi người chỉ đếm một lần trong kỳ."
+              tip="Số lần trang xuất hiện trên Google — người dùng có thể thấy mà chưa bấm."
             />
             <KpiCard
-              label="Phiên truy cập"
-              value={fNum(payload.totals.sessions)}
-              sub="lượt vào site"
+              label="Tỷ lệ bấm"
+              value={fPct(payload.totals.ctr)}
               color={C.green}
-              tip="Một phiên là chuỗi tương tác liên tục trên site — thoát rồi vào lại sẽ tính phiên mới."
+              tip="Lượt bấm ÷ lượt hiển thị. Càng cao, tiêu đề và mô tả trên Google càng hấp dẫn."
             />
             <KpiCard
-              label="Trang hàng đầu"
-              value={fNum(topPagesChart.length)}
-              sub="trên biểu đồ"
+              label="Vị trí TB"
+              value={fPos(payload.totals.position)}
+              sub="càng thấp càng tốt"
               color={C.blue}
-              tip="Số trang được liệt kê trong biểu đồ top — trang nào thu hút nhiều lượt xem nhất."
+              tip="Thứ hạng trung bình trên Google. Số nhỏ hơn nghĩa là gần đầu trang hơn."
             />
           </div>
 
           {chartData.length === 0 ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
-              Chưa có dữ liệu trong khoảng đã chọn — GA4 có thể mới bật hoặc chưa có traffic.
+              Chưa có dữ liệu trong khoảng đã chọn — GSC có thể trễ 2–3 ngày.
             </div>
           ) : (
             <div className="flex flex-col gap-3">
               <Card>
-                <SecTitle color={C.blue}>Lượt xem &amp; người dùng theo thời gian</SecTitle>
+                <SecTitle color={C.blue}>Lượt bấm &amp; hiển thị theo thời gian</SecTitle>
                 <div className="h-[220px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData} margin={{ top: 6, right: 8, left: 0, bottom: denseDaily ? 22 : 4 }}>
                       <defs>
-                        <linearGradient id="wtPv" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={C.blue} stopOpacity={0.2} />
-                          <stop offset="95%" stopColor={C.blue} stopOpacity={0} />
+                        <linearGradient id="gscImp" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={C.pink} stopOpacity={0.15} />
+                          <stop offset="95%" stopColor={C.pink} stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid stroke={C.grid} vertical={false} />
@@ -357,20 +388,20 @@ export default function WebTrafficCharts({
                       />
                       <Area
                         type="monotone"
-                        dataKey="pageviews"
-                        name="Lượt xem trang"
-                        stroke={C.blue}
-                        fill="url(#wtPv)"
+                        dataKey="impressions"
+                        name="Lượt hiển thị"
+                        stroke={C.pink}
+                        fill="url(#gscImp)"
                         strokeWidth={2}
                         dot={false}
                       />
                       <Line
                         type="monotone"
-                        dataKey="users"
-                        name="Người dùng"
-                        stroke={C.pink}
+                        dataKey="clicks"
+                        name="Lượt bấm"
+                        stroke={C.blue}
                         strokeWidth={2}
-                        dot={{ r: 2, fill: C.pink }}
+                        dot={{ r: 2, fill: C.blue }}
                       />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                     </ComposedChart>
@@ -378,65 +409,105 @@ export default function WebTrafficCharts({
                 </div>
               </Card>
 
-              <Card>
-                <SecTitle color={C.green}>Trang hiệu quả (top lượt xem)</SecTitle>
-                <p className="-mt-2 mb-2 text-[10px] text-black/45">Đường dẫn GA4 — trang nào thu hút nhiều lượt xem nhất trong kỳ.</p>
-                <div className="h-[320px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={topPagesChart}
-                      layout="vertical"
-                      margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
-                    >
-                      <CartesianGrid stroke={C.grid} horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 10, fill: C.muted }} tickFormatter={fK} tickLine={false} axisLine={false} />
-                      <YAxis
-                        type="category"
-                        dataKey="shortPath"
-                        width={140}
-                        tick={{ fontSize: 9, fill: C.muted }}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <Tooltip
-                        formatter={(value, name) => [fNum(Number(value)), String(name)]}
-                        labelFormatter={(_, items) => {
-                          const row = items?.[0]?.payload as { path?: string } | undefined;
-                          return row?.path ?? "";
-                        }}
-                      />
-                      <Bar dataKey="pageviews" name="Lượt xem trang" fill={C.blue} radius={[0, 4, 4, 0]} barSize={14} />
-                      <Bar dataKey="users" name="Người dùng" fill={C.pink} radius={[0, 4, 4, 0]} barSize={14} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
+              {topQueriesChart.length > 0 ? (
+                <Card>
+                  <SecTitle color={C.green}>Top từ khóa (lượt bấm)</SecTitle>
+                  <div className="h-[320px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={topQueriesChart}
+                        layout="vertical"
+                        margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
+                      >
+                        <CartesianGrid stroke={C.grid} horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 10, fill: C.muted }} tickFormatter={fK} tickLine={false} axisLine={false} />
+                        <YAxis
+                          type="category"
+                          dataKey="shortQuery"
+                          width={140}
+                          tick={{ fontSize: 9, fill: C.muted }}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <Tooltip
+                          formatter={(value, name) => [fNum(Number(value)), String(name)]}
+                          labelFormatter={(_, items) => {
+                            const row = items?.[0]?.payload as { query?: string } | undefined;
+                            return row?.query ?? "";
+                          }}
+                        />
+                        <Bar dataKey="clicks" name="Lượt bấm" fill={C.blue} radius={[0, 4, 4, 0]} barSize={14} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+              ) : null}
 
-              {payload.topPages.length > 0 ? (
+              {topPagesChart.length > 0 ? (
+                <Card>
+                  <SecTitle color={C.blue}>Top trang (lượt bấm từ Google)</SecTitle>
+                  <div className="h-[320px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={topPagesChart}
+                        layout="vertical"
+                        margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
+                      >
+                        <CartesianGrid stroke={C.grid} horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 10, fill: C.muted }} tickFormatter={fK} tickLine={false} axisLine={false} />
+                        <YAxis
+                          type="category"
+                          dataKey="shortPath"
+                          width={140}
+                          tick={{ fontSize: 9, fill: C.muted }}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <Tooltip
+                          formatter={(value, name) => [fNum(Number(value)), String(name)]}
+                          labelFormatter={(_, items) => {
+                            const row = items?.[0]?.payload as { page?: string } | undefined;
+                            return row?.page ?? "";
+                          }}
+                        />
+                        <Bar dataKey="clicks" name="Lượt bấm" fill={C.green} radius={[0, 4, 4, 0]} barSize={14} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+              ) : null}
+
+              {payload.topQueries.length > 0 ? (
                 <Card className="overflow-x-auto">
-                  <SecTitle color={C.blue}>Chi tiết trang</SecTitle>
-                  <table className="w-full min-w-[480px] border-collapse text-[12px]">
+                  <SecTitle color={C.green}>Chi tiết từ khóa</SecTitle>
+                  <table className="w-full min-w-[520px] border-collapse text-[12px]">
                     <thead>
                       <tr className="border-b border-[#EDE8E9] text-left text-[10px] uppercase tracking-wide text-[#9E8A90]">
-                        <th className="py-2 pr-3 font-extrabold">Đường dẫn</th>
-                        <th className="py-2 pr-3 font-extrabold text-right" title="Tổng lượt xem trang trong kỳ">
-                          Lượt xem
+                        <th className="py-2 pr-3 font-extrabold">Từ khóa</th>
+                        <th className="py-2 pr-3 font-extrabold text-right" title="Số lần bấm từ Google">
+                          Lượt bấm
                         </th>
-                        <th className="py-2 pr-3 font-extrabold text-right" title="Số người dùng truy cập trang">
-                          Người dùng
+                        <th className="py-2 pr-3 font-extrabold text-right" title="Số lần hiển thị trên Google">
+                          Hiển thị
                         </th>
-                        <th className="py-2 font-extrabold text-right">TB phiên (s)</th>
+                        <th className="py-2 pr-3 font-extrabold text-right" title="Tỷ lệ bấm ÷ hiển thị">
+                          Tỷ lệ bấm
+                        </th>
+                        <th className="py-2 font-extrabold text-right" title="Vị trí trung bình trên Google">
+                          Vị trí
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {payload.topPages.map((row) => (
-                        <tr key={row.path} className="border-b border-[#F3EEEF] last:border-0">
-                          <td className="max-w-[280px] truncate py-2 pr-3 font-medium text-[#323232]" title={row.path}>
-                            {row.path}
+                      {payload.topQueries.map((row) => (
+                        <tr key={row.query} className="border-b border-[#F3EEEF] last:border-0">
+                          <td className="max-w-[240px] truncate py-2 pr-3 font-medium text-[#323232]" title={row.query}>
+                            {row.query}
                           </td>
-                          <td className="py-2 pr-3 text-right tabular-nums">{fNum(row.pageviews)}</td>
-                          <td className="py-2 pr-3 text-right tabular-nums">{fNum(row.users)}</td>
-                          <td className="py-2 text-right tabular-nums">{fNum(row.avgEngagementSec)}</td>
+                          <td className="py-2 pr-3 text-right tabular-nums">{fNum(row.clicks)}</td>
+                          <td className="py-2 pr-3 text-right tabular-nums">{fNum(row.impressions)}</td>
+                          <td className="py-2 pr-3 text-right tabular-nums">{fPct(row.ctr)}</td>
+                          <td className="py-2 text-right tabular-nums">{fPos(row.position)}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -156,7 +156,10 @@ export async function fetchWebTrafficReport(opts: {
   preset: WebTrafficPreset;
   customFrom?: string;
   customTo?: string;
-}): Promise<{ ok: true; data: WebTrafficReport } | { ok: false; error: string; code?: "not_configured" }> {
+}): Promise<
+  | { ok: true; data: WebTrafficReport }
+  | { ok: false; error: string; code?: "not_configured" | "permission_denied" }
+> {
   const cfg = getGa4ServerConfig();
   if (!cfg) {
     return {
@@ -249,6 +252,14 @@ export async function fetchWebTrafficReport(opts: {
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Lỗi GA4 không xác định.";
+    if (msg.includes("PERMISSION_DENIED")) {
+      return {
+        ok: false,
+        code: "permission_denied",
+        error:
+          "Service account chưa có quyền Viewer trên property GA4. Vào Admin → Property access management → thêm email service account.",
+      };
+    }
     return { ok: false, error: msg };
   }
 }

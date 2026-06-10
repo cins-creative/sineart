@@ -1,9 +1,10 @@
 import { cache } from "react";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { DEFAULT_HOME_CONTENT, HERO_HOC_THU_FACEBOOK_URL } from "@/lib/admin/home-content-schema";
 import { buildCourseSlugIndex } from "@/lib/data/courses-page";
 import { fetchNganhHocCardsFromCins } from "@/lib/data/cins-careers";
+import { fetchCinsMatcherPayload } from "@/lib/data/cins-matcher";
+import type { CinsMatcherPayload } from "@/lib/data/cins-matcher";
 import { CAREER_CARDS, FALLBACK_STATS } from "@/lib/data/fallback";
 import {
   getHomeCareersData,
@@ -13,9 +14,7 @@ import {
 } from "@/lib/data/home";
 import { getHomeContent } from "@/lib/data/home-content";
 import { getBaiTapListForMon } from "@/lib/data/bai-tap";
-import { fetchDhExamProfilesSafe } from "@/lib/agent/dh-exam-profiles";
 import { cfResolvedImageUrl } from "@/lib/cfImageUrl";
-import { fetchDhNguyenVongCatalog } from "@/lib/donghocphi/dh-catalog";
 import { createStaticClient } from "@/lib/supabase/static";
 import { toJSONSafe } from "@/lib/serialize";
 import type { CareerCard } from "@/types/career";
@@ -75,21 +74,12 @@ export type HomeMockupTeacher = {
 
 export type HomeMockupExamStat = { value: string; label: string };
 
-export type HomeMockupMatcherSchool = { id: number; name: string };
-export type HomeMockupMatcherOption = {
-  schoolId: number;
-  majorKey: string;
-  majorLabel: string;
-  resultTitle: string;
-  rows: { label: string; value: string }[];
-  ctaHref: string;
-};
-
 export type HomeMockupPayload = {
   hero: {
     badge: string;
     headlineEmphasis: string;
     subPill: string;
+    subSchools: string;
     lead: string;
     ctaPrimary: { label: string; href: string };
     ctaGhost: { label: string; href: string };
@@ -124,11 +114,7 @@ export type HomeMockupPayload = {
   };
   teachers: HomeMockupTeacher[];
   careers: CareerCard[];
-  matcher: {
-    schools: HomeMockupMatcherSchool[];
-    options: HomeMockupMatcherOption[];
-    defaultOptionKey: string;
-  };
+  matcher: CinsMatcherPayload;
   reviews: HomeReview[];
   cta: typeof DEFAULT_HOME_CONTENT.ctaBand;
   footer: {
@@ -285,186 +271,6 @@ const TEACHER_GRADS = [
   "linear-gradient(135deg,#dcfff2,#6efec0)",
   "linear-gradient(135deg,#fef0e4,#f8a668)",
 ];
-
-const MATCHER_FALLBACK_SCHOOLS: HomeMockupMatcherSchool[] = [
-  { id: 1, name: "ĐH Kiến trúc TP.HCM" },
-  { id: 2, name: "ĐH Mỹ thuật TP.HCM" },
-  { id: 3, name: "ĐH Sân khấu Điện ảnh" },
-  { id: 4, name: "ĐH Tôn Đức Thắng" },
-];
-
-const MATCHER_FALLBACK: HomeMockupMatcherOption[] = [
-  {
-    schoolId: 1,
-    majorKey: "1-0",
-    majorLabel: "Kiến trúc",
-    resultTitle: "Kiến trúc · ĐH Kiến trúc TP.HCM",
-    rows: [
-      { label: "Môn thi năng khiếu", value: "Hình họa + Bố cục màu" },
-      { label: "Thời lượng thi", value: "4 tiếng / bài" },
-      { label: "Điểm chuẩn các năm", value: "Chưa có số liệu" },
-      { label: "Khóa nên học", value: "Hình họa + Bố cục màu" },
-      { label: "Lộ trình đề xuất", value: "3–6 tháng" },
-    ],
-    ctaHref: "/tra-cuu-thong-tin",
-  },
-];
-
-type MatcherDiemChuanLatest = { nam: number; diem: number };
-
-function matcherPairKey(truongId: number, nganhId: number): string {
-  return `${truongId}-${nganhId}`;
-}
-
-function formatMatcherDiemChuanValue(latest: MatcherDiemChuanLatest | undefined): string {
-  if (!latest) return "Chưa có số liệu";
-  return `${latest.diem} · năm ${latest.nam}`;
-}
-
-/** Năm gần nhất có `diem_chuan` cho từng cặp trường–ngành. */
-async function fetchMatcherLatestDiemChuanByPair(
-  supabase: SupabaseClient,
-): Promise<Map<string, MatcherDiemChuanLatest>> {
-  const map = new Map<string, MatcherDiemChuanLatest>();
-  const PAGE = 500;
-  let from = 0;
-
-  for (;;) {
-    const { data, error } = await supabase
-      .from("dh_truong_nganh_theo_nam")
-      .select("truong_dai_hoc, nganh_dao_tao, nam_tuyen_sinh, diem_chuan")
-      .not("diem_chuan", "is", null)
-      .order("nam_tuyen_sinh", { ascending: false })
-      .range(from, from + PAGE - 1);
-
-    if (error || !data?.length) break;
-
-    for (const raw of data as Record<string, unknown>[]) {
-      const tid = Number(raw.truong_dai_hoc);
-      const nid = Number(raw.nganh_dao_tao);
-      const nam = Number(raw.nam_tuyen_sinh);
-      const diemRaw = raw.diem_chuan;
-      const diem =
-        typeof diemRaw === "number" ? diemRaw : diemRaw != null && diemRaw !== "" ? Number(diemRaw) : NaN;
-      if (!Number.isFinite(tid) || !Number.isFinite(nid) || !Number.isFinite(nam) || !Number.isFinite(diem)) {
-        continue;
-      }
-
-      const key = matcherPairKey(tid, nid);
-      if (!map.has(key)) map.set(key, { nam, diem });
-    }
-
-    if (data.length < PAGE) break;
-    from += PAGE;
-  }
-
-  return map;
-}
-
-async function fetchMatcherPayload(): Promise<{
-  schools: HomeMockupMatcherSchool[];
-  options: HomeMockupMatcherOption[];
-  defaultOptionKey: string;
-}> {
-  const supabase = createStaticClient();
-  if (!supabase) {
-    return {
-      schools: MATCHER_FALLBACK_SCHOOLS,
-      options: MATCHER_FALLBACK,
-      defaultOptionKey: MATCHER_FALLBACK[0]!.majorKey,
-    };
-  }
-
-  const [profiles, catalogRes, diemChuanByPair] = await Promise.all([
-    fetchDhExamProfilesSafe(supabase),
-    fetchDhNguyenVongCatalog(supabase),
-    fetchMatcherLatestDiemChuanByPair(supabase),
-  ]);
-
-  const catalog = catalogRes.catalog;
-  const schoolList: HomeMockupMatcherSchool[] =
-    catalog?.truong.map((t) => ({ id: t.id, name: t.ten })) ??
-    MATCHER_FALLBACK_SCHOOLS;
-
-  if (profiles.length === 0) {
-    const optionsFromCatalog: HomeMockupMatcherOption[] = [];
-    for (const school of schoolList) {
-      const majors = catalog?.nganhByTruongId[String(school.id)] ?? [];
-      for (const ng of majors) {
-        optionsFromCatalog.push({
-          schoolId: school.id,
-          majorKey: `${school.id}-${ng.id}`,
-          majorLabel: ng.ten,
-          resultTitle: `${ng.ten} · ${school.name}`,
-          rows: [
-            { label: "Môn thi năng khiếu", value: "Hình họa + Bố cục màu" },
-            {
-              label: "Điểm chuẩn các năm",
-              value: formatMatcherDiemChuanValue(
-                diemChuanByPair.get(matcherPairKey(school.id, ng.id)),
-              ),
-            },
-            { label: "Khóa nên học", value: "Theo môn thi năng khiếu" },
-            { label: "Lộ trình đề xuất", value: "3–6 tháng" },
-          ],
-          ctaHref: "/tra-cuu-thong-tin",
-        });
-      }
-    }
-    const options = optionsFromCatalog.length ? optionsFromCatalog : MATCHER_FALLBACK;
-    const preferred =
-      options.find((o) => /mỹ thuật tp\.?hcm/i.test(o.resultTitle)) ?? options[0];
-    return {
-      schools: schoolList.length ? schoolList : MATCHER_FALLBACK_SCHOOLS,
-      options,
-      defaultOptionKey: preferred?.majorKey ?? options[0]!.majorKey,
-    };
-  }
-
-  const options: HomeMockupMatcherOption[] = profiles.map((p) => {
-    const monThi =
-      p.mon_thi.length > 0 ? p.mon_thi.join(" · ") : "Hình họa + Bố cục màu";
-    return {
-      schoolId: p.truong_id,
-      majorKey: `${p.truong_id}-${p.nganh_id}`,
-      majorLabel: p.ten_nganh,
-      resultTitle: `${p.ten_nganh} · ${p.ten_truong_dai_hoc}`,
-      rows: [
-        { label: "Môn thi năng khiếu", value: monThi },
-        {
-          label: "Điểm chuẩn các năm",
-          value: formatMatcherDiemChuanValue(
-            diemChuanByPair.get(matcherPairKey(p.truong_id, p.nganh_id)),
-          ),
-        },
-        { label: "Khóa nên học", value: "Hình họa · Trang trí màu · Bố cục màu" },
-        { label: "Lộ trình đề xuất", value: "3–6 tháng" },
-      ],
-      ctaHref: "/tra-cuu-thong-tin",
-    };
-  });
-
-  const schoolMap = new Map<number, string>();
-  for (const s of schoolList) schoolMap.set(s.id, s.name);
-  for (const p of profiles) {
-    if (!schoolMap.has(p.truong_id)) {
-      schoolMap.set(p.truong_id, p.ten_truong_dai_hoc);
-    }
-  }
-  const schools = [...schoolMap.entries()]
-    .map(([id, name]) => ({ id, name }))
-    .sort((a, b) => a.name.localeCompare(b.name, "vi"));
-
-  const preferred =
-    options.find((o) => /mỹ thuật tp\.?hcm|đh mỹ thuật tp\.?hcm/i.test(o.resultTitle)) ??
-    options[0];
-
-  return {
-    schools,
-    options,
-    defaultOptionKey: preferred?.majorKey ?? options[0]!.majorKey,
-  };
-}
 
 function resolveFoundationKey(tenMon: string): "hh" | "tt" | "bc" | null {
   for (const f of FOUNDATION_ORDER) {
@@ -725,7 +531,7 @@ async function getHomeMockupPayloadUncached(): Promise<HomeMockupPayload> {
     getHomeReviewsData(),
     getHomeGallerySectionData(),
     getHomeCareersData(),
-    fetchMatcherPayload(),
+    fetchCinsMatcherPayload(),
     fetchTeachersUncached(),
   ]);
 
@@ -773,18 +579,28 @@ async function getHomeMockupPayloadUncached(): Promise<HomeMockupPayload> {
   const trustAvatarOverflow =
     Number.isFinite(studentNum) && studentNum > 4 ? studentNum - 4 : reviewExtra;
 
-  const slides = SLIDES_STATIC.map((s, i) => {
-    const cardUrls = [
+  const slides = homeContent.heroSlides.map((s, i) => {
+    const legacyUrls = [
       homeContent.hero.cards.main.imageUrl,
       homeContent.hero.cards.top.imageUrl,
       homeContent.hero.cards.bottom.imageUrl,
     ];
-    const url = cardUrls[i]?.trim();
+    const url = s.imageUrl?.trim() || legacyUrls[i]?.trim();
     return url ? { ...s, imageUrl: url, bg: s.bg } : s;
   });
 
-  const matcherSchools = matcher.schools;
-  const matcherOptions = matcher.options;
+  const matcherSchoolCount = matcher.schools.length;
+
+  const examStats = homeContent.exam.stats.map((s, i) => {
+    if (i === 0) {
+      const n = String(students).replace(/\D/g, "") || s.value.replace(/\D/g, "") || "120";
+      return { ...s, value: `${n}+` };
+    }
+    if (i === 2) {
+      return { ...s, value: String(Math.max(matcherSchoolCount, Number(s.value) || 12)) };
+    }
+    return s;
+  });
 
   const cinsCareers =
     careers.length > 0
@@ -794,19 +610,24 @@ async function getHomeMockupPayloadUncached(): Promise<HomeMockupPayload> {
   return toJSONSafe({
     hero: {
       badge: `${rating} · ${students} học viên tin tưởng · ${homeContent.hero.ratingSource || "Google Reviews"}`,
-      headlineEmphasis: "họa sỹ công nghệ",
-      subPill: "luyện thi năng khiếu",
-      lead: "Sine Art xây nền tảng mỹ thuật khoa học, có người đồng hành, giúp bạn vừa đậu đại học vừa đi xa trong nghề sáng tạo.",
+      headlineEmphasis: homeContent.hero.mockupHeadlineEmphasis || "họa sỹ công nghệ",
+      subPill: homeContent.hero.mockupSubPill || "luyện thi năng khiếu",
+      subSchools:
+        homeContent.hero.mockupSubSchools || "ĐH Mỹ thuật · Kiến trúc · Văn Lang - Tôn Đức Thắng",
+      lead: homeContent.hero.lead,
       ctaPrimary: {
-        label: "Học thử miễn phí",
+        label: homeContent.hero.ctaPrimary.label || "Học thử miễn phí",
         href: homeContent.hero.ctaPrimary.href || HERO_HOC_THU_FACEBOOK_URL,
       },
-      ctaGhost: { label: "Xem lộ trình 3 môn", href: "#curr" },
+      ctaGhost: {
+        label: homeContent.hero.ctaGhost.label || "Xem lộ trình 3 môn",
+        href: homeContent.hero.ctaGhost.href || "#curr",
+      },
       studentsLabel: `${students} học viên`,
       trustAvatars: heroTrustAvatars,
       trustAvatarOverflow,
     },
-    marquee: MARQUEE_STATIC,
+    marquee: homeContent.marquee,
     slides,
     stats: [
       { value: students, label: "Học viên đã & đang theo học" },
@@ -816,39 +637,22 @@ async function getHomeMockupPayloadUncached(): Promise<HomeMockupPayload> {
     ],
     exam: {
       title: "Học để đậu — không chỉ học để biết vẽ.",
-      subtitle:
-        "Nền tảng vững là con đường ngắn nhất qua kỳ thi năng khiếu. Đây là kết quả các học viên Sine Art đã làm được.",
-      stats: [
-        {
-          value: `${students.replace(/\D/g, "") || "120"}+`,
-          label: "Học viên đậu ĐH Mỹ thuật · Kiến trúc 2024–2025",
-        },
-        { value: "8.5", label: "Điểm năng khiếu trung bình của học viên luyện thi" },
-        {
-          value: String(Math.max(matcherSchools.length, 12)),
-          label: "Trường ĐH có học viên Sine Art trúng tuyển",
-        },
-        { value: "94%", label: "Học viên luyện thi đạt nguyện vọng đăng ký" },
-      ],
+      subtitle: homeContent.exam.subtitle,
+      stats: examStats,
     },
     kieng: { pillars: kiengPillars },
     curriculum: curriculumWithImages,
     beforeAfter,
     video: {
       youtubeId: homeContent.video.tabs[0]?.youtubeId || "tiUBpOVqHGs",
-      sectionLabel: "Học online tại Sine Art",
-      titleEmphasis: "sửa bài 1-1",
-      subtitle:
-        "Lo lắng học vẽ qua màn hình không hiệu quả? Đây là cách lớp online ở Sine Art vận hành.",
+      sectionLabel: homeContent.mockupVideo.sectionLabel,
+      titleEmphasis: homeContent.mockupVideo.titleEmphasis,
+      subtitle: homeContent.mockupVideo.subtitle,
       thumbnailUrl: null,
     },
     teachers,
     careers: cinsCareers,
-    matcher: {
-      schools: matcherSchools,
-      options: matcherOptions,
-      defaultOptionKey: matcher.defaultOptionKey,
-    },
+    matcher,
     reviews: reviews.slice(0, 3),
     cta: {
       ...homeContent.ctaBand,
@@ -856,14 +660,10 @@ async function getHomeMockupPayloadUncached(): Promise<HomeMockupPayload> {
       ctaGhost: { ...homeContent.ctaBand.ctaGhost, href: HERO_HOC_THU_FACEBOOK_URL },
     },
     footer: {
-      tagline:
-        "Trung tâm luyện thi vẽ với lộ trình chi tiết cho từng ngành và từng trường, giúp bạn thi đậu vào ngôi trường mơ ước.",
-      branches: [
-        { label: "CS1: 67 Tân Sơn Nhì, P.14, Tân Phú, TP.HCM" },
-        { label: "CS2: 131 Nơ Trang Long, Bình Thạnh, TP.HCM" },
-      ],
-      phone: "086 755 1531",
-      email: "sineart.official@gmail.com",
+      tagline: homeContent.footer.tagline,
+      branches: [{ label: homeContent.footer.branch1 }, { label: homeContent.footer.branch2 }],
+      phone: homeContent.footer.phone,
+      email: homeContent.footer.email,
     },
   });
 }

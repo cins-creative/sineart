@@ -1,7 +1,10 @@
-import { toPng } from "html-to-image";
+import { toPng, type Options as HtmlToImageOptions } from "html-to-image";
 
 /** Chụp DOM → PNG → clipboard (Zalo/Messenger: dán ảnh). */
-export async function copyDomAsPngToClipboard(node: HTMLElement): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function copyDomAsPngToClipboard(
+  node: HTMLElement,
+  options?: Pick<HtmlToImageOptions, "filter">,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   if (typeof navigator === "undefined" || !navigator.clipboard?.write) {
     return { ok: false, error: "Trình duyệt không hỗ trợ ghi ảnh vào clipboard (cần HTTPS và quyền trang)." };
   }
@@ -9,7 +12,8 @@ export async function copyDomAsPngToClipboard(node: HTMLElement): Promise<{ ok: 
     const dataUrl = await toPng(node, {
       pixelRatio: 2,
       cacheBust: true,
-      backgroundColor: "#f5f7f7",
+      backgroundColor: "#ffffff",
+      ...options,
     });
     const blob = await (await fetch(dataUrl)).blob();
     const type = blob.type && blob.type !== "" ? blob.type : "image/png";

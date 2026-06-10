@@ -15,6 +15,7 @@ type Props = {
   badge: string;
   headlineEmphasis: string;
   subPill: string;
+  subSchools: string;
   lead: string;
   ctaPrimary: { label: string; href: string };
   ctaGhost: { label: string; href: string };
@@ -33,6 +34,7 @@ export function HomeMockupHero({
   badge,
   headlineEmphasis,
   subPill,
+  subSchools,
   lead,
   ctaPrimary,
   ctaGhost,
@@ -73,8 +75,7 @@ export function HomeMockupHero({
             Dành cho <span className="grad-text">{headlineEmphasis}</span> tương lai
           </h1>
           <p className="sub">
-            Giáo trình bài bản từ 2020 — <span className="pill">{subPill}</span> ĐH Mỹ thuật ·
-            Kiến trúc · Văn Lang - Tôn Đức Thắng.
+            Giáo trình bài bản từ 2020 — <span className="pill">{subPill}</span> {subSchools}
           </p>
           <p className="lead">{lead}</p>
           <div className="hero-actions">

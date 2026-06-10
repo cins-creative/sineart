@@ -17,14 +17,12 @@ import {
 import { HomeMockupCareerTicker } from "@/app/_components/home-mockup/HomeMockupCareerTicker";
 import { HomeMockupMarquee } from "@/app/_components/home-mockup/HomeMockupMarquee";
 import { HomeMockupMatcher } from "@/app/_components/home-mockup/HomeMockupMatcher";
-import { HomeMockupNav } from "@/app/_components/home-mockup/HomeMockupNav";
 import { HomeMockupReviewsSection } from "@/app/_components/home-mockup/HomeMockupReviewsSection";
 import { HomeMockupClassroomPhotosSection } from "@/app/_components/home-mockup/HomeMockupClassroomPhotosSection";
 import { HomeMockupTeachersSection } from "@/app/_components/home-mockup/HomeMockupTeachersSection";
 import { HomeMockupVideo } from "@/app/_components/home-mockup/HomeMockupVideo";
 import { HomeMockupHero } from "@/app/_components/home-mockup/HomeMockupHero";
 import { getHomeMockupPayload } from "@/lib/data/home-mockup";
-import { getKhoaHocNavGroups } from "@/lib/nav/build-khoa-hoc-nav";
 import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 
 const KIENG_LABEL = {
@@ -51,7 +49,7 @@ function GalleryArt({ photo, grad, label }: { photo: string | null | undefined; 
 }
 
 export async function HomeMockupPage() {
-  const [data, khoaHocGroups] = await Promise.all([getHomeMockupPayload(), getKhoaHocNavGroups()]);
+  const data = await getHomeMockupPayload();
 
   const pillarIcon = {
     hh: Edit3,
@@ -61,7 +59,6 @@ export async function HomeMockupPage() {
 
   return (
     <>
-      <HomeMockupNav khoaHocGroups={khoaHocGroups} />
       <HomeMockupMarquee items={data.marquee} />
       <HomeMockupHero {...data.hero} slides={data.slides} />
 
@@ -354,7 +351,10 @@ export async function HomeMockupPage() {
       <section className="section" id="dang-ky">
         <div className="wrap">
           <div className="final">
-            <h2>Sẵn sàng bắt đầu hành trình họa sỹ công nghệ?</h2>
+            <h2>
+              {data.cta.titleBefore}
+              <span className="grad-text">{data.cta.titleEmphasis}</span>
+            </h2>
             <p>{data.cta.text}</p>
             <div className="final-actions">
               <Link

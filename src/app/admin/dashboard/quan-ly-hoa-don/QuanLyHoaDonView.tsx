@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -28,6 +28,7 @@ import {
   updateHpDonThu,
 } from "@/app/admin/dashboard/quan-ly-hoa-don/actions";
 import type { AdminChiTietDisplay, AdminHoaDonBundle, AdminHpDonRow } from "@/lib/data/admin-quan-ly-hoa-don";
+import { copyDomAsPngToClipboard } from "@/lib/copy-dom-png-clipboard";
 import { buildVietQrImageUrl, getTpBankQrRecipient } from "@/lib/payment/vietqr";
 import { calendarDaysRemainingInclusive, cn } from "@/lib/utils";
 
@@ -858,15 +859,31 @@ export default function QuanLyHoaDonView({ bundle: initialBundle, days }: Props)
  * - Còn `Chờ thanh toán` (không hiển thị khi đã thanh toán / huỷ)
  * - Có `ma_don_so` (hoặc `ma_don`) hợp lệ + tổng > 0
  */
-function QrPaymentCard({ don, chi }: { don: AdminHpDonRow; chi: AdminChiTietDisplay[] }) {
+function QrPaymentCard({
+  don,
+  chi,
+  hvName,
+}: {
+  don: AdminHpDonRow;
+  chi: AdminChiTietDisplay[];
+  hvName: string | null;
+}) {
+  const slipRef = useRef<HTMLDivElement>(null);
   const total = totalDon(don, chi);
+  const sub = subtotalChi(chi);
+  const giam = parseMoney(don.giam_gia) + parseMoney(don.giam_gia_vnd);
   const noiDungCk = (don.ma_don_so?.trim() || don.ma_don?.trim() || "").toUpperCase();
+  const maDonCk = don.ma_don?.trim() || "—";
   const transfer = isTransferHinhThuc(don.hinh_thuc_thu);
   const status = String(don.status ?? "");
   const recipient = useMemo(() => getTpBankQrRecipient(don.id), [don.id]);
   const qrUrl = useMemo(() => {
     if (!transfer || total <= 0 || !noiDungCk) return null;
     return buildVietQrImageUrl(noiDungCk, total, don.id);
+  }, [transfer, total, noiDungCk, don.id]);
+  const qrProxyUrl = useMemo(() => {
+    if (!transfer || total <= 0 || !noiDungCk) return null;
+    return `/admin/api/quan-ly-hoa-don/qr-proxy?donId=${don.id}&maDonSo=${encodeURIComponent(noiDungCk)}&amount=${total}`;
   }, [transfer, total, noiDungCk, don.id]);
 
   const [copied, setCopied] = useState<string | null>(null);
@@ -886,40 +903,39 @@ function QrPaymentCard({ don, chi }: { don: AdminHpDonRow; chi: AdminChiTietDisp
   }, []);
 
   const copyImage = useCallback(async () => {
+    const el = slipRef.current;
+    if (!el || copyingImg) return;
     setCopyImgErr(null);
-    if (
-      typeof window === "undefined" ||
-      typeof window.ClipboardItem === "undefined" ||
-      !navigator.clipboard?.write
-    ) {
-      setCopyImgErr("Trình duyệt không hỗ trợ copy ảnh — dùng nút copy các trường bên dưới.");
-      return;
-    }
     setCopyingImg(true);
     try {
-      const proxyUrl = `/admin/api/quan-ly-hoa-don/qr-proxy?donId=${don.id}&maDonSo=${encodeURIComponent(noiDungCk)}&amount=${total}`;
-      // Safari yêu cầu Promise<Blob> truyền thẳng vào ClipboardItem trong user gesture.
-      const item = new ClipboardItem({
-        "image/png": (async () => {
-          const res = await fetch(proxyUrl, { cache: "no-store" });
-          if (!res.ok) throw new Error(`Tải ảnh QR thất bại (${res.status})`);
-          const blob = await res.blob();
-          return blob.type === "image/png"
-            ? blob
-            : new Blob([await blob.arrayBuffer()], { type: "image/png" });
-        })(),
+      await Promise.all(
+        [...el.querySelectorAll("img")].map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) {
+                resolve();
+                return;
+              }
+              img.addEventListener("load", () => resolve(), { once: true });
+              img.addEventListener("error", () => resolve(), { once: true });
+            }),
+        ),
+      );
+      const r = await copyDomAsPngToClipboard(el, {
+        filter: (node) => !(node instanceof HTMLButtonElement),
       });
-      await navigator.clipboard.write([item]);
+      if (!r.ok) {
+        setCopyImgErr(r.error);
+        return;
+      }
       setCopied("image");
       window.setTimeout(() => setCopied((c) => (c === "image" ? null : c)), 1600);
-    } catch (e) {
-      setCopyImgErr(e instanceof Error ? e.message : "Không copy được ảnh QR.");
     } finally {
       setCopyingImg(false);
     }
-  }, [don.id, noiDungCk, total]);
+  }, [copyingImg]);
 
-  if (!transfer || total <= 0 || !noiDungCk || !qrUrl) return null;
+  if (!transfer || total <= 0 || !noiDungCk || !qrUrl || !qrProxyUrl) return null;
   if (status === "Đã thanh toán" || status === "Đã hủy") return null;
 
   const rows: { k: string; label: string; value: string; copyValue?: string }[] = [
@@ -936,87 +952,141 @@ function QrPaymentCard({ don, chi }: { don: AdminHpDonRow; chi: AdminChiTietDisp
   ];
 
   return (
-    <div className="rounded-xl border border-[#F8A568]/30 bg-gradient-to-br from-[#FFF7F0] via-white to-[#FFF0F7]/50 p-3">
+    <div className="rounded-xl border border-[#F8A568]/30 bg-white p-2.5 shadow-sm">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="m-0 inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#F8A568]">
-          <QrCode size={11} aria-hidden /> QR thanh toán · gửi lại
+        <p className="m-0 inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#F8A568]">
+          <QrCode size={12} aria-hidden /> Gửi lại QR
         </p>
         <button
           type="button"
           onClick={() => void copyImage()}
           disabled={copyingImg}
           className={cn(
-            "inline-flex items-center gap-1 rounded-md border border-[#F8A568]/30 bg-white px-2 py-0.5 text-[10px] font-bold text-[#c2410c] shadow-sm transition",
+            "inline-flex items-center gap-1 rounded-md border border-[#F8A568]/35 bg-[#FFF7F0] px-2 py-1 text-[10px] font-bold text-[#c2410c] transition",
             "hover:bg-orange-50",
             copyingImg && "cursor-wait opacity-60"
           )}
-          title="Copy ảnh QR vào bộ nhớ tạm (paste thẳng vào Zalo/Messenger)"
+          title="Chụp đơn thu học phí (QR + chi tiết) thành ảnh — dán Zalo/Messenger"
         >
           {copyingImg ? (
             <>
-              <Loader2 size={10} className="animate-spin" /> Đang copy…
+              <Loader2 size={11} className="animate-spin" /> Đang copy…
             </>
           ) : copied === "image" ? (
             <>
-              <Check size={10} className="text-emerald-600" /> Đã copy ảnh
+              <Check size={11} className="text-emerald-600" /> Đã copy
             </>
           ) : (
             <>
-              <ImageIcon size={10} /> Copy ảnh
+              <ImageIcon size={11} /> Copy ảnh
             </>
           )}
         </button>
       </div>
 
       {copyImgErr ? (
-        <p className="mb-2 flex items-start gap-1.5 rounded-md bg-red-50 px-2 py-1 text-[10.5px] font-semibold text-red-700">
-          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+        <p className="mb-2 flex items-start gap-1.5 rounded-md bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {copyImgErr}
         </p>
       ) : null}
 
-      <div className="flex flex-col items-center gap-1.5">
-        {/* eslint-disable-next-line @next/next/no-img-element -- VietQR URL */}
-        <img
-          src={qrUrl}
-          alt={`Mã QR thanh toán đơn ${noiDungCk}`}
-          className="h-40 w-40 rounded-[10px] bg-white object-contain ring-1 ring-black/[0.05]"
-          loading="lazy"
-        />
-        <p className="m-0 text-center text-base font-black text-[#1a1a2e]">{fmtVnd(total)}</p>
-        <p className="m-0 text-center text-[10px] text-black/45">
-          Nội dung: <strong className="text-[#1a1a2e]">{noiDungCk}</strong>
-        </p>
-      </div>
+      <div ref={slipRef} className="overflow-hidden rounded-lg border border-[#EAEAEA] bg-white text-[#1a1a2e]">
+        <div className="border-b border-[#EAEAEA] bg-gradient-to-r from-[#FFF7F0] to-white px-3 py-2">
+          <p className="m-0 text-[9px] font-extrabold uppercase tracking-[0.12em] text-[#ee5b9f]">
+            Sine Art · Đơn thu học phí
+          </p>
+          <p className="m-0 mt-0.5 text-[13px] font-extrabold tabular-nums">{maDonCk}</p>
+          <p className="m-0 mt-0.5 text-[11.5px] font-semibold text-black/60">
+            {hvName?.trim() || "—"}
+          </p>
+        </div>
 
-      <dl className="mt-2.5 space-y-0">
-        {rows.map((row) => (
-          <div
-            key={row.k}
-            className="flex items-center justify-between gap-2 border-b border-[#F8A568]/15 py-1.5 last:border-0"
-          >
-            <dt className="text-[10px] font-bold uppercase tracking-wide text-[#AAA]">{row.label}</dt>
-            <dd className="m-0 flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-[12px] font-bold text-[#1a1a2e]" title={row.value}>
-                {row.value}
-              </span>
-              <button
-                type="button"
-                onClick={() => copy(row.k, row.copyValue ?? row.value)}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#EAEAEA] bg-white text-black/45 transition hover:border-[#F8A568]/40 hover:bg-orange-50 hover:text-[#c2410c]"
-                aria-label={`Copy ${row.label}`}
-                title={`Copy ${row.label}`}
-              >
-                {copied === row.k ? (
-                  <Check className="h-3 w-3 text-emerald-600" />
-                ) : (
-                  <Copy className="h-3 w-3" />
-                )}
-              </button>
-            </dd>
+        {chi.length > 0 ? (
+          <ul className="m-0 list-none divide-y divide-[#EAEAEA] border-b border-[#EAEAEA] px-3 py-1">
+            {chi.map((c, i) => (
+              <li key={c.id} className="flex items-start justify-between gap-3 py-1.5">
+                <div className="min-w-0">
+                  <p className="m-0 text-[11.5px] font-bold leading-snug">
+                    <span className="text-[#F8A568]">Gói {i + 1} ·</span> {c.ten_lop || "—"}
+                  </p>
+                  <p className="m-0 mt-0.5 text-[10.5px] text-black/50">
+                    {fmtDate(c.ngay_dau_ky)} – {fmtDate(c.ngay_cuoi_ky)}
+                  </p>
+                </div>
+                <span className="shrink-0 text-[11.5px] font-bold tabular-nums">
+                  {c.hoc_phi_display != null ? fmtVnd(c.hoc_phi_display) : "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <div className="space-y-1 border-b border-[#EAEAEA] px-3 py-2 text-[11px]">
+          {giam > 0 ? (
+            <>
+              <div className="flex justify-between gap-2 text-black/55">
+                <span>Tạm tính</span>
+                <span className="font-semibold tabular-nums">{fmtVnd(sub)}</span>
+              </div>
+              <div className="flex justify-between gap-2 text-emerald-700">
+                <span>Giảm giá</span>
+                <span className="font-semibold tabular-nums">−{fmtVnd(giam)}</span>
+              </div>
+            </>
+          ) : null}
+          <div className="flex items-center justify-between gap-2 border-t border-dashed border-black/10 pt-1.5">
+            <span className="text-[11.5px] font-extrabold">Tổng thanh toán</span>
+            <span className="text-[15px] font-black tabular-nums">{fmtVnd(total)}</span>
           </div>
-        ))}
-      </dl>
+        </div>
+
+        <div className="flex flex-col items-center gap-2.5 px-3 py-2.5">
+          {/* eslint-disable-next-line @next/next/no-img-element -- proxy same-origin cho html-to-image */}
+          <img
+            src={qrProxyUrl}
+            alt={`QR ${noiDungCk}`}
+            className="h-[124px] w-[124px] rounded-lg bg-white object-contain ring-1 ring-black/[0.08]"
+            loading="lazy"
+          />
+          <dl className="m-0 w-full space-y-0">
+            {rows.map((row) => (
+              <div
+                key={row.k}
+                className="flex items-center justify-between gap-2 border-b border-[#EAEAEA] py-1.5 last:border-0"
+              >
+                <dt className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-[#999]">
+                  {row.label}
+                </dt>
+                <dd className="m-0 flex min-w-0 flex-1 items-center justify-end gap-1">
+                  <span
+                    className={cn(
+                      "text-right text-[11.5px] font-bold text-[#1a1a2e]",
+                      row.k === "name" ? "whitespace-normal leading-snug" : "tabular-nums",
+                    )}
+                    title={row.value}
+                  >
+                    {row.value}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => copy(row.k, row.copyValue ?? row.value)}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#EAEAEA] bg-white text-black/45 transition hover:border-[#F8A568]/40 hover:bg-orange-50 hover:text-[#c2410c]"
+                    aria-label={`Copy ${row.label}`}
+                    title={`Copy ${row.label}`}
+                  >
+                    {copied === row.k ? (
+                      <Check className="h-3 w-3 text-emerald-600" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </button>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1258,7 +1328,7 @@ function DonDetailPanel({
           </div>
         </div>
 
-        <QrPaymentCard don={don} chi={chi} />
+        <QrPaymentCard don={don} chi={chi} hvName={hvName} />
 
         <div>
           <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-black/40">Chi tiết kỳ học phí</p>

@@ -10,7 +10,10 @@ const ICONS = {
 } as const;
 
 export function HomeMockupMarquee({ items }: { items: HomeMockupMarqueeItem[] }) {
-  const track = [...items, ...items];
+  const visible = items.filter((item) => item.text.trim());
+  if (visible.length === 0) return null;
+
+  const track = [...visible, ...visible];
 
   return (
     <div className="marquee" aria-label="Thông báo">

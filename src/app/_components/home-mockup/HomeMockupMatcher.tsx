@@ -4,45 +4,47 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { MonThiThumb } from "@/app/_components/home-mockup/MonThiThumb";
 import { MatchSearchSelect } from "@/app/_components/home-mockup/MatchSearchSelect";
-import type { HomeMockupMatcherOption, HomeMockupMatcherSchool } from "@/lib/data/home-mockup";
+import type { CinsMatcherPayload } from "@/lib/data/cins-matcher";
 
-type Props = {
-  schools: HomeMockupMatcherSchool[];
-  options: HomeMockupMatcherOption[];
-  defaultOptionKey: string;
-};
+type Props = CinsMatcherPayload;
 
-function schoolValue(id: number): string {
-  return String(id);
-}
+export function HomeMockupMatcher({
+  schools,
+  programsByOrg,
+  resultsByMajorKey,
+  defaultMajorKey,
+}: Props) {
+  const defaultSchoolId = useMemo(() => {
+    if (defaultMajorKey) {
+      for (const [orgId, programs] of Object.entries(programsByOrg)) {
+        if (programs.some((p) => p.id === defaultMajorKey)) return orgId;
+      }
+    }
+    return schools[0]?.id ?? "";
+  }, [defaultMajorKey, programsByOrg, schools]);
 
-export function HomeMockupMatcher({ schools, options, defaultOptionKey }: Props) {
-  const defaultOption =
-    options.find((o) => o.majorKey === defaultOptionKey) ?? options[0] ?? null;
-
-  const [schoolId, setSchoolId] = useState(
-    defaultOption?.schoolId ?? schools[0]?.id ?? 0,
-  );
-  const [majorKey, setMajorKey] = useState(defaultOption?.majorKey ?? "");
+  const [schoolId, setSchoolId] = useState(defaultSchoolId);
+  const [majorKey, setMajorKey] = useState(defaultMajorKey);
 
   const schoolOptions = useMemo(
-    () => schools.map((s) => ({ value: schoolValue(s.id), label: s.name })),
+    () => schools.map((s) => ({ value: s.id, label: s.name })),
     [schools],
   );
 
-  const majorsForSchool = useMemo(
-    () => options.filter((o) => o.schoolId === schoolId),
-    [options, schoolId],
+  const programsForSchool = useMemo(
+    () => programsByOrg[schoolId] ?? [],
+    [programsByOrg, schoolId],
   );
 
   const majorOptions = useMemo(
     () =>
-      (majorsForSchool.length ? majorsForSchool : options).map((o) => ({
-        value: o.majorKey,
-        label: o.majorLabel,
+      programsForSchool.map((p) => ({
+        value: p.id,
+        label: p.label,
       })),
-    [majorsForSchool, options],
+    [programsForSchool],
   );
 
   useEffect(() => {
@@ -51,8 +53,7 @@ export function HomeMockupMatcher({ schools, options, defaultOptionKey }: Props)
     if (first) setMajorKey(first.value);
   }, [majorKey, majorOptions]);
 
-  const activeMajor =
-    options.find((o) => o.majorKey === majorKey) ?? majorsForSchool[0] ?? options[0];
+  const activeResult = resultsByMajorKey[majorKey] ?? null;
 
   return (
     <section className="section">
@@ -70,15 +71,14 @@ export function HomeMockupMatcher({ schools, options, defaultOptionKey }: Props)
                 id="hm-school"
                 label="Trường mục tiêu"
                 options={schoolOptions}
-                value={schoolValue(schoolId)}
+                value={schoolId}
                 searchable
                 searchPlaceholder="Gõ tên trường để tìm…"
                 onChange={(next) => {
-                  const id = Number(next);
-                  if (!Number.isFinite(id)) return;
-                  setSchoolId(id);
-                  const firstMajor = options.find((o) => o.schoolId === id);
-                  if (firstMajor) setMajorKey(firstMajor.majorKey);
+                  if (!next) return;
+                  setSchoolId(next);
+                  const firstProgram = programsByOrg[next]?.[0];
+                  if (firstProgram) setMajorKey(firstProgram.id);
                 }}
               />
               <MatchSearchSelect
@@ -91,23 +91,39 @@ export function HomeMockupMatcher({ schools, options, defaultOptionKey }: Props)
               />
             </div>
           </div>
-          {activeMajor ? (
+          {activeResult ? (
             <div className="match-result">
               <span className="eyebrow">Gợi ý lộ trình</span>
-              <h4>{activeMajor.resultTitle}</h4>
-              {activeMajor.rows.map((r) => (
-                <div key={r.label} className="rrow">
-                  <span>{r.label}</span>
-                  <b>{r.value}</b>
-                </div>
-              ))}
-              <Link
-                href={activeMajor.ctaHref}
-                className="btn btn-primary"
-                style={{ marginTop: 18, width: "100%", justifyContent: "center" }}
-              >
-                Xem thông tin chi tiết <ArrowRight className="feather" aria-hidden />
-              </Link>
+              <h4>{activeResult.resultTitle}</h4>
+              {activeResult.hasConfig ? (
+                <>
+                  {activeResult.thumbs.length > 0 ? (
+                    <div className="match-result-illus" aria-label="Môn thi năng khiếu">
+                      {activeResult.thumbs.map((thumb) => (
+                        <MonThiThumb key={thumb.ma || thumb.ten} thumb={thumb} />
+                      ))}
+                    </div>
+                  ) : null}
+                  {activeResult.rows.map((r) => (
+                    <div key={r.label} className="rrow">
+                      <span>{r.label}</span>
+                      <b>{r.value}</b>
+                    </div>
+                  ))}
+                  <Link
+                    href={activeResult.ctaHref}
+                    className="btn btn-primary"
+                    style={{ marginTop: 18, width: "100%", justifyContent: "center" }}
+                  >
+                    Xem thông tin chi tiết <ArrowRight className="feather" aria-hidden />
+                  </Link>
+                </>
+              ) : (
+                <p className="match-empty">
+                  Thông tin môn thi cho ngành này đang được cập nhật. Vui lòng chọn ngành khác hoặc liên
+                  hệ Sine Art để được tư vấn.
+                </p>
+              )}
             </div>
           ) : null}
         </div>

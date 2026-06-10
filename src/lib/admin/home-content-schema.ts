@@ -39,6 +39,12 @@ export type HeroContent = {
   headlineEmphasis: string;
   headlineAfter: string;
   headlineSuffix: string;
+  /** Mockup `/new` — nhấn mạnh trong H1 (vd. họa sỹ công nghệ). */
+  mockupHeadlineEmphasis: string;
+  /** Mockup — pill trong dòng sub (vd. luyện thi năng khiếu). */
+  mockupSubPill: string;
+  /** Mockup — danh sách trường sau pill. */
+  mockupSubSchools: string;
   lead: string;
   ctaPrimary: CtaLink;
   ctaGhost: CtaLink;
@@ -140,6 +146,54 @@ export type CtaBandContent = {
   sticks: [CtaBandStick, CtaBandStick, CtaBandStick, CtaBandStick];
 };
 
+export type MarqueeIconKey = "map-pin" | "calendar" | "gift" | "edit-3";
+
+export type MarqueeItemContent = {
+  id: string;
+  icon: MarqueeIconKey;
+  text: string;
+};
+
+export type HeroSlideContent = {
+  id: string;
+  tag: string;
+  tagColor: string;
+  title: string;
+  subtitle: string;
+  bg: string;
+  /** Ảnh nền slide carousel `/new` — tuỳ chọn, fallback gradient `bg`. */
+  imageUrl?: string;
+};
+
+/** Khuyến nghị upload ảnh carousel Hero mockup (khớp `.carousel` aspect-ratio 4/4.4). */
+export const HERO_SLIDE_IMAGE_SPEC = {
+  width: 800,
+  height: 880,
+  ratio: "4 / 4.4",
+  label: "800 × 880px",
+} as const;
+
+export type ExamStatContent = { value: string; label: string };
+
+export type ExamContent = {
+  subtitle: string;
+  stats: [ExamStatContent, ExamStatContent, ExamStatContent, ExamStatContent];
+};
+
+export type FooterContent = {
+  tagline: string;
+  branch1: string;
+  branch2: string;
+  phone: string;
+  email: string;
+};
+
+export type MockupVideoLabels = {
+  sectionLabel: string;
+  titleEmphasis: string;
+  subtitle: string;
+};
+
 // ── Ad banner ảnh (cột riêng trên bảng mkt_home_content, không phải JSONB) ──
 
 export type AdVisibleWhere = "home" | "class" | "both";
@@ -200,6 +254,16 @@ export type HomeContent = {
   career: CareerContent;
   teachers: TeachersContent;
   ctaBand: CtaBandContent;
+  /** Thanh ticker dưới nav — trang chủ mới `/new`. */
+  marquee: MarqueeItemContent[];
+  /** Carousel hero mockup `/new` — số slide tuỳ chỉnh. */
+  heroSlides: HeroSlideContent[];
+  /** Khối “Học để đậu” + số liệu. */
+  exam: ExamContent;
+  /** Video section mockup (nhãn; YouTube ID vẫn ở `video.tabs[0]`). */
+  mockupVideo: MockupVideoLabels;
+  /** Footer mockup. */
+  footer: FooterContent;
 };
 
 // ── Defaults (khớp hardcode hiện tại trong các section TSX) ───────────────────
@@ -211,12 +275,15 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
     headlineEmphasis: "Họa sỹ",
     headlineAfter: "công nghệ",
     headlineSuffix: ".",
-    lead: "Sine Art xây dựng nền tảng Mỹ thuật bài bản và khoa học, giúp các bạn đủ kiến thức để trở thành Họa sỹ công nghệ trong Hoạt hình, Phim và Game.",
+    mockupHeadlineEmphasis: "họa sỹ công nghệ",
+    mockupSubPill: "luyện thi năng khiếu",
+    mockupSubSchools: "ĐH Mỹ thuật · Kiến trúc · Văn Lang - Tôn Đức Thắng",
+    lead: "Sine Art xây nền tảng mỹ thuật khoa học, có người đồng hành, giúp bạn vừa đậu đại học vừa đi xa trong nghề sáng tạo.",
     ctaPrimary: {
       label: "Học thử miễn phí",
       href: HERO_HOC_THU_FACEBOOK_URL,
     },
-    ctaGhost: { label: "Xem khoá học", href: "/khoa-hoc" },
+    ctaGhost: { label: "Xem lộ trình 3 môn", href: "#curr" },
     ratingScore: "4.9/5",
     ratingSource: "Google Reviews",
     studentsTrust: "350+ học viên",
@@ -320,18 +387,82 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
     subtitle:
       "Hoạ sỹ thực chiến — đang làm tại studio Hoạt hình, Game, Phim. Dạy bằng kiến thức đúng tiêu chuẩn ngành.",
   },
-  ctaBand: {
-    titleBefore: "Sẵn sàng bắt đầu hành trình làm ",
-    titleEmphasis: "Họa sỹ công nghệ?",
+    ctaBand: {
+    titleBefore: "Sẵn sàng bắt đầu hành trình ",
+    titleEmphasis: "họa sỹ công nghệ?",
     text: "Học thử 1 buổi miễn phí — không cần kinh nghiệm, chỉ cần giấy bút và đam mê.",
-    ctaPrimary: { label: "Đăng ký học thử", href: "/dang-ky" },
-    ctaGhost: { label: "Tư vấn lộ trình", href: "/khoa-hoc" },
+    ctaPrimary: { label: "Đăng ký học thử", href: HERO_HOC_THU_FACEBOOK_URL },
+    ctaGhost: { label: "Tư vấn qua Facebook", href: HERO_HOC_THU_FACEBOOK_URL },
     sticks: [
       { n: "2 phút", l: "để đăng ký online" },
       { n: "100%", l: "buổi học thử miễn phí" },
       { n: "8+", l: "lớp học / tuần" },
       { n: "7/7", l: "lịch linh hoạt trong tuần" },
     ],
+  },
+  marquee: [
+    { id: "m1", icon: "map-pin", text: "Khai trương cơ sở 2 — 131 Nơ Trang Long, Bình Thạnh" },
+    { id: "m2", icon: "calendar", text: "Hình họa khóa mới khai giảng thứ 5 hàng tuần" },
+    { id: "m3", icon: "gift", text: "Học thử 1 buổi miễn phí — không cần kinh nghiệm" },
+    { id: "m4", icon: "edit-3", text: "Đăng ký thi thử năng khiếu online" },
+  ],
+  heroSlides: [
+    {
+      id: "s1",
+      tag: "Cơ sở mới",
+      tagColor: "var(--cat-bc)",
+      title: "Khai trương cơ sở 2",
+      subtitle: "131 Nơ Trang Long, Bình Thạnh — sẵn sàng đón học viên",
+      bg: "linear-gradient(160deg,#ee5b9f,#f8a668)",
+    },
+    {
+      id: "s2",
+      tag: "Khai giảng",
+      tagColor: "var(--cat-hh)",
+      title: "Hình họa khóa mới",
+      subtitle: "Khai giảng thứ 5 hàng tuần · lớp online & tại lớp",
+      bg: "linear-gradient(160deg,#2D2020,#5a3d3d)",
+    },
+    {
+      id: "s3",
+      tag: "Ưu đãi",
+      tagColor: "#fff",
+      title: "Học thử 1 buổi miễn phí",
+      subtitle: "Không cần kinh nghiệm — chỉ cần giấy bút và đam mê",
+      bg: "linear-gradient(160deg,#bb89f8,#ee5b9f)",
+    },
+    {
+      id: "s4",
+      tag: "Thi thử",
+      tagColor: "var(--cat-tt)",
+      title: "Thi thử năng khiếu online",
+      subtitle: "Làm quen format thi, chấm điểm theo chuẩn trường",
+      bg: "linear-gradient(160deg,#6efec0,#1aa377)",
+    },
+  ],
+  exam: {
+    subtitle:
+      "Nền tảng vững là con đường ngắn nhất qua kỳ thi năng khiếu. Đây là kết quả các học viên Sine Art đã làm được.",
+    stats: [
+      { value: "120+", label: "Học viên đậu ĐH Mỹ thuật · Kiến trúc 2024–2025" },
+      { value: "8.5", label: "Điểm năng khiếu trung bình của học viên luyện thi" },
+      { value: "12", label: "Trường ĐH có học viên Sine Art trúng tuyển" },
+      { value: "94%", label: "Học viên luyện thi đạt nguyện vọng đăng ký" },
+    ],
+  },
+  mockupVideo: {
+    sectionLabel: "Học online tại Sine Art",
+    titleEmphasis: "sửa bài 1-1",
+    subtitle:
+      "Lo lắng học vẽ qua màn hình không hiệu quả? Đây là cách lớp online ở Sine Art vận hành.",
+  },
+  footer: {
+    tagline:
+      "Trung tâm luyện thi vẽ với lộ trình chi tiết cho từng ngành và từng trường, giúp bạn thi đậu vào ngôi trường mơ ước.",
+    branch1: "CS1: 67 Tân Sơn Nhì, P.14, Tân Phú, TP.HCM",
+    branch2: "CS2: 131 Nơ Trang Long, Bình Thạnh, TP.HCM",
+    phone: "086 755 1531",
+    email: "sineart.official@gmail.com",
   },
 };
 
@@ -345,8 +476,9 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
  */
 export function mergeHomeContent(raw: unknown): HomeContent {
   const o = isObj(raw) ? raw : {};
+  const hero = mergeHero(o.hero);
   return {
-    hero: mergeHero(o.hero),
+    hero,
     statStrip: mergeStatStrip(o.statStrip),
     why: mergeWhy(o.why),
     video: mergeVideo(o.video),
@@ -355,6 +487,11 @@ export function mergeHomeContent(raw: unknown): HomeContent {
     career: mergeCareer(o.career),
     teachers: mergeTeachers(o.teachers),
     ctaBand: mergeCtaBand(o.ctaBand),
+    marquee: mergeMarquee(o.marquee),
+    heroSlides: mergeHeroSlides(o.heroSlides, hero.cards),
+    exam: mergeExam(o.exam),
+    mockupVideo: mergeMockupVideo(o.mockupVideo),
+    footer: mergeFooter(o.footer),
   };
 }
 
@@ -386,6 +523,9 @@ function mergeHero(v: unknown): HeroContent {
     headlineEmphasis: str(o.headlineEmphasis, d.headlineEmphasis),
     headlineAfter: str(o.headlineAfter, d.headlineAfter),
     headlineSuffix: str(o.headlineSuffix, d.headlineSuffix),
+    mockupHeadlineEmphasis: str(o.mockupHeadlineEmphasis, d.mockupHeadlineEmphasis),
+    mockupSubPill: str(o.mockupSubPill, d.mockupSubPill),
+    mockupSubSchools: str(o.mockupSubSchools, d.mockupSubSchools),
     lead: str(o.lead, d.lead),
     ctaPrimary: (() => {
       const m = cta(o.ctaPrimary, d.ctaPrimary);
@@ -600,5 +740,97 @@ function mergeStick(v: unknown, d: CtaBandStick): CtaBandStick {
   return {
     n: str(o.n, d.n),
     l: str(o.l, d.l),
+  };
+}
+
+function mergeMarqueeIcon(v: unknown, fallback: MarqueeIconKey): MarqueeIconKey {
+  return v === "map-pin" || v === "calendar" || v === "gift" || v === "edit-3" ? v : fallback;
+}
+
+function mergeMarqueeItem(v: unknown, d: MarqueeItemContent): MarqueeItemContent {
+  const o = isObj(v) ? v : {};
+  return {
+    id: str(o.id, d.id),
+    icon: mergeMarqueeIcon(o.icon, d.icon),
+    text: str(o.text, d.text),
+  };
+}
+
+function mergeMarquee(v: unknown): MarqueeItemContent[] {
+  const defaults = DEFAULT_HOME_CONTENT.marquee;
+  const raw = Array.isArray(v) ? v : [];
+  if (raw.length === 0) return [...defaults];
+  return raw.map((item, i) => mergeMarqueeItem(item, defaults[i] ?? defaults[0]!));
+}
+
+function mergeHeroSlide(v: unknown, d: HeroSlideContent): HeroSlideContent {
+  const o = isObj(v) ? v : {};
+  const imageUrl = typeof o.imageUrl === "string" ? o.imageUrl : d.imageUrl ?? "";
+  return {
+    id: str(o.id, d.id),
+    tag: str(o.tag, d.tag),
+    tagColor: str(o.tagColor, d.tagColor),
+    title: str(o.title, d.title),
+    subtitle: str(o.subtitle, d.subtitle),
+    bg: str(o.bg, d.bg),
+    imageUrl,
+  };
+}
+
+function mergeHeroSlides(v: unknown, cards?: HeroCardsContent): HeroSlideContent[] {
+  const defaults = DEFAULT_HOME_CONTENT.heroSlides;
+  const raw = Array.isArray(v) ? v : [];
+  const cardUrls = cards
+    ? [cards.main.imageUrl, cards.top.imageUrl, cards.bottom.imageUrl]
+    : [];
+  const source = raw.length === 0 ? defaults : raw;
+  return source.map((item, i) => {
+    const merged = mergeHeroSlide(item, defaults[i] ?? defaults[defaults.length - 1]!);
+    if (!merged.imageUrl?.trim() && cardUrls[i]?.trim()) {
+      return { ...merged, imageUrl: cardUrls[i]!.trim() };
+    }
+    return merged;
+  });
+}
+
+function mergeExamStat(v: unknown, d: ExamStatContent): ExamStatContent {
+  const o = isObj(v) ? v : {};
+  return { value: str(o.value, d.value), label: str(o.label, d.label) };
+}
+
+function mergeExam(v: unknown): ExamContent {
+  const d = DEFAULT_HOME_CONTENT.exam;
+  const o = isObj(v) ? v : {};
+  const statsRaw = Array.isArray(o.stats) ? o.stats : [];
+  return {
+    subtitle: str(o.subtitle, d.subtitle),
+    stats: [
+      mergeExamStat(statsRaw[0], d.stats[0]),
+      mergeExamStat(statsRaw[1], d.stats[1]),
+      mergeExamStat(statsRaw[2], d.stats[2]),
+      mergeExamStat(statsRaw[3], d.stats[3]),
+    ],
+  };
+}
+
+function mergeMockupVideo(v: unknown): MockupVideoLabels {
+  const d = DEFAULT_HOME_CONTENT.mockupVideo;
+  const o = isObj(v) ? v : {};
+  return {
+    sectionLabel: str(o.sectionLabel, d.sectionLabel),
+    titleEmphasis: str(o.titleEmphasis, d.titleEmphasis),
+    subtitle: str(o.subtitle, d.subtitle),
+  };
+}
+
+function mergeFooter(v: unknown): FooterContent {
+  const d = DEFAULT_HOME_CONTENT.footer;
+  const o = isObj(v) ? v : {};
+  return {
+    tagline: str(o.tagline, d.tagline),
+    branch1: str(o.branch1, d.branch1),
+    branch2: str(o.branch2, d.branch2),
+    phone: str(o.phone, d.phone),
+    email: str(o.email, d.email),
   };
 }

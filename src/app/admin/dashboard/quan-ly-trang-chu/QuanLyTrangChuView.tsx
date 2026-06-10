@@ -5,11 +5,13 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
   Film,
   ImageIcon,
   Info,
   Loader2,
   Megaphone,
+  Plus,
   Save,
   Sparkles,
   Trash2,
@@ -21,15 +23,17 @@ import {
   DEFAULT_HOME_AD,
   DEFAULT_HOME_CONTENT,
   type AdVisibleWhere,
-  type HeroCardImage,
-  type HeroCardsContent,
+  type ExamContent,
   type HeroContent,
+  type HeroSlideContent,
+  HERO_SLIDE_IMAGE_SPEC,
   type HomeAdConfig,
   type HomeContent,
+  type MarqueeIconKey,
+  type MarqueeItemContent,
+  type MockupVideoLabels,
   isRenderableAdImageUrl,
   type VideoContent,
-  type WhyContent,
-  type WhyPillar,
 } from "@/lib/admin/home-content-schema";
 import { parseYoutubeVideoId } from "@/lib/youtube";
 
@@ -47,26 +51,15 @@ type Toast = { ok: boolean; msg: string; warn?: boolean } | null;
 
 type HeroCardKey = "top" | "main" | "bottom";
 
-const HERO_CARD_ORDER: { key: HeroCardKey; label: string; hint: string; ratio: string }[] = [
-  {
-    key: "top",
-    label: "Ảnh nhỏ phía trên (hero-card--top)",
-    hint: "Khung nhỏ 3:4 góc trên phải — thường dùng ảnh chân dung / minh họa.",
-    ratio: "3 / 4",
-  },
-  {
-    key: "main",
-    label: "Ảnh lớn chính (hero-card--main)",
-    hint: "Khung lớn giữa — ảnh nổi bật nhất đại diện cho trường.",
-    ratio: "4 / 5",
-  },
-  {
-    key: "bottom",
-    label: "Ảnh nhỏ phía dưới (hero-card--bottom)",
-    hint: "Khung nhỏ 4:3 góc dưới trái — ảnh lớp học hoặc tác phẩm phụ.",
-    ratio: "4 / 3",
-  },
-];
+function syncHeroCardsFromSlides(hero: HeroContent, slides: HeroSlideContent[]): HeroContent {
+  const cardKeys: HeroCardKey[] = ["main", "top", "bottom"];
+  const cards = { ...hero.cards };
+  cardKeys.forEach((key, i) => {
+    const url = slides[i]?.imageUrl?.trim() ?? "";
+    cards[key] = { ...cards[key], imageUrl: url };
+  });
+  return { ...hero, cards };
+}
 
 function fmtUpdatedAt(iso: string | null): string {
   if (!iso) return "—";
@@ -110,14 +103,24 @@ export default function QuanLyTrangChuView({
     [content, initialSnapshot, ad, initialAdSnapshot, imgClass, initialImgClassSnapshot],
   );
 
-  const setHero = useCallback((hero: HeroContent) => {
-    setContent((c) => ({ ...c, hero }));
-  }, []);
-  const setWhy = useCallback((why: WhyContent) => {
-    setContent((c) => ({ ...c, why }));
-  }, []);
   const setVideo = useCallback((video: VideoContent) => {
     setContent((c) => ({ ...c, video }));
+  }, []);
+  const setMarquee = useCallback((marquee: MarqueeItemContent[]) => {
+    setContent((c) => ({ ...c, marquee }));
+  }, []);
+  const setHeroSlides = useCallback((heroSlides: HeroSlideContent[]) => {
+    setContent((c) => ({
+      ...c,
+      heroSlides,
+      hero: syncHeroCardsFromSlides(c.hero, heroSlides),
+    }));
+  }, []);
+  const setExam = useCallback((exam: ExamContent) => {
+    setContent((c) => ({ ...c, exam }));
+  }, []);
+  const setMockupVideo = useCallback((mockupVideo: MockupVideoLabels) => {
+    setContent((c) => ({ ...c, mockupVideo }));
   }, []);
 
   const handleReset = useCallback(() => {
@@ -183,6 +186,11 @@ export default function QuanLyTrangChuView({
         <div>
           <h1 className="qlh-h1">Quản lý trang chủ</h1>
           <p className="qlh-updated">
+            Layout mới — xem trước tại{" "}
+            <a href="/new" target="_blank" rel="noopener noreferrer" className="qlh-preview-link">
+              /new
+            </a>
+            {" · "}
             Cập nhật lần cuối: <b>{fmtUpdatedAt(updatedAt)}</b>
           </p>
         </div>
@@ -231,9 +239,9 @@ export default function QuanLyTrangChuView({
       <div className="qlh-note">
         <Info size={16} />
         <span>
-          Quản lý ảnh Hero, nội dung Hero / 3 trụ, video 2 tab,{" "}
-          <b>ảnh lớp thực tế</b> (giữa Giáo viên và CTA), và banner quảng cáo.
-          Khóa học, review, giáo viên, gallery học viên quản lý ở trang riêng.
+          Quản lý nội dung trang chủ mới (<a href="/new" target="_blank" rel="noopener noreferrer">/new</a>
+          ): ticker, Hero + carousel, số liệu luyện thi, video, CTA, footer, ảnh lớp và banner quảng cáo.
+          Khóa học, review, giáo viên, gallery, matcher trường–ngành (CINS) lấy từ DB tự động.
         </span>
       </div>
 
@@ -247,14 +255,15 @@ export default function QuanLyTrangChuView({
         </div>
       ) : null}
 
-      <HeroImagesSection data={content.hero} onChange={setHero} />
-      <ContentSection
-        hero={content.hero}
-        why={content.why}
-        onChangeHero={setHero}
-        onChangeWhy={setWhy}
+      <MarqueeSection data={content.marquee} onChange={setMarquee} />
+      <HeroSlidesSection data={content.heroSlides} onChange={setHeroSlides} />
+      <ExamSection data={content.exam} onChange={setExam} />
+      <VideoSection
+        data={content.video}
+        mockupVideo={content.mockupVideo}
+        onChange={setVideo}
+        onChangeMockupVideo={setMockupVideo}
       />
-      <VideoSection data={content.video} onChange={setVideo} />
       <ImgClassPhotosSection urls={imgClass} onChange={setImgClass} />
       <AdSection data={ad} onChange={setAd} />
 
@@ -406,75 +415,34 @@ function ImgClassPhotosSection({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Section 1: Hero images
+// Carousel slides (mockup hero)
 // ═══════════════════════════════════════════════════════════════════════════
 
-function HeroImagesSection({
-  data,
-  onChange,
-}: {
-  data: HeroContent;
-  onChange: (v: HeroContent) => void;
-}) {
-  const setCard = useCallback(
-    (key: HeroCardKey, card: HeroCardImage) => {
-      const next: HeroCardsContent = { ...data.cards, [key]: card };
-      onChange({ ...data, cards: next });
-    },
-    [data, onChange],
-  );
+const HERO_SLIDES_MIN = 1;
+const HERO_SLIDES_MAX = 8;
 
-  return (
-    <section className="qlh-section">
-      <header className="qlh-section-head">
-        <span className="qlh-section-icon">
-          <ImageIcon size={18} />
-        </span>
-        <div>
-          <h2 className="qlh-section-title">Ảnh Hero</h2>
-          <p className="qlh-section-sub">
-            3 khung ảnh trong vùng cover của trang chủ. Upload ảnh hoặc dán URL
-            Cloudflare Images.
-          </p>
-        </div>
-      </header>
-
-      <div className="qlh-hero-grid">
-        {HERO_CARD_ORDER.map(({ key, label, hint, ratio }) => (
-          <HeroImageCard
-            key={key}
-            label={label}
-            hint={hint}
-            ratio={ratio}
-            card={data.cards[key]}
-            onChange={(v) => setCard(key, v)}
-          />
-        ))}
-      </div>
-    </section>
-  );
+function newHeroSlide(): HeroSlideContent {
+  return {
+    id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    tag: "Mới",
+    tagColor: "var(--cat-bc)",
+    title: "Tiêu đề slide",
+    subtitle: "Mô tả ngắn",
+    bg: "linear-gradient(160deg,#ee5b9f,#f8a668)",
+    imageUrl: "",
+  };
 }
 
-function HeroImageCard({
-  label,
-  hint,
-  ratio,
-  card,
+function HeroSlideImageThumb({
+  imageUrl,
   onChange,
 }: {
-  label: string;
-  hint: string;
-  ratio: string;
-  card: HeroCardImage;
-  onChange: (v: HeroCardImage) => void;
+  imageUrl: string;
+  onChange: (url: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handlePickFile = useCallback(() => {
-    fileRef.current?.click();
-  }, []);
 
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -493,7 +461,7 @@ function HeroImageCard({
         if (!res.ok || !json.ok || !json.url) {
           throw new Error(json.error || "Upload thất bại.");
         }
-        onChange({ ...card, imageUrl: json.url });
+        onChange(json.url);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Upload thất bại.");
       } finally {
@@ -501,128 +469,359 @@ function HeroImageCard({
         if (fileRef.current) fileRef.current.value = "";
       }
     },
-    [card, onChange],
+    [onChange],
   );
 
-  const handleClear = useCallback(() => {
-    if (!card.imageUrl) return;
-    if (!confirm("Xoá ảnh này? (chỉ xoá khỏi dashboard, không xoá trên Cloudflare)")) return;
-    onChange({ ...card, imageUrl: "" });
-  }, [card, onChange]);
-
   return (
-    <div className="qlh-hero-card">
-      <div className="qlh-hero-card-head">
-        <div>
-          <h3>{label}</h3>
-          <p>{hint}</p>
-        </div>
-      </div>
-
-      <div className="qlh-hero-preview" style={{ aspectRatio: ratio }}>
-        {card.imageUrl ? (
+    <div className="qlh-slide-thumb-wrap">
+      <button
+        type="button"
+        className="qlh-slide-thumb"
+        style={{ aspectRatio: HERO_SLIDE_IMAGE_SPEC.ratio }}
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        title={`Upload ảnh ${HERO_SLIDE_IMAGE_SPEC.label}`}
+      >
+        {imageUrl ? (
           <Image
-            src={card.imageUrl}
-            alt={card.alt || label}
+            src={imageUrl}
+            alt=""
             fill
-            sizes="(max-width: 720px) 100vw, 33vw"
+            sizes="72px"
             style={{ objectFit: "cover" }}
             unoptimized
           />
         ) : (
-          <div className="qlh-hero-preview-empty">
-            <ImageIcon size={28} />
-            <span>Chưa có ảnh</span>
-          </div>
+          <span className="qlh-slide-thumb-empty">
+            <ImageIcon size={16} />
+          </span>
         )}
         {uploading ? (
-          <div className="qlh-hero-preview-loading">
-            <Loader2 size={20} className="qlh-spin" />
-            <span>Đang upload…</span>
-          </div>
+          <span className="qlh-slide-thumb-loading">
+            <Loader2 size={14} className="qlh-spin" />
+          </span>
         ) : null}
-      </div>
-
-      {error ? <div className="qlh-hero-err">{error}</div> : null}
-
-      <div className="qlh-hero-actions">
+      </button>
+      {imageUrl ? (
         <button
           type="button"
-          className="qlh-btn qlh-btn-sm qlh-btn-primary"
-          onClick={handlePickFile}
+          className="qlh-btn qlh-btn-sm qlh-btn-ghost qlh-slide-thumb-clear"
+          onClick={() => onChange("")}
           disabled={uploading}
+          aria-label="Xóa ảnh"
         >
-          <Upload size={13} />
-          {card.imageUrl ? "Đổi ảnh" : "Upload ảnh"}
+          <Trash2 size={12} />
         </button>
-        {card.imageUrl ? (
-          <button
-            type="button"
-            className="qlh-btn qlh-btn-sm qlh-btn-danger"
-            onClick={handleClear}
-            disabled={uploading}
-          >
-            <Trash2 size={13} />
-            Xoá
-          </button>
-        ) : null}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          style={{ display: "none" }}
-        />
-      </div>
-
-      <label className="qlh-field">
-        <span className="qlh-field-label">URL ảnh</span>
-        <input
-          type="text"
-          className="qlh-field-input"
-          value={card.imageUrl}
-          onChange={(e) => onChange({ ...card, imageUrl: e.target.value })}
-          placeholder="https://imagedelivery.net/..."
-        />
-      </label>
-
-      <label className="qlh-field">
-        <span className="qlh-field-label">Alt text (SEO / accessibility)</span>
-        <input
-          type="text"
-          className="qlh-field-input"
-          value={card.alt}
-          onChange={(e) => onChange({ ...card, alt: e.target.value })}
-          placeholder="Mô tả ngắn về nội dung ảnh"
-        />
-      </label>
+      ) : null}
+      {error ? <span className="qlh-slide-thumb-err">{error}</span> : null}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        style={{ display: "none" }}
+      />
     </div>
   );
 }
 
+function HeroSlidesSection({
+  data,
+  onChange,
+}: {
+  data: HeroSlideContent[];
+  onChange: (v: HeroSlideContent[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const setSlide = (index: number, slide: HeroSlideContent) => {
+    const next = [...data];
+    next[index] = slide;
+    onChange(next);
+  };
+
+  const removeSlide = (index: number) => {
+    if (data.length <= HERO_SLIDES_MIN) return;
+    onChange(data.filter((_, i) => i !== index));
+  };
+
+  const addSlide = () => {
+    if (data.length >= HERO_SLIDES_MAX) return;
+    onChange([...data, newHeroSlide()]);
+    setOpen(true);
+  };
+
+  const preview =
+    data.length === 0
+      ? "Chưa có slide"
+      : data.length === 1
+        ? data[0]!.title.trim() || "1 slide"
+        : `${data.length} slide · ${data[0]!.title.trim().slice(0, 40)}${data[0]!.title.length > 40 ? "…" : ""}`;
+
+  return (
+    <section className={`qlh-section qlh-collapsible${open ? " is-open" : ""}`}>
+      <button
+        type="button"
+        className="qlh-collapsible-head"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span className="qlh-section-icon">
+          <ImageIcon size={18} />
+        </span>
+        <span className="qlh-collapsible-meta">
+          <span className="qlh-section-title">Carousel Hero</span>
+          <span className="qlh-collapsible-preview">{preview}</span>
+        </span>
+        <ChevronDown size={18} className="qlh-collapsible-chevron" aria-hidden />
+      </button>
+
+      {open ? (
+        <div className="qlh-collapsible-body">
+          <p className="qlh-section-sub qlh-collapsible-sub">
+            Slide bên phải Hero trên /new. Ảnh tuỳ chọn — khuyến nghị{" "}
+            <b>{HERO_SLIDE_IMAGE_SPEC.label}</b> (tỷ lệ {HERO_SLIDE_IMAGE_SPEC.ratio.replace(/\s/g, "")}
+            ). Không có ảnh sẽ dùng gradient nền.
+          </p>
+          {data.length > 0 ? (
+            <ul className="qlh-slide-rows">
+              {data.map((slide, i) => (
+                <li key={slide.id} className="qlh-slide-row">
+                  <div className="qlh-slide-row-head">
+                    <span className="qlh-slide-idx">{i + 1}</span>
+                    <span className="qlh-slide-size">{HERO_SLIDE_IMAGE_SPEC.label}</span>
+                    <button
+                      type="button"
+                      className="qlh-btn qlh-btn-sm qlh-btn-ghost qlh-marquee-remove"
+                      aria-label="Xóa slide"
+                      disabled={data.length <= HERO_SLIDES_MIN}
+                      onClick={() => removeSlide(i)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <div className="qlh-slide-row-body">
+                    <HeroSlideImageThumb
+                      imageUrl={slide.imageUrl?.trim() ?? ""}
+                      onChange={(url) => setSlide(i, { ...slide, imageUrl: url })}
+                    />
+                    <div className="qlh-slide-fields">
+                      <input
+                        type="text"
+                        className="qlh-field-input"
+                        value={slide.tag}
+                        placeholder="Tag"
+                        aria-label={`Tag slide ${i + 1}`}
+                        onChange={(e) => setSlide(i, { ...slide, tag: e.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="qlh-field-input"
+                        value={slide.title}
+                        placeholder="Tiêu đề"
+                        aria-label={`Tiêu đề slide ${i + 1}`}
+                        onChange={(e) => setSlide(i, { ...slide, title: e.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="qlh-field-input qlh-slide-sub"
+                        value={slide.subtitle}
+                        placeholder="Mô tả"
+                        aria-label={`Mô tả slide ${i + 1}`}
+                        onChange={(e) => setSlide(i, { ...slide, subtitle: e.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="qlh-field-input qlh-slide-bg"
+                        value={slide.bg}
+                        placeholder="Gradient nền (CSS)"
+                        aria-label={`Gradient slide ${i + 1}`}
+                        onChange={(e) => setSlide(i, { ...slide, bg: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="qlh-section-sub" style={{ margin: 0 }}>
+              Chưa có slide — bấm + để thêm.
+            </p>
+          )}
+          <div className="qlh-marquee-toolbar">
+            <button
+              type="button"
+              className="qlh-btn qlh-btn-sm qlh-btn-ghost"
+              onClick={addSlide}
+              disabled={data.length >= HERO_SLIDES_MAX}
+            >
+              <Plus size={14} />
+              Thêm slide
+            </button>
+            {data.length >= HERO_SLIDES_MAX ? (
+              <span className="qlh-section-sub" style={{ margin: 0 }}>
+                Tối đa {HERO_SLIDES_MAX} slide.
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
-// Section 2: Content (hero lead + 3 why cards)
+// Marquee ticker
 // ═══════════════════════════════════════════════════════════════════════════
 
-function ContentSection({
-  hero,
-  why,
-  onChangeHero,
-  onChangeWhy,
+const MARQUEE_ICON_OPTIONS: { value: MarqueeIconKey; label: string }[] = [
+  { value: "map-pin", label: "📍" },
+  { value: "calendar", label: "📅" },
+  { value: "gift", label: "🎁" },
+  { value: "edit-3", label: "✏️" },
+];
+
+const MARQUEE_MAX_ITEMS = 12;
+
+function newMarqueeItem(): MarqueeItemContent {
+  return {
+    id: `m-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    icon: "gift",
+    text: "",
+  };
+}
+
+function MarqueeSection({
+  data,
+  onChange,
 }: {
-  hero: HeroContent;
-  why: WhyContent;
-  onChangeHero: (v: HeroContent) => void;
-  onChangeWhy: (v: WhyContent) => void;
+  data: MarqueeItemContent[];
+  onChange: (v: MarqueeItemContent[]) => void;
 }) {
-  const setPillar = useCallback(
-    (index: 0 | 1 | 2, pillar: WhyPillar) => {
-      const pillars = [...why.pillars] as WhyContent["pillars"];
-      pillars[index] = pillar;
-      onChangeWhy({ ...why, pillars });
-    },
-    [why, onChangeWhy],
+  const [open, setOpen] = useState(false);
+
+  const setItem = (index: number, item: MarqueeItemContent) => {
+    const next = [...data];
+    next[index] = item;
+    onChange(next);
+  };
+
+  const removeItem = (index: number) => {
+    onChange(data.filter((_, i) => i !== index));
+  };
+
+  const addItem = () => {
+    if (data.length >= MARQUEE_MAX_ITEMS) return;
+    onChange([...data, newMarqueeItem()]);
+    setOpen(true);
+  };
+
+  const preview =
+    data.length === 0
+      ? "Chưa có mục"
+      : data.length === 1
+        ? data[0]!.text.trim() || "1 mục"
+        : `${data.length} mục · ${data[0]!.text.trim().slice(0, 48)}${data[0]!.text.length > 48 ? "…" : ""}`;
+
+  return (
+    <section className={`qlh-section qlh-collapsible${open ? " is-open" : ""}`}>
+      <button
+        type="button"
+        className="qlh-collapsible-head"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span className="qlh-section-icon">
+          <Megaphone size={18} />
+        </span>
+        <span className="qlh-collapsible-meta">
+          <span className="qlh-section-title">Thanh ticker</span>
+          <span className="qlh-collapsible-preview">{preview}</span>
+        </span>
+        <ChevronDown size={18} className="qlh-collapsible-chevron" aria-hidden />
+      </button>
+
+      {open ? (
+        <div className="qlh-collapsible-body">
+          <p className="qlh-section-sub qlh-collapsible-sub">
+            Dòng chạy ngang dưới menu trên /new.
+          </p>
+          {data.length > 0 ? (
+            <ul className="qlh-marquee-rows">
+              {data.map((item, i) => (
+                <li key={item.id} className="qlh-marquee-row">
+                  <select
+                    className="qlh-field-input qlh-marquee-icon"
+                    value={item.icon}
+                    aria-label={`Icon mục ${i + 1}`}
+                    onChange={(e) =>
+                      setItem(i, { ...item, icon: e.target.value as MarqueeIconKey })
+                    }
+                  >
+                    {MARQUEE_ICON_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    className="qlh-field-input qlh-marquee-text"
+                    value={item.text}
+                    placeholder="Nội dung ticker…"
+                    aria-label={`Nội dung mục ${i + 1}`}
+                    onChange={(e) => setItem(i, { ...item, text: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="qlh-btn qlh-btn-sm qlh-btn-ghost qlh-marquee-remove"
+                    aria-label="Xóa mục"
+                    onClick={() => removeItem(i)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="qlh-section-sub" style={{ margin: 0 }}>
+              Chưa có mục — bấm + để thêm.
+            </p>
+          )}
+          <div className="qlh-marquee-toolbar">
+            <button
+              type="button"
+              className="qlh-btn qlh-btn-sm qlh-btn-ghost"
+              onClick={addItem}
+              disabled={data.length >= MARQUEE_MAX_ITEMS}
+            >
+              <Plus size={14} />
+              Thêm mục
+            </button>
+            {data.length >= MARQUEE_MAX_ITEMS ? (
+              <span className="qlh-section-sub" style={{ margin: 0 }}>
+                Tối đa {MARQUEE_MAX_ITEMS} mục.
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
+}
+
+function ExamSection({
+  data,
+  onChange,
+}: {
+  data: ExamContent;
+  onChange: (v: ExamContent) => void;
+}) {
+  const setStat = (index: 0 | 1 | 2 | 3, stat: ExamContent["stats"][number]) => {
+    const stats = [...data.stats] as ExamContent["stats"];
+    stats[index] = stat;
+    onChange({ ...data, stats });
+  };
 
   return (
     <section className="qlh-section">
@@ -631,112 +830,59 @@ function ContentSection({
           <Sparkles size={18} />
         </span>
         <div>
-          <h2 className="qlh-section-title">Nội dung</h2>
+          <h2 className="qlh-section-title">Số liệu luyện thi</h2>
           <p className="qlh-section-sub">
-            Đoạn mô tả Hero và 3 trụ cột <em>Tại sao Sine Art</em>.
+            Khối “Học để đậu”. Ô 1 & 3 tự cập nhật số học viên / số trường CINS khi publish.
           </p>
         </div>
       </header>
-
-      <div className="qlh-content-block">
-        <div className="qlh-content-block-head">
-          <span className="qlh-block-pill">Hero · lead paragraph</span>
-          <code>p.hero-lead</code>
-        </div>
-        <label className="qlh-field">
-          <span className="qlh-field-label">
-            Đoạn giới thiệu ngắn dưới tiêu đề Hero
-          </span>
-          <textarea
-            className="qlh-field-input qlh-field-ta"
-            rows={3}
-            value={hero.lead}
-            onChange={(e) => onChangeHero({ ...hero, lead: e.target.value })}
-            placeholder="Sine Art xây dựng nền tảng Mỹ thuật bài bản và khoa học…"
-          />
-        </label>
-      </div>
-
-      <div className="qlh-content-block">
-        <div className="qlh-content-block-head">
-          <span className="qlh-block-pill">Tại sao Sine Art · đoạn dẫn + 3 trụ cột</span>
-          <code>p.why-text--lead</code> · <code>article.why-card</code>
-        </div>
-        <label className="qlh-field">
-          <span className="qlh-field-label">
-            Đoạn mô tả dưới tiêu đề section (trên lưới card — trụ 01)
-          </span>
-          <textarea
-            className="qlh-field-input qlh-field-ta"
-            rows={3}
-            value={why.leadBody}
-            onChange={(e) => onChangeWhy({ ...why, leadBody: e.target.value })}
-            placeholder="Từ hình họa cơ bản đến digital painting…"
-          />
-        </label>
-        <div className="qlh-pillars-grid">
-          {why.pillars.map((p, i) => (
-            <PillarCard
-              key={i}
-              index={i as 0 | 1 | 2}
-              data={p}
-              onChange={(v) => setPillar(i as 0 | 1 | 2, v)}
-            />
-          ))}
-        </div>
+      <label className="qlh-field">
+        <span className="qlh-field-label">Đoạn mô tả</span>
+        <textarea
+          className="qlh-field-input qlh-field-ta"
+          rows={2}
+          value={data.subtitle}
+          onChange={(e) => onChange({ ...data, subtitle: e.target.value })}
+        />
+      </label>
+      <div className="qlh-marquee-grid">
+        {data.stats.map((stat, i) => (
+          <div key={i} className="qlh-pillar-card">
+            <div className="qlh-pillar-card-head">
+              <span className="qlh-pillar-idx">#{i + 1}</span>
+            </div>
+            <label className="qlh-field">
+              <span className="qlh-field-label">Số / giá trị</span>
+              <input
+                type="text"
+                className="qlh-field-input"
+                value={stat.value}
+                onChange={(e) =>
+                  setStat(i as 0 | 1 | 2 | 3, { ...stat, value: e.target.value })
+                }
+              />
+            </label>
+            <label className="qlh-field">
+              <span className="qlh-field-label">Nhãn</span>
+              <input
+                type="text"
+                className="qlh-field-input"
+                value={stat.label}
+                onChange={(e) =>
+                  setStat(i as 0 | 1 | 2 | 3, { ...stat, label: e.target.value })
+                }
+              />
+            </label>
+          </div>
+        ))}
       </div>
     </section>
   );
 }
 
-function PillarCard({
-  index,
-  data,
-  onChange,
-}: {
-  index: 0 | 1 | 2;
-  data: WhyPillar;
-  onChange: (v: WhyPillar) => void;
-}) {
-  return (
-    <div className="qlh-pillar-card">
-      <div className="qlh-pillar-card-head">
-        <span className="qlh-pillar-idx">0{index + 1}</span>
-        <code>why-card--c{index + 1}</code>
-      </div>
-      <label className="qlh-field">
-        <span className="qlh-field-label">Số hiển thị</span>
-        <input
-          type="text"
-          className="qlh-field-input"
-          value={data.num}
-          onChange={(e) => onChange({ ...data, num: e.target.value })}
-          placeholder="01"
-        />
-      </label>
-      <label className="qlh-field">
-        <span className="qlh-field-label">Tiêu đề</span>
-        <input
-          type="text"
-          className="qlh-field-input"
-          value={data.title}
-          onChange={(e) => onChange({ ...data, title: e.target.value })}
-          placeholder="Giáo trình khoa học"
-        />
-      </label>
-      <label className="qlh-field">
-        <span className="qlh-field-label">Nội dung</span>
-        <textarea
-          className="qlh-field-input qlh-field-ta"
-          rows={4}
-          value={data.text}
-          onChange={(e) => onChange({ ...data, text: e.target.value })}
-          placeholder="Từ hình họa cơ bản đến digital painting chuyên sâu…"
-        />
-      </label>
-    </div>
-  );
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// Legacy placeholder removed — why section only on trang chủ cũ `/`
+// ═══════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Section 3: Video URLs
@@ -744,10 +890,14 @@ function PillarCard({
 
 function VideoSection({
   data,
+  mockupVideo,
   onChange,
+  onChangeMockupVideo,
 }: {
   data: VideoContent;
+  mockupVideo: MockupVideoLabels;
   onChange: (v: VideoContent) => void;
+  onChangeMockupVideo: (v: MockupVideoLabels) => void;
 }) {
   const setTab = useCallback(
     (index: 0 | 1, tab: VideoContent["tabs"][number]) => {
@@ -765,13 +915,51 @@ function VideoSection({
           <Film size={18} />
         </span>
         <div>
-          <h2 className="qlh-section-title">URL video</h2>
+          <h2 className="qlh-section-title">Video lớp online</h2>
           <p className="qlh-section-sub">
-            2 tab video giới thiệu — Online và Offline. Dán link YouTube hoặc
-            ID (phần sau <code>v=</code>).
+            Trang /new dùng tab 1 (Online). Tab 2 giữ cho trang chủ cũ nếu cần.
           </p>
         </div>
       </header>
+
+      <div className="qlh-content-block">
+        <span className="qlh-block-pill">Nhãn section video (mockup)</span>
+        <div className="qlh-pillars-grid qlh-pillars-grid--2">
+          <label className="qlh-field">
+            <span className="qlh-field-label">Eyebrow</span>
+            <input
+              type="text"
+              className="qlh-field-input"
+              value={mockupVideo.sectionLabel}
+              onChange={(e) =>
+                onChangeMockupVideo({ ...mockupVideo, sectionLabel: e.target.value })
+              }
+            />
+          </label>
+          <label className="qlh-field">
+            <span className="qlh-field-label">Nhấn mạnh tiêu đề</span>
+            <input
+              type="text"
+              className="qlh-field-input"
+              value={mockupVideo.titleEmphasis}
+              onChange={(e) =>
+                onChangeMockupVideo({ ...mockupVideo, titleEmphasis: e.target.value })
+              }
+            />
+          </label>
+        </div>
+        <label className="qlh-field">
+          <span className="qlh-field-label">Mô tả</span>
+          <textarea
+            className="qlh-field-input qlh-field-ta"
+            rows={2}
+            value={mockupVideo.subtitle}
+            onChange={(e) =>
+              onChangeMockupVideo({ ...mockupVideo, subtitle: e.target.value })
+            }
+          />
+        </label>
+      </div>
 
       <div className="qlh-video-grid">
         {data.tabs.map((t, i) => (
@@ -1120,6 +1308,41 @@ const QLH_CSS = `
 .qlh-content-block-head code{font-size:11.5px;color:#6b5c5c;background:#fff;border:1px solid rgba(45,32,32,.1);padding:2px 8px;border-radius:6px;font-family:ui-monospace,SFMono-Regular,monospace}
 
 .qlh-pillars-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.qlh-pillars-grid--2{grid-template-columns:repeat(2,1fr)}
+.qlh-marquee-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.qlh-collapsible{padding:0;overflow:hidden}
+.qlh-collapsible-head{width:100%;display:flex;align-items:center;gap:12px;padding:14px 16px;border:none;background:transparent;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.qlh-collapsible-head:hover{background:rgba(45,32,32,.02)}
+.qlh-collapsible-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.qlh-collapsible-meta .qlh-section-title{font-size:15px;font-weight:800;color:#2d2020;line-height:1.2}
+.qlh-collapsible-preview{font-size:12.5px;color:#6b5c5c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qlh-collapsible-chevron{flex-shrink:0;color:#6b5c5c;transition:transform .2s ease}
+.qlh-collapsible.is-open .qlh-collapsible-chevron{transform:rotate(180deg)}
+.qlh-collapsible-body{padding:0 16px 14px;display:flex;flex-direction:column;gap:10px}
+.qlh-collapsible-sub{margin:0}
+.qlh-marquee-rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.qlh-marquee-row{display:flex;align-items:center;gap:8px}
+.qlh-marquee-icon{width:52px;flex-shrink:0;padding:8px 6px;text-align:center}
+.qlh-marquee-text{flex:1;min-width:0;padding:8px 10px}
+.qlh-marquee-remove{flex-shrink:0;padding:8px;color:#9a6b6b}
+.qlh-marquee-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:2px}
+.qlh-slide-rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.qlh-slide-row{border:1px solid rgba(45,32,32,.08);border-radius:10px;padding:10px;background:#fafafa;display:flex;flex-direction:column;gap:8px}
+.qlh-slide-row-head{display:flex;align-items:center;gap:8px}
+.qlh-slide-idx{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:8px;background:rgba(238,92,162,.12);color:#c0447a;font-size:11.5px;font-weight:800;flex-shrink:0}
+.qlh-slide-size{flex:1;min-width:0;font-size:11.5px;color:#6b5c5c;font-weight:600}
+.qlh-slide-row-body{display:flex;gap:10px;align-items:flex-start}
+.qlh-slide-thumb-wrap{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;width:72px}
+.qlh-slide-thumb{position:relative;width:72px;border:none;border-radius:8px;overflow:hidden;background:#eee;cursor:pointer;padding:0;display:block}
+.qlh-slide-thumb-empty{display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-height:79px;color:#9a8a8a;background:#f0ecec}
+.qlh-slide-thumb-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.75)}
+.qlh-slide-thumb-clear{padding:4px 6px!important;min-height:0!important}
+.qlh-slide-thumb-err{font-size:10px;color:#c04444;line-height:1.3;text-align:center}
+.qlh-slide-fields{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qlh-slide-fields .qlh-field-input{padding:8px 10px;font-size:13px}
+.qlh-slide-sub,.qlh-slide-bg{grid-column:1/-1}
+.qlh-preview-link{color:#b31e62;font-weight:700;text-decoration:underline;text-underline-offset:2px}
+.qlh-preview-link:hover{color:#ee5b9f}
 .qlh-pillar-card{background:#fff;border:1px solid rgba(45,32,32,.08);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .qlh-pillar-card-head{display:flex;align-items:center;gap:8px}
 .qlh-pillar-idx{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#f8a668,#ee5b9f);color:#fff;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
@@ -1177,7 +1400,8 @@ const QLH_CSS = `
 .qlh-ad-preview-note{font-size:11px;color:#9c8a8a;margin:0;line-height:1.5;font-style:italic}
 
 @media (max-width:900px){
-  .qlh-hero-grid,.qlh-pillars-grid{grid-template-columns:1fr}
+  .qlh-hero-grid,.qlh-pillars-grid,.qlh-marquee-grid{grid-template-columns:1fr}
+  .qlh-slide-fields{grid-template-columns:1fr}
   .qlh-video-grid{grid-template-columns:1fr}
   .qlh-ad-wrap{grid-template-columns:1fr}
   .qlh-vw-grid{grid-template-columns:1fr}

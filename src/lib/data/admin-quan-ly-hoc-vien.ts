@@ -54,6 +54,8 @@ export type AdminQlhvEnrollment = {
   lop_hoc: number | null;
   tien_do_hoc: number | null;
   ghi_chu: string | null;
+  /** `ql_quan_ly_hoc_vien.created_at` — ngày ghi danh lớp. */
+  created_at: string | null;
   ngay_dau_ky: string | null;
   ngay_cuoi_ky: string | null;
   lop: AdminQlhvLopBrief | null;
@@ -281,6 +283,7 @@ export async function fetchAdminQuanLyHocVienBundle(supabase: SupabaseClient): P
       lop_hoc: lopId,
       tien_do_hoc: nId(r.tien_do_hoc),
       ghi_chu: r.ghi_chu != null ? String(r.ghi_chu).trim() || null : null,
+      created_at: r.created_at != null ? String(r.created_at) : null,
       ngay_dau_ky: dates?.ngay_dau_ky ?? null,
       ngay_cuoi_ky: dates?.ngay_cuoi_ky ?? null,
       lop: lopId ? lopById[String(lopId)] ?? null : null,

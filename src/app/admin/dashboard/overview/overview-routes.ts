@@ -4,10 +4,13 @@ import type { MkDatePreset } from "./marketing-date-range";
 export const OVERVIEW_SECTION_MARKETING = "marketing-data-analysis" as const;
 /** Segment URL — tab BCTC */
 export const OVERVIEW_SECTION_BCTC = "bctc-tong-quan" as const;
+/** Segment URL — theo dõi HV từ DB */
+export const OVERVIEW_SECTION_HV_TRACKING = "theo-doi-hoc-vien" as const;
 
 export type OverviewSectionSlug =
   | typeof OVERVIEW_SECTION_MARKETING
-  | typeof OVERVIEW_SECTION_BCTC;
+  | typeof OVERVIEW_SECTION_BCTC
+  | typeof OVERVIEW_SECTION_HV_TRACKING;
 
 export const OVERVIEW_PERIOD_WEEK = "tuan" as const;
 export const OVERVIEW_PERIOD_MONTH = "thang" as const;
@@ -24,7 +27,11 @@ export type OverviewPeriodSlug =
   | typeof OVERVIEW_PERIOD_ALL
   | typeof OVERVIEW_PERIOD_CUSTOM;
 
-const SECTIONS = new Set<string>([OVERVIEW_SECTION_MARKETING, OVERVIEW_SECTION_BCTC]);
+const SECTIONS = new Set<string>([
+  OVERVIEW_SECTION_MARKETING,
+  OVERVIEW_SECTION_BCTC,
+  OVERVIEW_SECTION_HV_TRACKING,
+]);
 
 const PERIODS = new Set<string>([
   OVERVIEW_PERIOD_WEEK,

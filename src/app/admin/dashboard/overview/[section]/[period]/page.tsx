@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 
 import { OverviewBctcPanel } from "@/app/admin/dashboard/overview/_components/OverviewBctcPanel";
 import { OverviewBctcPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewBctcPanel.skeleton";
+import { OverviewHvTrackingPanel } from "@/app/admin/dashboard/overview/_components/OverviewHvTrackingPanel";
+import { OverviewHvTrackingPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewHvTrackingPanel.skeleton";
 import { OverviewMarketingPanel } from "@/app/admin/dashboard/overview/_components/OverviewMarketingPanel";
 import { OverviewMarketingPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewMarketingPanel.skeleton";
 import DashboardOverviewClient from "@/app/admin/dashboard/overview/DashboardOverviewClient";
@@ -48,6 +50,11 @@ export default async function AdminDashboardOverviewSegmentPage({ params, search
         bctcContent={
           <Suspense fallback={<OverviewBctcPanelSkeleton />}>
             <OverviewBctcPanel period={period} />
+          </Suspense>
+        }
+        hvTrackingContent={
+          <Suspense fallback={<OverviewHvTrackingPanelSkeleton />}>
+            <OverviewHvTrackingPanel period={period} customFrom={customFrom} customTo={customTo} />
           </Suspense>
         }
       />

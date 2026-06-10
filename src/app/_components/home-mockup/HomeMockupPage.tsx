@@ -65,7 +65,7 @@ export async function HomeMockupPage() {
       <HomeMockupMarquee items={data.marquee} />
       <HomeMockupHero {...data.hero} slides={data.slides} />
 
-      <section className="section" style={{ paddingTop: 64, paddingBottom: 40 }}>
+      <section className="section section--stats">
         <div className="wrap stats">
           {data.stats.map((s) => (
             <div key={s.label} className="stat">
@@ -76,7 +76,7 @@ export async function HomeMockupPage() {
         </div>
       </section>
 
-      <section className="section" style={{ paddingTop: 24 }}>
+      <section className="section section--exam">
         <div className="wrap">
           <div className="results">
             <div className="results-grid">
@@ -357,10 +357,20 @@ export async function HomeMockupPage() {
             <h2>Sẵn sàng bắt đầu hành trình họa sỹ công nghệ?</h2>
             <p>{data.cta.text}</p>
             <div className="final-actions">
-              <Link href={data.cta.ctaPrimary.href} className="btn btn-primary">
+              <Link
+                href={data.cta.ctaPrimary.href}
+                className="btn btn-primary"
+                target={data.cta.ctaPrimary.href.startsWith("http") ? "_blank" : undefined}
+                rel={data.cta.ctaPrimary.href.startsWith("http") ? "noopener noreferrer" : undefined}
+              >
                 {data.cta.ctaPrimary.label} <ArrowRight className="feather" aria-hidden />
               </Link>
-              <Link href={data.cta.ctaGhost.href} className="btn btn-ghost">
+              <Link
+                href={data.cta.ctaGhost.href}
+                className="btn btn-ghost"
+                target={data.cta.ctaGhost.href.startsWith("http") ? "_blank" : undefined}
+                rel={data.cta.ctaGhost.href.startsWith("http") ? "noopener noreferrer" : undefined}
+              >
                 <MessageCircle className="feather" aria-hidden /> {data.cta.ctaGhost.label}
               </Link>
             </div>

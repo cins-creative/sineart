@@ -128,8 +128,11 @@ export function CareerScrollTicker({ careers, openInNewTab = true }: Props) {
       document.addEventListener(
         "click",
         (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
+          const target = ev.target;
+          if (target instanceof Element && target.closest("[data-career-card-link]")) {
+            ev.preventDefault();
+            ev.stopPropagation();
+          }
         },
         { capture: true, once: true },
       );

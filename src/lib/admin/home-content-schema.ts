@@ -293,7 +293,7 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
     titleAfter: "",
     subtitle:
       "Review thực, không chỉnh sửa — lấy trực tiếp từ Google Reviews và Facebook.",
-    googleMapsUrl: "https://maps.app.goo.gl/LeKBd5WVyH6EtKjo9",
+    googleMapsUrl: "https://maps.app.goo.gl/qdyYPg3b1DDPJu3A6",
   },
   gallery: {
     sectionLabel: "Tác phẩm học viên",

@@ -10,7 +10,7 @@ type Props = {
 export function HomeMockupCareerTicker({ careers }: Props) {
   return (
     <div className="career-ticker-wrap">
-      <CareerScrollTicker careers={careers} openInNewTab={false} />
+      <CareerScrollTicker careers={careers} openInNewTab />
     </div>
   );
 }

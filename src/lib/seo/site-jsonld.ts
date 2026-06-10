@@ -7,6 +7,10 @@ export const SITE_SOCIAL = {
   tiktok: "https://www.tiktok.com/@sineart.official",
 } as const;
 
+/** Google Maps — đánh giá / chi nhánh (hero badge, ReviewsSection). */
+export const SITE_GOOGLE_MAPS_URL =
+  "https://maps.app.goo.gl/qdyYPg3b1DDPJu3A6" as const;
+
 /** Logo thương hiệu (Cloudflare Images) — đồng bộ CtaSection / SeoOrganizationJsonLd. */
 export const SITE_LOGO_URL =
   "https://imagedelivery.net/PtnQ1mNuCedkboD0kJ2_4w/65b0e187-cbc0-42f6-4978-b3da96efe300/public" as const;

@@ -1,12 +1,13 @@
 "use client";
 
 import Image from "next/image";
+import { SITE_GOOGLE_MAPS_URL } from "@/lib/seo/site-jsonld";
 import type { HomeReview } from "@/types/homepage";
 import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import { reviewInitials } from "@/lib/review-initials";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const GOOGLE_MAPS_URL = "https://maps.app.goo.gl/LeKBd5WVyH6EtKjo9";
+const GOOGLE_MAPS_URL = SITE_GOOGLE_MAPS_URL;
 
 const GoogleIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden>

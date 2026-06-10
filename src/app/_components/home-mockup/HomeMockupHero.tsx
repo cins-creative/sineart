@@ -9,6 +9,7 @@ import type { HeroTrustAvatar } from "@/app/_components/HeroSection";
 import type { HomeMockupSlide } from "@/lib/data/home-mockup";
 import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
 import { reviewInitials } from "@/lib/review-initials";
+import { SITE_GOOGLE_MAPS_URL } from "@/lib/seo/site-jsonld";
 
 type Props = {
   badge: string;
@@ -56,18 +57,24 @@ export function HomeMockupHero({
     <header className="hero">
       <div className="wrap hero-grid">
         <div className="hero-text">
-          <div className="hero-badge">
+          <a
+            className="hero-badge"
+            href={SITE_GOOGLE_MAPS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Xem đánh giá Sine Art trên Google Maps (mở tab mới)"
+          >
             <span className="star" aria-hidden>
               ★
             </span>{" "}
             {badge}
-          </div>
+          </a>
           <h1>
             Dành cho <span className="grad-text">{headlineEmphasis}</span> tương lai
           </h1>
           <p className="sub">
             Giáo trình bài bản từ 2020 — <span className="pill">{subPill}</span> ĐH Mỹ thuật ·
-            Kiến trúc · SKĐA.
+            Kiến trúc · Văn Lang - Tôn Đức Thắng.
           </p>
           <p className="lead">{lead}</p>
           <div className="hero-actions">

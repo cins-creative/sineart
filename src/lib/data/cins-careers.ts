@@ -37,7 +37,17 @@ function resolveCareerThumbnail(raw: string | null | undefined): string | null {
   return cfImageNormalizeAccount(t) ?? t;
 }
 
-const CINS_SITE = "https://cins.vn";
+const CINS_PUBLIC_SITE =
+  process.env.CINS_PUBLIC_SITE_URL?.trim() ||
+  process.env.NEXT_PUBLIC_CINS_PUBLIC_SITE_URL?.trim() ||
+  "https://cins.vercel.app";
+
+/** URL bài viết ngành trên CINS — `https://cins.vercel.app/nganh-hoc/[slug]`. */
+export function cinsMajorArticleHref(slug: string): string {
+  const s = slug.trim();
+  const base = CINS_PUBLIC_SITE.replace(/\/$/, "");
+  return `${base}/nganh-hoc/${encodeURIComponent(s)}`;
+}
 
 const GRAD_ROTATION: string[] = [
   "linear-gradient(135deg,#f8a668,#fde859)",
@@ -129,7 +139,7 @@ function mapRow(row: ArticleNganhDaoTaoRow, index: number): CareerCard | null {
     slug,
     title,
     sub,
-    href: `${CINS_SITE}/nganh-hoc/${encodeURIComponent(slug)}`,
+    href: cinsMajorArticleHref(slug),
     imageUrl,
     emoji: EMOJI_ROTATION[index % EMOJI_ROTATION.length]!,
     tint: TINT_ROTATION[i]!,

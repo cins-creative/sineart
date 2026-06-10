@@ -789,7 +789,11 @@ async function getHomeMockupPayloadUncached(): Promise<HomeMockupPayload> {
       defaultOptionKey: matcher.defaultOptionKey,
     },
     reviews: reviews.slice(0, 3),
-    cta: homeContent.ctaBand,
+    cta: {
+      ...homeContent.ctaBand,
+      ctaPrimary: { ...homeContent.ctaBand.ctaPrimary, href: HERO_HOC_THU_FACEBOOK_URL },
+      ctaGhost: { ...homeContent.ctaBand.ctaGhost, href: HERO_HOC_THU_FACEBOOK_URL },
+    },
     footer: {
       tagline:
         "Trung tâm luyện thi vẽ với lộ trình chi tiết cho từng ngành và từng trường, giúp bạn thi đậu vào ngôi trường mơ ước.",

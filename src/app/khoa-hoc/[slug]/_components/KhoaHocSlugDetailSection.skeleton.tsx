@@ -115,6 +115,7 @@ export function KhoaHocSlugDetailSectionSkeleton() {
             </section>
           </div>
 
+          <div className="kd-sidebar-col">
           <aside className="kd-sidebar" aria-hidden>
             <div className="rounded-[20px] border border-[rgba(45,32,32,0.08)] bg-[rgba(45,32,32,0.03)] p-5 shadow-[0_12px_32px_rgba(45,32,32,0.08)]">
               <Skeleton className="mb-3 h-4 w-28 rounded-[12px]" />
@@ -141,6 +142,7 @@ export function KhoaHocSlugDetailSectionSkeleton() {
               <Skeleton className="h-11 w-full rounded-[16px]" />
             </div>
           </aside>
+          </div>
         </div>
       </div>
     </div>

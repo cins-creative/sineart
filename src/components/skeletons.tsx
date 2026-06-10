@@ -319,6 +319,7 @@ export function KhoaHocDetailPageSkeleton({ className }: { className?: string })
               </ul>
             </div>
 
+            <div className="kd-sidebar-col">
             <aside className="kd-sidebar" aria-hidden>
               <div className="mb-4 h-36 w-full animate-pulse rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-200/80" />
               <div className="space-y-3">
@@ -337,6 +338,7 @@ export function KhoaHocDetailPageSkeleton({ className }: { className?: string })
                 <div className="h-11 w-full animate-pulse rounded-xl bg-zinc-200/45" />
               </div>
             </aside>
+            </div>
           </div>
         </div>
       </div>

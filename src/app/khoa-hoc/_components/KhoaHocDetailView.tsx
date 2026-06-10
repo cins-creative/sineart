@@ -10,6 +10,7 @@ import type {
   OngoingClassCard,
 } from "@/types/khoa-hoc";
 import HocPhiBlock from "@/components/courses/HocPhiBlock";
+import KdStickySidebarCol from "./KdStickySidebarCol";
 import type { GalleryDisplayItem } from "@/types/homepage";
 import type { BaiTap } from "@/types/baiTap";
 import type { TeacherPortfolioSlide } from "@/types/khoa-hoc";
@@ -518,7 +519,7 @@ export default function KhoaHocDetailView({
          * Title được kéo ra khỏi .kd-page-main để làm grid item trực tiếp.
          * Thứ tự visual được điều khiển bởi CSS grid-row:
          *   Mobile: title (row 1) → sidebar (row 2) → main (row 3)
-         *   Desktop: title col1 row1, main col1 row2, sidebar col2 row1/span 2 (sticky)
+         *   Desktop: title col1 row1, main col1 row2, .kd-sidebar-col col2 row1/span 2 (aside sticky)
          * Xem khoa-hoc-detail.css — selector `.kd-page-grid`.
          */}
       <div className="kd-page-grid">
@@ -955,8 +956,8 @@ export default function KhoaHocDetailView({
 
         </div>{/* /kd-page-main */}
 
-        {/* ── STICKY SIDEBAR ── */}
-        <aside className="kd-sidebar" aria-label="Thông tin khóa học">
+        {/* ── STICKY SIDEBAR (fixed khi scroll — desktop) ── */}
+        <KdStickySidebarCol asideClassName="kd-sidebar" asideLabel="Thông tin khóa học">
           {/* Học phí block */}
           {hocPhiBlock != null && hocPhiMonId != null ? (
             <HocPhiBlock
@@ -1032,7 +1033,7 @@ export default function KhoaHocDetailView({
               ))}
             </div>
           )}
-        </aside>
+        </KdStickySidebarCol>
       </div>{/* /kd-page-grid */}
 
       <DongHocPhiEmailGateModal

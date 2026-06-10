@@ -102,7 +102,7 @@ export default function RootLayout({
       className={`${quicksand.variable} ${beVietnamPro.variable} ${quicksand.className} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex w-full min-w-0 flex-col overflow-x-hidden" suppressHydrationWarning>
+      <body className="min-h-full flex w-full min-w-0 flex-col overflow-x-clip" suppressHydrationWarning>
         <Script
           id="eruda"
           src="https://cdn.jsdelivr.net/npm/eruda"

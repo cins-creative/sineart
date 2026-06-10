@@ -6,11 +6,17 @@ export const OVERVIEW_SECTION_MARKETING = "marketing-data-analysis" as const;
 export const OVERVIEW_SECTION_BCTC = "bctc-tong-quan" as const;
 /** Segment URL — theo dõi HV từ DB */
 export const OVERVIEW_SECTION_HV_TRACKING = "theo-doi-hoc-vien" as const;
+/** Segment URL — traffic web GA4 */
+export const OVERVIEW_SECTION_WEB_TRAFFIC = "traffic-web" as const;
+/** Segment URL — Meta Fanpage + Ads */
+export const OVERVIEW_SECTION_META_INSIGHTS = "meta-insights" as const;
 
 export type OverviewSectionSlug =
   | typeof OVERVIEW_SECTION_MARKETING
   | typeof OVERVIEW_SECTION_BCTC
-  | typeof OVERVIEW_SECTION_HV_TRACKING;
+  | typeof OVERVIEW_SECTION_HV_TRACKING
+  | typeof OVERVIEW_SECTION_WEB_TRAFFIC
+  | typeof OVERVIEW_SECTION_META_INSIGHTS;
 
 export const OVERVIEW_PERIOD_WEEK = "tuan" as const;
 export const OVERVIEW_PERIOD_MONTH = "thang" as const;
@@ -31,6 +37,8 @@ const SECTIONS = new Set<string>([
   OVERVIEW_SECTION_MARKETING,
   OVERVIEW_SECTION_BCTC,
   OVERVIEW_SECTION_HV_TRACKING,
+  OVERVIEW_SECTION_WEB_TRAFFIC,
+  OVERVIEW_SECTION_META_INSIGHTS,
 ]);
 
 const PERIODS = new Set<string>([

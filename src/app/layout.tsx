@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/react";
 import localFont from "next/font/local";
 import ConditionalCta from "./_components/ConditionalCta";
 import ConditionalHomeAdBanner from "./_components/ConditionalHomeAdBanner";
+import Ga4Script from "./_components/Ga4Script";
 import SeoOrganizationJsonLd from "./_components/SeoOrganizationJsonLd";
 import { SITE_OG_DEFAULT_IMAGE } from "@/lib/seo/site-jsonld";
 import "./globals.css";
@@ -115,6 +116,7 @@ export default function RootLayout({
         <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
         <ConditionalCta />
         <ConditionalHomeAdBanner />
+        <Ga4Script />
         <Analytics />
       </body>
     </html>

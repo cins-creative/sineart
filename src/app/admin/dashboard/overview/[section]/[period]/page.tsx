@@ -7,6 +7,10 @@ import { OverviewHvTrackingPanel } from "@/app/admin/dashboard/overview/_compone
 import { OverviewHvTrackingPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewHvTrackingPanel.skeleton";
 import { OverviewMarketingPanel } from "@/app/admin/dashboard/overview/_components/OverviewMarketingPanel";
 import { OverviewMarketingPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewMarketingPanel.skeleton";
+import { OverviewMetaInsightsPanel } from "@/app/admin/dashboard/overview/_components/OverviewMetaInsightsPanel";
+import { OverviewMetaInsightsPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewMetaInsightsPanel.skeleton";
+import { OverviewWebTrafficPanel } from "@/app/admin/dashboard/overview/_components/OverviewWebTrafficPanel";
+import { OverviewWebTrafficPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewWebTrafficPanel.skeleton";
 import DashboardOverviewClient from "@/app/admin/dashboard/overview/DashboardOverviewClient";
 import {
   isOverviewPeriodSlug,
@@ -55,6 +59,16 @@ export default async function AdminDashboardOverviewSegmentPage({ params, search
         hvTrackingContent={
           <Suspense fallback={<OverviewHvTrackingPanelSkeleton />}>
             <OverviewHvTrackingPanel period={period} customFrom={customFrom} customTo={customTo} />
+          </Suspense>
+        }
+        webTrafficContent={
+          <Suspense fallback={<OverviewWebTrafficPanelSkeleton />}>
+            <OverviewWebTrafficPanel period={period} customFrom={customFrom} customTo={customTo} />
+          </Suspense>
+        }
+        metaInsightsContent={
+          <Suspense fallback={<OverviewMetaInsightsPanelSkeleton />}>
+            <OverviewMetaInsightsPanel period={period} customFrom={customFrom} customTo={customTo} />
           </Suspense>
         }
       />

@@ -9,6 +9,8 @@ import {
   OVERVIEW_SECTION_BCTC,
   OVERVIEW_SECTION_HV_TRACKING,
   OVERVIEW_SECTION_MARKETING,
+  OVERVIEW_SECTION_WEB_TRAFFIC,
+  OVERVIEW_SECTION_META_INSIGHTS,
   type OverviewPeriodSlug,
   type OverviewSectionSlug,
 } from "./overview-routes";
@@ -19,10 +21,14 @@ type Props = {
   marketingContent: ReactNode;
   bctcContent: ReactNode;
   hvTrackingContent: ReactNode;
+  webTrafficContent: ReactNode;
+  metaInsightsContent: ReactNode;
 };
 
 const TAB_META: { id: OverviewSectionSlug; label: string }[] = [
   { id: OVERVIEW_SECTION_MARKETING, label: "Marketing Data Analysis" },
+  { id: OVERVIEW_SECTION_WEB_TRAFFIC, label: "Traffic web" },
+  { id: OVERVIEW_SECTION_META_INSIGHTS, label: "Meta (FB)" },
   { id: OVERVIEW_SECTION_HV_TRACKING, label: "Theo dõi học viên" },
   { id: OVERVIEW_SECTION_BCTC, label: "BCTC tổng quan" },
 ];
@@ -33,6 +39,8 @@ export default function DashboardOverviewClient({
   marketingContent,
   bctcContent,
   hvTrackingContent,
+  webTrafficContent,
+  metaInsightsContent,
 }: Props) {
   const base = "/admin/dashboard/overview";
 
@@ -62,6 +70,8 @@ export default function DashboardOverviewClient({
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 md:pr-1" role="tabpanel">
         {section === OVERVIEW_SECTION_MARKETING ? marketingContent : null}
+        {section === OVERVIEW_SECTION_WEB_TRAFFIC ? webTrafficContent : null}
+        {section === OVERVIEW_SECTION_META_INSIGHTS ? metaInsightsContent : null}
         {section === OVERVIEW_SECTION_HV_TRACKING ? hvTrackingContent : null}
         {section === OVERVIEW_SECTION_BCTC ? bctcContent : null}
       </div>

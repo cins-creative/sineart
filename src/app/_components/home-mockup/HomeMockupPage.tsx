@@ -105,6 +105,7 @@ export async function HomeMockupPage() {
             </h2>
             <p>Ba môn nâng đỡ nhau tạo nên nền tảng vững. Đây cũng chính là 3 môn thi năng khiếu vào đại học.</p>
           </div>
+          <div className="kieng-stage">
           <div className="kieng">
             <div className="kieng-hub">
               <div className="fa">Fine Arts</div>
@@ -150,6 +151,7 @@ export async function HomeMockupPage() {
                   </Link>
                 );
               })}
+            </div>
             </div>
           </div>
         </div>

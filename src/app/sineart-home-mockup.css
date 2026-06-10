@@ -25,7 +25,7 @@
   --body:var(--font-quicksand,'Quicksand',sans-serif);
 }
 .sa-mockup *{margin:0;padding:0;box-sizing:border-box}
-.sa-mockup{font-family:var(--body);background:var(--paper);color:var(--ink);line-height:1.6;font-weight:500;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.sa-mockup{font-family:var(--body);background:var(--paper);color:var(--ink);line-height:1.6;font-weight:500;-webkit-font-smoothing:antialiased;overflow-x:clip}
 .sa-mockup h1, .sa-mockup h2, .sa-mockup h3, .sa-mockup h4{font-family:var(--display);font-weight:700;line-height:1.15;letter-spacing:-.01em}
 .sa-mockup a{color:inherit;text-decoration:none}
 .sa-mockup .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
@@ -51,13 +51,15 @@
 /* ===== HERO ===== */
 .sa-mockup .hero{padding:44px 0 56px}
 .sa-mockup .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center}
+.sa-mockup .hero-text{min-width:0;max-width:100%}
+.sa-mockup .hero-grid .cover{min-width:0;max-width:100%}
 .sa-mockup .hero-badge{display:inline-flex;align-items:center;gap:8px;background:#fff;box-shadow:var(--sh-sm);border:1px solid var(--ink-06);border-radius:999px;padding:7px 16px;font-size:13px;font-weight:600;font-family:var(--display);margin-bottom:22px;transition:border-color .2s,box-shadow .2s,transform .15s}
 .sa-mockup a.hero-badge:hover{border-color:var(--ink-12);box-shadow:var(--sh-md);transform:translateY(-1px)}
 .sa-mockup .hero-badge .star{color:#f8a668}
 .sa-mockup .hero h1{font-size:56px;font-weight:800;line-height:1.05}
 .sa-mockup .hero .sub{font-family:var(--display);font-weight:600;font-size:19px;margin-top:18px;color:var(--ink)}
 .sa-mockup .hero .sub .pill{display:inline-block;background:var(--ink);color:#fff;border-radius:999px;padding:2px 12px;font-size:15px;margin:0 2px}
-.sa-mockup .hero p.lead{font-size:17px;color:var(--ink-60);margin-top:18px;max-width:520px}
+.sa-mockup .hero p.lead{font-size:17px;color:var(--ink-60);margin-top:18px;max-width:min(520px,100%)}
 .sa-mockup .hero-actions{display:flex;gap:14px;margin-top:24px;flex-wrap:wrap}
 .sa-mockup .hero-proof{display:flex;gap:26px;margin-top:28px;align-items:center}
 .sa-mockup .proof-avatars{display:flex}
@@ -97,10 +99,22 @@
 @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 
 /* ===== STATS ===== */
-.sa-mockup .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
-.sa-mockup .stat{text-align:center;padding:26px 16px;background:#fff;border-radius:var(--r-lg);box-shadow:var(--sh-sm)}
+.sa-mockup .stats{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:22px;
+  min-width:0;
+}
+.sa-mockup .stat{
+  text-align:center;
+  min-width:0;
+  padding:26px 16px;
+  background:#fff;
+  border-radius:var(--r-lg);
+  box-shadow:var(--sh-sm);
+}
 .sa-mockup .stat .num{font-family:var(--display);font-weight:800;font-size:40px;line-height:1}
-.sa-mockup .stat .lbl{color:var(--ink-60);font-size:13.5px;margin-top:8px}
+.sa-mockup .stat .lbl{color:var(--ink-60);font-size:13.5px;margin-top:8px;line-height:1.35}
 
 /* ===== EXAM RESULTS ===== */
 .sa-mockup .results{background:var(--ink);color:#fff;border-radius:var(--r-xl);padding:40px 36px;position:relative;overflow:hidden}
@@ -117,13 +131,14 @@
 
 /* ===== KIENG 3 CHAN (signature) ===== */
 .sa-mockup .kieng-sec{background:#fff}
-.sa-mockup .kieng{max-width:1080px;margin:0 auto}
+.sa-mockup .kieng-stage{width:100%;min-width:0}
+.sa-mockup .kieng{width:100%;max-width:1080px;margin:0 auto;min-width:0}
 .sa-mockup .kieng-hub{width:166px;height:166px;border-radius:50%;background:var(--grad);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;margin:0 auto;box-shadow:0 18px 50px rgba(238,91,159,.4)}
 .sa-mockup .kieng-hub .fa{font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.9}
 .sa-mockup .kieng-hub .mt{font-family:var(--display);font-weight:800;font-size:20px;margin:5px 0;line-height:1.1}
 .sa-mockup .kieng-hub .exam{font-size:11px;opacity:.92;max-width:128px;line-height:1.35;margin-top:3px}
 .sa-mockup .kieng-fan{display:block;width:100%;max-width:1080px;height:42px;margin:-2px auto 0}
-.sa-mockup .kieng-row{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.sa-mockup .kieng-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;min-width:0}
 .sa-mockup .pillar{background:#fff;border-radius:var(--r-lg);box-shadow:var(--sh-md);transition:transform .3s,box-shadow .3s;cursor:pointer;overflow:hidden;display:flex;flex-direction:column}
 .sa-mockup .pillar:hover{transform:translateY(-6px);box-shadow:var(--sh-lg)}
 .sa-mockup .pillar .thumb{aspect-ratio:1/1;width:100%;position:relative;overflow:hidden}
@@ -141,14 +156,14 @@
 .sa-mockup .p-hh .role{color:#b59500} .p-tt .role{color:#8b4fd6} .p-bc .role{color:#1aa377}
 
 /* ===== CURRICULUM ===== */
-.sa-mockup .curr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
-.sa-mockup .curr-card{background:#fff;border-radius:var(--r-lg);box-shadow:var(--sh-sm);overflow:hidden;display:flex;flex-direction:column;transition:transform .25s,box-shadow .25s}
+.sa-mockup .curr-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;min-width:0}
+.sa-mockup .curr-card{background:#fff;border-radius:var(--r-lg);box-shadow:var(--sh-sm);overflow:hidden;display:flex;flex-direction:column;min-width:0;transition:transform .25s,box-shadow .25s}
 .sa-mockup .curr-card:hover{transform:translateY(-5px);box-shadow:var(--sh-md)}
 .sa-mockup .curr-art{aspect-ratio:1/1;width:100%;position:relative;overflow:hidden}
 .sa-mockup .curr-art--has-img{padding:0}
 .sa-mockup .curr-art-img{object-fit:cover}
 .sa-mockup .curr-body{padding:24px}
-.sa-mockup .curr-cat{display:inline-flex;align-items:center;gap:7px;font-family:var(--display);font-weight:700;font-size:12.5px;padding:5px 12px;border-radius:999px;margin-bottom:12px}
+.sa-mockup .curr-cat{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;gap:7px;font-family:var(--display);font-weight:700;font-size:12.5px;padding:5px 12px;border-radius:999px;margin-bottom:12px}
 .sa-mockup .curr-cat .d{width:9px;height:9px;border-radius:50%}
 .sa-mockup .curr-card h3{font-size:21px;margin-bottom:6px}
 .sa-mockup .curr-card .desc{font-size:14px;color:var(--ink-60);margin-bottom:16px}
@@ -393,6 +408,7 @@
 /* ===== FINAL CTA ===== */
 .sa-mockup .final{background:var(--grad);border-radius:var(--r-xl);padding:44px 36px;text-align:center;color:#fff;position:relative;overflow:hidden}
 .sa-mockup .final h2{font-size:40px;color:#fff;max-width:640px;margin:0 auto 12px}
+.sa-mockup .final .grad-text{background:none;-webkit-background-clip:unset;background-clip:unset;-webkit-text-fill-color:#fde859;color:#fde859}
 .sa-mockup .final p{font-size:17px;color:rgba(255,255,255,.92);max-width:520px;margin:0 auto 24px}
 .sa-mockup .final .btn-primary{background:#fff;color:var(--ink);box-shadow:0 10px 30px rgba(45,32,32,.25)}
 .sa-mockup .final .btn-ghost{background:rgba(255,255,255,.16);color:#fff;border:1.5px solid rgba(255,255,255,.35);box-shadow:none}
@@ -440,6 +456,11 @@
   .sa-mockup .hero-grid {
     grid-template-columns: 1fr;
     gap: 32px;
+    min-width: 0;
+  }
+  .sa-mockup .hero-text {
+    min-width: 0;
+    width: 100%;
   }
   .sa-mockup .hero h1 {
     font-size: 42px;
@@ -468,31 +489,236 @@
   .sa-mockup .teach-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  /* Stats: tablet — vẫn 4 cột 1 hàng, thu gọn */
   .sa-mockup .stats {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
   }
-  .sa-mockup .curr-grid,
-  .sa-mockup .rev-grid,
-  .sa-mockup .kieng-row {
+  .sa-mockup .stat {
+    padding: 18px 10px;
+  }
+  .sa-mockup .stat .num {
+    font-size: 28px;
+  }
+  .sa-mockup .stat .lbl {
+    font-size: 11.5px;
+    margin-top: 6px;
+  }
+  .sa-mockup .rev-grid {
     grid-template-columns: 1fr;
     max-width: 440px;
     margin: 0 auto;
   }
-  .sa-mockup .kieng-fan {
+  /* Giáo trình — mobile compact như kieng-row */
+  .sa-mockup .curr-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  .sa-mockup .curr-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: stretch;
+    border-radius: var(--r);
+    box-shadow: var(--sh-sm);
+  }
+  .sa-mockup .curr-card:hover {
+    transform: translateY(-2px);
+  }
+  .sa-mockup .curr-art {
+    width: auto;
+    height: 100%;
+    min-height: 80px;
+    flex-shrink: 0;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--r) 0 0 var(--r);
+  }
+  .sa-mockup .curr-art--has-img {
+    display: block;
+  }
+  .sa-mockup .curr-body {
+    padding: 12px 14px 12px 12px;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .sa-mockup .curr-cat {
+    font-size: 10px;
+    padding: 3px 8px;
+    gap: 5px;
+    margin-bottom: 6px;
+  }
+  .sa-mockup .curr-cat .d {
+    width: 7px;
+    height: 7px;
+  }
+  .sa-mockup .curr-card h3 {
+    font-size: 15px;
+    margin-bottom: 4px;
+    line-height: 1.2;
+  }
+  .sa-mockup .curr-card .desc {
+    font-size: 12px;
+    margin-bottom: 0;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .sa-mockup .steps {
     display: none;
+  }
+  .sa-mockup .curr-foot {
+    margin-top: 8px;
+    padding-top: 0;
+    border-top: none;
+    justify-content: flex-start;
+  }
+  .sa-mockup .curr-foot a {
+    font-size: 11px;
+    gap: 4px;
+  }
+  .sa-mockup .curr-foot a svg {
+    width: 12px;
+    height: 12px;
+  }
+  /* Kieng — mobile/tablet: hub trên, fan, 3 card xếp dọc (đọc được đủ nội dung) */
+  .sa-mockup .kieng-stage {
+    width: 100%;
+    overflow: visible;
+  }
+  .sa-mockup .kieng {
+    width: 100%;
+    max-width: 100%;
+    transform: none;
+    margin: 0;
   }
   .sa-mockup .kieng-hub {
-    margin-bottom: 10px;
+    width: 132px;
+    height: 132px;
+    margin-bottom: 6px;
+    box-shadow: 0 12px 36px rgba(238, 91, 159, 0.35);
+  }
+  .sa-mockup .kieng-hub .fa {
+    font-size: 10px;
+  }
+  .sa-mockup .kieng-hub .mt {
+    font-size: 17px;
+  }
+  .sa-mockup .kieng-hub .exam {
+    font-size: 10px;
+    max-width: 112px;
+    line-height: 1.3;
+  }
+  .sa-mockup .kieng-fan {
+    display: block;
+    width: min(72%, 240px);
+    height: 24px;
+    margin: 0 auto 10px;
+  }
+  .sa-mockup .kieng-row {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  .sa-mockup .pillar {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: stretch;
+    border-radius: var(--r);
+    box-shadow: var(--sh-sm);
+  }
+  .sa-mockup .pillar .thumb {
+    width: auto;
+    height: 100%;
+    min-height: 80px;
+    flex-shrink: 0;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--r) 0 0 var(--r);
+  }
+  .sa-mockup .pillar .thumb:has(img) {
+    display: block;
+  }
+  .sa-mockup .pillar .pbody {
+    padding: 12px 14px 12px 12px;
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+  }
+  .sa-mockup .pillar .pic {
+    display: none;
+  }
+  .sa-mockup .pillar h3 {
+    font-size: 15px;
+    line-height: 1.2;
+  }
+  .sa-mockup .pillar .role {
+    font-size: 11.5px;
+    margin: 3px 0 6px;
+    line-height: 1.25;
+  }
+  .sa-mockup .pillar p {
+    font-size: 12px;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .sa-mockup .pillar .more {
+    font-size: 11px;
+    padding-top: 8px;
+    gap: 4px;
+  }
+  .sa-mockup .pillar .more svg {
+    width: 12px;
+    height: 12px;
   }
   .sa-mockup .pillar:hover {
-    transform: translateY(-4px) !important;
+    transform: translateY(-2px) !important;
   }
   .sa-mockup .ba-grid {
-    grid-template-columns: 1fr;
-    max-width: 440px;
+    grid-template-columns: 1fr 1fr;
+    max-width: 100%;
+    width: 100%;
+    border-radius: var(--r);
+  }
+  .sa-mockup .ba-col {
+    min-width: 0;
+  }
+  .sa-mockup .ba-col .cap {
+    padding: 10px 8px;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .sa-mockup .ba-col .cap .tag {
+    font-size: 10px;
+    padding: 3px 8px;
+    flex-shrink: 0;
+  }
+  .sa-mockup .ba-col .cap span {
+    font-size: 10.5px;
+    line-height: 1.35;
+    min-width: 0;
   }
   .sa-mockup .ba-arrow {
-    display: none;
+    display: flex;
+    width: 36px;
+    height: 36px;
+  }
+  .sa-mockup .ba-arrow svg {
+    width: 16px;
+    height: 16px;
   }
   .sa-mockup .sec-head h2 {
     font-size: 30px;
@@ -510,6 +736,16 @@
   }
   .sa-mockup .wrap {
     padding: 0 18px;
+  }
+  .sa-mockup .kieng-hub {
+    width: 120px;
+    height: 120px;
+  }
+  .sa-mockup .kieng-hub .mt {
+    font-size: 16px;
+  }
+  .sa-mockup .curr-grid {
+    gap: 10px;
   }
   .sa-mockup .hero {
     padding: 28px 0 40px;
@@ -545,11 +781,24 @@
   .sa-mockup .section--stats {
     padding: 28px 0 16px;
   }
-  .sa-mockup .section--exam {
-    padding: 8px 0 44px;
+  /* Stats: mobile — 2×2 (2 hàng), thu nhỏ */
+  .sa-mockup .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .sa-mockup .stat {
+    padding: 14px 8px;
+    border-radius: var(--r);
   }
   .sa-mockup .stat .num {
-    font-size: 32px;
+    font-size: 24px;
+  }
+  .sa-mockup .stat .lbl {
+    font-size: 10.5px;
+    margin-top: 5px;
+  }
+  .sa-mockup .section--exam {
+    padding: 8px 0 44px;
   }
   .sa-mockup .results h2 {
     font-size: 28px;
@@ -614,6 +863,12 @@
   .sa-mockup .wrap {
     padding: 0 16px;
   }
+  .sa-mockup .kieng-row {
+    gap: 10px;
+  }
+  .sa-mockup .curr-grid {
+    gap: 10px;
+  }
   .sa-mockup .hero h1 {
     font-size: 32px;
   }
@@ -628,9 +883,6 @@
   }
   .sa-mockup .sec-head p {
     font-size: 15px;
-  }
-  .sa-mockup .stats {
-    grid-template-columns: 1fr;
   }
   .sa-mockup .teach-grid {
     grid-template-columns: 1fr;
@@ -690,6 +942,155 @@
 @media (min-width: 992px) {
   .sa-mockup .wrap {
     max-width: 1180px;
+  }
+  .sa-mockup .kieng-hub {
+    width: 166px;
+    height: 166px;
+    margin-bottom: 0;
+  }
+  .sa-mockup .kieng-hub .fa {
+    font-size: 12px;
+  }
+  .sa-mockup .kieng-hub .mt {
+    font-size: 20px;
+  }
+  .sa-mockup .kieng-hub .exam {
+    font-size: 11px;
+    max-width: 128px;
+  }
+  .sa-mockup .kieng-fan {
+    width: 100%;
+    max-width: 1080px;
+    height: 42px;
+    margin: -2px auto 0;
+  }
+  .sa-mockup .kieng-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    flex-direction: unset;
+    gap: 24px;
+    max-width: none;
+  }
+  .sa-mockup .pillar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sa-mockup .pillar .thumb {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    border-radius: 0;
+  }
+  .sa-mockup .pillar .thumb:has(img) {
+    display: block;
+  }
+  .sa-mockup .pillar .pic {
+    display: flex;
+  }
+  .sa-mockup .pillar .pbody {
+    padding: 0 24px 24px;
+  }
+  .sa-mockup .pillar .pic {
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+    margin-top: -25px;
+    margin-bottom: 14px;
+    border-width: 3px;
+  }
+  .sa-mockup .pillar .pic .feather {
+    width: 20px;
+    height: 20px;
+  }
+  .sa-mockup .pillar h3 {
+    font-size: 22px;
+  }
+  .sa-mockup .pillar .role {
+    font-size: 14px;
+    margin: 4px 0 10px;
+  }
+  .sa-mockup .pillar p {
+    display: block;
+    font-size: 14px;
+    line-height: 1.55;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+  }
+  .sa-mockup .pillar .more {
+    font-size: 13.5px;
+    padding-top: 14px;
+    gap: 6px;
+  }
+  .sa-mockup .pillar .more svg {
+    width: 15px;
+    height: 15px;
+  }
+  .sa-mockup .curr-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    flex-direction: unset;
+    gap: 24px;
+    max-width: none;
+    margin: 0;
+  }
+  .sa-mockup .curr-card {
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-sm);
+  }
+  .sa-mockup .curr-card:hover {
+    transform: translateY(-5px);
+  }
+  .sa-mockup .curr-art {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    min-width: 0;
+    border-radius: 0;
+  }
+  .sa-mockup .curr-body {
+    padding: 24px;
+    justify-content: flex-start;
+  }
+  .sa-mockup .curr-cat {
+    font-size: 12.5px;
+    padding: 5px 12px;
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+  .sa-mockup .curr-cat .d {
+    width: 9px;
+    height: 9px;
+  }
+  .sa-mockup .curr-card h3 {
+    font-size: 21px;
+    margin-bottom: 6px;
+  }
+  .sa-mockup .curr-card .desc {
+    font-size: 14px;
+    margin-bottom: 16px;
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+  }
+  .sa-mockup .steps {
+    display: flex;
+  }
+  .sa-mockup .curr-foot {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--ink-06);
+    justify-content: flex-end;
+  }
+  .sa-mockup .curr-foot a {
+    font-size: 13.5px;
+    gap: 5px;
+  }
+  .sa-mockup .curr-foot a svg {
+    width: 15px;
+    height: 15px;
   }
 }
 

@@ -1876,6 +1876,12 @@ button.tc-art-full.tc-art-btn:hover .tc-art-img {
 .cc-art .ca-bg {
   position:absolute; inset:0; z-index:0;
 }
+.cc-art--has-img {
+  background:#fff;
+}
+.cc-art--has-img .cc-art-img {
+  object-fit:contain;
+}
 .cc-art--has-img .ca-bg,
 .cc-art--has-img .ca-sh {
   opacity:0;
@@ -1891,10 +1897,16 @@ button.tc-art-full.tc-art-btn:hover .tc-art-img {
   z-index:3;
   line-height:1;
 }
-.cc-info { padding:10px 12px 13px; flex:0 0 auto; }
+.cc-info {
+  padding:10px 12px 13px;
+  flex:1 1 auto;
+  display:flex;
+  flex-direction:column;
+  background:#fff;
+}
 .cc-title { font-weight:800; font-size:14px; color:var(--ink); }
 .cc-sub   { font-size:12px; font-weight:600; color:var(--ink2); margin-top:2px; line-height:1.45; }
-.cc-arrow { font-size:18px; margin-top:6px; color:var(--ink2); }
+.cc-arrow { font-size:18px; margin-top:auto; padding-top:6px; color:var(--ink2); }
 
 /* ─────────────────────────────
   8. REVIEWS

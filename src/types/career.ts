@@ -1,5 +1,5 @@
 /**
- * Thẻ ngành học trên trang chủ (CINS `bai_viet_nganh_hoc`: name, ma_nganh, thumbnail).
+ * Thẻ ngành học trên trang chủ (CINS `article_bai_viet`: tieu_de, meta.ma_nganh, thumbnail/cover_id).
  */
 export type CareerCard = {
   slug: string;

@@ -9,6 +9,8 @@ export const STAFF_PERSONAL_DASHBOARD_HREF = "/admin/dashboard/ho-so-ca-nhan";
 export const ORDER_MEDIA_HREF = "/admin/dashboard/order-media";
 /** BCTC tự động (học phí + thu chi khác + họa cụ) — chỉ menu cho vai trò `admin`. */
 export const BCTC_TU_DONG_HREF = "/admin/dashboard/bctc-tu-dong";
+/** Nhập liệu marketing thủ công — không còn trong sidebar; mở từ Tổng quan → MKT. */
+export const REPORT_MKT_HREF = "/admin/dashboard/report-mkt";
 
 export const AGENT_CONSULT_HREF = "/admin/agent";
 
@@ -55,7 +57,6 @@ export const NAV_HR: { label: string; href: string; disabled?: boolean }[] = [
 ];
 
 export const NAV_MARKETING: { label: string; href: string; disabled?: boolean }[] = [
-  { label: "Marketing analytics", href: "/admin/dashboard/report-mkt" },
   { label: "Quản lý trang chủ", href: "/admin/dashboard/quan-ly-trang-chu" },
   { label: "Quản lý media", href: "/admin/dashboard/quan-ly-media" },
   { label: "Quản lý bài học viên", href: "/admin/dashboard/quan-ly-bai-hoc-vien" },

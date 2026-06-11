@@ -260,6 +260,13 @@ export async function fetchWebTrafficReport(opts: {
           "Service account chưa có quyền Viewer trên property GA4. Vào Admin → Property access management → thêm email service account.",
       };
     }
+    if (msg.includes("DECODER") || msg.includes("unsupported") || msg.includes("Getting metadata from plugin failed")) {
+      return {
+        ok: false,
+        error:
+          "GA4_PRIVATE_KEY trên production không đọc được (PEM bị hỏng khi dán lên Vercel). Copy đúng giá trị GA4_PRIVATE_KEY từ .env.local — dạng một dòng với \\n: -----BEGIN PRIVATE KEY-----\\nMIIE...\\n-----END PRIVATE KEY-----\\n → Vercel Environment Variables → Redeploy.",
+      };
+    }
     return { ok: false, error: msg };
   }
 }

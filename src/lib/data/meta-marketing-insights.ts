@@ -1,4 +1,10 @@
-import { getMetaServerConfig, META_GRAPH_VERSION } from "@/lib/meta/meta-config";
+import {
+  getMetaServerConfig,
+  META_GRAPH_VERSION,
+  META_PAGE_TOKEN_REQUIRED_HELP,
+  normalizeMetaApiErrorMessage,
+  resolveMetaPageAccessToken,
+} from "@/lib/meta/meta-config";
 
 export type MetaInsightsPreset = "all" | "week" | "month" | "quarter" | "year" | "custom";
 
@@ -162,12 +168,18 @@ function ymdFromMetaEndTime(endTime: string): string {
   return endTime.trim().slice(0, 10);
 }
 
-async function graphGet<T>(path: string, params: Record<string, string>): Promise<T> {
-  const cfg = getMetaServerConfig();
-  if (!cfg) throw new Error("Thiếu cấu hình Meta.");
+/** Page token đã resolve — dùng cho mọi Graph call trong một lần fetch report. */
+let activeMetaAccessToken: string | null = null;
 
+function getActiveMetaAccessToken(): string {
+  const cfg = getMetaServerConfig();
+  if (!activeMetaAccessToken && !cfg) throw new Error("Thiếu cấu hình Meta.");
+  return activeMetaAccessToken ?? cfg!.accessToken;
+}
+
+async function graphGet<T>(path: string, params: Record<string, string>): Promise<T> {
   const url = new URL(`https://graph.facebook.com/${META_GRAPH_VERSION}${path}`);
-  url.searchParams.set("access_token", cfg.accessToken);
+  url.searchParams.set("access_token", getActiveMetaAccessToken());
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
   const res = await fetch(url.toString(), { cache: "no-store" });
@@ -262,7 +274,7 @@ async function fetchPageInsights(range: DateRangeYmd): Promise<{
     messagingNewConversations.size > 0 ||
     totalBlocks > 0;
   if (!hasAny) {
-    await throwIfMissingReadInsights(cfg.accessToken);
+    await throwIfMissingReadInsights(getActiveMetaAccessToken());
   }
 
   return { pageMediaViews, pageEngagements, pageFollows, messagingNewConversations };
@@ -311,19 +323,17 @@ const META_READ_INSIGHTS_HELP =
   "Token thiếu quyền read_insights — Meta trả về rỗng (dashboard toàn 0). Vào developers.facebook.com → App Sine Art Analytics → Use cases / Quyền → thêm read_insights → Graph API Explorer Generate token lại (read_insights + pages_read_engagement + pages_show_list + business_management) → me/accounts → copy access_token Page → .env.local → restart.";
 
 async function throwIfMissingReadInsights(accessToken: string): Promise<void> {
-  try {
-    const debug = await graphGet<{ data?: { scopes?: string[]; is_valid?: boolean } }>(`/debug_token`, {
-      input_token: accessToken,
-      access_token: accessToken,
-    });
-    const scopes = debug.data?.scopes ?? [];
-    if (!scopes.includes("read_insights")) {
-      throw new Error(META_READ_INSIGHTS_HELP);
-    }
-  } catch (e) {
-    if (e instanceof Error && e.message === META_READ_INSIGHTS_HELP) throw e;
+  const debug = await graphGet<{ data?: { scopes?: string[]; is_valid?: boolean } }>(`/debug_token`, {
+    input_token: accessToken,
+    access_token: accessToken,
+  });
+  const scopes = debug.data?.scopes ?? [];
+  if (!scopes.includes("read_insights")) {
+    throw new Error(META_READ_INSIGHTS_HELP);
   }
-  throw new Error("Không có dữ liệu Fanpage insights trong khoảng đã chọn — thử kỳ dài hơn hoặc kiểm tra quyền read_insights trên token.");
+  throw new Error(
+    "Không có dữ liệu Fanpage insights trong khoảng đã chọn — thử kỳ dài hơn. Nếu vừa dùng System User token, kiểm tra System User đã được gán Fanpage với quyền Phân tích/Quản lý.",
+  );
 }
 
 function extractMessageCount(actions: { action_type?: string; value?: string }[] | undefined): number {
@@ -724,6 +734,13 @@ export async function fetchMetaInsightsReport(opts: {
     };
   }
 
+  try {
+    activeMetaAccessToken = await resolveMetaPageAccessToken(cfg.accessToken, cfg.pageId);
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : META_PAGE_TOKEN_REQUIRED_HELP;
+    return { ok: false, error: normalizeMetaApiErrorMessage(raw) };
+  }
+
   const range = resolveRange(opts.preset, opts.customFrom ?? "", opts.customTo ?? "");
   const compareRange = previousRange(range);
   const span = daySpanInclusive(range.startYmd, range.endYmd);
@@ -769,9 +786,6 @@ export async function fetchMetaInsightsReport(opts: {
     };
   } catch (e) {
     const raw = e instanceof Error ? e.message : "Lỗi Meta Graph API.";
-    const error = raw.toLowerCase().includes("malformed access token")
-      ? "Token Meta không hợp lệ — thường do dán 2 token dính liền hoặc thừa khoảng trắng. Graph API Explorer → chọn Page「Đồ họa Sine Art」→ copy Mã truy cập (một dòng EAA..., ~240 ký tự) → .env.local → restart."
-      : raw.replace(/EAA[A-Za-z0-9+/=_-]{20,}/g, "[token]");
-    return { ok: false, error };
+    return { ok: false, error: normalizeMetaApiErrorMessage(raw) };
   }
 }

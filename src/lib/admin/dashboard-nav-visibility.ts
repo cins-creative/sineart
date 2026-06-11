@@ -11,6 +11,7 @@ import {
   HREFS_MARKETING_ALL,
   HREFS_NHAN_SU_TC_ALL,
   ORDER_MEDIA_HREF,
+  REPORT_MKT_HREF,
 } from "@/lib/admin/dashboard-nav-config";
 
 export type DashboardNavAccess = {
@@ -102,6 +103,7 @@ function hrefsForPhongRule(rule: PhongRule): Set<string> {
       break;
     case "marketing_phong":
       HREFS_MARKETING_ALL.forEach((h) => s.add(h));
+      s.add(REPORT_MKT_HREF);
       s.add("/admin/dashboard/quan-ly-hoa-cu");
       s.add("/admin/dashboard/thu-chi-khac");
       s.add(ORDER_MEDIA_HREF);

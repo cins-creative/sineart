@@ -55,7 +55,8 @@ export async function GET(req: Request) {
   if (scope === "history") {
     const page = Math.max(1, Number(url.searchParams.get("page") ?? "1") || 1);
     const pageSize = Math.max(5, Number(url.searchParams.get("pageSize") ?? "20") || 20);
-    const res = await fetchSepayIncomingTransfersPaginated(access.supabase, { page, pageSize });
+    const search = url.searchParams.get("q")?.trim() ?? "";
+    const res = await fetchSepayIncomingTransfersPaginated(access.supabase, { page, pageSize, search });
     if (!res.ok) {
       return NextResponse.json({ ok: false, error: res.error }, { status: 502 });
     }

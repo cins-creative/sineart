@@ -42,6 +42,27 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, x-api-secret",
 };
 
+/** SePay `transactionDate`: `YYYY-MM-DD HH:mm:ss` — giờ Việt Nam (GMT+7). */
+const SEPAY_LOCAL_RE = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/;
+const VN_UTC_OFFSET_HOURS = 7;
+
+function parseSepayLocalDateTimeToUtcIso(raw) {
+  const m = String(raw).trim().match(SEPAY_LOCAL_RE);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  const utcMs = Date.UTC(+y, +mo - 1, +d, +h - VN_UTC_OFFSET_HOURS, +mi, +s);
+  const iso = new Date(utcMs).toISOString();
+  return Number.isFinite(Date.parse(iso)) ? iso : null;
+}
+
+function sepayTransactionDateToIso(transactionDate) {
+  if (!transactionDate) return new Date().toISOString();
+  const fromVn = parseSepayLocalDateTimeToUtcIso(transactionDate);
+  if (fromVn) return fromVn;
+  const parsed = Date.parse(transactionDate);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString();
+}
+
 function getTTL(baseId, table) {
   if (baseId === BASE_ID_CHAT) return CACHE_TTL.CHAT;
   const t = String(table).toLowerCase();
@@ -235,9 +256,7 @@ export default {
         headers: sbH,
         body: JSON.stringify({
           gateway: payload.gateway || null,
-          transaction_date: payload.transactionDate
-            ? new Date(payload.transactionDate).toISOString()
-            : new Date().toISOString(),
+          transaction_date: sepayTransactionDateToIso(payload.transactionDate),
           transfer_amount: payload.transferAmount || 0,
           transfer_type: payload.transferType || null,
           content,

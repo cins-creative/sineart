@@ -1,9 +1,13 @@
 "use client";
 
-import { Bell, ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
+import { Bell, ChevronLeft, ChevronRight, Loader2, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { SepayIncomingTransfer } from "@/lib/data/admin-sepay-transfers";
+import {
+  formatSepayTransactionDateVn,
+  sepayTransactionInstantMs,
+} from "@/lib/sepay/sepay-datetime";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 45_000;
@@ -14,29 +18,15 @@ function formatVnd(amount: number): string {
   return `${Math.round(amount).toLocaleString("vi-VN")} ₫`;
 }
 
-function formatTransferTime(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return "—";
-  return d.toLocaleString("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function relativeVi(iso: string): string {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "";
+function relativeVi(tx: SepayIncomingTransfer): string {
+  const t = sepayTransactionInstantMs(tx.transactionDate, tx.sepayTransactionDateLocal);
+  if (!Number.isFinite(t) || t <= 0) return "";
   const diffMin = Math.round((Date.now() - t) / 60_000);
   if (diffMin < 1) return "vừa xong";
   if (diffMin < 60) return `${diffMin} phút trước`;
   const h = Math.floor(diffMin / 60);
   if (h < 24) return `${h} giờ trước`;
-  return formatTransferTime(iso);
+  return formatSepayTransactionDateVn(tx.transactionDate, tx.sepayTransactionDateLocal);
 }
 
 function orderLabel(tx: SepayIncomingTransfer): string | null {
@@ -47,7 +37,7 @@ function isUnread(tx: SepayIncomingTransfer, lastSeenAt: string | null): boolean
   if (!lastSeenAt) return true;
   const seenMs = Date.parse(lastSeenAt);
   if (!Number.isFinite(seenMs)) return true;
-  return Date.parse(tx.transactionDate) > seenMs;
+  return sepayTransactionInstantMs(tx.transactionDate, tx.sepayTransactionDateLocal) > seenMs;
 }
 
 function seenStorageKey(staffId: number): string {
@@ -77,7 +67,7 @@ function TransferRow({ tx, compact }: { tx: SepayIncomingTransfer; compact?: boo
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-bold tabular-nums text-emerald-800">+{formatVnd(tx.transferAmount)}</span>
         <span className="shrink-0 text-[10px] font-medium tabular-nums text-slate-500">
-          {relativeVi(tx.transactionDate)}
+          {relativeVi(tx)}
         </span>
       </div>
       {label ? <p className="m-0 mt-0.5 text-[11px] font-semibold text-[#323232]">{label}</p> : null}
@@ -95,13 +85,15 @@ type HistoryModalProps = {
 
 function SepayHistoryModal({ open, onClose }: HistoryModalProps) {
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [items, setItems] = useState<SepayIncomingTransfer[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPage = useCallback(async (p: number) => {
+  const fetchPage = useCallback(async (p: number, q: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -110,6 +102,8 @@ function SepayHistoryModal({ open, onClose }: HistoryModalProps) {
         page: String(p),
         pageSize: String(HISTORY_PAGE_SIZE),
       });
+      const trimmed = q.trim();
+      if (trimmed) qs.set("q", trimmed);
       const res = await fetch(`/admin/api/sepay-recent-transfers?${qs}`, { cache: "no-store" });
       const json = (await res.json()) as {
         ok?: boolean;
@@ -118,6 +112,7 @@ function SepayHistoryModal({ open, onClose }: HistoryModalProps) {
         total?: number;
         page?: number;
         totalPages?: number;
+        search?: string;
       };
       if (!res.ok || !json.ok || !json.items) {
         throw new Error(json.error ?? "Không tải được lịch sử.");
@@ -136,8 +131,23 @@ function SepayHistoryModal({ open, onClose }: HistoryModalProps) {
   useEffect(() => {
     if (!open) return;
     setPage(1);
-    void fetchPage(1);
-  }, [open, fetchPage]);
+    setSearchInput("");
+    setSearchQuery("");
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+      setPage(1);
+    }, 320);
+    return () => window.clearTimeout(t);
+  }, [searchInput, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    void fetchPage(page, searchQuery);
+  }, [open, page, searchQuery, fetchPage]);
 
   useEffect(() => {
     if (!open) return;
@@ -175,6 +185,39 @@ function SepayHistoryModal({ open, onClose }: HistoryModalProps) {
           </button>
         </div>
 
+        <div className="border-b border-[#F3EEEF] px-4 py-2.5 sm:px-5">
+          <label className="relative block">
+            <Search
+              size={14}
+              strokeWidth={2}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Tìm mã đơn SA… hoặc nội dung chuyển khoản"
+              className="h-9 w-full rounded-lg border border-[#EAEAEA] bg-white py-0 pl-8 pr-8 text-[12px] text-[#323232] shadow-sm outline-none placeholder:text-slate-400 focus:border-[#BC8AF9] focus:ring-2 focus:ring-[#BC8AF9]/20"
+            />
+            {searchInput ? (
+              <button
+                type="button"
+                onClick={() => setSearchInput("")}
+                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Xóa tìm kiếm"
+              >
+                <X size={14} strokeWidth={2} />
+              </button>
+            ) : null}
+          </label>
+          {searchQuery ? (
+            <p className="m-0 mt-1.5 text-[10px] text-slate-500">
+              Đang lọc: <span className="font-semibold text-[#323232]">{searchQuery}</span>
+            </p>
+          ) : null}
+        </div>
+
         <div className="min-h-0 flex-1 overflow-auto px-4 py-2 sm:px-5">
           {loading && items.length === 0 ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
@@ -184,7 +227,11 @@ function SepayHistoryModal({ open, onClose }: HistoryModalProps) {
           ) : null}
           {error ? <p className="py-6 text-center text-sm text-red-700">{error}</p> : null}
           {!loading && !error && items.length === 0 ? (
-            <p className="py-12 text-center text-sm text-slate-500">Chưa có giao dịch chuyển khoản đến.</p>
+            <p className="py-12 text-center text-sm text-slate-500">
+              {searchQuery
+                ? `Không tìm thấy giao dịch khớp «${searchQuery}».`
+                : "Chưa có giao dịch chuyển khoản đến."}
+            </p>
           ) : null}
           {items.length > 0 ? (
             <table className="w-full min-w-[520px] border-collapse text-left text-[12px]">
@@ -200,7 +247,7 @@ function SepayHistoryModal({ open, onClose }: HistoryModalProps) {
                 {items.map((tx) => (
                   <tr key={tx.id} className="border-b border-[#F3EEEF] last:border-0">
                     <td className="py-2.5 pr-3 align-top tabular-nums text-slate-600">
-                      {formatTransferTime(tx.transactionDate)}
+                      {formatSepayTransactionDateVn(tx.transactionDate, tx.sepayTransactionDateLocal)}
                     </td>
                     <td className="py-2.5 pr-3 align-top font-bold tabular-nums text-emerald-800">
                       +{formatVnd(tx.transferAmount)}
@@ -222,13 +269,17 @@ function SepayHistoryModal({ open, onClose }: HistoryModalProps) {
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#EDE8E9] px-4 py-3 sm:px-5">
           <p className="m-0 text-[11px] text-slate-500">
-            {total > 0 ? `${total.toLocaleString("vi-VN")} giao dịch` : "—"}
+            {total > 0
+              ? `${total.toLocaleString("vi-VN")} giao dịch${searchQuery ? " khớp" : ""}`
+              : searchQuery
+                ? "0 kết quả"
+                : "—"}
           </p>
           <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={loading || page <= 1}
-              onClick={() => void fetchPage(page - 1)}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#EAEAEA] bg-white px-2.5 text-[11px] font-semibold text-[#323232] disabled:opacity-40"
             >
               <ChevronLeft size={14} aria-hidden />
@@ -240,7 +291,7 @@ function SepayHistoryModal({ open, onClose }: HistoryModalProps) {
             <button
               type="button"
               disabled={loading || page >= totalPages}
-              onClick={() => void fetchPage(page + 1)}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#EAEAEA] bg-white px-2.5 text-[11px] font-semibold text-[#323232] disabled:opacity-40"
             >
               Sau
@@ -304,9 +355,14 @@ export default function SepayTransferNotification({ staffId }: Props) {
   const unreadCount = unreadItems.length;
 
   const markAllSeen = useCallback(() => {
-    const newest = items[0]?.transactionDate ?? new Date().toISOString();
-    writeLastSeenAt(staffId, newest);
-    setLastSeenAt(newest);
+    const newest = items[0];
+    const newestIso = newest
+      ? new Date(
+          sepayTransactionInstantMs(newest.transactionDate, newest.sepayTransactionDateLocal),
+        ).toISOString()
+      : new Date().toISOString();
+    writeLastSeenAt(staffId, newestIso);
+    setLastSeenAt(newestIso);
   }, [items, staffId]);
 
   const toggleDropdown = useCallback(() => {

@@ -1,10 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { hpParseMoney } from "@/lib/data/hp-goi-payable";
+import {
+  extractSePayRawTransactionDate,
+  sepayTransactionInstantMs,
+} from "@/lib/sepay/sepay-datetime";
 
 export type SepayIncomingTransfer = {
   id: number;
+  /** ISO từ DB (`transaction_date`). */
   transactionDate: string;
+  /** Giờ gốc SePay `YYYY-MM-DD HH:mm:ss` (GMT+7) — dùng để hiển thị đúng. */
+  sepayTransactionDateLocal: string | null;
   transferAmount: number;
   content: string;
   maDonTrichXuat: string | null;
@@ -32,7 +39,7 @@ export async function fetchRecentSepayIncomingTransfers(
 
   const { data, error } = await supabase
     .from("hp_giao_dich_thanh_toan")
-    .select("id, gateway, transaction_date, transfer_amount, transfer_type, content, ma_don_trich_xuat")
+    .select("id, gateway, transaction_date, transfer_amount, transfer_type, content, ma_don_trich_xuat, raw_webhook")
     .gte("transaction_date", since)
     .order("transaction_date", { ascending: false })
     .limit(limit * 3);
@@ -51,37 +58,18 @@ export async function fetchRecentSepayIncomingTransfers(
       transfer_type?: unknown;
       content?: unknown;
       ma_don_trich_xuat?: unknown;
+      raw_webhook?: unknown;
     };
-    if (!isIncomingTransferType(row.transfer_type != null ? String(row.transfer_type) : null)) continue;
-    const id = nId(row.id);
-    if (!id) continue;
-    const amount = hpParseMoney(row.transfer_amount);
-    if (amount <= 0) continue;
-    const ts =
-      row.transaction_date != null && String(row.transaction_date).trim() !== ""
-        ? String(row.transaction_date)
-        : "";
-    items.push({
-      id,
-      transactionDate: ts,
-      transferAmount: Math.round(amount),
-      content: String(row.content ?? "").trim(),
-      maDonTrichXuat: String(row.ma_don_trich_xuat ?? "").trim() || null,
-      gateway: String(row.gateway ?? "").trim() || null,
-    });
+    const mapped = mapIncomingRow(row);
+    if (!mapped) continue;
+    items.push(mapped);
     if (items.length >= limit) break;
   }
 
+  items.sort(compareSepayTransfersNewestFirst);
+
   return { ok: true, items };
 }
-
-export type SepayIncomingTransferPage = {
-  items: SepayIncomingTransfer[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-};
 
 function mapIncomingRow(raw: {
   id?: unknown;
@@ -91,6 +79,7 @@ function mapIncomingRow(raw: {
   transfer_type?: unknown;
   content?: unknown;
   ma_don_trich_xuat?: unknown;
+  raw_webhook?: unknown;
 }): SepayIncomingTransfer | null {
   if (!isIncomingTransferType(raw.transfer_type != null ? String(raw.transfer_type) : null)) return null;
   const id = nId(raw.id);
@@ -104,6 +93,7 @@ function mapIncomingRow(raw: {
   return {
     id,
     transactionDate: ts,
+    sepayTransactionDateLocal: extractSePayRawTransactionDate(raw.raw_webhook),
     transferAmount: Math.round(amount),
     content: String(raw.content ?? "").trim(),
     maDonTrichXuat: String(raw.ma_don_trich_xuat ?? "").trim() || null,
@@ -111,17 +101,51 @@ function mapIncomingRow(raw: {
   };
 }
 
+function compareSepayTransfersNewestFirst(a: SepayIncomingTransfer, b: SepayIncomingTransfer): number {
+  return (
+    sepayTransactionInstantMs(b.transactionDate, b.sepayTransactionDateLocal) -
+    sepayTransactionInstantMs(a.transactionDate, a.sepayTransactionDateLocal)
+  );
+}
+
+export type SepayIncomingTransferPage = {
+  items: SepayIncomingTransfer[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  search: string;
+};
+
+/** Khớp mã đơn SA…, `ma_don_trich_xuat`, hoặc nội dung chuyển khoản. */
+export function sepayTransferMatchesSearch(tx: SepayIncomingTransfer, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const maDon = (tx.maDonTrichXuat ?? "").toLowerCase();
+  const content = tx.content.toLowerCase();
+  if (maDon.includes(q) || content.includes(q)) return true;
+  const compact = q.replace(/\s+/g, "");
+  if (compact && (maDon.includes(compact) || content.replace(/\s+/g, "").includes(compact))) return true;
+  const saInQuery = q.match(/sa[\d]{0,6}/i)?.[0]?.toUpperCase();
+  if (saInQuery) {
+    const label = tx.maDonTrichXuat?.toUpperCase() ?? tx.content.match(/SA\d{6}/i)?.[0]?.toUpperCase() ?? "";
+    if (label.startsWith(saInQuery) || content.toUpperCase().includes(saInQuery)) return true;
+  }
+  return false;
+}
+
 /** Lịch sử chuyển khoản đến — phân trang (mới nhất trước). */
 export async function fetchSepayIncomingTransfersPaginated(
   supabase: SupabaseClient,
-  opts: { page: number; pageSize: number },
+  opts: { page: number; pageSize: number; search?: string },
 ): Promise<{ ok: true; data: SepayIncomingTransferPage } | { ok: false; error: string }> {
   const pageSize = Math.min(Math.max(opts.pageSize, 5), 50);
   const page = Math.max(opts.page, 1);
+  const search = (opts.search ?? "").trim();
 
   const { data: allRows, error } = await supabase
     .from("hp_giao_dich_thanh_toan")
-    .select("id, gateway, transaction_date, transfer_amount, transfer_type, content, ma_don_trich_xuat")
+    .select("id, gateway, transaction_date, transfer_amount, transfer_type, content, ma_don_trich_xuat, raw_webhook")
     .order("transaction_date", { ascending: false })
     .limit(5000);
 
@@ -140,19 +164,22 @@ export async function fetchSepayIncomingTransfersPaginated(
           transfer_type?: unknown;
           content?: unknown;
           ma_don_trich_xuat?: unknown;
+          raw_webhook?: unknown;
         },
       ),
     )
-    .filter((x): x is SepayIncomingTransfer => x != null);
+    .filter((x): x is SepayIncomingTransfer => x != null)
+    .filter((tx) => sepayTransferMatchesSearch(tx, search))
+    .sort(compareSepayTransfersNewestFirst);
 
   const total = allIncoming.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(page, totalPages);
+  const safePage = total === 0 ? 1 : Math.min(page, totalPages);
   const start = (safePage - 1) * pageSize;
   const items = allIncoming.slice(start, start + pageSize);
 
   return {
     ok: true,
-    data: { items, total, page: safePage, pageSize, totalPages },
+    data: { items, total, page: safePage, pageSize, totalPages, search },
   };
 }

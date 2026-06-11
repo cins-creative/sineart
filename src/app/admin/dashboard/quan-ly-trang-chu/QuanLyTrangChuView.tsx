@@ -4,13 +4,17 @@ import Image from "next/image";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Calendar,
   Check,
   ChevronDown,
   Film,
+  Gift,
   ImageIcon,
   Info,
   Loader2,
+  MapPin,
   Megaphone,
+  PenLine,
   Plus,
   Save,
   Sparkles,
@@ -674,14 +678,89 @@ function HeroSlidesSection({
 // Marquee ticker
 // ═══════════════════════════════════════════════════════════════════════════
 
-const MARQUEE_ICON_OPTIONS: { value: MarqueeIconKey; label: string }[] = [
-  { value: "map-pin", label: "📍" },
-  { value: "calendar", label: "📅" },
-  { value: "gift", label: "🎁" },
-  { value: "edit-3", label: "✏️" },
+const MARQUEE_ICON_OPTIONS: {
+  value: MarqueeIconKey;
+  label: string;
+  Icon: typeof MapPin;
+}[] = [
+  { value: "map-pin", label: "Địa điểm", Icon: MapPin },
+  { value: "calendar", label: "Lịch", Icon: Calendar },
+  { value: "gift", label: "Ưu đãi", Icon: Gift },
+  { value: "edit-3", label: "Thông báo", Icon: PenLine },
 ];
 
+const MARQUEE_ICONS: Record<MarqueeIconKey, typeof MapPin> = {
+  "map-pin": MapPin,
+  calendar: Calendar,
+  gift: Gift,
+  "edit-3": PenLine,
+};
+
 const MARQUEE_MAX_ITEMS = 12;
+
+function MarqueeIconPicker({
+  value,
+  onChange,
+  name,
+}: {
+  value: MarqueeIconKey;
+  onChange: (v: MarqueeIconKey) => void;
+  name: string;
+}) {
+  return (
+    <div className="qlh-marquee-icon-picker" role="radiogroup" aria-label={`Icon ${name}`}>
+      {MARQUEE_ICON_OPTIONS.map(({ value: key, label, Icon }) => {
+        const active = value === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            aria-label={label}
+            title={label}
+            className={`qlh-marquee-icon-btn${active ? " is-active" : ""}`}
+            onClick={() => onChange(key)}
+          >
+            <Icon size={16} strokeWidth={2} aria-hidden />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MarqueeAdminPreview({ items }: { items: MarqueeItemContent[] }) {
+  const visible = items.filter((item) => item.text.trim());
+  const track = visible.length > 0 ? [...visible, ...visible] : items.slice(0, 4);
+
+  if (track.length === 0) {
+    return (
+      <div className="qlh-marquee-preview qlh-marquee-preview--empty">
+        <Megaphone size={18} strokeWidth={2} aria-hidden />
+        <span>Thêm mục để xem trước dòng chạy</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="qlh-marquee-preview" aria-hidden>
+      <div className="qlh-marquee-preview-track">
+        {track.map((item, i) => {
+          const Icon = MARQUEE_ICONS[item.icon];
+          const text = item.text.trim() || "Nội dung ticker…";
+          return (
+            <span key={`${item.id}-${i}`} className="qlh-marquee-preview-item">
+              <Icon size={15} strokeWidth={2.2} aria-hidden />
+              <span>{text}</span>
+              <span className="qlh-marquee-preview-sep">◆</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function newMarqueeItem(): MarqueeItemContent {
   return {
@@ -716,12 +795,18 @@ function MarqueeSection({
     setOpen(true);
   };
 
+  const filledCount = data.filter((item) => item.text.trim()).length;
+  const firstFilled = data.find((item) => item.text.trim());
+  const firstText = firstFilled?.text.trim() ?? "";
+
   const preview =
     data.length === 0
       ? "Chưa có mục"
-      : data.length === 1
-        ? data[0]!.text.trim() || "1 mục"
-        : `${data.length} mục · ${data[0]!.text.trim().slice(0, 48)}${data[0]!.text.length > 48 ? "…" : ""}`;
+      : filledCount === 0
+        ? `${data.length} mục · chưa có nội dung`
+        : filledCount === 1
+          ? firstText
+          : `${filledCount} mục · ${firstText.slice(0, 48)}${firstText.length > 48 ? "…" : ""}`;
 
   return (
     <section className={`qlh-section qlh-collapsible${open ? " is-open" : ""}`}>
@@ -744,66 +829,79 @@ function MarqueeSection({
       {open ? (
         <div className="qlh-collapsible-body">
           <p className="qlh-section-sub qlh-collapsible-sub">
-            Dòng chạy ngang dưới menu trên /new.
+            Dòng chạy ngang dưới menu trên <code>/new</code>. Chỉ hiển thị mục đã có nội dung.
           </p>
+
+          <MarqueeAdminPreview items={data} />
+
           {data.length > 0 ? (
-            <ul className="qlh-marquee-rows">
+            <ul className="qlh-marquee-cards">
               {data.map((item, i) => (
-                <li key={item.id} className="qlh-marquee-row">
-                  <select
-                    className="qlh-field-input qlh-marquee-icon"
-                    value={item.icon}
-                    aria-label={`Icon mục ${i + 1}`}
-                    onChange={(e) =>
-                      setItem(i, { ...item, icon: e.target.value as MarqueeIconKey })
-                    }
-                  >
-                    {MARQUEE_ICON_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    className="qlh-field-input qlh-marquee-text"
-                    value={item.text}
-                    placeholder="Nội dung ticker…"
-                    aria-label={`Nội dung mục ${i + 1}`}
-                    onChange={(e) => setItem(i, { ...item, text: e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    className="qlh-btn qlh-btn-sm qlh-btn-ghost qlh-marquee-remove"
-                    aria-label="Xóa mục"
-                    onClick={() => removeItem(i)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                <li key={item.id} className="qlh-marquee-card">
+                  <div className="qlh-marquee-card-head">
+                    <span className="qlh-marquee-idx">{i + 1}</span>
+                    <span className="qlh-marquee-card-label">Mục ticker</span>
+                    <button
+                      type="button"
+                      className="qlh-btn qlh-btn-sm qlh-btn-ghost qlh-marquee-remove"
+                      aria-label={`Xóa mục ${i + 1}`}
+                      onClick={() => removeItem(i)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <div className="qlh-marquee-card-body">
+                    <label className="qlh-field qlh-marquee-icon-field">
+                      <span className="qlh-field-label">Icon</span>
+                      <MarqueeIconPicker
+                        value={item.icon}
+                        name={`mục ${i + 1}`}
+                        onChange={(icon) => setItem(i, { ...item, icon })}
+                      />
+                    </label>
+                    <label className="qlh-field qlh-marquee-text-field">
+                      <span className="qlh-field-label">Nội dung</span>
+                      <input
+                        type="text"
+                        className="qlh-field-input"
+                        value={item.text}
+                        placeholder="VD: Khai giảng lớp Hình họa — 15/06"
+                        aria-label={`Nội dung mục ${i + 1}`}
+                        onChange={(e) => setItem(i, { ...item, text: e.target.value })}
+                      />
+                    </label>
+                  </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="qlh-section-sub" style={{ margin: 0 }}>
-              Chưa có mục — bấm + để thêm.
-            </p>
+            <div className="qlh-marquee-empty">
+              <Megaphone size={22} strokeWidth={2} aria-hidden />
+              <p>Chưa có mục ticker nào.</p>
+              <button type="button" className="qlh-btn qlh-btn-sm qlh-btn-primary" onClick={addItem}>
+                <Plus size={14} />
+                Thêm mục đầu tiên
+              </button>
+            </div>
           )}
-          <div className="qlh-marquee-toolbar">
-            <button
-              type="button"
-              className="qlh-btn qlh-btn-sm qlh-btn-ghost"
-              onClick={addItem}
-              disabled={data.length >= MARQUEE_MAX_ITEMS}
-            >
-              <Plus size={14} />
-              Thêm mục
-            </button>
-            {data.length >= MARQUEE_MAX_ITEMS ? (
-              <span className="qlh-section-sub" style={{ margin: 0 }}>
-                Tối đa {MARQUEE_MAX_ITEMS} mục.
+
+          {data.length > 0 ? (
+            <div className="qlh-marquee-toolbar">
+              <button
+                type="button"
+                className="qlh-btn qlh-btn-sm qlh-btn-ghost"
+                onClick={addItem}
+                disabled={data.length >= MARQUEE_MAX_ITEMS}
+              >
+                <Plus size={14} />
+                Thêm mục
+              </button>
+              <span className="qlh-marquee-count">
+                {filledCount}/{data.length} mục có nội dung
+                {data.length >= MARQUEE_MAX_ITEMS ? ` · tối đa ${MARQUEE_MAX_ITEMS}` : ""}
               </span>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -1320,6 +1418,29 @@ const QLH_CSS = `
 .qlh-collapsible.is-open .qlh-collapsible-chevron{transform:rotate(180deg)}
 .qlh-collapsible-body{padding:0 16px 14px;display:flex;flex-direction:column;gap:10px}
 .qlh-collapsible-sub{margin:0}
+.qlh-marquee-preview{position:relative;overflow:hidden;border-radius:12px;background:linear-gradient(90deg,#f8a668,#ee5b9f);color:#fff;padding:11px 0;box-shadow:0 4px 14px rgba(238,91,159,.22)}
+.qlh-marquee-preview--empty{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 16px;font-size:12.5px;font-weight:600;color:rgba(255,255,255,.92);background:linear-gradient(90deg,rgba(248,166,104,.85),rgba(238,91,159,.85))}
+.qlh-marquee-preview-track{display:flex;gap:0;white-space:nowrap;width:max-content;animation:qlh-marquee-scroll 28s linear infinite}
+.qlh-marquee-preview:hover .qlh-marquee-preview-track{animation-play-state:paused}
+.qlh-marquee-preview-item{display:inline-flex;align-items:center;gap:8px;padding:0 24px;font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+.qlh-marquee-preview-sep{opacity:.55;font-size:10px}
+@keyframes qlh-marquee-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.qlh-marquee-cards{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.qlh-marquee-card{border:1px solid rgba(45,32,32,.08);border-radius:12px;padding:12px 14px;background:#fafafa;display:flex;flex-direction:column;gap:10px}
+.qlh-marquee-card-head{display:flex;align-items:center;gap:8px}
+.qlh-marquee-idx{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:8px;background:rgba(238,92,162,.12);color:#c0447a;font-size:11.5px;font-weight:800;flex-shrink:0}
+.qlh-marquee-card-label{flex:1;min-width:0;font-size:12px;font-weight:700;color:#6b5c5c}
+.qlh-marquee-card-body{display:grid;grid-template-columns:auto 1fr;gap:12px 14px;align-items:end}
+.qlh-marquee-icon-field{flex-shrink:0}
+.qlh-marquee-text-field{min-width:0}
+.qlh-marquee-icon-picker{display:flex;flex-wrap:wrap;gap:6px}
+.qlh-marquee-icon-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(45,32,32,.12);border-radius:10px;background:#fff;color:#6b5c5c;cursor:pointer;transition:border-color .15s ease,background .15s ease,color .15s ease,box-shadow .15s ease}
+.qlh-marquee-icon-btn:hover{border-color:rgba(238,91,159,.35);color:#b31e62;background:rgba(238,91,159,.04)}
+.qlh-marquee-icon-btn.is-active{border-color:transparent;color:#fff;background:linear-gradient(135deg,#f8a668,#ee5b9f);box-shadow:0 4px 12px rgba(238,91,159,.28)}
+.qlh-marquee-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:28px 16px;border:1.5px dashed rgba(45,32,32,.12);border-radius:12px;background:#fafafa;text-align:center}
+.qlh-marquee-empty svg{color:#ee5b9f;opacity:.85}
+.qlh-marquee-empty p{margin:0;font-size:13px;color:#6b5c5c;font-weight:600}
+.qlh-marquee-count{font-size:11.5px;color:#6b5c5c;font-weight:600}
 .qlh-marquee-rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .qlh-marquee-row{display:flex;align-items:center;gap:8px}
 .qlh-marquee-icon{width:52px;flex-shrink:0;padding:8px 6px;text-align:center}
@@ -1402,6 +1523,7 @@ const QLH_CSS = `
 @media (max-width:900px){
   .qlh-hero-grid,.qlh-pillars-grid,.qlh-marquee-grid{grid-template-columns:1fr}
   .qlh-slide-fields{grid-template-columns:1fr}
+  .qlh-marquee-card-body{grid-template-columns:1fr}
   .qlh-video-grid{grid-template-columns:1fr}
   .qlh-ad-wrap{grid-template-columns:1fr}
   .qlh-vw-grid{grid-template-columns:1fr}

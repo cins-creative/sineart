@@ -5,7 +5,10 @@ import {
   DH_MON_THI_ITEM_MAX_LEN,
 } from "@/lib/agent/dh-exam-profiles";
 import { slugifyVi } from "@/lib/admin/tra-cuu-schema";
-import { isEnrollmentDangHocByKy } from "@/lib/data/admin-qlhv-tinh-trang";
+import {
+  formatThangHocTaiSineArt,
+  isEnrollmentDangHocByKy,
+} from "@/lib/data/admin-qlhv-tinh-trang";
 import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 
 export type AdminDhTruongLookup = {
@@ -53,10 +56,16 @@ export type AdminDhStudentExamRow = {
   ten_nganh: string;
   nam_thi: number | null;
   ghi_chu: string | null;
-  /** `ql_hv_truong_nganh.score` — điểm thi tư vấn nhập sau khi có kết quả. */
+  /** `ql_hv_truong_nganh.score` — điểm môn thi thứ 1 (`dh_truong_nganh.mon_thi[0]`). */
   score: number | null;
+  /** `ql_hv_truong_nganh.score_2` — điểm môn thi thứ 2 (`dh_truong_nganh.mon_thi[1]`). */
+  score_2: number | null;
+  /** Môn thi của cặp trường–ngành (từ `dh_truong_nganh.mon_thi`, tối đa 2 môn hiển thị). */
+  mon_thi: string[];
   /** `ql_hv_truong_nganh.mon_thi_chon` — môn/hình thức đăng thi (khớp catalog `dh_truong_nganh.mon_thi`). */
   mon_thi_chon: string | null;
+  /** Số tháng học tại Sine Art — đồng bộ Quản lý học viên (`created_at` → hôm nay / cuối kỳ HP). */
+  thang_hoc_tai_sine: string | null;
 };
 
 /** Một mốc trong `dh_moc_lich_tuyen_sinh`. */
@@ -325,6 +334,146 @@ function coerceSdt(v: unknown): string | null {
 
 const IN_CHUNK = 200;
 
+/** Tối đa số môn thi có ô điểm riêng trên UI (nghiệp vụ: 1 hoặc 2 môn / ngành). */
+export const DH_EXAM_SCORE_SUBJECT_MAX = 2;
+
+async function fetchMonThiByNganhForTruong(
+  supabase: SupabaseClient,
+  truongId: number,
+  nganhIds: readonly number[],
+): Promise<Map<number, string[]>> {
+  const map = new Map<number, string[]>();
+  const ids = [...new Set(nganhIds.filter((id) => Number.isFinite(id) && id > 0))];
+  if (!ids.length) return map;
+
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const chunk = ids.slice(i, i + IN_CHUNK);
+    const { data, error } = await supabase
+      .from("dh_truong_nganh")
+      .select("nganh_dao_tao, mon_thi")
+      .eq("truong_dai_hoc", truongId)
+      .in("nganh_dao_tao", chunk);
+    if (error) return map;
+    for (const raw of (data ?? []) as Record<string, unknown>[]) {
+      const nid = nIdLoose(raw.nganh_dao_tao);
+      if (nid == null) continue;
+      map.set(nid, parseMonThiArray(raw.mon_thi).slice(0, DH_EXAM_SCORE_SUBJECT_MAX));
+    }
+  }
+  return map;
+}
+
+async function fetchMonThiByTruongNganhPairs(
+  supabase: SupabaseClient,
+  pairs: ReadonlyArray<{ truongId: number; nganhId: number }>,
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  const byTruong = new Map<number, Set<number>>();
+  for (const p of pairs) {
+    if (!Number.isFinite(p.truongId) || p.truongId <= 0) continue;
+    if (!Number.isFinite(p.nganhId) || p.nganhId <= 0) continue;
+    if (!byTruong.has(p.truongId)) byTruong.set(p.truongId, new Set());
+    byTruong.get(p.truongId)!.add(p.nganhId);
+  }
+  for (const [truongId, nganhSet] of byTruong) {
+    const sub = await fetchMonThiByNganhForTruong(supabase, truongId, [...nganhSet]);
+    for (const [nganhId, monThi] of sub) {
+      map.set(`${truongId}__${nganhId}`, monThi);
+    }
+  }
+  return map;
+}
+
+function monThiForStudentRow(
+  monThiByNganh: Map<number, string[]>,
+  monThiByPair: Map<string, string[]>,
+  truongId: number,
+  nganhId: number | null,
+): string[] {
+  if (nganhId == null) return [];
+  return monThiByNganh.get(nganhId) ?? monThiByPair.get(`${truongId}__${nganhId}`) ?? [];
+}
+
+/** Gom kỳ HP theo học viên + tính nhãn «X tháng» (chỉ cho các HV trong danh sách). */
+async function fetchThangHocTaiSineByHvIds(
+  supabase: SupabaseClient,
+  hvIds: readonly number[],
+): Promise<Map<number, string | null>> {
+  const out = new Map<number, string | null>();
+  const ids = [...new Set(hvIds.filter((id) => Number.isFinite(id) && id > 0))];
+  if (!ids.length) return out;
+
+  const createdAtByHv = new Map<number, string | null>();
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const chunk = ids.slice(i, i + IN_CHUNK);
+    const { data, error } = await supabase
+      .from("ql_thong_tin_hoc_vien")
+      .select("id, created_at")
+      .in("id", chunk);
+    if (error) return out;
+    for (const row of (data ?? []) as Record<string, unknown>[]) {
+      const id = nIdLoose(row.id);
+      if (id == null) continue;
+      createdAtByHv.set(
+        id,
+        row.created_at != null ? String(row.created_at) : null,
+      );
+    }
+  }
+
+  const qlIdsByHv = new Map<number, number[]>();
+  const allQlIds: number[] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const chunk = ids.slice(i, i + IN_CHUNK);
+    let from = 0;
+    for (;;) {
+      const { data, error } = await supabase
+        .from("ql_quan_ly_hoc_vien")
+        .select("id, hoc_vien_id")
+        .in("hoc_vien_id", chunk)
+        .range(from, from + STUDENT_PAGE - 1);
+      if (error) return out;
+      const batch = (data ?? []) as Record<string, unknown>[];
+      if (!batch.length) break;
+      for (const r of batch) {
+        const qid = nIdLoose(r.id);
+        const hid = nIdLoose(r.hoc_vien_id);
+        if (qid == null || hid == null) continue;
+        if (!qlIdsByHv.has(hid)) qlIdsByHv.set(hid, []);
+        qlIdsByHv.get(hid)!.push(qid);
+        allQlIds.push(qid);
+      }
+      if (batch.length < STUDENT_PAGE) break;
+      from += STUDENT_PAGE;
+    }
+  }
+
+  const kyMap = await fetchKyByKhoaHocVienIds(supabase, [...new Set(allQlIds)]);
+
+  for (const hvId of ids) {
+    const qlIds = qlIdsByHv.get(hvId) ?? [];
+    const enrollments = qlIds.map((qid) => {
+      const ky = kyMap.get(qid);
+      return {
+        ngay_dau_ky: ky?.ngay_dau_ky ?? null,
+        ngay_cuoi_ky: ky?.ngay_cuoi_ky ?? null,
+      };
+    });
+    out.set(hvId, formatThangHocTaiSineArt(createdAtByHv.get(hvId), enrollments));
+  }
+
+  return out;
+}
+
+function isMissingScore2ColumnError(message: string): boolean {
+  return /score_2/i.test(message) && /column|schema cache/i.test(message);
+}
+
+const QL_HV_TN_STUDENT_SELECT_WITH_SCORE_2 =
+  "id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu, score, score_2, mon_thi_chon";
+const QL_HV_TN_STUDENT_SELECT_LEGACY =
+  "id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu, score, mon_thi_chon";
+
 /**
  * Danh sách nguyện vọng dự thi (`ql_hv_truong_nganh`) — kèm thông tin học viên,
  * tên trường, tên ngành.
@@ -346,7 +495,7 @@ export async function fetchAdminDhStudentsByTruong(
 ): Promise<{ ok: true; rows: AdminDhStudentExamRow[] } | { ok: false; error: string }> {
   let q = supabase
     .from("ql_hv_truong_nganh")
-    .select("id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu, score, mon_thi_chon")
+    .select(QL_HV_TN_STUDENT_SELECT_WITH_SCORE_2)
     .order("nam_thi", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false });
 
@@ -432,6 +581,25 @@ export async function fetchAdminDhStudentsByTruong(
   }
 
   const mapped: AdminDhStudentExamRow[] = [];
+  const monThiByNganh =
+    truongFilterId != null && Number.isFinite(truongFilterId) && truongFilterId > 0
+      ? await fetchMonThiByNganhForTruong(supabase, truongFilterId, ngIds)
+      : new Map<number, string[]>();
+  const monThiByPair =
+    monThiByNganh.size > 0
+      ? new Map<string, string[]>()
+      : await fetchMonThiByTruongNganhPairs(
+          supabase,
+          acc
+            .map((r) => ({
+              truongId: nIdLoose(r.truong_dai_hoc) ?? 0,
+              nganhId: nIdLoose(r.nganh_dao_tao) ?? 0,
+            }))
+            .filter((p) => p.truongId > 0 && p.nganhId > 0),
+        );
+
+  const thangHocByHv = await fetchThangHocTaiSineByHvIds(supabase, hvIds);
+
   for (const raw of acc) {
     const id = nIdLoose(raw.id);
     if (id == null) continue;
@@ -456,7 +624,10 @@ export async function fetchAdminDhStudentsByTruong(
       nam_thi: parseNamThi(raw.nam_thi),
       ghi_chu: typeof raw.ghi_chu === "string" && raw.ghi_chu.trim() ? raw.ghi_chu.trim() : null,
       score: parseExamScore(raw.score),
+      score_2: parseExamScore(raw.score_2),
+      mon_thi: monThiForStudentRow(monThiByNganh, monThiByPair, tid, nid),
       mon_thi_chon: parseMonThiChon(raw.mon_thi_chon),
+      thang_hoc_tai_sine: thangHocByHv.get(hvId) ?? null,
     });
   }
 
@@ -692,30 +863,38 @@ export async function fetchAdminDhStudentsByTruongPaged(
   const page = Math.max(1, Math.trunc(args.page || 1));
   const offset = (page - 1) * pageSize;
 
-  let q = supabase
-    .from("ql_hv_truong_nganh")
-    .select("id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu, score, mon_thi_chon", {
-      count: "exact",
-    })
-    .eq("truong_dai_hoc", args.truongId)
-    .order("nam_thi", { ascending: false, nullsFirst: false })
-    .order("id", { ascending: false })
-    .range(offset, offset + pageSize - 1);
+  const buildPagedQuery = (selectCols: string) => {
+    let q = supabase
+      .from("ql_hv_truong_nganh")
+      .select(selectCols, { count: "exact" })
+      .eq("truong_dai_hoc", args.truongId)
+      .order("nam_thi", { ascending: false, nullsFirst: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + pageSize - 1);
 
-  if (args.nganhId != null && Number.isFinite(args.nganhId) && args.nganhId > 0) {
-    q = q.eq("nganh_dao_tao", args.nganhId);
-  }
-  if (args.namThi != null && Number.isFinite(args.namThi)) {
-    q = q.eq("nam_thi", args.namThi);
-  }
-  if (args.monThiChon != null && String(args.monThiChon).trim() !== "") {
-    q = q.eq("mon_thi_chon", String(args.monThiChon).trim());
+    if (args.nganhId != null && Number.isFinite(args.nganhId) && args.nganhId > 0) {
+      q = q.eq("nganh_dao_tao", args.nganhId);
+    }
+    if (args.namThi != null && Number.isFinite(args.namThi)) {
+      q = q.eq("nam_thi", args.namThi);
+    }
+    if (args.monThiChon != null && String(args.monThiChon).trim() !== "") {
+      q = q.eq("mon_thi_chon", String(args.monThiChon).trim());
+    }
+    return q;
+  };
+
+  let hasScore2Column = true;
+  let result = await buildPagedQuery(QL_HV_TN_STUDENT_SELECT_WITH_SCORE_2);
+  if (result.error && isMissingScore2ColumnError(result.error.message)) {
+    hasScore2Column = false;
+    result = await buildPagedQuery(QL_HV_TN_STUDENT_SELECT_LEGACY);
   }
 
-  const { data, error, count } = await q;
+  const { data, error, count } = result;
   if (error) return { ok: false, error: error.message };
 
-  const acc = ((data ?? []) as Record<string, unknown>[]) ?? [];
+  const acc = ((data ?? []) as unknown as Record<string, unknown>[]) ?? [];
   const total = typeof count === "number" ? count : acc.length;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
@@ -773,6 +952,9 @@ export async function fetchAdminDhStudentsByTruongPaged(
     }
   }
 
+  const monThiByNganh = await fetchMonThiByNganhForTruong(supabase, args.truongId, ngIds);
+  const thangHocByHv = await fetchThangHocTaiSineByHvIds(supabase, hvIds);
+
   const rows: AdminDhStudentExamRow[] = [];
   for (const raw of acc) {
     const id = nIdLoose(raw.id);
@@ -795,7 +977,10 @@ export async function fetchAdminDhStudentsByTruongPaged(
       nam_thi: parseNamThi(raw.nam_thi),
       ghi_chu: typeof raw.ghi_chu === "string" && raw.ghi_chu.trim() ? raw.ghi_chu.trim() : null,
       score: parseExamScore(raw.score),
+      score_2: hasScore2Column ? parseExamScore(raw.score_2) : null,
+      mon_thi: monThiForStudentRow(monThiByNganh, new Map(), args.truongId, nid),
       mon_thi_chon: parseMonThiChon(raw.mon_thi_chon),
+      thang_hoc_tai_sine: thangHocByHv.get(hvId) ?? null,
     });
   }
 

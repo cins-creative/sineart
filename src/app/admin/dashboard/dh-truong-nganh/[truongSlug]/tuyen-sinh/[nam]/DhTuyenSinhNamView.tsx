@@ -4,7 +4,6 @@ import Link from "next/link";
 import { ArrowLeft, CalendarRange, GraduationCap, School } from "lucide-react";
 
 import type {
-  AdminDhMocLichRow,
   AdminDhNganhNamMergedRow,
   AdminDhOverviewStats,
   AdminDhStudentsPagedResult,
@@ -12,7 +11,6 @@ import type {
 } from "@/lib/data/admin-dh-truong-nganh";
 import { cn } from "@/lib/utils";
 
-import DhMocLichTuyenSinhPanel from "../../../_shared/DhMocLichTuyenSinhPanel";
 import DhNganhNamMetricTable from "../../../_shared/DhNganhNamMetricTable";
 import DhPagination from "../../../_shared/DhPagination";
 import DhStatsCards from "../../../_shared/DhStatsCards";
@@ -22,9 +20,6 @@ type Props = {
   truongSlug: string;
   nam: number;
   truong: AdminDhTruongMatched | null;
-  /** Năm có trong hệ thống — dropdown đổi năm trong panel mốc lịch. */
-  yearOptions: number[];
-  milestones: AdminDhMocLichRow[];
   nganhRows: AdminDhNganhNamMergedRow[];
   students: AdminDhStudentsPagedResult | null;
   stats: AdminDhOverviewStats | null;
@@ -38,8 +33,6 @@ export default function DhTuyenSinhNamView({
   truongSlug,
   nam,
   truong,
-  yearOptions,
-  milestones,
   nganhRows,
   students,
   stats,
@@ -123,19 +116,6 @@ export default function DhTuyenSinhNamView({
       ) : null}
 
       <DhStatsCards stats={stats} />
-
-      {!missingServiceRole ? (
-        <DhMocLichTuyenSinhPanel
-          truongId={truong.id}
-          truongTen={truong.ten}
-          namTuyenSinh={nam}
-          yearOptions={yearOptions}
-          rows={milestones}
-          hrefForYear={(y) =>
-            `/admin/dashboard/dh-truong-nganh/${truongSlug}/tuyen-sinh/${y}`
-          }
-        />
-      ) : null}
 
       <section className="flex flex-col gap-2">
         <h2 className="m-0 flex items-center gap-2 text-[15px] font-extrabold text-[#1a1a2e]">

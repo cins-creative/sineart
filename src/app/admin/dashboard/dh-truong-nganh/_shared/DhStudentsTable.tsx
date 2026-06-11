@@ -49,7 +49,7 @@ export default function DhStudentsTable({
   return (
     <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] border-collapse text-left text-[13px]">
+        <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
           <thead>
             <tr className="border-b border-black/[0.06] bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wide text-black/45">
               <th className="min-w-[180px] px-3 py-3 md:px-4">Học viên</th>
@@ -61,8 +61,7 @@ export default function DhStudentsTable({
                 <th className="min-w-[160px] px-3 py-3 md:px-4">Môn / hình thức</th>
               ) : null}
               <th className="whitespace-nowrap px-3 py-3 md:px-4">Năm thi</th>
-              <th className="whitespace-nowrap px-3 py-3 md:px-4">Điểm thi</th>
-              <th className="min-w-[180px] px-3 py-3 md:px-4">Ghi chú</th>
+              <th className="min-w-[140px] whitespace-nowrap px-3 py-3 md:px-4">Điểm thi</th>
             </tr>
           </thead>
           <tbody>
@@ -71,6 +70,14 @@ export default function DhStudentsTable({
                 <td className="align-top px-3 py-3 md:px-4">
                   <div className="font-semibold text-[#1a1a2e]">{s.full_name}</div>
                   <div className="mt-0.5 text-[11px] text-black/40">ID #{s.hoc_vien_id}</div>
+                  {s.thang_hoc_tai_sine ? (
+                    <div
+                      className="mt-0.5 text-[11px] font-semibold text-black/50"
+                      title="Từ ngày tạo tài khoản đến hôm nay (đang học) hoặc đến ngày cuối kỳ học phí (nghỉ)"
+                    >
+                      {s.thang_hoc_tai_sine} tại Sine Art
+                    </div>
+                  ) : null}
                 </td>
                 <td className="align-top px-3 py-3 md:px-4">
                   <div className="flex flex-col gap-0.5 text-[12px]">
@@ -141,16 +148,11 @@ export default function DhStudentsTable({
                   )}
                 </td>
                 <td className="align-top px-3 py-3 md:px-4">
-                  <ScoreCell rowId={s.id} initialScore={s.score} />
-                </td>
-                <td className="align-top px-3 py-3 text-[12px] leading-snug text-black/55 md:px-4">
-                  {s.ghi_chu ? (
-                    <span className="line-clamp-3" title={s.ghi_chu}>
-                      {s.ghi_chu}
-                    </span>
-                  ) : (
-                    "—"
-                  )}
+                  <ExamScoresCell
+                    rowId={s.id}
+                    monThi={s.mon_thi}
+                    scores={[s.score, s.score_2]}
+                  />
                 </td>
               </tr>
             ))}
@@ -234,12 +236,52 @@ function MonThiChonCell({
   );
 }
 
+/**
+ * Ô điểm thi theo môn: 1 hoặc 2 ô tương ứng `dh_truong_nganh.mon_thi`.
+ * Nếu chưa khai báo môn → một ô điểm chung (cột `score`).
+ */
+function ExamScoresCell({
+  rowId,
+  monThi,
+  scores,
+}: {
+  rowId: number;
+  monThi: string[];
+  scores: [number | null, number | null];
+}) {
+  const subjects = monThi.length > 0 ? monThi.slice(0, 2) : [null as string | null];
+
+  return (
+    <div className="flex min-w-[120px] flex-col gap-1.5">
+      {subjects.map((label, idx) => (
+        <div key={`${label ?? "score"}-${idx}`} className="flex flex-col gap-0.5">
+          {label ? (
+            <span className="max-w-[180px] truncate text-[10px] font-semibold leading-tight text-black/45" title={label}>
+              {label}
+            </span>
+          ) : null}
+          <ScoreCell
+            rowId={rowId}
+            subjectIndex={idx === 1 ? 1 : 0}
+            initialScore={scores[idx] ?? null}
+            subjectLabel={label}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ScoreCell({
   rowId,
   initialScore,
+  subjectIndex = 0,
+  subjectLabel,
 }: {
   rowId: number;
   initialScore: number | null;
+  subjectIndex?: 0 | 1;
+  subjectLabel?: string | null;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -282,7 +324,7 @@ function ScoreCell({
     }
     setSaving(true);
     setErr(null);
-    const res = await updateQlHvTruongNganhScore({ rowId, score: next });
+    const res = await updateQlHvTruongNganhScore({ rowId, score: next, subjectIndex });
     setSaving(false);
     if (!res.ok) {
       setErr(res.error);
@@ -298,7 +340,11 @@ function ScoreCell({
       <button
         type="button"
         onClick={startEdit}
-        title="Bấm để nhập / sửa điểm thi"
+        title={
+          subjectLabel
+            ? `Bấm để nhập / sửa điểm — ${subjectLabel}`
+            : "Bấm để nhập / sửa điểm thi"
+        }
         className={cn(
           "group inline-flex min-w-[60px] items-center justify-between gap-1 rounded-md border border-transparent px-2 py-0.5 text-[12px] font-bold transition-colors",
           score != null

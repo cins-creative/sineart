@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  DH_MON_THI_ARRAY_MAX_COUNT,
+  DH_MON_THI_ITEM_MAX_LEN,
+} from "@/lib/agent/dh-exam-profiles";
+
 import { fetchKyByKhoaHocVienIds } from "@/lib/data/hp-thu-hp-chi-tiet-ky";
 
 const PAGE = 1000;
@@ -38,6 +43,12 @@ export type AdminQlhvTruongNganhItem = {
   ten_nganh: string;
   nam_thi: number | null;
   ghi_chu: string | null;
+  /** `ql_hv_truong_nganh.score` — điểm môn 1. */
+  score: number | null;
+  /** `ql_hv_truong_nganh.score_2` — điểm môn 2 (nếu có cột DB). */
+  score_2: number | null;
+  /** Môn thi của cặp trường–ngành (`dh_truong_nganh.mon_thi`). */
+  mon_thi: string[];
 };
 
 export type AdminQlhvLopBrief = {
@@ -70,7 +81,39 @@ export type AdminQlhvBaiTapBrief = {
   thumbnail: string | null;
 };
 
-export function normalizeQlhvTrangThaiTuVan(v: unknown): QlhvTrangThaiTuVan {
+export function parseExamScore(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseMonThiArray(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const x of raw) {
+    if (typeof x !== "string") continue;
+    let t = x.trim();
+    if (!t) continue;
+    if (t.length > DH_MON_THI_ITEM_MAX_LEN) t = t.slice(0, DH_MON_THI_ITEM_MAX_LEN);
+    if (seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+    if (out.length >= DH_MON_THI_ARRAY_MAX_COUNT) break;
+  }
+  return out.slice(0, 2);
+}
+
+function isMissingScore2ColumnError(message: string): boolean {
+  return /score_2/i.test(message) && /column|schema cache/i.test(message);
+}
+
+const QLHV_NV_SELECT_WITH_SCORE_2 =
+  "id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu, score, score_2";
+const QLHV_NV_SELECT_LEGACY =
+  "id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu, score";
+
+function normalizeQlhvTrangThaiTuVan(v: unknown): QlhvTrangThaiTuVan {
   return v === "nghi" ? "nghi" : "dang_hoc";
 }
 
@@ -324,16 +367,30 @@ export async function fetchAdminQuanLyHocVienBundle(supabase: SupabaseClient): P
   const truongNganhByHvId: Record<string, AdminQlhvTruongNganhItem[]> = {};
   const hvIdList = students.map((s) => s.id).filter((id) => id > 0);
   const nvRows: Record<string, unknown>[] = [];
+  let hasScore2Column = true;
   for (let i = 0; i < hvIdList.length; i += IN_CHUNK) {
     const chunk = hvIdList.slice(i, i + IN_CHUNK);
     if (!chunk.length) break;
-    const nvRes = await supabase
+    const firstRes = await supabase
       .from("ql_hv_truong_nganh")
-      .select("id, hoc_vien, truong_dai_hoc, nganh_dao_tao, nam_thi, ghi_chu")
+      .select(QLHV_NV_SELECT_WITH_SCORE_2)
       .in("hoc_vien", chunk)
       .order("id", { ascending: true });
-    if (nvRes.error) break;
-    nvRows.push(...((nvRes.data ?? []) as Record<string, unknown>[]));
+    let batchRows: Record<string, unknown>[] = [];
+    if (firstRes.error && isMissingScore2ColumnError(firstRes.error.message)) {
+      hasScore2Column = false;
+      const legacyRes = await supabase
+        .from("ql_hv_truong_nganh")
+        .select(QLHV_NV_SELECT_LEGACY)
+        .in("hoc_vien", chunk)
+        .order("id", { ascending: true });
+      if (legacyRes.error) break;
+      batchRows = (legacyRes.data ?? []) as Record<string, unknown>[];
+    } else {
+      if (firstRes.error) break;
+      batchRows = (firstRes.data ?? []) as Record<string, unknown>[];
+    }
+    nvRows.push(...batchRows);
   }
 
   const trIds = [...new Set(nvRows.map((r) => nId(r.truong_dai_hoc)).filter((x): x is number => x != null))];
@@ -359,6 +416,22 @@ export async function fetchAdminQuanLyHocVienBundle(supabase: SupabaseClient): P
     }
   }
 
+  const monThiByPair = new Map<string, string[]>();
+  if (trIds.length) {
+    const { data: pairMon, error: pairMonErr } = await supabase
+      .from("dh_truong_nganh")
+      .select("truong_dai_hoc, nganh_dao_tao, mon_thi")
+      .in("truong_dai_hoc", trIds);
+    if (!pairMonErr && pairMon) {
+      for (const raw of pairMon as Record<string, unknown>[]) {
+        const tid = nId(raw.truong_dai_hoc);
+        const nid = nId(raw.nganh_dao_tao);
+        if (tid == null || nid == null) continue;
+        monThiByPair.set(`${tid}__${nid}`, parseMonThiArray(raw.mon_thi));
+      }
+    }
+  }
+
   for (const r of nvRows) {
     const hv = nId(r.hoc_vien);
     const id = nId(r.id);
@@ -375,6 +448,9 @@ export async function fetchAdminQuanLyHocVienBundle(supabase: SupabaseClient): P
       ten_nganh: nid ? ngMap.get(nid) ?? "—" : "—",
       nam_thi: nt,
       ghi_chu: r.ghi_chu != null ? String(r.ghi_chu).trim() || null : null,
+      score: parseExamScore(r.score),
+      score_2: hasScore2Column ? parseExamScore(r.score_2) : null,
+      mon_thi: tid != null && nid != null ? monThiByPair.get(`${tid}__${nid}`) ?? [] : [],
     };
     const key = String(hv);
     if (!truongNganhByHvId[key]) truongNganhByHvId[key] = [];

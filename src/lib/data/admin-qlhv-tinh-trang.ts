@@ -50,6 +50,61 @@ export function computeOverallStatus(khs: AdminQlhvEnrollment[]): string {
   return "Nghỉ";
 }
 
+export type EnrollmentKyPartial = Pick<AdminQlhvEnrollment, "ngay_dau_ky" | "ngay_cuoi_ky">;
+
+export function isoDateFromCreatedAt(v: string | null | undefined): string | null {
+  if (v == null || String(v).trim() === "") return null;
+  const ymd = String(v).trim().slice(0, 10);
+  return ISO_YMD.test(ymd) ? ymd : null;
+}
+
+export function todayIsoDateLocal(): string {
+  const t = new Date();
+  const y = t.getFullYear();
+  const m = String(t.getMonth() + 1).padStart(2, "0");
+  const d = String(t.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function maxNgayCuoiKyFromKyRows(khs: EnrollmentKyPartial[]): string | null {
+  let maxD: string | null = null;
+  for (const k of khs) {
+    const d = (k.ngay_cuoi_ky ?? "").trim().slice(0, 10);
+    if (!ISO_YMD.test(d)) continue;
+    if (!maxD || d > maxD) maxD = d;
+  }
+  return maxD;
+}
+
+/** Số tháng lịch giữa hai ngày YYYY-MM-DD (chỉ phần năm/tháng). */
+export function monthsBetweenCalendarYmd(start: string, end: string): number | null {
+  try {
+    const e = new Date(end);
+    const s = new Date(start);
+    const m = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+    return m >= 0 ? m : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Nhãn «X tháng» — đồng bộ `QuanLyHocVienView.thangHocTaiSineArt`.
+ * Từ ngày tạo tài khoản → hôm nay (đang học) hoặc max ngày cuối kỳ HP (nghỉ).
+ */
+export function formatThangHocTaiSineArt(
+  createdAt: string | null | undefined,
+  enrollments: EnrollmentKyPartial[],
+): string | null {
+  const start = isoDateFromCreatedAt(createdAt);
+  if (!start) return null;
+  const tt = computeOverallStatus(enrollments as AdminQlhvEnrollment[]);
+  const end = tt === "Nghỉ" ? maxNgayCuoiKyFromKyRows(enrollments) : todayIsoDateLocal();
+  if (!end) return null;
+  const m = monthsBetweenCalendarYmd(start, end);
+  return m != null ? `${m} tháng` : null;
+}
+
 /**
  * Ít nhất một ghi danh và mọi khoá đều hết kỳ HP — không còn lớp «Đang học» hay «Chưa học».
  * (Từng khoá đã có kỳ thì ngày học còn lại = 0; khoá không kỳ làm tổng trạng thái khác «Nghỉ».)

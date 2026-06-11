@@ -4,8 +4,6 @@ import {
   DH_STUDENTS_PAGE_SIZE,
   fetchAdminDhStudentsByTruongPaged,
   fetchAdminDhTruongOverviewStats,
-  fetchDhDistinctTuyenSinhYearsForTruong,
-  fetchDhMocLichTuyenSinh,
   fetchDhTruongNganhNamMerged,
   findDhTruongBySlug,
 } from "@/lib/data/admin-dh-truong-nganh";
@@ -43,8 +41,6 @@ export default async function DhTuyenSinhNamPageData({
         truongSlug={truongSlug}
         nam={nam}
         truong={null}
-        yearOptions={[]}
-        milestones={[]}
         nganhRows={[]}
         students={null}
         stats={null}
@@ -62,8 +58,6 @@ export default async function DhTuyenSinhNamPageData({
         truongSlug={truongSlug}
         nam={nam}
         truong={null}
-        yearOptions={[]}
-        milestones={[]}
         nganhRows={[]}
         students={null}
         stats={null}
@@ -76,9 +70,7 @@ export default async function DhTuyenSinhNamPageData({
   if (!truongRes.row) notFound();
   const truong = truongRes.row;
 
-  const [yearsRes, mocRes, mergedRes, statsRes, pagedRes] = await Promise.all([
-    fetchDhDistinctTuyenSinhYearsForTruong(supabase, truong.id),
-    fetchDhMocLichTuyenSinh(supabase, truong.id, nam),
+  const [mergedRes, statsRes, pagedRes] = await Promise.all([
     fetchDhTruongNganhNamMerged(supabase, truong.id, nam),
     fetchAdminDhTruongOverviewStats(supabase, {
       truongId: truong.id,
@@ -94,31 +86,23 @@ export default async function DhTuyenSinhNamPageData({
     }),
   ]);
 
-  const yearOptions = yearsRes.ok ? yearsRes.years : [nam];
-  const milestones = mocRes.ok ? mocRes.rows : [];
   const nganhRows = mergedRes.ok ? mergedRes.rows : [];
   const stats = statsRes.ok ? statsRes.stats : null;
   const students = pagedRes.ok ? pagedRes.result : null;
 
-  const loadError = !yearsRes.ok
-    ? yearsRes.error
-    : !mocRes.ok
-      ? mocRes.error
-      : !mergedRes.ok
-        ? mergedRes.error
-        : !statsRes.ok
-          ? statsRes.error
-          : !pagedRes.ok
-            ? pagedRes.error
-            : null;
+  const loadError = !mergedRes.ok
+    ? mergedRes.error
+    : !statsRes.ok
+      ? statsRes.error
+      : !pagedRes.ok
+        ? pagedRes.error
+        : null;
 
   return (
     <DhTuyenSinhNamView
       truongSlug={truongSlug}
       nam={nam}
       truong={truong}
-      yearOptions={yearOptions}
-      milestones={milestones}
       nganhRows={nganhRows}
       students={students}
       stats={stats}

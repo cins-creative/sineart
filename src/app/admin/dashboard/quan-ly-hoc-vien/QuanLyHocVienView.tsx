@@ -853,6 +853,26 @@ function EnrollmentCard({
   );
 }
 
+/** Ngày bắt đầu hiển thị: ưu tiên `ngay_bat_dau` hồ sơ, không có thì `created_at`. */
+function resolveNgayBatDauDisplay(student: AdminQlhvStudent): string | null {
+  const fromProfile = isoDateInput(student.ngay_bat_dau);
+  if (fromProfile) return fromProfile;
+  return isoDateFromCreatedAt(student.created_at);
+}
+
+/** Ngày kết thúc đã lưu trên hồ sơ (nếu có). */
+function resolveNgayKetThucProfile(student: AdminQlhvStudent): string | null {
+  return isoDateInput(student.ngay_ket_thuc);
+}
+
+const hvDateClickableProps = {
+  role: "button" as const,
+  tabIndex: 0,
+  title: "Bấm để sửa ngày",
+  className:
+    "cursor-pointer rounded px-0.5 -mx-0.5 transition-colors hover:bg-[#BC8AF9]/10 hover:text-[#BC8AF9]",
+};
+
 function HvInfoRow({
   label,
   value,
@@ -860,14 +880,18 @@ function HvInfoRow({
 }: {
   label: string;
   value: ReactNode;
-  valueProps?: ComponentPropsWithoutRef<"div"> & Record<string, string | undefined>;
+  valueProps?: ComponentPropsWithoutRef<"div"> & { "data-supabase-column"?: string };
 }) {
+  const { className: valueClassName, ...restValueProps } = valueProps ?? {};
   return (
     <div className="flex min-w-0 items-start gap-2 border-b border-[#f0f0f0] py-1 last:border-0">
       <div className="w-[5.5rem] shrink-0 pt-px text-[9px] font-bold uppercase leading-tight text-[#AAA]">{label}</div>
       <div
-        className="min-w-0 flex-1 break-words text-left text-[12px] font-semibold leading-snug text-gray-800"
-        {...valueProps}
+        className={cn(
+          "min-w-0 flex-1 break-words text-left text-[12px] font-semibold leading-snug text-gray-800",
+          valueClassName,
+        )}
+        {...restValueProps}
       >
         {value}
       </div>
@@ -1078,15 +1102,7 @@ function TruongNganhRowEditor({
   }
 
   if (!profileEditing) {
-    return (
-      <li className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-xs">
-        <p className="m-0 font-bold text-slate-900">{nv.ten_truong}</p>
-        <p className="m-0 mt-0.5 text-slate-600">{nv.ten_nganh}</p>
-        {nv.nam_thi != null ? <p className="m-0 mt-1 text-[10px] font-semibold text-slate-500">Năm thi: {nv.nam_thi}</p> : null}
-        {nv.ghi_chu ? <p className="m-0 mt-1 text-[10px] text-amber-800">📝 {nv.ghi_chu}</p> : null}
-        <NvSineArtCountBadges nv={nv} stats={nvStats} />
-      </li>
-    );
+    return <NvReadOnlyCard nv={nv} nvStats={nvStats} />;
   }
 
   return (
@@ -1274,32 +1290,117 @@ function NvSineArtCountBadges({
   const pairYear = pairKey && yr != null ? stats.pairByYear[`${tr}__${ng}__${yr}`] ?? 0 : null;
 
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-1">
       <span
-        className="inline-flex items-center gap-1 rounded-md bg-[#BC8AF9]/12 px-1.5 py-0.5 text-[10px] font-bold text-[#6b3fbf]"
+        className="inline-flex max-w-full items-center gap-1 rounded-md bg-[#BC8AF9]/10 px-1.5 py-0.5 text-[9px] font-bold text-[#6b3fbf]"
         title="Số học viên Sine Art đã đăng ký thi trường này"
       >
-        Trường: {truongTotal} HV
-        {truongYear != null && yr != null ? (
-          <span className="font-semibold text-[#6b3fbf]/75">
-            · {truongYear}/{yr}
-          </span>
-        ) : null}
+        <span className="shrink-0 text-[#6b3fbf]/65">Trường</span>
+        <span className="truncate tabular-nums">
+          {truongTotal} HV
+          {truongYear != null && yr != null ? (
+            <span className="font-semibold text-[#6b3fbf]/60"> · {truongYear}/{yr}</span>
+          ) : null}
+        </span>
       </span>
       {pairTotal != null ? (
         <span
-          className="inline-flex items-center gap-1 rounded-md bg-[#F8A568]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#c2410c]"
+          className="inline-flex max-w-full items-center gap-1 rounded-md bg-[#F8A568]/12 px-1.5 py-0.5 text-[9px] font-bold text-[#c2410c]"
           title="Số học viên Sine Art đã đăng ký đúng (trường, ngành) này"
         >
-          Ngành: {pairTotal} HV
-          {pairYear != null && yr != null ? (
-            <span className="font-semibold text-[#c2410c]/75">
-              · {pairYear}/{yr}
-            </span>
-          ) : null}
+          <span className="shrink-0 text-[#c2410c]/65">Ngành</span>
+          <span className="truncate tabular-nums">
+            {pairTotal} HV
+            {pairYear != null && yr != null ? (
+              <span className="font-semibold text-[#c2410c]/60"> · {pairYear}/{yr}</span>
+            ) : null}
+          </span>
         </span>
       ) : null}
     </div>
+  );
+}
+
+/** Điểm thi theo môn — đồng bộ dữ liệu `DhStudentsTable` / `ql_hv_truong_nganh`. */
+function NvExamScoresSummary({ nv }: { nv: AdminQlhvTruongNganhItem }) {
+  const scores: [number | null, number | null] = [nv.score, nv.score_2];
+  if (scores.every((s) => s == null)) return null;
+
+  const subjects = nv.mon_thi.length > 0 ? nv.mon_thi.slice(0, 2) : [null as string | null, null];
+  const items = subjects
+    .map((label, idx) => ({ label, score: scores[idx] ?? null }))
+    .filter((line) => line.score != null);
+
+  if (!items.length) {
+    const single = scores.find((s) => s != null);
+    if (single == null) return null;
+    return (
+      <div className="flex flex-wrap gap-1">
+        <NvScoreChip label="Điểm" score={single} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {items.map((line, idx) => (
+        <NvScoreChip key={`${line.label ?? "score"}-${idx}`} label={line.label ?? "Điểm"} score={line.score!} />
+      ))}
+    </div>
+  );
+}
+
+function NvScoreChip({ label, score }: { label: string; score: number }) {
+  return (
+    <span
+      className="inline-flex min-w-0 max-w-full items-baseline gap-1 rounded-md border border-[#F8A568]/20 bg-[#F8A568]/8 px-1.5 py-0.5"
+      title={`${label}: ${score}`}
+    >
+      <span className="truncate text-[9px] font-semibold text-[#64748b]">{label}</span>
+      <span className="shrink-0 text-[12px] font-extrabold leading-none tabular-nums text-[#c2410c]">{score}</span>
+    </span>
+  );
+}
+
+/** Card nguyện vọng (chế độ xem) — dùng chung cho Luyện thi và loại khóa khác. */
+function NvReadOnlyCard({ nv, nvStats }: { nv: AdminQlhvTruongNganhItem; nvStats: QlhvNvStats }) {
+  const hasScores = nv.score != null || nv.score_2 != null;
+  const hasStats = nv.truong_dai_hoc != null && nv.truong_dai_hoc > 0;
+  const hasFooter = hasScores || hasStats || nv.ghi_chu;
+
+  return (
+    <li className="rounded-lg border border-black/[0.06] bg-[#fafafa]/80 px-2.5 py-2">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="m-0 truncate text-[12px] font-bold leading-tight text-[#1a1a2e]" title={nv.ten_truong}>
+            {nv.ten_truong}
+          </p>
+          <p className="m-0 truncate text-[10px] font-medium text-[#64748b]" title={nv.ten_nganh}>
+            {nv.ten_nganh}
+          </p>
+        </div>
+        {nv.nam_thi != null ? (
+          <span className="shrink-0 rounded bg-[#BC8AF9]/12 px-1.5 py-px text-[9px] font-bold tabular-nums text-[#6b3fbf]">
+            {nv.nam_thi}
+          </span>
+        ) : null}
+      </div>
+
+      {hasFooter ? (
+        <div className={cn("space-y-1", hasScores || nv.ghi_chu ? "mt-1.5" : "mt-1")}>
+          <NvExamScoresSummary nv={nv} />
+
+          {nv.ghi_chu ? (
+            <p className="m-0 flex items-start gap-1 rounded-md bg-amber-50/90 px-1.5 py-1 text-[9px] font-medium leading-snug text-amber-900">
+              <BookOpen size={10} strokeWidth={2.25} className="mt-px shrink-0" aria-hidden />
+              <span className="min-w-0 break-words">{nv.ghi_chu}</span>
+            </p>
+          ) : null}
+
+          <NvSineArtCountBadges nv={nv} stats={nvStats} />
+        </div>
+      ) : null}
+    </li>
   );
 }
 
@@ -1394,17 +1495,9 @@ function QlhvNguyenVongAdminBlock({
         nvList.length === 0 ? (
           <p className="m-0 py-1 text-center text-xs font-medium text-slate-400">Chưa khai báo trường / ngành</p>
         ) : (
-          <ul className="m-0 list-none space-y-2 p-0">
+          <ul className="m-0 list-none space-y-2.5 p-0">
             {nvList.map((nv) => (
-              <li key={nv.id} className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-xs">
-                <p className="m-0 font-bold text-slate-900">{nv.ten_truong}</p>
-                <p className="m-0 mt-0.5 text-slate-600">{nv.ten_nganh}</p>
-                {nv.nam_thi != null ? (
-                  <p className="m-0 mt-1 text-[10px] font-semibold text-slate-500">Năm thi: {nv.nam_thi}</p>
-                ) : null}
-                {nv.ghi_chu ? <p className="m-0 mt-1 text-[10px] text-amber-800">📝 {nv.ghi_chu}</p> : null}
-                <NvSineArtCountBadges nv={nv} stats={nvStats} />
-              </li>
+              <NvReadOnlyCard key={nv.id} nv={nv} nvStats={nvStats} />
             ))}
           </ul>
         )
@@ -1556,7 +1649,8 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
   ref
 ) {
   const fb = student.facebook?.trim() || "";
-  const ngayBatDauTaiKhoan = isoDateFromCreatedAt(student.created_at);
+  const ngayBatDauHienThi = resolveNgayBatDauDisplay(student);
+  const ngayKetThucProfile = resolveNgayKetThucProfile(student);
   const ngayKetThucTinh = ngayKetThucHienThi(enrollments);
   const soThangTaiSine = thangHocTaiSineArt(student.created_at, enrollments);
 
@@ -1568,6 +1662,12 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
   const [facebook, setFacebook] = useState(student.facebook ?? "");
   const [sex, setSex] = useState(student.sex ?? "");
   const [loai, setLoai] = useState(student.loai_khoa_hoc ?? "");
+  const [nbd, setNbd] = useState(
+    () => resolveNgayBatDauDisplay(student) ?? "",
+  );
+  const [nkt, setNkt] = useState(
+    () => resolveNgayKetThucProfile(student) ?? ngayKetThucTinh ?? "",
+  );
   const [namThi, setNamThi] = useState(student.nam_thi != null ? String(student.nam_thi) : "");
   const [saveBusy, setSaveBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
@@ -1582,6 +1682,8 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
       setFacebook(student.facebook ?? "");
       setSex(student.sex ?? "");
       setLoai(student.loai_khoa_hoc ?? "");
+      setNbd(resolveNgayBatDauDisplay(student) ?? "");
+      setNkt(resolveNgayKetThucProfile(student) ?? ngayKetThucHienThi(enrollments) ?? "");
       setNamThi(student.nam_thi != null ? String(student.nam_thi) : "");
       setFormErr(null);
     });
@@ -1595,16 +1697,16 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
     setFacebook(student.facebook ?? "");
     setSex(student.sex ?? "");
     setLoai(student.loai_khoa_hoc ?? "");
+    setNbd(resolveNgayBatDauDisplay(student) ?? "");
+    setNkt(resolveNgayKetThucProfile(student) ?? ngayKetThucHienThi(enrollments) ?? "");
     setNamThi(student.nam_thi != null ? String(student.nam_thi) : "");
     setFormErr(null);
-  }, [student]);
+  }, [student, enrollments]);
 
   const saveProfile = useCallback(async (): Promise<boolean> => {
     setSaveBusy(true);
     setFormErr(null);
     const namNum = namThi.trim() === "" ? null : Number(namThi);
-    const nbd = isoDateInput(student.ngay_bat_dau).trim();
-    const nkt = isoDateInput(student.ngay_ket_thuc).trim();
     const payload = {
       full_name: full_name.trim(),
       email: email.trim() ? normalizeHocVienEmail(email) : null,
@@ -1612,8 +1714,8 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
       facebook: facebook.trim() || null,
       sex: sex.trim() || null,
       loai_khoa_hoc: loai.trim() || null,
-      ngay_bat_dau: nbd || null,
-      ngay_ket_thuc: nkt || null,
+      ngay_bat_dau: nbd.trim() || null,
+      ngay_ket_thuc: nkt.trim() || null,
       nam_thi: namNum != null && Number.isFinite(namNum) ? Math.trunc(namNum) : null,
     };
     const r = await updateHocVienProfile(student.id, payload);
@@ -1627,14 +1729,14 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
     return true;
   }, [
     student.id,
-    student.ngay_bat_dau,
-    student.ngay_ket_thuc,
     full_name,
     email,
     sdt,
     facebook,
     sex,
     loai,
+    nbd,
+    nkt,
     namThi,
     onProfileEditingChange,
     onProfileSaved,
@@ -1698,17 +1800,38 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
             <HvInfoRow label="Loại khoá" value={student.loai_khoa_hoc?.trim() || "—"} />
             <HvInfoRow
               label="Ngày bắt đầu"
-              value={ngayBatDauTaiKhoan ? fmtDate(ngayBatDauTaiKhoan) : "—"}
+              value={ngayBatDauHienThi ? fmtDate(ngayBatDauHienThi) : "—"}
+              valueProps={{
+                ...hvDateClickableProps,
+                onClick: () => onProfileEditingChange(true),
+                onKeyDown: (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onProfileEditingChange(true);
+                  }
+                },
+              }}
             />
             <HvInfoRow
               label="Ngày kết thúc"
               value={(() => {
+                if (ngayKetThucProfile) return fmtDate(ngayKetThucProfile);
                 const overall = computeOverallStatus(enrollments);
                 if (ngayKetThucTinh) return fmtDate(ngayKetThucTinh);
                 if (overall === "Đang học") return "Đang học";
                 if (overall === "Chưa học") return "Chưa học";
                 return "—";
               })()}
+              valueProps={{
+                ...hvDateClickableProps,
+                onClick: () => onProfileEditingChange(true),
+                onKeyDown: (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onProfileEditingChange(true);
+                  }
+                },
+              }}
             />
             <HvInfoRow label="Số tháng học" value={soThangTaiSine} />
             <HvInfoRow label="Năm thi" value={student.nam_thi != null ? String(student.nam_thi) : "—"} />
@@ -1779,6 +1902,28 @@ const StudentDetailBody = forwardRef<StudentDetailBodyHandle, StudentDetailBodyP
                     </option>
                   ))}
                 </select>
+              </label>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="block text-[9px] font-bold uppercase text-slate-400">
+                Ngày bắt đầu
+                <input
+                  type="date"
+                  value={nbd}
+                  disabled={saveBusy}
+                  onChange={(e) => setNbd(e.target.value)}
+                  className={cn(inpProfile, "bg-white px-2")}
+                />
+              </label>
+              <label className="block text-[9px] font-bold uppercase text-slate-400">
+                Ngày kết thúc
+                <input
+                  type="date"
+                  value={nkt}
+                  disabled={saveBusy}
+                  onChange={(e) => setNkt(e.target.value)}
+                  className={cn(inpProfile, "bg-white px-2")}
+                />
               </label>
             </div>
             <p className="m-0 text-[10px] text-slate-400">

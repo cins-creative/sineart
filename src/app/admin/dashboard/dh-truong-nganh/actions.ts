@@ -94,6 +94,8 @@ export async function updateDhTruongNganhRow(payload: {
 export async function updateQlHvTruongNganhScore(payload: {
   rowId: number;
   score: number | null;
+  /** 0 = `score` (môn 1), 1 = `score_2` (môn 2). Mặc định 0. */
+  subjectIndex?: 0 | 1;
 }): Promise<DhTnUpdateState> {
   const session = await getAdminSessionOrNull();
   if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
@@ -102,6 +104,8 @@ export async function updateQlHvTruongNganhScore(payload: {
   if (!Number.isFinite(rowId) || rowId <= 0) {
     return { ok: false, error: "Dòng nguyện vọng không hợp lệ." };
   }
+
+  const subjectIndex = payload.subjectIndex === 1 ? 1 : 0;
 
   let scoreToSave: number | null = null;
   if (payload.score != null) {
@@ -120,12 +124,20 @@ export async function updateQlHvTruongNganhScore(payload: {
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
 
-  const { error } = await supabase
-    .from("ql_hv_truong_nganh")
-    .update({ score: scoreToSave })
-    .eq("id", rowId);
+  const patch = subjectIndex === 1 ? { score_2: scoreToSave } : { score: scoreToSave };
 
-  if (error) return { ok: false, error: error.message };
+  const { error } = await supabase.from("ql_hv_truong_nganh").update(patch).eq("id", rowId);
+
+  if (error) {
+    if (subjectIndex === 1 && /score_2/i.test(error.message) && /column|schema cache/i.test(error.message)) {
+      return {
+        ok: false,
+        error:
+          "Chưa có cột score_2 trong DB. Chạy scripts/sql/add-ql-hv-truong-nganh-score-2.sql trong Supabase SQL Editor.",
+      };
+    }
+    return { ok: false, error: error.message };
+  }
 
   revalidateDhSlugRoutes();
   return { ok: true };

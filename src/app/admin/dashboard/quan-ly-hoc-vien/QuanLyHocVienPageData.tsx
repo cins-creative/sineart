@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 
 import QuanLyHocVienBootstrap from "@/app/admin/dashboard/quan-ly-hoc-vien/QuanLyHocVienBootstrap";
 import { staffBelongsToTuVanPhong } from "@/lib/admin/dashboard-nav-visibility";
-import { adminStaffCanEditTrangThaiTuVan } from "@/lib/admin/staff-mutation-access";
+import {
+  adminStaffCanEditTrangThaiTuVan,
+  adminStaffCanViewSepayTuVanNotifications,
+} from "@/lib/admin/staff-mutation-access";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
 import { fetchDhNguyenVongCatalog } from "@/lib/donghocphi/dh-catalog";
 import {
@@ -46,6 +49,10 @@ export default async function QuanLyHocVienPageData() {
     phongTenPhongs,
     tenBans,
   });
+  const showSepayTuVanNotifications = adminStaffCanViewSepayTuVanNotifications({
+    vai_tro: profile.vai_tro,
+    phongTenPhongs,
+  });
 
   /** Đổi theo từng request RSC (kể cả `router.refresh()`) — client dùng để refetch bundle. */
   // eslint-disable-next-line react-hooks/purity -- `Date.now` cố ý: không cần idempotent giữa các request
@@ -59,6 +66,7 @@ export default async function QuanLyHocVienPageData() {
       dhpShowExtraVndDiscount={dhpShowExtraVndDiscount}
       initialHtbtCapToc={initialHtbtCapToc}
       canEditTrangThaiTuVan={canEditTrangThaiTuVan}
+      showSepayTuVanNotifications={showSepayTuVanNotifications}
     />
   );
 }

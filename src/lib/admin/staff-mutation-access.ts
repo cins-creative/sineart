@@ -74,6 +74,15 @@ export function adminStaffCanAccessAgentPage(vaiTro: string | null | undefined):
   return v === "admin" || v === "quan_ly" || v === "tu_van";
 }
 
+/** Thông báo chuyển khoản SePay trên Quản lý học viên — chỉ phòng / vai trò tư vấn. */
+export function adminStaffCanViewSepayTuVanNotifications(staff: {
+  vai_tro?: string | null;
+  phongTenPhongs: readonly string[];
+}): boolean {
+  if (normalizeStaffVaiTro(staff.vai_tro) === "tu_van") return true;
+  return staffBelongsToTuVanPhong(staff.phongTenPhongs);
+}
+
 /** Xem dashboard hồ sơ `/admin/dashboard/ho-so-ca-nhan/[id]` — bản thân hoặc admin/quản lý. */
 export function adminStaffCanViewStaffPersonalDashboard(
   vaiTro: string | null | undefined,

@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 
 import { useAdminDashboardAbilities } from "@/app/admin/dashboard/_components/AdminDashboardAbilitiesProvider";
 import AdminDongHocPhiModal from "@/app/admin/dashboard/quan-ly-hoc-vien/AdminDongHocPhiModal";
+import SepayTransferNotification from "@/app/admin/dashboard/quan-ly-hoc-vien/SepayTransferNotification";
 import type {
   AdminQlhvBaiTapBrief,
   AdminQlhvEnrollment,
@@ -121,6 +122,8 @@ type Props = {
   initialHtbtCapToc: boolean;
   /** Ban Vận Hành / admin — chỉnh `trang_thai_tu_van`. */
   canEditTrangThaiTuVan: boolean;
+  /** Chỉ tư vấn viên — thông báo chuyển khoản SePay. */
+  showSepayTuVanNotifications: boolean;
 };
 
 type SortDir = "asc" | "desc" | null;
@@ -1964,6 +1967,7 @@ export default function QuanLyHocVienView({
   dhpShowExtraVndDiscount,
   initialHtbtCapToc,
   canEditTrangThaiTuVan,
+  showSepayTuVanNotifications,
 }: Props) {
   const router = useRouter();
   const { canDelete: staffMayDeleteHocVien } = useAdminDashboardAbilities();
@@ -2423,6 +2427,9 @@ export default function QuanLyHocVienView({
               <h1 className="m-0 text-[16px] font-bold tracking-tight text-[#323232]">Quản lý học viên</h1>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
+              {showSepayTuVanNotifications ? (
+                <SepayTransferNotification staffId={adminStaffId} />
+              ) : null}
               <div
                 className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1 shadow-sm"
                 title="Bật: mọi học viên xem được mọi bài / video bài giảng trong hệ thống bài tập. Tắt: khóa theo tiến độ bài tập như hiện tại."

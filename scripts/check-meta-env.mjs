@@ -96,7 +96,25 @@ const basic = await graphGet(`/${pageId}`, { fields: "name,fan_count", access_to
 if (basic.error) {
   console.log("META API: FAIL");
   console.log("  code:", basic.error.code);
-  console.log("  message:", String(basic.error.message).replace(/EAA[A-Za-z0-9+/=_-]{20,}/g, "[token]"));
+  console.log(
+    "  message:",
+    String(basic.error.message).replace(/EAA[A-Za-z0-9+/=_-]{20,}/g, "[token]"),
+  );
+  const debugFail = await graphGet("/debug_token", { input_token: envToken, access_token: envToken });
+  const d = debugFail.data ?? {};
+  if (d.type) console.log("  token type:", d.type);
+  if (d.expires_at != null) {
+    const exp =
+      d.expires_at === 0
+        ? "never (System User — không hết hạn)"
+        : new Date(d.expires_at * 1000).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+    console.log("  expires_at:", exp);
+  }
+  if (d.type === "USER" && d.expires_at && d.expires_at > 0) {
+    console.log("");
+    console.log("TIP: Đây là User token tạm (~1–2 giờ) từ Graph API Explorer — KHÔNG phải System User.");
+    console.log("     Tạo token trong Business Manager → System users → Generate → chọn Never expire.");
+  }
   process.exit(1);
 }
 console.log("META API: OK");
@@ -117,6 +135,13 @@ console.log("  page token length:", token.length);
 const debugJson = await graphGet("/debug_token", { input_token: token, access_token: token });
 const scopes = debugJson.data?.scopes ?? [];
 console.log("  scopes:", scopes.join(", ") || "(none)");
+if (debugJson.data?.expires_at != null) {
+  const exp =
+    debugJson.data.expires_at === 0
+      ? "never"
+      : new Date(debugJson.data.expires_at * 1000).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  console.log("  page token expires:", exp);
+}
 if (!scopes.includes("read_insights")) {
   console.log("WARN: thiếu read_insights — dashboard Meta sẽ toàn 0. Thêm quyền trong App + Generate token lại.");
   process.exit(2);

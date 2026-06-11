@@ -49,7 +49,7 @@ export default function DhStudentsTable({
   return (
     <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
+        <table className="w-full min-w-[820px] border-collapse text-left text-[13px]">
           <thead>
             <tr className="border-b border-black/[0.06] bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wide text-black/45">
               <th className="min-w-[180px] px-3 py-3 md:px-4">Học viên</th>
@@ -62,6 +62,7 @@ export default function DhStudentsTable({
               ) : null}
               <th className="whitespace-nowrap px-3 py-3 md:px-4">Năm thi</th>
               <th className="min-w-[140px] whitespace-nowrap px-3 py-3 md:px-4">Điểm thi</th>
+              <th className="min-w-[180px] px-3 py-3 md:px-4">Ghi chú</th>
             </tr>
           </thead>
           <tbody>
@@ -153,6 +154,15 @@ export default function DhStudentsTable({
                     monThi={s.mon_thi}
                     scores={[s.score, s.score_2]}
                   />
+                </td>
+                <td className="align-top px-3 py-3 text-[12px] leading-snug text-black/55 md:px-4">
+                  {s.ghi_chu ? (
+                    <span className="line-clamp-3" title={s.ghi_chu}>
+                      {s.ghi_chu}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
                 </td>
               </tr>
             ))}

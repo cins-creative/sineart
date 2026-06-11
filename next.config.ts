@@ -51,6 +51,11 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      {
+        source: "/admin/dashboard/dh-truong-nganh/:truongSlug/tuyen-sinh/:nam",
+        destination: "/admin/dashboard/dh-truong-nganh/:truongSlug?nam=:nam",
+        permanent: true,
+      },
       /* Blog id-prefix → slug sạch: xem src/proxy.ts (next/config không nhận pattern an toàn cho một segment) */
       {
         source: "/hoc-thu",

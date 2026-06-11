@@ -232,8 +232,6 @@ export default function DhPairDetailView({
       <DhStudentsTable
         rows={students?.rows ?? []}
         showNganhColumn={false}
-        showMonThiChonColumn
-        monThiOptions={catalog.mon_thi}
         emptyText={
           totalRows === 0
             ? `Chưa có học viên nào${monThiFilter != null ? ` (môn «${monThiFilter}»)` : ""} thi ${nganh.ten} — ${truong.ten}${namThiFilter != null ? ` vào năm ${namThiFilter}` : ""}.`

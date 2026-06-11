@@ -64,8 +64,11 @@ export type AdminDhStudentExamRow = {
   mon_thi: string[];
   /** `ql_hv_truong_nganh.mon_thi_chon` — môn/hình thức đăng thi (khớp catalog `dh_truong_nganh.mon_thi`). */
   mon_thi_chon: string | null;
-  /** Số tháng học tại Sine Art — đồng bộ Quản lý học viên (`created_at` → hôm nay / cuối kỳ HP). */
+  /** Số tháng học tại Sine Art — đồng bộ Quản lý học viên. */
   thang_hoc_tai_sine: string | null;
+  created_at: string | null;
+  ngay_bat_dau: string | null;
+  ngay_ket_thuc: string | null;
 };
 
 /** Một mốc trong `dh_moc_lich_tuyen_sinh`. */
@@ -403,21 +406,25 @@ async function fetchThangHocTaiSineByHvIds(
   const ids = [...new Set(hvIds.filter((id) => Number.isFinite(id) && id > 0))];
   if (!ids.length) return out;
 
-  const createdAtByHv = new Map<number, string | null>();
+  const profileByHv = new Map<
+    number,
+    { created_at: string | null; ngay_bat_dau: string | null; ngay_ket_thuc: string | null }
+  >();
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const chunk = ids.slice(i, i + IN_CHUNK);
     const { data, error } = await supabase
       .from("ql_thong_tin_hoc_vien")
-      .select("id, created_at")
+      .select("id, created_at, ngay_bat_dau, ngay_ket_thuc")
       .in("id", chunk);
     if (error) return out;
     for (const row of (data ?? []) as Record<string, unknown>[]) {
       const id = nIdLoose(row.id);
       if (id == null) continue;
-      createdAtByHv.set(
-        id,
-        row.created_at != null ? String(row.created_at) : null,
-      );
+      profileByHv.set(id, {
+        created_at: row.created_at != null ? String(row.created_at) : null,
+        ngay_bat_dau: row.ngay_bat_dau != null ? String(row.ngay_bat_dau) : null,
+        ngay_ket_thuc: row.ngay_ket_thuc != null ? String(row.ngay_ket_thuc) : null,
+      });
     }
   }
 
@@ -459,7 +466,14 @@ async function fetchThangHocTaiSineByHvIds(
         ngay_cuoi_ky: ky?.ngay_cuoi_ky ?? null,
       };
     });
-    out.set(hvId, formatThangHocTaiSineArt(createdAtByHv.get(hvId), enrollments));
+    const prof = profileByHv.get(hvId);
+    out.set(
+      hvId,
+      formatThangHocTaiSineArt(prof?.created_at, enrollments, {
+        ngay_bat_dau: prof?.ngay_bat_dau,
+        ngay_ket_thuc: prof?.ngay_ket_thuc,
+      }),
+    );
   }
 
   return out;
@@ -530,14 +544,22 @@ export async function fetchAdminDhStudentsByTruong(
 
   const hvMap = new Map<
     number,
-    { full_name: string; sdt: string | null; email: string | null; facebook: string | null }
+    {
+      full_name: string;
+      sdt: string | null;
+      email: string | null;
+      facebook: string | null;
+      created_at: string | null;
+      ngay_bat_dau: string | null;
+      ngay_ket_thuc: string | null;
+    }
   >();
   for (let i = 0; i < hvIds.length; i += IN_CHUNK) {
     const chunk = hvIds.slice(i, i + IN_CHUNK);
     if (!chunk.length) break;
     const { data, error } = await supabase
       .from("ql_thong_tin_hoc_vien")
-      .select("id, full_name, sdt, email, facebook")
+      .select("id, full_name, sdt, email, facebook, created_at, ngay_bat_dau, ngay_ket_thuc")
       .in("id", chunk);
     if (error) return { ok: false, error: error.message };
     for (const row of (data ?? []) as Record<string, unknown>[]) {
@@ -548,6 +570,9 @@ export async function fetchAdminDhStudentsByTruong(
         sdt: coerceSdt(row.sdt),
         email: row.email != null ? String(row.email).trim() || null : null,
         facebook: row.facebook != null ? String(row.facebook).trim() || null : null,
+        created_at: row.created_at != null ? String(row.created_at) : null,
+        ngay_bat_dau: row.ngay_bat_dau != null ? String(row.ngay_bat_dau) : null,
+        ngay_ket_thuc: row.ngay_ket_thuc != null ? String(row.ngay_ket_thuc) : null,
       });
     }
   }
@@ -628,6 +653,9 @@ export async function fetchAdminDhStudentsByTruong(
       mon_thi: monThiForStudentRow(monThiByNganh, monThiByPair, tid, nid),
       mon_thi_chon: parseMonThiChon(raw.mon_thi_chon),
       thang_hoc_tai_sine: thangHocByHv.get(hvId) ?? null,
+      created_at: hv?.created_at ?? null,
+      ngay_bat_dau: hv?.ngay_bat_dau ?? null,
+      ngay_ket_thuc: hv?.ngay_ket_thuc ?? null,
     });
   }
 
@@ -907,12 +935,20 @@ export async function fetchAdminDhStudentsByTruongPaged(
 
   const hvMap = new Map<
     number,
-    { full_name: string; sdt: string | null; email: string | null; facebook: string | null }
+    {
+      full_name: string;
+      sdt: string | null;
+      email: string | null;
+      facebook: string | null;
+      created_at: string | null;
+      ngay_bat_dau: string | null;
+      ngay_ket_thuc: string | null;
+    }
   >();
   if (hvIds.length) {
     const { data: hvData, error: hvErr } = await supabase
       .from("ql_thong_tin_hoc_vien")
-      .select("id, full_name, sdt, email, facebook")
+      .select("id, full_name, sdt, email, facebook, created_at, ngay_bat_dau, ngay_ket_thuc")
       .in("id", hvIds);
     if (hvErr) return { ok: false, error: hvErr.message };
     for (const row of (hvData ?? []) as Record<string, unknown>[]) {
@@ -923,6 +959,9 @@ export async function fetchAdminDhStudentsByTruongPaged(
         sdt: coerceSdt(row.sdt),
         email: row.email != null ? String(row.email).trim() || null : null,
         facebook: row.facebook != null ? String(row.facebook).trim() || null : null,
+        created_at: row.created_at != null ? String(row.created_at) : null,
+        ngay_bat_dau: row.ngay_bat_dau != null ? String(row.ngay_bat_dau) : null,
+        ngay_ket_thuc: row.ngay_ket_thuc != null ? String(row.ngay_ket_thuc) : null,
       });
     }
   }
@@ -981,6 +1020,9 @@ export async function fetchAdminDhStudentsByTruongPaged(
       mon_thi: monThiForStudentRow(monThiByNganh, new Map(), args.truongId, nid),
       mon_thi_chon: parseMonThiChon(raw.mon_thi_chon),
       thang_hoc_tai_sine: thangHocByHv.get(hvId) ?? null,
+      created_at: hv?.created_at ?? null,
+      ngay_bat_dau: hv?.ngay_bat_dau ?? null,
+      ngay_ket_thuc: hv?.ngay_ket_thuc ?? null,
     });
   }
 

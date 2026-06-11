@@ -336,6 +336,42 @@ export async function updateHocVienProfile(studentId: number, payload: HocVienPr
   return { ok: true, message: "Đã lưu." };
 }
 
+/** Cập nhật ngày bắt đầu / ngày nghỉ trên hồ sơ học viên (`ql_thong_tin_hoc_vien`). */
+export async function updateHocVienStudyDates(
+  studentId: number,
+  payload: { ngay_bat_dau: string | null; ngay_ket_thuc: string | null },
+): Promise<QlhvActionState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(studentId) || studentId <= 0) return { ok: false, error: "ID học viên không hợp lệ." };
+
+  const dau = sliceIsoDate(payload.ngay_bat_dau ?? undefined);
+  const cuoi = sliceIsoDate(payload.ngay_ket_thuc ?? undefined);
+  if (payload.ngay_bat_dau != null && String(payload.ngay_bat_dau).trim() !== "" && dau == null) {
+    return { ok: false, error: "Ngày bắt đầu không hợp lệ (YYYY-MM-DD)." };
+  }
+  if (payload.ngay_ket_thuc != null && String(payload.ngay_ket_thuc).trim() !== "" && cuoi == null) {
+    return { ok: false, error: "Ngày nghỉ không hợp lệ (YYYY-MM-DD)." };
+  }
+  if (dau && cuoi && cuoi < dau) {
+    return { ok: false, error: "Ngày nghỉ không được trước ngày bắt đầu." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { error } = await supabase
+    .from("ql_thong_tin_hoc_vien")
+    .update({ ngay_bat_dau: dau, ngay_ket_thuc: cuoi })
+    .eq("id", studentId);
+  if (error) return { ok: false, error: error.message || "Không lưu được ngày học." };
+
+  revalidate();
+  revalidatePath("/admin/dashboard/dh-truong-nganh/[truongSlug]", "page");
+  revalidatePath("/admin/dashboard/dh-truong-nganh/[truongSlug]/nganh/[nganhSlug]", "page");
+  return { ok: true, message: "Đã lưu ngày học." };
+}
+
 /** Cập nhật `nam_thi` / `ghi_chu` trên một dòng `ql_hv_truong_nganh` (trường–ngành đã gắn). */
 export async function updateQlHvTruongNganhRow(
   rowId: number,

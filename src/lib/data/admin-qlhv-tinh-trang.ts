@@ -88,18 +88,39 @@ export function monthsBetweenCalendarYmd(start: string, end: string): number | n
   }
 }
 
+function sliceIsoYmd(v: string | null | undefined): string | null {
+  if (v == null || String(v).trim() === "") return null;
+  const ymd = String(v).trim().slice(0, 10);
+  return ISO_YMD.test(ymd) ? ymd : null;
+}
+
+/** Ngày bắt đầu tính tháng học: ưu tiên `ngay_bat_dau`, không có thì `created_at`. */
+export function resolveNgayBatDauForThang(
+  createdAt: string | null | undefined,
+  ngayBatDau: string | null | undefined,
+): string | null {
+  return sliceIsoYmd(ngayBatDau) ?? isoDateFromCreatedAt(createdAt);
+}
+
+export type ThangHocTaiSineProfile = {
+  ngay_bat_dau?: string | null;
+  ngay_ket_thuc?: string | null;
+};
+
 /**
- * Nhãn «X tháng» — đồng bộ `QuanLyHocVienView.thangHocTaiSineArt`.
- * Từ ngày tạo tài khoản → hôm nay (đang học) hoặc max ngày cuối kỳ HP (nghỉ).
+ * Nhãn «X tháng» — đồng bộ Quản lý học viên.
+ * Bắt đầu: `ngay_bat_dau` hoặc `created_at`. Kết thúc: `ngay_ket_thuc` hoặc hôm nay / cuối kỳ HP.
  */
 export function formatThangHocTaiSineArt(
   createdAt: string | null | undefined,
   enrollments: EnrollmentKyPartial[],
+  profile?: ThangHocTaiSineProfile,
 ): string | null {
-  const start = isoDateFromCreatedAt(createdAt);
+  const start = resolveNgayBatDauForThang(createdAt, profile?.ngay_bat_dau);
   if (!start) return null;
+  const profileEnd = sliceIsoYmd(profile?.ngay_ket_thuc);
   const tt = computeOverallStatus(enrollments as AdminQlhvEnrollment[]);
-  const end = tt === "Nghỉ" ? maxNgayCuoiKyFromKyRows(enrollments) : todayIsoDateLocal();
+  const end = profileEnd ?? (tt === "Nghỉ" ? maxNgayCuoiKyFromKyRows(enrollments) : todayIsoDateLocal());
   if (!end) return null;
   const m = monthsBetweenCalendarYmd(start, end);
   return m != null ? `${m} tháng` : null;

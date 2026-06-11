@@ -6,10 +6,15 @@ import { useRouter } from "next/navigation";
 import { Check, Link2, Loader2, Mail, Pencil, Phone, X } from "lucide-react";
 
 import type { AdminDhStudentExamRow } from "@/lib/data/admin-dh-truong-nganh";
+import { updateHocVienStudyDates } from "@/app/admin/dashboard/quan-ly-hoc-vien/actions";
 import {
-  updateQlHvTruongNganhMonThiChon,
   updateQlHvTruongNganhScore,
 } from "@/app/admin/dashboard/dh-truong-nganh/actions";
+import {
+  monthsBetweenCalendarYmd,
+  resolveNgayBatDauForThang,
+  todayIsoDateLocal,
+} from "@/lib/data/admin-qlhv-tinh-trang";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -19,10 +24,6 @@ type Props = {
    * ẩn (mọi dòng đều cùng ngành) — truyền `false` để giấu.
    */
   showNganhColumn?: boolean;
-  /** Trang cặp trường–ngành: cho phép gán `mon_thi_chon` (dropdown). */
-  showMonThiChonColumn?: boolean;
-  /** Nhãn môn từ catalog `dh_truong_nganh.mon_thi` + tuỳ chọn «Chưa gán». */
-  monThiOptions?: string[];
   /** Build link sang sub-subpage cho ngành; nếu không truyền → render text. */
   hrefForNganh?: (nganhId: number) => string;
   emptyText: string;
@@ -31,8 +32,6 @@ type Props = {
 export default function DhStudentsTable({
   rows,
   showNganhColumn = true,
-  showMonThiChonColumn = false,
-  monThiOptions = [],
   hrefForNganh,
   emptyText,
 }: Props) {
@@ -57,9 +56,6 @@ export default function DhStudentsTable({
               {showNganhColumn ? (
                 <th className="min-w-[160px] px-3 py-3 md:px-4">Ngành đăng ký</th>
               ) : null}
-              {showMonThiChonColumn ? (
-                <th className="min-w-[160px] px-3 py-3 md:px-4">Môn / hình thức</th>
-              ) : null}
               <th className="whitespace-nowrap px-3 py-3 md:px-4">Năm thi</th>
               <th className="min-w-[140px] whitespace-nowrap px-3 py-3 md:px-4">Điểm thi</th>
               <th className="min-w-[180px] px-3 py-3 md:px-4">Ghi chú</th>
@@ -71,14 +67,7 @@ export default function DhStudentsTable({
                 <td className="align-top px-3 py-3 md:px-4">
                   <div className="font-semibold text-[#1a1a2e]">{s.full_name}</div>
                   <div className="mt-0.5 text-[11px] text-black/40">ID #{s.hoc_vien_id}</div>
-                  {s.thang_hoc_tai_sine ? (
-                    <div
-                      className="mt-0.5 text-[11px] font-semibold text-black/50"
-                      title="Từ ngày tạo tài khoản đến hôm nay (đang học) hoặc đến ngày cuối kỳ học phí (nghỉ)"
-                    >
-                      {s.thang_hoc_tai_sine} tại Sine Art
-                    </div>
-                  ) : null}
+                  <ThangHocTaiSineCell row={s} />
                 </td>
                 <td className="align-top px-3 py-3 md:px-4">
                   <div className="flex flex-col gap-0.5 text-[12px]">
@@ -130,15 +119,6 @@ export default function DhStudentsTable({
                     )}
                   </td>
                 ) : null}
-                {showMonThiChonColumn ? (
-                  <td className="align-top px-3 py-3 md:px-4">
-                    <MonThiChonCell
-                      rowId={s.id}
-                      initial={s.mon_thi_chon}
-                      options={monThiOptions}
-                    />
-                  </td>
-                ) : null}
                 <td className="align-top px-3 py-3 md:px-4">
                   {s.nam_thi != null ? (
                     <span className="inline-flex rounded-md bg-[#BB89F8]/15 px-2 py-0.5 text-[12px] font-bold text-[#6b3fbf]">
@@ -173,75 +153,179 @@ export default function DhStudentsTable({
   );
 }
 
-/**
- * Ô điểm thi: click → chuyển sang `<input type="number">`. Nhấn Enter / nút lưu
- * sẽ gọi server action; Esc / nút huỷ sẽ rollback. Sau khi lưu thành công
- * `router.refresh()` để stats card và bảng cập nhật.
- */
-function MonThiChonCell({
-  rowId,
-  initial,
-  options,
-}: {
-  rowId: number;
-  initial: string | null;
-  options: string[];
-}) {
+function isoDateInput(d: string | null | undefined): string {
+  if (d == null || String(d).trim() === "") return "";
+  return String(d).trim().slice(0, 10);
+}
+
+function resolveNgayBatDauDisplay(row: AdminDhStudentExamRow): string {
+  return resolveNgayBatDauForThang(row.created_at, row.ngay_bat_dau) ?? "";
+}
+
+function previewThangLabel(ngayBatDau: string, ngayKetThuc: string, createdAt: string | null): string {
+  const start = ngayBatDau.trim().slice(0, 10) || resolveNgayBatDauForThang(createdAt, null);
+  if (!start) return "—";
+  const end = ngayKetThuc.trim().slice(0, 10) || todayIsoDateLocal();
+  const m = monthsBetweenCalendarYmd(start, end);
+  return m != null ? `${m} tháng` : "—";
+}
+
+function ThangHocTaiSineCell({ row }: { row: AdminDhStudentExamRow }) {
   const router = useRouter();
-  const [value, setValue] = useState<string>(initial ?? "");
+  const [open, setOpen] = useState(false);
+  const label = row.thang_hoc_tai_sine ?? previewThangLabel("", isoDateInput(row.ngay_ket_thuc), row.created_at);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(
+          "group mt-0.5 inline-flex items-center gap-1 rounded px-0.5 -mx-0.5 text-left text-[11px] font-semibold transition-colors",
+          label !== "—"
+            ? "text-black/50 hover:bg-[#F8A568]/10 hover:text-[#c2410c]"
+            : "text-black/35 hover:bg-black/[0.04] hover:text-black/55",
+        )}
+        title="Bấm để chỉnh ngày bắt đầu và ngày nghỉ"
+      >
+        <span>{label !== "—" ? `${label} tại Sine Art` : "— tại Sine Art"}</span>
+        <Pencil className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
+      </button>
+      {open ? (
+        <StudyDatesModal
+          row={row}
+          onClose={() => setOpen(false)}
+          onSaved={() => {
+            setOpen(false);
+            router.refresh();
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function StudyDatesModal({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: AdminDhStudentExamRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [nbd, setNbd] = useState(() => resolveNgayBatDauDisplay(row));
+  const [nkt, setNkt] = useState(() => isoDateInput(row.ngay_ket_thuc));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    setValue(initial ?? "");
-  }, [initial]);
+  const preview = useMemo(
+    () => previewThangLabel(nbd, nkt, row.created_at),
+    [nbd, nkt, row.created_at],
+  );
 
-  const opts = useMemo(() => {
-    const base = [...options];
-    if (initial && initial.trim() !== "" && !base.includes(initial)) base.unshift(initial);
-    return base;
-  }, [initial, options]);
-
-  const submit = async (nextRaw: string) => {
-    const trimmed = nextRaw.trim();
-    const next = trimmed === "" ? null : trimmed;
+  async function submit() {
     setSaving(true);
     setErr(null);
-    const res = await updateQlHvTruongNganhMonThiChon({
-      rowId,
-      monThiChon: next,
+    const r = await updateHocVienStudyDates(row.hoc_vien_id, {
+      ngay_bat_dau: nbd.trim() || null,
+      ngay_ket_thuc: nkt.trim() || null,
     });
     setSaving(false);
-    if (!res.ok) {
-      setErr(res.error);
+    if (!r.ok) {
+      setErr(r.error);
       return;
     }
-    router.refresh();
-  };
+    onSaved();
+  }
+
+  const fieldLbl = "mb-1 block text-[10px] font-bold uppercase tracking-wide text-[#64748b]";
+  const fieldInp =
+    "w-full rounded-lg border-[1.5px] border-[#EAEAEA] bg-white px-2.5 py-2 text-[13px] font-semibold text-[#1a1a2e] outline-none focus:border-[#F8A568] focus:ring-[2px] focus:ring-[#F8A568]/15 disabled:opacity-55";
 
   return (
-    <div className="flex min-w-[140px] flex-col gap-1">
-      <select
-        disabled={saving}
-        className={cn(
-          "max-w-[220px] rounded-lg border-[1.5px] border-[#EAEAEA] bg-white px-2 py-1.5 text-[12px] font-semibold text-[#1a1a2e]",
-          "outline-none focus:border-[#F8A568] focus:ring-[2px] focus:ring-[#F8A568]/20 disabled:opacity-55",
-        )}
-        value={value}
-        onChange={(e) => {
-          const v = e.target.value;
-          setValue(v);
-          void submit(v);
-        }}
+    <div
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-labelledby="dh-study-dates-title"
+        aria-modal="true"
+        className="w-full max-w-[400px] rounded-xl border border-black/[0.06] bg-white p-4 shadow-[var(--shadow-md)]"
+        onClick={(e) => e.stopPropagation()}
       >
-        <option value="">— Chưa gán —</option>
-        {opts.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-      {err ? <p className="m-0 text-[10px] font-semibold text-red-700">{err}</p> : null}
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 id="dh-study-dates-title" className="m-0 text-[14px] font-extrabold text-[#1a1a2e]">
+              Thời gian học tại Sine Art
+            </h3>
+            <p className="m-0 mt-0.5 truncate text-[11px] font-semibold text-black/45">
+              {row.full_name} · ID #{row.hoc_vien_id}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Đóng"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#EAEAEA] text-black/50 hover:bg-black/[0.04]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <label className="block">
+            <span className={fieldLbl}>Ngày bắt đầu học</span>
+            <input
+              type="date"
+              value={nbd}
+              disabled={saving}
+              onChange={(e) => setNbd(e.target.value)}
+              className={fieldInp}
+            />
+          </label>
+          <label className="block">
+            <span className={fieldLbl}>Ngày nghỉ</span>
+            <input
+              type="date"
+              value={nkt}
+              disabled={saving}
+              onChange={(e) => setNkt(e.target.value)}
+              className={fieldInp}
+            />
+            <p className="m-0 mt-1 text-[10px] font-medium text-black/40">
+              Để trống nếu học viên vẫn đang học (tính đến hôm nay hoặc theo học phí).
+            </p>
+          </label>
+          <p className="m-0 rounded-lg bg-[#F8A568]/10 px-2.5 py-2 text-[12px] font-bold text-[#c2410c]">
+            ≈ {preview} tại Sine Art
+          </p>
+        </div>
+
+        {err ? <p className="mb-0 mt-2 text-[11px] font-semibold text-red-700">{err}</p> : null}
+
+        <div className="mt-4 flex justify-end gap-2 border-t border-[#f0f0f0] pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-[12px] font-semibold text-[#475569] hover:bg-slate-50 disabled:opacity-50"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void submit()}
+            className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-3 py-2 text-[12px] font-bold text-white disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            Lưu
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

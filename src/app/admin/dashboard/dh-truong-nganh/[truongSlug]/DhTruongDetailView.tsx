@@ -3,29 +3,33 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, GraduationCap, Plus } from "lucide-react";
+import { ArrowLeft, GraduationCap, ListChecks, Plus, Users } from "lucide-react";
 
 import type {
-  AdminDhNganhNamMergedRow,
+  AdminDhNganhFilterRow,
   AdminDhOverviewStats,
-  AdminDhSchoolYearSummary,
   AdminDhStudentsPagedResult,
   AdminDhTruongMatched,
 } from "@/lib/data/admin-dh-truong-nganh";
 import { cn } from "@/lib/utils";
 
-import DhNganhNamMetricTable from "../_shared/DhNganhNamMetricTable";
+import DhNganhFilterCards from "../_shared/DhNganhFilterCards";
 import DhPagination from "../_shared/DhPagination";
-import DhStatsCards from "../_shared/DhStatsCards";
 import DhStudentsTable from "../_shared/DhStudentsTable";
+
+const PAGE_SHELL =
+  "-m-4 flex min-h-[calc(100vh-5.5rem)] w-[calc(100%+2rem)] max-w-none min-w-0 flex-col gap-3 bg-[#F5F7F7] px-4 py-4 text-[#2d2020] md:-m-6 md:w-[calc(100%+3rem)] md:gap-4 md:px-6 md:py-5";
 
 type Props = {
   truongSlug: string;
   nam: number;
   truong: AdminDhTruongMatched | null;
   yearOptions: number[];
-  yearSummaries: AdminDhSchoolYearSummary[];
-  nganhRows: AdminDhNganhNamMergedRow[];
+  yearHvByNam: Record<number, number>;
+  nganhRows: AdminDhNganhFilterRow[];
+  hvCountByNganhId: Record<number, number>;
+  totalHvDistinct: number;
+  selectedNganhSlug: string | null;
   students: AdminDhStudentsPagedResult | null;
   stats: AdminDhOverviewStats | null;
   page: number;
@@ -39,8 +43,11 @@ export default function DhTruongDetailView({
   nam,
   truong,
   yearOptions,
-  yearSummaries,
+  yearHvByNam,
   nganhRows,
+  hvCountByNganhId,
+  totalHvDistinct,
+  selectedNganhSlug,
   students,
   stats,
   page,
@@ -51,38 +58,34 @@ export default function DhTruongDetailView({
   const router = useRouter();
   const basePath = `/admin/dashboard/dh-truong-nganh/${truongSlug}`;
 
-  const summaryByYear = useMemo(() => {
-    const m = new Map<number, AdminDhSchoolYearSummary>();
-    for (const s of yearSummaries) m.set(s.nam, s);
-    return m;
-  }, [yearSummaries]);
-
   const selectYears = useMemo(() => {
     const set = new Set(yearOptions);
     set.add(nam);
+    for (const y of Object.keys(yearHvByNam)) set.add(Number(y));
     return [...set].sort((a, b) => b - a);
-  }, [yearOptions, nam]);
+  }, [yearOptions, nam, yearHvByNam]);
 
-  const existingYears = useMemo(() => new Set(yearOptions), [yearOptions]);
+  const existingYears = useMemo(() => new Set(selectYears), [selectYears]);
 
-  function hrefForNam(nextNam: number, nextPage = 1): string {
+  function hrefForFilters(nextNam: number, nextNganhSlug: string | null, nextPage = 1): string {
     const params = new URLSearchParams();
     params.set("nam", String(nextNam));
+    if (nextNganhSlug) params.set("nganh", nextNganhSlug);
     if (nextPage > 1) params.set("page", String(nextPage));
     return `${basePath}?${params.toString()}`;
   }
 
   function openYear(year: number): void {
-    router.push(hrefForNam(year));
+    router.push(hrefForFilters(year, selectedNganhSlug));
   }
+
+  const selectedNganh = selectedNganhSlug
+    ? nganhRows.find((r) => r.nganh_slug === selectedNganhSlug) ?? null
+    : null;
 
   if (!truong) {
     return (
-      <div
-        className={cn(
-          "-m-4 flex min-h-[calc(100vh-5.5rem)] w-[calc(100%+2rem)] max-w-none min-w-0 flex-col gap-4 bg-[#F5F7F7] px-4 py-5 text-[#323232] md:-m-6 md:w-[calc(100%+3rem)] md:px-6",
-        )}
-      >
+      <div className={PAGE_SHELL}>
         <Link
           href="/admin/dashboard/dh-truong-nganh"
           className="inline-flex w-fit items-center gap-1 text-[12px] font-bold text-[#EE5CA2] hover:underline"
@@ -100,58 +103,83 @@ export default function DhTruongDetailView({
   const pageCount = students?.pageCount ?? 1;
 
   return (
-    <div
-      className={cn(
-        "-m-4 flex min-h-[calc(100vh-5.5rem)] w-[calc(100%+2rem)] max-w-none min-w-0 flex-col gap-4 bg-[#F5F7F7] px-4 py-5 text-[#323232] md:-m-6 md:w-[calc(100%+3rem)] md:px-6",
-      )}
-    >
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <Link
-            href="/admin/dashboard/dh-truong-nganh"
-            className="inline-flex items-center gap-1 text-[11px] font-bold text-[#EE5CA2] hover:underline"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Trường đại học
-          </Link>
-          <h1 className="m-0 mt-1 flex flex-wrap items-center gap-2 text-xl font-extrabold tracking-tight text-[#1a1a2e]">
-            <GraduationCap className="h-6 w-6 text-[#EE5CA2]" aria-hidden />
-            {truong.ten}
-          </h1>
-          {truong.score != null ? (
-            <p className="m-0 mt-0.5 text-[11px] font-semibold text-black/45">
-              Score (ưu tiên): {truong.score}
-            </p>
-          ) : null}
-        </div>
+    <div className={PAGE_SHELL}>
+      <section className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-sm md:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <Link
+              href="/admin/dashboard/dh-truong-nganh"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-[#EE5CA2] hover:underline"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Trường đại học
+            </Link>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h1 className="m-0 flex min-w-0 items-center gap-2 text-lg font-extrabold tracking-tight text-[#2d2020] md:text-xl">
+                <GraduationCap className="h-5 w-5 shrink-0 text-[#EE5CA2]" aria-hidden />
+                <span className="truncate">{truong.ten}</span>
+              </h1>
+              {truong.score != null ? (
+                <span className="inline-flex shrink-0 rounded-full bg-black/[0.04] px-2 py-0.5 text-[10px] font-bold tabular-nums text-black/50">
+                  Ưu tiên #{truong.score}
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <InlineStatChip
+                icon={Users}
+                value={stats?.totalHocVien ?? 0}
+                label="học viên"
+                tone="pink"
+              />
+              <InlineStatChip
+                icon={ListChecks}
+                value={stats?.totalNguyenVong ?? 0}
+                label="nguyện vọng"
+                tone="orange"
+              />
+            </div>
+          </div>
 
-        <div className="flex w-full min-w-0 flex-col gap-1.5 sm:w-auto sm:min-w-[280px]">
-          <label className="text-[10px] font-bold uppercase tracking-wide text-black/40" htmlFor="dh-truong-nam">
-            Năm tuyển sinh
-          </label>
-          <select
-            id="dh-truong-nam"
-            value={nam}
-            onChange={(e) => openYear(Number(e.target.value))}
-            className={cn(
-              "w-full rounded-lg border-[1.5px] border-[#EAEAEA] bg-white px-2.5 py-2 text-[12px] font-semibold text-[#1a1a2e]",
-              "outline-none focus:border-[#F8A568] focus:ring-[2px] focus:ring-[#F8A568]/15",
-            )}
-          >
-            {selectYears.map((y) => {
-              const sum = summaryByYear.get(y);
-              const label = sum
-                ? `${y} — ${sum.soMocLich} mốc · ${sum.soNganhCoSoLieu} ngành · ${sum.hocVienDistinct} HV`
-                : String(y);
-              return (
-                <option key={y} value={y}>
-                  {label}
-                </option>
-              );
-            })}
-          </select>
-          <AddYearWidget existingYears={existingYears} onOpenYear={openYear} />
+          <div className="w-full min-w-0 lg:max-w-[520px]">
+            <p className="m-0 mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-black/40">
+              Năm thi
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {selectYears.map((y) => {
+                const active = y === nam;
+                const hv = yearHvByNam[y];
+                return (
+                  <Link
+                    key={y}
+                    href={hrefForFilters(y, selectedNganhSlug)}
+                    scroll={false}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold tabular-nums transition-all",
+                      active
+                        ? "border-transparent bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] text-white shadow-sm"
+                        : "border-black/[0.08] bg-white text-black/55 hover:border-[#EE5CA2]/30 hover:text-[#EE5CA2]",
+                    )}
+                    aria-current={active ? "true" : undefined}
+                  >
+                    {y}
+                    {hv != null ? (
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-px text-[9px] font-extrabold",
+                          active ? "bg-white/20 text-white" : "bg-black/[0.05] text-black/45",
+                        )}
+                      >
+                        {hv}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              })}
+              <AddYearWidget existingYears={existingYears} onOpenYear={openYear} />
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
       {missingServiceRole ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
@@ -165,35 +193,41 @@ export default function DhTruongDetailView({
         </div>
       ) : null}
 
-      <DhStatsCards stats={stats} />
+      {!missingServiceRole ? (
+        <DhNganhFilterCards
+          nam={nam}
+          rows={nganhRows}
+          selectedNganhSlug={selectedNganhSlug}
+          hvCountByNganhId={hvCountByNganhId}
+          totalHvCount={totalHvDistinct}
+          hrefForNganh={(slug, p = 1) => hrefForFilters(nam, slug, p)}
+        />
+      ) : null}
 
-      <section className="flex flex-col gap-2">
-        {!missingServiceRole ? (
-          <DhNganhNamMetricTable
-            truongId={truong.id}
-            nam={nam}
-            truongSlug={truongSlug}
-            rows={nganhRows}
-          />
-        ) : null}
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="m-0 text-[15px] font-extrabold text-[#1a1a2e]">
-          Học viên Sine Art đăng ký thi (năm {nam})
-        </h2>
+      <section className="flex min-h-0 flex-1 flex-col gap-2">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <h2 className="m-0 text-[14px] font-extrabold text-[#2d2020] md:text-[15px]">
+            {selectedNganh ? selectedNganh.ten_nganh : "Danh sách học viên"}
+          </h2>
+          <p className="m-0 text-[11px] font-semibold text-black/45">
+            Năm {nam}
+            {selectedNganh ? ` · ${totalRows.toLocaleString("vi-VN")} dòng` : null}
+          </p>
+        </div>
         <DhStudentsTable
           rows={students?.rows ?? []}
-          showNganhColumn
+          showNganhColumn={!selectedNganh}
           hrefForNganh={(nganhId) => {
             const r = nganhRows.find((x) => x.nganh_id === nganhId);
             return r
               ? `/admin/dashboard/dh-truong-nganh/${truongSlug}/nganh/${r.nganh_slug}`
-              : `${basePath}?nam=${nam}`;
+              : hrefForFilters(nam, null);
           }}
           emptyText={
             totalRows === 0
-              ? `Chưa có học viên nào đăng ký thi trường này vào năm ${nam}.`
+              ? selectedNganh
+                ? `Chưa có học viên nào đăng ký ngành «${selectedNganh.ten_nganh}» vào năm ${nam}.`
+                : `Chưa có học viên nào đăng ký thi trường này vào năm ${nam}.`
               : "Trang này không còn bản ghi."
           }
         />
@@ -202,10 +236,37 @@ export default function DhTruongDetailView({
           pageCount={pageCount}
           total={totalRows}
           pageSize={pageSize}
-          hrefForPage={(p) => hrefForNam(nam, p)}
+          hrefForPage={(p) => hrefForFilters(nam, selectedNganhSlug, p)}
         />
       </section>
     </div>
+  );
+}
+
+function InlineStatChip({
+  icon: Icon,
+  value,
+  label,
+  tone,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  value: number;
+  label: string;
+  tone: "pink" | "orange";
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold",
+        tone === "pink"
+          ? "border-[#EE5CA2]/15 bg-[#EE5CA2]/08 text-[#a4326c]"
+          : "border-[#F8A568]/20 bg-[#F8A568]/10 text-[#c2410c]",
+      )}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0 opacity-75" aria-hidden />
+      <span className="tabular-nums text-[#2d2020]">{value.toLocaleString("vi-VN")}</span>
+      <span className="font-semibold opacity-70">{label}</span>
+    </span>
   );
 }
 
@@ -216,6 +277,7 @@ function AddYearWidget({
   existingYears: Set<number>;
   onOpenYear: (year: number) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const [val, setVal] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
@@ -236,22 +298,37 @@ function AddYearWidget({
       return;
     }
     onOpenYear(n);
+    setOpen(false);
+    setVal("");
   }
 
   const trimmedNum = Number(val.trim());
   const alreadyExists =
     val.trim() !== "" && Number.isInteger(trimmedNum) && existingYears.has(trimmedNum);
 
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-black/[0.12] bg-white px-2.5 py-1 text-[11px] font-bold text-black/45 transition-colors hover:border-[#EE5CA2]/35 hover:text-[#EE5CA2]"
+      >
+        <Plus size={11} strokeWidth={2.5} aria-hidden />
+        Năm khác
+      </button>
+    );
+  }
+
   return (
-    <div className="flex w-full min-w-0 flex-col gap-1">
-      <div className="flex items-center gap-1.5">
-        <span className="shrink-0 text-[10px] font-bold text-black/45">Thêm năm</span>
+    <div className="flex w-full min-w-[200px] flex-col gap-1 sm:w-auto">
+      <div className="flex items-center gap-1">
         <input
           type="number"
           inputMode="numeric"
           min={2000}
           max={2100}
           step={1}
+          autoFocus
           value={val}
           onChange={(e) => {
             setVal(e.target.value);
@@ -261,26 +338,40 @@ function AddYearWidget({
             if (e.key === "Enter") {
               e.preventDefault();
               handleSubmit();
+            } else if (e.key === "Escape") {
+              setOpen(false);
+              setVal("");
+              setErr(null);
             }
           }}
-          placeholder="2020"
-          aria-label="Năm tuyển sinh mới"
-          className="min-w-0 flex-1 rounded-lg border-[1.5px] border-[#EAEAEA] bg-white px-2 py-1.5 text-[12px] font-semibold tabular-nums text-[#1a1a2e] outline-none focus:border-[#EE5CA2] focus:ring-[2px] focus:ring-[#EE5CA2]/15 sm:w-[88px] sm:flex-none"
+          placeholder="2028"
+          aria-label="Năm thi mới"
+          className="w-[72px] rounded-full border-[1.5px] border-[#EAEAEA] bg-white px-2.5 py-1 text-[11px] font-bold tabular-nums text-[#2d2020] outline-none focus:border-[#F8A568] focus:ring-[2px] focus:ring-[#F8A568]/15"
         />
         <button
           type="button"
           onClick={handleSubmit}
           disabled={!val.trim()}
-          className="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-[#EE5CA2]/35 bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#EE5CA2] transition-colors hover:bg-[#EE5CA2]/06 disabled:opacity-50"
+          className="rounded-full bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-2.5 py-1 text-[10px] font-extrabold text-white disabled:opacity-50"
         >
-          <Plus size={11} strokeWidth={2.5} aria-hidden />
           Mở
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setVal("");
+            setErr(null);
+          }}
+          className="rounded-full px-1.5 py-1 text-[10px] font-bold text-black/40 hover:text-black/65"
+        >
+          Huỷ
         </button>
       </div>
       {err ? (
         <p className="m-0 text-[10px] font-semibold text-red-600">{err}</p>
       ) : alreadyExists ? (
-        <p className="m-0 text-[10px] font-semibold text-amber-700">Năm {trimmedNum} đã có trong danh sách.</p>
+        <p className="m-0 text-[10px] font-semibold text-amber-700">Năm {trimmedNum} đã có.</p>
       ) : null}
     </div>
   );

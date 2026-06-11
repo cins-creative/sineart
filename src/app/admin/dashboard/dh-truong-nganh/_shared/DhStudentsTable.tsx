@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Link2, Loader2, Mail, Pencil, Phone, X } from "lucide-react";
+import { Check, Copy, Link2, Loader2, Pencil, Phone, X } from "lucide-react";
 
 import type { AdminDhStudentExamRow } from "@/lib/data/admin-dh-truong-nganh";
 import { updateHocVienStudyDates } from "@/app/admin/dashboard/quan-ly-hoc-vien/actions";
 import {
+  updateQlHvTruongNganhGhiChu,
   updateQlHvTruongNganhScore,
 } from "@/app/admin/dashboard/dh-truong-nganh/actions";
 import {
@@ -66,7 +67,7 @@ export default function DhStudentsTable({
               <tr key={s.id} className="border-b border-black/[0.04] last:border-0">
                 <td className="align-top px-3 py-3 md:px-4">
                   <div className="font-semibold text-[#1a1a2e]">{s.full_name}</div>
-                  <div className="mt-0.5 text-[11px] text-black/40">ID #{s.hoc_vien_id}</div>
+                  <HvTinhTrangBadge value={s.tinh_trang} />
                   <ThangHocTaiSineCell row={s} />
                 </td>
                 <td className="align-top px-3 py-3 md:px-4">
@@ -80,15 +81,7 @@ export default function DhStudentsTable({
                         {s.sdt}
                       </a>
                     ) : null}
-                    {s.email ? (
-                      <a
-                        href={`mailto:${s.email}`}
-                        className="inline-flex items-center gap-1 text-black/65 hover:text-[#EE5CA2]"
-                      >
-                        <Mail className="h-3 w-3" aria-hidden />
-                        <span className="truncate">{s.email}</span>
-                      </a>
-                    ) : null}
+                    {s.email ? <CopyEmailButton email={s.email} /> : null}
                     {s.facebook ? (
                       <a
                         href={s.facebook}
@@ -136,13 +129,7 @@ export default function DhStudentsTable({
                   />
                 </td>
                 <td className="align-top px-3 py-3 text-[12px] leading-snug text-black/55 md:px-4">
-                  {s.ghi_chu ? (
-                    <span className="line-clamp-3" title={s.ghi_chu}>
-                      {s.ghi_chu}
-                    </span>
-                  ) : (
-                    "—"
-                  )}
+                  <GhiChuCell rowId={s.id} rowName={s.full_name} initialGhiChu={s.ghi_chu} />
                 </td>
               </tr>
             ))}
@@ -150,6 +137,57 @@ export default function DhStudentsTable({
         </table>
       </div>
     </div>
+  );
+}
+
+const HV_TINH_TRANG_COLOR: Record<string, { bg: string; text: string }> = {
+  "Đang học": { bg: "#dcfce7", text: "#16a34a" },
+  "Chưa học": { bg: "#e2e8f0", text: "#475569" },
+  Nghỉ: { bg: "#fee2e2", text: "#dc2626" },
+};
+
+function HvTinhTrangBadge({ value }: { value: string }) {
+  const cfg = HV_TINH_TRANG_COLOR[value] ?? { bg: "#f3f4f6", text: "#6b7280" };
+  return (
+    <span
+      className="mt-0.5 inline-block whitespace-nowrap rounded-full px-2 py-px text-[10px] font-semibold"
+      style={{ background: cfg.bg, color: cfg.text }}
+    >
+      {value || "—"}
+    </span>
+  );
+}
+
+function CopyEmailButton({ email }: { email: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    void navigator.clipboard
+      .writeText(email)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {
+        /* trình duyệt không hỗ trợ clipboard */
+      });
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex max-w-full items-center gap-1 rounded px-0.5 -mx-0.5 text-left text-black/65 transition-colors hover:bg-[#EE5CA2]/08 hover:text-[#EE5CA2]"
+      title={copied ? "Đã copy email" : "Copy email"}
+      aria-label={copied ? "Đã copy email" : `Copy email ${email}`}
+    >
+      {copied ? (
+        <Check className="h-3 w-3 shrink-0 text-emerald-600" aria-hidden />
+      ) : (
+        <Copy className="h-3 w-3 shrink-0" aria-hidden />
+      )}
+      <span className="truncate">{email}</span>
+    </button>
   );
 }
 
@@ -303,6 +341,168 @@ function StudyDatesModal({
             ≈ {preview} tại Sine Art
           </p>
         </div>
+
+        {err ? <p className="mb-0 mt-2 text-[11px] font-semibold text-red-700">{err}</p> : null}
+
+        <div className="mt-4 flex justify-end gap-2 border-t border-[#f0f0f0] pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-[12px] font-semibold text-[#475569] hover:bg-slate-50 disabled:opacity-50"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void submit()}
+            className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-3 py-2 text-[12px] font-bold text-white disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            Lưu
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ô điểm thi theo môn: 1 hoặc 2 ô tương ứng `dh_truong_nganh.mon_thi`.
+ * Nếu chưa khai báo môn → một ô điểm chung (cột `score`).
+ */
+function GhiChuCell({
+  rowId,
+  rowName,
+  initialGhiChu,
+}: {
+  rowId: number;
+  rowName: string;
+  initialGhiChu: string | null;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [ghiChu, setGhiChu] = useState(initialGhiChu ?? "");
+
+  useEffect(() => {
+    if (!open) setGhiChu(initialGhiChu ?? "");
+  }, [initialGhiChu, open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(
+          "group inline-flex max-w-full items-start gap-1 rounded px-0.5 -mx-0.5 text-left transition-colors",
+          initialGhiChu
+            ? "text-black/55 hover:bg-amber-50/80 hover:text-amber-900"
+            : "text-black/35 hover:bg-black/[0.04] hover:text-black/55",
+        )}
+        title={initialGhiChu ? initialGhiChu : "Bấm để thêm ghi chú"}
+      >
+        <span className={cn("min-w-0 break-words", initialGhiChu ? "line-clamp-3" : "italic")}>
+          {initialGhiChu || "Thêm ghi chú…"}
+        </span>
+        <Pencil className="mt-0.5 h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
+      </button>
+      {open ? (
+        <GhiChuModal
+          rowId={rowId}
+          rowName={rowName}
+          value={ghiChu}
+          onChange={setGhiChu}
+          onClose={() => setOpen(false)}
+          onSaved={() => {
+            setOpen(false);
+            router.refresh();
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function GhiChuModal({
+  rowId,
+  rowName,
+  value,
+  onChange,
+  onClose,
+  onSaved,
+}: {
+  rowId: number;
+  rowName: string;
+  value: string;
+  onChange: (v: string) => void;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    setSaving(true);
+    setErr(null);
+    const r = await updateQlHvTruongNganhGhiChu({
+      rowId,
+      ghiChu: value.trim() || null,
+    });
+    setSaving(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    onSaved();
+  }
+
+  const fieldLbl = "mb-1 block text-[10px] font-bold uppercase tracking-wide text-[#64748b]";
+  const fieldInp =
+    "w-full resize-y rounded-lg border-[1.5px] border-[#EAEAEA] bg-white px-2.5 py-2 text-[13px] font-medium text-[#1a1a2e] outline-none focus:border-[#F8A568] focus:ring-[2px] focus:ring-[#F8A568]/15 disabled:opacity-55";
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-labelledby="dh-ghi-chu-title"
+        aria-modal="true"
+        className="w-full max-w-[420px] rounded-xl border border-black/[0.06] bg-white p-4 shadow-[var(--shadow-md)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 id="dh-ghi-chu-title" className="m-0 text-[14px] font-extrabold text-[#1a1a2e]">
+              Ghi chú nguyện vọng
+            </h3>
+            <p className="m-0 mt-0.5 truncate text-[11px] font-semibold text-black/45">{rowName}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Đóng"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#EAEAEA] text-black/50 hover:bg-black/[0.04]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <label className="block">
+          <span className={fieldLbl}>Nội dung</span>
+          <textarea
+            rows={4}
+            autoFocus
+            disabled={saving}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Ghi chú về nguyện vọng, điểm dự kiến, tình trạng thi…"
+            className={fieldInp}
+          />
+        </label>
 
         {err ? <p className="mb-0 mt-2 text-[11px] font-semibold text-red-700">{err}</p> : null}
 

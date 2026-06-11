@@ -5,7 +5,9 @@ import {
   DH_MON_THI_ITEM_MAX_LEN,
 } from "@/lib/agent/dh-exam-profiles";
 import { slugifyVi } from "@/lib/admin/tra-cuu-schema";
+import type { AdminQlhvEnrollment } from "@/lib/data/admin-quan-ly-hoc-vien";
 import {
+  computeOverallStatus,
   formatThangHocTaiSineArt,
   isEnrollmentDangHocByKy,
 } from "@/lib/data/admin-qlhv-tinh-trang";
@@ -37,6 +39,24 @@ export type AdminDhTruongNganhRow = {
   details: string | null;
 };
 
+/** Một ngành trên trang trường — dùng card lọc (không còn chỉ tiêu / điểm chuẩn theo năm). */
+export type AdminDhNganhFilterRow = {
+  nganh_id: number;
+  ten_nganh: string;
+  mon_thi: string[];
+  nganh_slug: string;
+};
+
+export function buildAdminDhNganhFilterRows(rows: AdminDhTruongNganhRow[]): AdminDhNganhFilterRow[] {
+  const bases = rows.map((r) => ({ id: r.nganh_id, ten: r.ten_nganh }));
+  return rows.map((r) => ({
+    nganh_id: r.nganh_id,
+    ten_nganh: r.ten_nganh,
+    mon_thi: [...r.mon_thi],
+    nganh_slug: buildDhNganhSlug(r.nganh_id, r.ten_nganh, bases),
+  }));
+}
+
 /**
  * Một dòng nguyện vọng dự thi của học viên (`ql_hv_truong_nganh` join
  * `ql_thong_tin_hoc_vien` + `dh_nganh_dao_tao`). Một học viên có thể xuất hiện
@@ -66,6 +86,8 @@ export type AdminDhStudentExamRow = {
   mon_thi_chon: string | null;
   /** Số tháng học tại Sine Art — đồng bộ Quản lý học viên. */
   thang_hoc_tai_sine: string | null;
+  /** «Đang học» | «Chưa học» | «Nghỉ» — đồng bộ Quản lý học viên (`computeOverallStatus`). */
+  tinh_trang: string;
   created_at: string | null;
   ngay_bat_dau: string | null;
   ngay_ket_thuc: string | null;
@@ -397,12 +419,12 @@ function monThiForStudentRow(
   return monThiByNganh.get(nganhId) ?? monThiByPair.get(`${truongId}__${nganhId}`) ?? [];
 }
 
-/** Gom kỳ HP theo học viên + tính nhãn «X tháng» (chỉ cho các HV trong danh sách). */
-async function fetchThangHocTaiSineByHvIds(
+/** Gom kỳ HP theo học viên + tính nhãn «X tháng» và tình trạng tổng. */
+async function fetchHvEnrollmentBriefByHvIds(
   supabase: SupabaseClient,
   hvIds: readonly number[],
-): Promise<Map<number, string | null>> {
-  const out = new Map<number, string | null>();
+): Promise<Map<number, { thang_hoc_tai_sine: string | null; tinh_trang: string }>> {
+  const out = new Map<number, { thang_hoc_tai_sine: string | null; tinh_trang: string }>();
   const ids = [...new Set(hvIds.filter((id) => Number.isFinite(id) && id > 0))];
   if (!ids.length) return out;
 
@@ -467,13 +489,13 @@ async function fetchThangHocTaiSineByHvIds(
       };
     });
     const prof = profileByHv.get(hvId);
-    out.set(
-      hvId,
-      formatThangHocTaiSineArt(prof?.created_at, enrollments, {
+    out.set(hvId, {
+      thang_hoc_tai_sine: formatThangHocTaiSineArt(prof?.created_at, enrollments, {
         ngay_bat_dau: prof?.ngay_bat_dau,
         ngay_ket_thuc: prof?.ngay_ket_thuc,
       }),
-    );
+      tinh_trang: computeOverallStatus(enrollments as AdminQlhvEnrollment[]),
+    });
   }
 
   return out;
@@ -623,7 +645,7 @@ export async function fetchAdminDhStudentsByTruong(
             .filter((p) => p.truongId > 0 && p.nganhId > 0),
         );
 
-  const thangHocByHv = await fetchThangHocTaiSineByHvIds(supabase, hvIds);
+  const hvBriefByHv = await fetchHvEnrollmentBriefByHvIds(supabase, hvIds);
 
   for (const raw of acc) {
     const id = nIdLoose(raw.id);
@@ -652,7 +674,8 @@ export async function fetchAdminDhStudentsByTruong(
       score_2: parseExamScore(raw.score_2),
       mon_thi: monThiForStudentRow(monThiByNganh, monThiByPair, tid, nid),
       mon_thi_chon: parseMonThiChon(raw.mon_thi_chon),
-      thang_hoc_tai_sine: thangHocByHv.get(hvId) ?? null,
+      thang_hoc_tai_sine: hvBriefByHv.get(hvId)?.thang_hoc_tai_sine ?? null,
+      tinh_trang: hvBriefByHv.get(hvId)?.tinh_trang ?? "Nghỉ",
       created_at: hv?.created_at ?? null,
       ngay_bat_dau: hv?.ngay_bat_dau ?? null,
       ngay_ket_thuc: hv?.ngay_ket_thuc ?? null,
@@ -745,6 +768,48 @@ export async function fetchAdminDhPairHvDistinctCounts(
   const counts: Record<string, number> = {};
   for (const [k, set] of pairToHv) counts[k] = set.size;
   return { ok: true, counts };
+}
+
+/** Số học viên distinct theo `nganh_dao_tao` — lọc trường + `nam_thi`. */
+export async function fetchAdminDhHvDistinctCountsByNganhForNam(
+  supabase: SupabaseClient,
+  truongId: number,
+  namThi: number,
+): Promise<
+  { ok: true; counts: Record<number, number>; totalDistinct: number } | { ok: false; error: string }
+> {
+  if (!Number.isFinite(truongId) || truongId <= 0 || !Number.isFinite(namThi)) {
+    return { ok: true, counts: {}, totalDistinct: 0 };
+  }
+
+  const hvByNganh = new Map<number, Set<number>>();
+  const allHv = new Set<number>();
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("ql_hv_truong_nganh")
+      .select("hoc_vien, nganh_dao_tao")
+      .eq("truong_dai_hoc", truongId)
+      .eq("nam_thi", namThi)
+      .range(from, from + STUDENT_PAGE - 1);
+    if (error) return { ok: false, error: error.message };
+    const batch = (data ?? []) as Record<string, unknown>[];
+    if (!batch.length) break;
+    for (const r of batch) {
+      const nid = nIdLoose(r.nganh_dao_tao);
+      const hv = nIdLoose(r.hoc_vien);
+      if (!nid || !hv) continue;
+      if (!hvByNganh.has(nid)) hvByNganh.set(nid, new Set());
+      hvByNganh.get(nid)!.add(hv);
+      allHv.add(hv);
+    }
+    if (batch.length < STUDENT_PAGE) break;
+    from += STUDENT_PAGE;
+  }
+
+  const counts: Record<number, number> = {};
+  for (const [nid, set] of hvByNganh) counts[nid] = set.size;
+  return { ok: true, counts, totalDistinct: allHv.size };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -992,7 +1057,7 @@ export async function fetchAdminDhStudentsByTruongPaged(
   }
 
   const monThiByNganh = await fetchMonThiByNganhForTruong(supabase, args.truongId, ngIds);
-  const thangHocByHv = await fetchThangHocTaiSineByHvIds(supabase, hvIds);
+  const hvBriefByHv = await fetchHvEnrollmentBriefByHvIds(supabase, hvIds);
 
   const rows: AdminDhStudentExamRow[] = [];
   for (const raw of acc) {
@@ -1019,7 +1084,8 @@ export async function fetchAdminDhStudentsByTruongPaged(
       score_2: hasScore2Column ? parseExamScore(raw.score_2) : null,
       mon_thi: monThiForStudentRow(monThiByNganh, new Map(), args.truongId, nid),
       mon_thi_chon: parseMonThiChon(raw.mon_thi_chon),
-      thang_hoc_tai_sine: thangHocByHv.get(hvId) ?? null,
+      thang_hoc_tai_sine: hvBriefByHv.get(hvId)?.thang_hoc_tai_sine ?? null,
+      tinh_trang: hvBriefByHv.get(hvId)?.tinh_trang ?? "Nghỉ",
       created_at: hv?.created_at ?? null,
       ngay_bat_dau: hv?.ngay_bat_dau ?? null,
       ngay_ket_thuc: hv?.ngay_ket_thuc ?? null,

@@ -143,6 +143,35 @@ export async function updateQlHvTruongNganhScore(payload: {
   return { ok: true };
 }
 
+/** Cập nhật ghi chú trên một dòng nguyện vọng (`ql_hv_truong_nganh`). */
+export async function updateQlHvTruongNganhGhiChu(payload: {
+  rowId: number;
+  ghiChu: string | null;
+}): Promise<DhTnUpdateState> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const rowId = Math.trunc(payload.rowId);
+  if (!Number.isFinite(rowId) || rowId <= 0) {
+    return { ok: false, error: "Dòng nguyện vọng không hợp lệ." };
+  }
+
+  const ghi_chu =
+    payload.ghiChu != null && String(payload.ghiChu).trim() !== ""
+      ? clampDhMocText(String(payload.ghiChu), DH_MOC_GHI_CHU_MAX)
+      : null;
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { error } = await supabase.from("ql_hv_truong_nganh").update({ ghi_chu }).eq("id", rowId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateDhSlugRoutes();
+  revalidatePath("/admin/dashboard/quan-ly-hoc-vien");
+  return { ok: true };
+}
+
 const DH_MOC_TEN_MAX = 240;
 const DH_MOC_GHI_CHU_MAX = 2000;
 const DH_MOC_NGUON_MAX = 2000;

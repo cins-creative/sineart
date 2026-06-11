@@ -393,6 +393,8 @@ export async function updateQlHvTruongNganhRow(
   const { error } = await supabase.from("ql_hv_truong_nganh").update({ nam_thi, ghi_chu }).eq("id", rowId);
   if (error) return { ok: false, error: error.message || "Không lưu được trường/ngành." };
   revalidate();
+  revalidatePath("/admin/dashboard/dh-truong-nganh/[truongSlug]", "page");
+  revalidatePath("/admin/dashboard/dh-truong-nganh/[truongSlug]/nganh/[nganhSlug]", "page");
   return { ok: true, message: "Đã lưu." };
 }
 

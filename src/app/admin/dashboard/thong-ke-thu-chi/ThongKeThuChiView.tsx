@@ -19,6 +19,7 @@ const NGUON_LABEL: Record<ThongKeThuChiNguon, string> = {
   "hoa-cu": "Bán họa cụ",
   "hoa-cu-nhap": "Nhập họa cụ",
   "giao-dich": "Giao dịch",
+  "thu-chi-khac": "Thu chi khác",
 };
 
 const PAGE_SIZE = 50;
@@ -203,7 +204,7 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
           <div className="min-w-0">
             <div className="text-[17px] font-bold tracking-tight text-[#323232]">Thống kê thu chi</div>
             <div className="text-xs text-[#AAAAAA]">
-              {initialRows.length} giao dịch · học phí, họa cụ, SePay
+              {initialRows.length} giao dịch · học phí, họa cụ, thu chi khác, SePay
             </div>
           </div>
         </div>
@@ -273,6 +274,7 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
                     <option value="hoc-phi">Học phí</option>
                     <option value="hoa-cu">Bán họa cụ</option>
                     <option value="hoa-cu-nhap">Nhập họa cụ</option>
+                    <option value="thu-chi-khac">Thu chi khác</option>
                     <option value="giao-dich">Giao dịch</option>
                   </select>
                   <select
@@ -351,7 +353,9 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
                                     ? "#fffbeb"
                                     : r.nguon === "hoa-cu-nhap"
                                       ? "#fff1f2"
-                                      : "#f5f3ff",
+                                      : r.nguon === "thu-chi-khac"
+                                        ? "#ecfdf5"
+                                        : "#f5f3ff",
                               color:
                                 r.nguon === "hoc-phi"
                                   ? "#2563eb"
@@ -359,7 +363,9 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
                                     ? "#d97706"
                                     : r.nguon === "hoa-cu-nhap"
                                       ? "#e11d48"
-                                      : "#7c3aed",
+                                      : r.nguon === "thu-chi-khac"
+                                        ? "#059669"
+                                        : "#7c3aed",
                             }}
                           >
                             {NGUON_LABEL[r.nguon]}

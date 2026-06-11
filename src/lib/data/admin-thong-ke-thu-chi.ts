@@ -11,8 +11,9 @@ import {
 const MAX_HP_DONS = 4000;
 const MAX_HC_DONS = 2000;
 const MAX_GD = 500;
+const MAX_TC_KHAC = 5000;
 
-export type ThongKeThuChiNguon = "hoc-phi" | "hoa-cu" | "hoa-cu-nhap" | "giao-dich";
+export type ThongKeThuChiNguon = "hoc-phi" | "hoa-cu" | "hoa-cu-nhap" | "giao-dich" | "thu-chi-khac";
 
 export type AdminThongKeThuChiRow = {
   id: string;
@@ -105,7 +106,7 @@ function transferIsChi(raw: string | null | undefined): boolean {
 }
 
 /**
- * Gộp học phí (đã thanh toán), bán họa cụ (thu), nhập họa cụ (chi), giao dịch SePay cho trang thống kê.
+ * Gộp học phí (đã thanh toán), bán họa cụ (thu), nhập họa cụ (chi), thu chi khác, giao dịch SePay cho trang thống kê.
  * Tiền học phí = tổng dòng `hp_thu_hp_chi_tiet` (theo gói) trừ `giam_gia` và `giam_gia_vnd` đơn — cùng logic «Quản lý hóa đơn».
  */
 export async function fetchAdminThongKeThuChiBundle(
@@ -113,7 +114,7 @@ export async function fetchAdminThongKeThuChiBundle(
 ): Promise<{ ok: true; data: AdminThongKeThuChiBundle } | { ok: false; error: string }> {
   const rows: AdminThongKeThuChiRow[] = [];
 
-  const [donRes, banDonRes, nhapDonRes, gdRes, loaiRes] = await Promise.all([
+  const [donRes, banDonRes, nhapDonRes, gdRes, loaiRes, tcKhacRes, dmRes] = await Promise.all([
     supabase
       .from("hp_don_thu_hoc_phi")
       .select(
@@ -140,6 +141,12 @@ export async function fetchAdminThongKeThuChiBundle(
       .order("transaction_date", { ascending: false })
       .limit(MAX_GD),
     supabase.from("tc_loai_thu_chi").select("id, giai_nghia"),
+    supabase
+      .from("tc_thu_chi_khac")
+      .select("id, created_at, tieu_de, chu_thich, thu, chi, hinh_thuc, danh_muc_thu_chi_id, loai_thu_chi_id")
+      .order("created_at", { ascending: false })
+      .limit(MAX_TC_KHAC),
+    supabase.from("tc_danh_muc_thu_chi").select("id, ten"),
   ]);
 
   if (donRes.error) {
@@ -157,12 +164,25 @@ export async function fetchAdminThongKeThuChiBundle(
   if (loaiRes.error) {
     return { ok: false, error: loaiRes.error.message || "Không đọc được loại thu chi." };
   }
+  if (tcKhacRes.error) {
+    return { ok: false, error: tcKhacRes.error.message || "Không đọc được thu chi khác." };
+  }
+  if (dmRes.error) {
+    return { ok: false, error: dmRes.error.message || "Không đọc được danh mục thu chi." };
+  }
 
   const loaiById = new Map<number, string>();
   for (const r of loaiRes.data ?? []) {
     const row = r as { id?: unknown; giai_nghia?: unknown };
     const id = nId(row.id);
     if (id) loaiById.set(id, String(row.giai_nghia ?? "").trim());
+  }
+
+  const dmById = new Map<number, string>();
+  for (const r of dmRes.data ?? []) {
+    const row = r as { id?: unknown; ten?: unknown };
+    const id = nId(row.id);
+    if (id) dmById.set(id, String(row.ten ?? "").trim());
   }
 
   const dons = (donRes.data ?? []) as unknown as AdminHpDonRow[];
@@ -476,6 +496,53 @@ export async function fetchAdminThongKeThuChiBundle(
         ghiChu: ncc ? `NCC: ${ncc}` : "",
       });
     }
+  }
+
+  for (const raw of tcKhacRes.data ?? []) {
+    const r = raw as {
+      id?: unknown;
+      created_at?: unknown;
+      tieu_de?: unknown;
+      chu_thich?: unknown;
+      thu?: unknown;
+      chi?: unknown;
+      hinh_thuc?: unknown;
+      danh_muc_thu_chi_id?: unknown;
+      loai_thu_chi_id?: unknown;
+    };
+    const id = nId(r.id);
+    if (!id) continue;
+    const thuAmt = Math.round(parseMoney(r.thu));
+    const chiAmt = Math.round(parseMoney(r.chi));
+    if (thuAmt === 0 && chiAmt === 0) continue;
+
+    const dmId = nId(r.danh_muc_thu_chi_id);
+    const loaiId = nId(r.loai_thu_chi_id);
+    const mucTen = dmId != null ? dmById.get(dmId) ?? "" : "";
+    const loaiTen = loaiId != null ? loaiById.get(loaiId) ?? "" : "";
+    const danhMucLabel = mucTen || loaiTen;
+
+    const tieuDeRaw = String(r.tieu_de ?? "").trim();
+    const chuThich = String(r.chu_thich ?? "").trim();
+    const ghiChuParts = [chuThich, danhMucLabel ? `DM: ${danhMucLabel}` : ""].filter(Boolean);
+
+    let trangThai = "—";
+    if (thuAmt > 0 && chiAmt === 0) trangThai = "Thu";
+    else if (chiAmt > 0 && thuAmt === 0) trangThai = "Chi";
+    else if (thuAmt > 0 && chiAmt > 0) trangThai = "Thu + Chi";
+
+    rows.push({
+      id: `tck_${id}`,
+      nguon: "thu-chi-khac",
+      datetime: String(r.created_at ?? ""),
+      maDon: `TCK-${id}`,
+      tieude: tieuDeRaw || danhMucLabel || "Thu chi khác",
+      hinhThuc: String(r.hinh_thuc ?? "").trim(),
+      thu: thuAmt,
+      chi: chiAmt,
+      trangThai,
+      ghiChu: ghiChuParts.join(" · "),
+    });
   }
 
   for (const raw of gdRes.data ?? []) {

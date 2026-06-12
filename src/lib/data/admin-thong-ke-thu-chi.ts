@@ -10,10 +10,9 @@ import {
 
 const MAX_HP_DONS = 4000;
 const MAX_HC_DONS = 2000;
-const MAX_GD = 500;
 const MAX_TC_KHAC = 5000;
 
-export type ThongKeThuChiNguon = "hoc-phi" | "hoa-cu" | "hoa-cu-nhap" | "giao-dich" | "thu-chi-khac";
+export type ThongKeThuChiNguon = "hoc-phi" | "hoa-cu" | "hoa-cu-nhap" | "thu-chi-khac";
 
 export type AdminThongKeThuChiRow = {
   id: string;
@@ -26,6 +25,10 @@ export type AdminThongKeThuChiRow = {
   chi: number;
   trangThai: string;
   ghiChu: string;
+  /** Các lớp trong đơn học phí (nếu có nhiều dòng chi tiết). */
+  lopHoc?: string;
+  /** Môn / khóa học (`ql_mon_hoc`) theo gói hoặc lớp. */
+  khoaHoc?: string;
 };
 
 export type AdminThongKeThuChiBundle = {
@@ -57,6 +60,20 @@ function isoOrEmpty(v: string | null | undefined): string {
   const s = String(v).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T12:00:00.000Z`;
   return s;
+}
+
+function khoaHocLabelForChi(
+  c: AdminChiTietDisplay,
+  goiRowById: Map<number, Record<string, unknown>>,
+  lopMonById: Map<number, number>,
+  monNameById: Map<number, string>,
+): string | null {
+  const goiRow = c.goi_hoc_phi != null ? goiRowById.get(c.goi_hoc_phi) : undefined;
+  const goiMon = goiRow != null ? nId(goiRow.mon_hoc) : null;
+  const lopMon = c.lop_id != null ? lopMonById.get(c.lop_id) ?? null : null;
+  const monId = goiMon ?? lopMon;
+  if (!monId) return null;
+  return monNameById.get(monId) ?? `Môn #${monId}`;
 }
 
 type ChiBanRow = {
@@ -95,18 +112,9 @@ function unwrapSpNhap(
   };
 }
 
-function transferIsThu(raw: string | null | undefined): boolean {
-  const t = (raw ?? "").trim().toLowerCase();
-  return t === "in" || t === "credit" || t.includes("thu");
-}
-
-function transferIsChi(raw: string | null | undefined): boolean {
-  const t = (raw ?? "").trim().toLowerCase();
-  return t === "out" || t === "debit" || t.includes("chi");
-}
-
 /**
- * Gộp học phí (đã thanh toán), bán họa cụ (thu), nhập họa cụ (chi), thu chi khác, giao dịch SePay cho trang thống kê.
+ * Gộp học phí (đã thanh toán), bán họa cụ (thu), nhập họa cụ (chi), thu chi khác cho trang thống kê.
+ * Không gồm `hp_giao_dich_thanh_toan` (SePay) — tránh trùng với dòng Học phí đã match đơn.
  * Tiền học phí = tổng dòng `hp_thu_hp_chi_tiet` (theo gói) trừ `giam_gia` và `giam_gia_vnd` đơn — cùng logic «Quản lý hóa đơn».
  */
 export async function fetchAdminThongKeThuChiBundle(
@@ -114,7 +122,7 @@ export async function fetchAdminThongKeThuChiBundle(
 ): Promise<{ ok: true; data: AdminThongKeThuChiBundle } | { ok: false; error: string }> {
   const rows: AdminThongKeThuChiRow[] = [];
 
-  const [donRes, banDonRes, nhapDonRes, gdRes, loaiRes, tcKhacRes, dmRes] = await Promise.all([
+  const [donRes, banDonRes, nhapDonRes, loaiRes, tcKhacRes, dmRes] = await Promise.all([
     supabase
       .from("hp_don_thu_hoc_phi")
       .select(
@@ -133,13 +141,6 @@ export async function fetchAdminThongKeThuChiBundle(
       .select("id, created_at, hinh_thuc_chi, tong_tien, nha_cung_cap")
       .order("created_at", { ascending: false })
       .limit(MAX_HC_DONS),
-    supabase
-      .from("hp_giao_dich_thanh_toan")
-      .select(
-        "id, gateway, transaction_date, transfer_amount, transfer_type, content, description, ma_don_trich_xuat"
-      )
-      .order("transaction_date", { ascending: false })
-      .limit(MAX_GD),
     supabase.from("tc_loai_thu_chi").select("id, giai_nghia"),
     supabase
       .from("tc_thu_chi_khac")
@@ -157,9 +158,6 @@ export async function fetchAdminThongKeThuChiBundle(
   }
   if (nhapDonRes.error) {
     return { ok: false, error: nhapDonRes.error.message || "Không đọc được đơn nhập họa cụ." };
-  }
-  if (gdRes.error) {
-    return { ok: false, error: gdRes.error.message || "Không đọc được giao dịch thanh toán." };
   }
   if (loaiRes.error) {
     return { ok: false, error: loaiRes.error.message || "Không đọc được loại thu chi." };
@@ -218,7 +216,10 @@ export async function fetchAdminThongKeThuChiBundle(
         ? supabase.from("ql_quan_ly_hoc_vien").select("id, lop_hoc").in("id", qlIds)
         : Promise.resolve({ data: [] as unknown[], error: null }),
       goiIds.length
-        ? supabase.from(goiTable).select(hpGoiHocPhiSelectForTable(goiTable)).in("id", goiIds)
+        ? supabase
+            .from(goiTable)
+            .select(`${hpGoiHocPhiSelectForTable(goiTable)}, mon_hoc`)
+            .in("id", goiIds)
         : Promise.resolve({ data: [] as unknown[], error: null }),
     ]);
 
@@ -256,21 +257,24 @@ export async function fetchAdminThongKeThuChiBundle(
 
     const lopIds = [...new Set(qlLopById.values())];
     const lopNameById = new Map<number, string>();
+    const lopMonById = new Map<number, number>();
     if (lopIds.length > 0) {
       const { data: lopRows, error: lopErr } = await supabase
         .from("ql_lop_hoc")
-        .select("id, class_full_name, class_name")
+        .select("id, class_full_name, class_name, mon_hoc")
         .in("id", lopIds);
       if (lopErr) {
         return { ok: false, error: lopErr.message || "Không đọc được lớp học." };
       }
       for (const r of lopRows ?? []) {
-        const row = r as { id?: unknown; class_full_name?: unknown; class_name?: unknown };
+        const row = r as { id?: unknown; class_full_name?: unknown; class_name?: unknown; mon_hoc?: unknown };
         const id = nId(row.id);
         if (!id) continue;
         const name =
           String(row.class_full_name ?? "").trim() || String(row.class_name ?? "").trim() || `Lớp #${id}`;
         lopNameById.set(id, name);
+        const monId = nId(row.mon_hoc);
+        if (monId) lopMonById.set(id, monId);
       }
     }
 
@@ -279,6 +283,30 @@ export async function fetchAdminThongKeThuChiBundle(
       const row = r as Record<string, unknown>;
       const id = nId(row.id);
       if (id) goiRowById.set(id, row);
+    }
+
+    const monIds = new Set<number>();
+    for (const row of goiRowById.values()) {
+      const mid = nId(row.mon_hoc);
+      if (mid) monIds.add(mid);
+    }
+    for (const mid of lopMonById.values()) monIds.add(mid);
+
+    const monNameById = new Map<number, string>();
+    if (monIds.size > 0) {
+      const { data: monRows, error: monErr } = await supabase
+        .from("ql_mon_hoc")
+        .select("id, ten_mon_hoc")
+        .in("id", [...monIds]);
+      if (monErr) {
+        return { ok: false, error: monErr.message || "Không đọc được khóa học." };
+      }
+      for (const r of monRows ?? []) {
+        const row = r as { id?: unknown; ten_mon_hoc?: unknown };
+        const id = nId(row.id);
+        if (!id) continue;
+        monNameById.set(id, String(row.ten_mon_hoc ?? "").trim() || `Môn #${id}`);
+      }
     }
 
     const chiByDonId: Record<string, AdminChiTietDisplay[]> = {};
@@ -320,6 +348,16 @@ export async function fetchAdminThongKeThuChiBundle(
       const ts = isoOrEmpty(d.ngay_thanh_toan ?? d.created_at ?? null);
       const chi = chiByDonId[String(d.id)] ?? [];
       const thu = totalDon(d, chi);
+      const lopNames = [
+        ...new Set(chi.map((c) => c.ten_lop).filter((t) => t && t !== "—")),
+      ];
+      const khoaNames = [
+        ...new Set(
+          chi
+            .map((c) => khoaHocLabelForChi(c, goiRowById, lopMonById, monNameById))
+            .filter((t): t is string => Boolean(t)),
+        ),
+      ];
       rows.push({
         id: `hp_${d.id}`,
         nguon: "hoc-phi",
@@ -331,6 +369,8 @@ export async function fetchAdminThongKeThuChiBundle(
         chi: 0,
         trangThai: "Đã thanh toán",
         ghiChu: tenHV,
+        lopHoc: lopNames.length > 0 ? lopNames.join(" · ") : undefined,
+        khoaHoc: khoaNames.length > 0 ? khoaNames.join(" · ") : undefined,
       });
     }
   }
@@ -542,52 +582,6 @@ export async function fetchAdminThongKeThuChiBundle(
       chi: chiAmt,
       trangThai,
       ghiChu: ghiChuParts.join(" · "),
-    });
-  }
-
-  for (const raw of gdRes.data ?? []) {
-    const r = raw as {
-      id?: unknown;
-      gateway?: unknown;
-      transaction_date?: unknown;
-      transfer_amount?: unknown;
-      transfer_type?: unknown;
-      content?: unknown;
-      description?: unknown;
-      ma_don_trich_xuat?: unknown;
-    };
-    const id = nId(r.id);
-    if (!id) continue;
-    const amount = parseMoney(r.transfer_amount);
-    if (amount === 0) continue;
-    const tt = r.transfer_type != null ? String(r.transfer_type) : "";
-    const isThu = transferIsThu(tt);
-    const isChi = transferIsChi(tt);
-    let thuAmt = 0;
-    let chiAmt = 0;
-    if (isChi) chiAmt = Math.round(amount);
-    else if (isThu) thuAmt = Math.round(amount);
-    else thuAmt = Math.round(amount);
-    const mucRaw = r.ma_don_trich_xuat;
-    const mucNum = mucRaw != null && String(mucRaw).trim() !== "" ? Number(mucRaw) : NaN;
-    const mucTen = Number.isFinite(mucNum) ? loaiById.get(mucNum) ?? "" : "";
-    const ts = isoOrEmpty(
-      r.transaction_date != null && String(r.transaction_date).trim() !== ""
-        ? String(r.transaction_date)
-        : null
-    );
-    const tieude = String(r.content ?? "").trim() || String(r.description ?? "").trim() || "—";
-    rows.push({
-      id: `gd_${id}`,
-      nguon: "giao-dich",
-      datetime: ts || "",
-      maDon: String(r.ma_don_trich_xuat ?? "").trim(),
-      tieude,
-      hinhThuc: String(r.gateway ?? "").trim(),
-      thu: thuAmt,
-      chi: chiAmt,
-      trangThai: isChi ? "Chi" : isThu ? "Thu" : tt.trim() ? tt : "Thu",
-      ghiChu: mucTen || String(r.description ?? "").trim(),
     });
   }
 

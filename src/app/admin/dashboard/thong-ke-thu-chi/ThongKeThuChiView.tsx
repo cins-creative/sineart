@@ -1,25 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, Download, Search } from "lucide-react";
+import { BarChart3, BookOpen, Calendar, Download, GraduationCap, Hash, Layers, Search, Wallet, X } from "lucide-react";
 
 import type { AdminThongKeThuChiRow, ThongKeThuChiNguon } from "@/lib/data/admin-thong-ke-thu-chi";
 import { cn } from "@/lib/utils";
-
-const DATE_PRESETS: { label: string; days: number }[] = [
-  { label: "Hôm nay", days: 0 },
-  { label: "7 ngày", days: 7 },
-  { label: "30 ngày", days: 30 },
-  { label: "90 ngày", days: 90 },
-  { label: "Tất cả", days: -1 },
-];
 
 const NGUON_LABEL: Record<ThongKeThuChiNguon, string> = {
   "hoc-phi": "Học phí",
   "hoa-cu": "Bán họa cụ",
   "hoa-cu-nhap": "Nhập họa cụ",
-  "giao-dich": "Giao dịch",
   "thu-chi-khac": "Thu chi khác",
+};
+
+const NGUON_BADGE: Record<ThongKeThuChiNguon, { bg: string; color: string }> = {
+  "hoc-phi": { bg: "#eff6ff", color: "#2563eb" },
+  "hoa-cu": { bg: "#fffbeb", color: "#d97706" },
+  "hoa-cu-nhap": { bg: "#fff1f2", color: "#e11d48" },
+  "thu-chi-khac": { bg: "#ecfdf5", color: "#059669" },
 };
 
 const PAGE_SIZE = 50;
@@ -50,22 +48,53 @@ function s2l(s: string): string {
     .toLowerCase();
 }
 
-function sinceIsoForDays(days: number): string | null {
-  if (days < 0) return null;
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - days);
-  return d.toISOString();
+function localYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-function rowMatchesPreset(rowIso: string, days: number): boolean {
-  if (days < 0) return true;
-  const since = sinceIsoForDays(days);
-  if (!since) return true;
-  const t = new Date(rowIso).getTime();
-  const s = new Date(since).getTime();
-  return Number.isFinite(t) && t >= s;
+function parseYmdStartMs(ymd: string): number | null {
+  const s = ymd.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00`);
+  return Number.isFinite(d.getTime()) ? d.getTime() : null;
 }
+
+function parseYmdEndMs(ymd: string): number | null {
+  const s = ymd.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T23:59:59.999`);
+  return Number.isFinite(d.getTime()) ? d.getTime() : null;
+}
+
+/** Lọc theo khoảng [từ ngày, đến ngày] — chuỗi rỗng = không giới hạn đầu/cuối. */
+function rowMatchesDateRange(rowIso: string, fromYmd: string, toYmd: string): boolean {
+  const t = new Date(rowIso).getTime();
+  if (!Number.isFinite(t)) return false;
+
+  let from = fromYmd.trim().slice(0, 10);
+  let to = toYmd.trim().slice(0, 10);
+  if (from && to && from > to) [from, to] = [to, from];
+
+  const startMs = from ? parseYmdStartMs(from) : null;
+  const endMs = to ? parseYmdEndMs(to) : null;
+  if (startMs != null && t < startMs) return false;
+  if (endMs != null && t > endMs) return false;
+  return true;
+}
+
+function rangeForLastDays(days: number): { from: string; to: string } {
+  const to = new Date();
+  to.setHours(0, 0, 0, 0);
+  const from = new Date(to);
+  from.setDate(from.getDate() - Math.max(0, days));
+  return { from: localYmd(from), to: localYmd(to) };
+}
+
+const DATE_INPUT_CLS =
+  "h-9 rounded-lg border border-[#EAEAEA] bg-white px-2.5 text-xs font-medium tabular-nums text-[#1a1a2e] outline-none focus:border-[#BC8AF9]";
 
 function exportCsv(rows: AdminThongKeThuChiRow[]) {
   const cols = ["STT", "Ngày giờ", "Nguồn", "Mã GD", "Nội dung", "Thu (₫)", "Chi (₫)", "Trạng thái", "Ghi chú"];
@@ -107,15 +136,17 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
   const [query, setQuery] = useState("");
   const [filterNguon, setFilterNguon] = useState<"all" | ThongKeThuChiNguon>("all");
   const [filterLoai, setFilterLoai] = useState<"all" | "thu" | "chi">("all");
-  const [datePreset, setDatePreset] = useState(-1);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [sortField, setSortField] = useState<SortField>("datetime");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
+  const [selectedRow, setSelectedRow] = useState<AdminThongKeThuChiRow | null>(null);
 
   const dateFiltered = useMemo(() => {
-    if (datePreset < 0) return initialRows;
-    return initialRows.filter((r) => rowMatchesPreset(r.datetime, datePreset));
-  }, [initialRows, datePreset]);
+    if (!dateFrom.trim() && !dateTo.trim()) return initialRows;
+    return initialRows.filter((r) => rowMatchesDateRange(r.datetime, dateFrom, dateTo));
+  }, [initialRows, dateFrom, dateTo]);
 
   const filtered = useMemo(() => {
     let list = dateFiltered;
@@ -130,6 +161,8 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
           s2l(r.maDon).includes(q) ||
           s2l(r.hinhThuc).includes(q) ||
           s2l(r.ghiChu).includes(q) ||
+          s2l(r.lopHoc ?? "").includes(q) ||
+          s2l(r.khoaHoc ?? "").includes(q) ||
           s2l(NGUON_LABEL[r.nguon]).includes(q),
       );
     }
@@ -158,7 +191,7 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
 
   useEffect(() => {
     setPage(1);
-  }, [filterNguon, filterLoai, datePreset, query]);
+  }, [filterNguon, filterLoai, dateFrom, dateTo, query]);
 
   useEffect(() => {
     setPage((p) => Math.min(Math.max(1, p), totalPages));
@@ -177,6 +210,18 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
     },
     [sortField],
   );
+
+  const applyQuickRange = useCallback((days: number | null) => {
+    if (days == null) {
+      setDateFrom("");
+      setDateTo("");
+    } else {
+      const r = rangeForLastDays(days);
+      setDateFrom(r.from);
+      setDateTo(r.to);
+    }
+    setPage(1);
+  }, []);
 
   const thHead = (label: string, field: SortField) => (
     <th className="whitespace-nowrap px-6 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-black/50">
@@ -204,7 +249,7 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
           <div className="min-w-0">
             <div className="text-[17px] font-bold tracking-tight text-[#323232]">Thống kê thu chi</div>
             <div className="text-xs text-[#AAAAAA]">
-              {initialRows.length} giao dịch · học phí, họa cụ, thu chi khác, SePay
+              {initialRows.length} dòng · học phí, họa cụ, thu chi khác
             </div>
           </div>
         </div>
@@ -224,25 +269,64 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
           <div className="mx-auto flex min-h-[min(56vh,480px)] w-full max-w-[1200px] flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
             <div className="shrink-0 space-y-3 border-b border-[#EAEAEA] bg-white px-6 py-3">
-              <div className="flex flex-wrap gap-1">
-                {DATE_PRESETS.map((p) => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => {
-                      setDatePreset(p.days);
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                <label className="flex min-w-[140px] flex-col gap-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-black/40">Từ ngày</span>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    max={dateTo || undefined}
+                    onChange={(e) => {
+                      setDateFrom(e.target.value);
                       setPage(1);
                     }}
+                    className={DATE_INPUT_CLS}
+                  />
+                </label>
+                <label className="flex min-w-[140px] flex-col gap-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-black/40">Đến ngày</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom || undefined}
+                    onChange={(e) => {
+                      setDateTo(e.target.value);
+                      setPage(1);
+                    }}
+                    className={DATE_INPUT_CLS}
+                  />
+                </label>
+                <div className="flex flex-wrap items-center gap-1 pb-0.5">
+                  {(
+                    [
+                      { label: "Hôm nay", days: 0 },
+                      { label: "7 ngày", days: 7 },
+                      { label: "30 ngày", days: 30 },
+                      { label: "90 ngày", days: 90 },
+                    ] as const
+                  ).map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => applyQuickRange(p.days)}
+                      className="rounded-full border border-[#EAEAEA] px-2.5 py-1 text-[11px] font-semibold text-black/50 transition-colors hover:border-[#BC8AF9]/40 hover:text-[#BC8AF9]"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => applyQuickRange(null)}
                     className={cn(
                       "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                      datePreset === p.days
+                      !dateFrom && !dateTo
                         ? "border-[#BC8AF9] bg-[#BC8AF9]/15 text-[#BC8AF9]"
                         : "border-[#EAEAEA] text-black/50 hover:border-black/15 hover:text-black/70",
                     )}
                   >
-                    {p.label}
+                    Tất cả
                   </button>
-                ))}
+                </div>
               </div>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="relative min-w-0 max-w-md flex-1">
@@ -275,7 +359,6 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
                     <option value="hoa-cu">Bán họa cụ</option>
                     <option value="hoa-cu-nhap">Nhập họa cụ</option>
                     <option value="thu-chi-khac">Thu chi khác</option>
-                    <option value="giao-dich">Giao dịch</option>
                   </select>
                   <select
                     value={filterLoai}
@@ -340,32 +423,27 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
                     </tr>
                   ) : (
                     pageRows.map((r) => (
-                      <tr key={r.id} className="border-b border-[#F0F0F0] last:border-0 hover:bg-black/[0.02]">
+                      <tr
+                        key={r.id}
+                        className="cursor-pointer border-b border-[#F0F0F0] last:border-0 hover:bg-[#BC8AF9]/06"
+                        onClick={() => setSelectedRow(r)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedRow(r);
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Xem chi tiết: ${r.tieude}`}
+                      >
                         <td className="whitespace-nowrap px-6 py-2.5 text-black/80">{fmtDateTime(r.datetime)}</td>
                         <td className="px-6 py-2.5">
                           <span
                             className="inline-block rounded-md px-2 py-0.5 text-[11px] font-semibold"
                             style={{
-                              background:
-                                r.nguon === "hoc-phi"
-                                  ? "#eff6ff"
-                                  : r.nguon === "hoa-cu"
-                                    ? "#fffbeb"
-                                    : r.nguon === "hoa-cu-nhap"
-                                      ? "#fff1f2"
-                                      : r.nguon === "thu-chi-khac"
-                                        ? "#ecfdf5"
-                                        : "#f5f3ff",
-                              color:
-                                r.nguon === "hoc-phi"
-                                  ? "#2563eb"
-                                  : r.nguon === "hoa-cu"
-                                    ? "#d97706"
-                                    : r.nguon === "hoa-cu-nhap"
-                                      ? "#e11d48"
-                                      : r.nguon === "thu-chi-khac"
-                                        ? "#059669"
-                                        : "#7c3aed",
+                              background: NGUON_BADGE[r.nguon].bg,
+                              color: NGUON_BADGE[r.nguon].color,
                             }}
                           >
                             {NGUON_LABEL[r.nguon]}
@@ -422,6 +500,252 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
             ) : null}
           </div>
         </div>
+      </div>
+
+      {selectedRow ? (
+        <TransactionDetailModal row={selectedRow} onClose={() => setSelectedRow(null)} />
+      ) : null}
+    </div>
+  );
+}
+
+function TransactionDetailModal({
+  row,
+  onClose,
+}: {
+  row: AdminThongKeThuChiRow;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const badge = NGUON_BADGE[row.nguon];
+  const loai =
+    row.thu > 0 && row.chi > 0 ? "Thu + Chi" : row.thu > 0 ? "Thu" : row.chi > 0 ? "Chi" : row.trangThai;
+  const loaiTone: "thu" | "chi" | undefined =
+    row.thu > 0 && row.chi > 0 ? undefined : row.thu > 0 ? "thu" : row.chi > 0 ? "chi" : undefined;
+  const title =
+    row.nguon === "hoc-phi"
+      ? row.ghiChu?.trim() || row.tieude.replace(/^HP:\s*/i, "").trim() || row.tieude
+      : row.tieude || NGUON_LABEL[row.nguon];
+  const showGhiChu =
+    Boolean(row.ghiChu?.trim()) &&
+    s2l(row.ghiChu) !== s2l(title) &&
+    s2l(row.ghiChu) !== s2l(row.tieude.replace(/^HP:\s*/i, ""));
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="thong-ke-tc-detail-title"
+        className="flex max-h-[min(92vh,640px)] w-full max-w-[520px] flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-[var(--shadow-md,0_10px_32px_rgba(45,32,32,.12))]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="shrink-0 border-b border-[#F0F0F0] px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className="inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+                  style={{ background: badge.bg, color: badge.color }}
+                >
+                  {NGUON_LABEL[row.nguon]}
+                </span>
+                {row.trangThai ? (
+                  <span className="inline-flex rounded-full border border-[#EAEAEA] bg-[#F5F7F7] px-2.5 py-0.5 text-[11px] font-semibold text-[#475569]">
+                    {row.trangThai}
+                  </span>
+                ) : null}
+              </div>
+              <h2
+                id="thong-ke-tc-detail-title"
+                className="m-0 mt-2 line-clamp-2 text-[17px] font-extrabold leading-snug text-[#1a1a2e]"
+              >
+                {title}
+              </h2>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-black/45">
+                {row.maDon ? (
+                  <span className="inline-flex items-center gap-1 font-mono text-[11px] text-black/55">
+                    <Hash className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+                    {row.maDon}
+                  </span>
+                ) : null}
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+                  {fmtDateTime(row.datetime)}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Đóng"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#EAEAEA] bg-[#F5F7F7] text-black/50 hover:bg-black/[0.04]"
+            >
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {row.thu > 0 ? (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 px-4 py-3">
+                <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Thu</p>
+                <p className="m-0 mt-1 text-[22px] font-extrabold tabular-nums leading-none text-[#059669]">
+                  {fmtVnd(row.thu)}
+                </p>
+              </div>
+            ) : null}
+            {row.chi > 0 ? (
+              <div className="rounded-xl border border-red-100 bg-red-50/80 px-4 py-3">
+                <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-red-700/70">Chi</p>
+                <p className="m-0 mt-1 text-[22px] font-extrabold tabular-nums leading-none text-[#dc2626]">
+                  {fmtVnd(row.chi)}
+                </p>
+              </div>
+            ) : null}
+            {row.thu === 0 && row.chi === 0 ? (
+              <div className="rounded-xl border border-[#EAEAEA] bg-[#F5F7F7] px-4 py-3 sm:col-span-2">
+                <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-black/40">Số tiền</p>
+                <p className="m-0 mt-1 text-[15px] font-bold text-black/55">—</p>
+              </div>
+            ) : null}
+          </div>
+
+          {row.nguon === "hoc-phi" ? (
+            <div
+              className="overflow-hidden rounded-xl border border-[#EAEAEA]"
+              style={{ background: `linear-gradient(135deg, ${badge.bg} 0%, #ffffff 72%)` }}
+            >
+              <div className="border-b border-[#EAEAEA]/80 px-4 py-2.5">
+                <p className="m-0 text-[10px] font-extrabold uppercase tracking-wide" style={{ color: badge.color }}>
+                  Đăng ký học
+                </p>
+              </div>
+              <div className="space-y-3 px-4 py-3">
+                <div className="flex gap-3">
+                  <span
+                    className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: badge.bg, color: badge.color }}
+                  >
+                    <BookOpen className="h-4 w-4" strokeWidth={2} aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-black/40">Khóa học</p>
+                    <p className="m-0 mt-0.5 break-words text-[13px] font-bold leading-snug text-[#1a1a2e]">
+                      {row.khoaHoc?.trim() || "—"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3 border-t border-[#EAEAEA]/80 pt-3">
+                  <span
+                    className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: badge.bg, color: badge.color }}
+                  >
+                    <GraduationCap className="h-4 w-4" strokeWidth={2} aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-black/40">Lớp học</p>
+                    <p className="m-0 mt-0.5 break-words text-[13px] font-bold leading-snug text-[#1a1a2e]">
+                      {row.lopHoc?.trim() || "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : row.tieude ? (
+            <div className="rounded-xl border border-[#EAEAEA] bg-[#F5F7F7]/60 px-4 py-3">
+              <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-black/40">Nội dung</p>
+              <p className="m-0 mt-1 break-words text-[13px] font-semibold leading-snug text-[#1a1a2e]">{row.tieude}</p>
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailMetaCell
+              icon={Wallet}
+              label="Hình thức"
+              value={row.hinhThuc?.trim() || "—"}
+            />
+            <DetailMetaCell icon={Layers} label="Loại" value={loai || "—"} tone={loaiTone} />
+          </div>
+
+          {showGhiChu ? (
+            <div className="rounded-xl border border-dashed border-[#EAEAEA] bg-white px-4 py-3">
+              <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-black/40">Ghi chú</p>
+              <p className="m-0 mt-1 break-words text-[13px] font-medium leading-snug text-[#475569]">{row.ghiChu}</p>
+            </div>
+          ) : null}
+
+          <p className="m-0 pt-1 text-center font-mono text-[10px] text-black/30">ID: {row.id}</p>
+        </div>
+
+        <div className="flex shrink-0 justify-end border-t border-[#F0F0F0] px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-[#EAEAEA] bg-white px-4 py-2 text-[12px] font-semibold text-[#475569] hover:bg-black/[0.03]"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailMetaCell({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: typeof Wallet;
+  label: string;
+  value: string;
+  tone?: "thu" | "chi";
+}) {
+  return (
+    <div
+      className={cn(
+        "flex gap-3 rounded-xl border px-3.5 py-3",
+        tone === "thu" && "border-emerald-100 bg-emerald-50/50",
+        tone === "chi" && "border-red-100 bg-red-50/50",
+        !tone && "border-[#EAEAEA] bg-white",
+      )}
+    >
+      <span
+        className={cn(
+          "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl",
+          tone === "thu" && "bg-emerald-100 text-[#059669]",
+          tone === "chi" && "bg-red-100 text-[#dc2626]",
+          !tone && "bg-[#F5F7F7] text-black/45",
+        )}
+      >
+        <Icon className="h-4 w-4" strokeWidth={2} aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-black/40">{label}</p>
+        <p
+          className={cn(
+            "m-0 mt-0.5 break-words text-[13px] font-semibold",
+            tone === "thu" && "text-[#059669]",
+            tone === "chi" && "text-[#dc2626]",
+            !tone && "text-[#1a1a2e]",
+          )}
+        >
+          {value}
+        </p>
       </div>
     </div>
   );

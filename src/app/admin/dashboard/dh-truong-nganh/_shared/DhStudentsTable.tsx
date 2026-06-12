@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Copy, Link2, Loader2, Pencil, Phone, X } from "lucide-react";
 
-import type { AdminDhStudentExamRow } from "@/lib/data/admin-dh-truong-nganh";
+import {
+  sortDhStudentExamRowsByScore,
+  type AdminDhStudentExamRow,
+} from "@/lib/data/admin-dh-truong-nganh";
 import { updateHocVienStudyDates } from "@/app/admin/dashboard/quan-ly-hoc-vien/actions";
 import {
   updateQlHvTruongNganhGhiChu,
@@ -36,7 +39,9 @@ export default function DhStudentsTable({
   hrefForNganh,
   emptyText,
 }: Props) {
-  if (!rows.length) {
+  const sortedRows = useMemo(() => sortDhStudentExamRowsByScore(rows), [rows]);
+
+  if (!sortedRows.length) {
     return (
       <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-sm">
         <div className="px-4 py-10 text-center text-[13px] font-semibold text-black/40">
@@ -58,12 +63,19 @@ export default function DhStudentsTable({
                 <th className="min-w-[160px] px-3 py-3 md:px-4">Ngành đăng ký</th>
               ) : null}
               <th className="whitespace-nowrap px-3 py-3 md:px-4">Năm thi</th>
-              <th className="min-w-[140px] whitespace-nowrap px-3 py-3 md:px-4">Điểm thi</th>
+              <th className="min-w-[140px] whitespace-nowrap px-3 py-3 md:px-4">
+                <span className="inline-flex items-center gap-1">
+                  Điểm thi
+                  <span className="text-[9px] font-bold normal-case text-[#EE5CA2]" title="Sắp cao → thấp">
+                    ↓
+                  </span>
+                </span>
+              </th>
               <th className="min-w-[180px] px-3 py-3 md:px-4">Ghi chú</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((s) => (
+            {sortedRows.map((s) => (
               <tr key={s.id} className="border-b border-black/[0.04] last:border-0">
                 <td className="align-top px-3 py-3 md:px-4">
                   <div className="font-semibold text-[#1a1a2e]">{s.full_name}</div>

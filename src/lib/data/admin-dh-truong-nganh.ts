@@ -422,6 +422,30 @@ function parseExamScore(v: unknown): number | null {
   return n;
 }
 
+/** Điểm dùng để xếp hạng — max(`score`, `score_2`); chưa có điểm → xuống cuối. */
+function examScoreSortKey(score: unknown, score_2?: unknown): number {
+  const vals = [parseExamScore(score), parseExamScore(score_2)].filter((v): v is number => v != null);
+  return vals.length ? Math.max(...vals) : Number.NEGATIVE_INFINITY;
+}
+
+function compareDhStudentRawByExamScore(a: Record<string, unknown>, b: Record<string, unknown>): number {
+  const sa = examScoreSortKey(a.score, a.score_2);
+  const sb = examScoreSortKey(b.score, b.score_2);
+  if (sa !== sb) return sb - sa;
+  const ida = nIdLoose(a.id) ?? 0;
+  const idb = nIdLoose(b.id) ?? 0;
+  return idb - ida;
+}
+
+export function sortDhStudentExamRowsByScore(rows: AdminDhStudentExamRow[]): AdminDhStudentExamRow[] {
+  return [...rows].sort((a, b) => {
+    const sa = examScoreSortKey(a.score, a.score_2);
+    const sb = examScoreSortKey(b.score, b.score_2);
+    if (sa !== sb) return sb - sa;
+    return b.id - a.id;
+  });
+}
+
 function parseMonThiChon(v: unknown): string | null {
   if (v == null) return null;
   const s = String(v).trim();
@@ -1063,9 +1087,8 @@ export type AdminDhStudentsPagedResult = {
 };
 
 /**
- * Phân trang server-side: chỉ SQL đúng `pageSize` dòng tương ứng `page` hiện tại
- * (`range(offset, offset + pageSize - 1)`), kèm `count: "exact"` để biết tổng.
- * Sau đó lookup HV / ngành chỉ cho các dòng trong page → phản hồi nhanh.
+ * Phân trang server-side: fetch toàn bộ dòng khớp bộ lọc, sắp theo điểm thi (cao → thấp),
+ * rồi cắt `pageSize` cho trang hiện tại. Lookup HV / ngành chỉ cho dòng trong page.
  */
 export async function fetchAdminDhStudentsByTruongPaged(
   supabase: SupabaseClient,
@@ -1083,7 +1106,6 @@ export async function fetchAdminDhStudentsByTruongPaged(
 ): Promise<{ ok: true; result: AdminDhStudentsPagedResult } | { ok: false; error: string }> {
   const pageSize = Math.max(1, Math.trunc(args.pageSize ?? DH_STUDENTS_PAGE_SIZE));
   const page = Math.max(1, Math.trunc(args.page || 1));
-  const offset = (page - 1) * pageSize;
   const searchQ = args.search != null ? String(args.search).trim() : "";
 
   const hvIdsForSearch =
@@ -1100,14 +1122,11 @@ export async function fetchAdminDhStudentsByTruongPaged(
       ? await loadNamThiFilterContext(supabase, args.namThi)
       : null;
 
-  const buildPagedQuery = (selectCols: string) => {
+  const buildFilteredQuery = (selectCols: string) => {
     let q = supabase
       .from("ql_hv_truong_nganh")
-      .select(selectCols, { count: "exact" })
-      .eq("truong_dai_hoc", args.truongId)
-      .order("nam_thi", { ascending: false, nullsFirst: false })
-      .order("id", { ascending: false })
-      .range(offset, offset + pageSize - 1);
+      .select(selectCols)
+      .eq("truong_dai_hoc", args.truongId);
 
     if (args.nganhId != null && Number.isFinite(args.nganhId) && args.nganhId > 0) {
       q = q.eq("nganh_dao_tao", args.nganhId);
@@ -1125,24 +1144,43 @@ export async function fetchAdminDhStudentsByTruongPaged(
   };
 
   let hasScore2Column = true;
-  let result = await buildPagedQuery(QL_HV_TN_STUDENT_SELECT_WITH_SCORE_2);
-  if (result.error && isMissingScore2ColumnError(result.error.message)) {
-    hasScore2Column = false;
-    result = await buildPagedQuery(QL_HV_TN_STUDENT_SELECT_LEGACY);
+  let selectCols = QL_HV_TN_STUDENT_SELECT_WITH_SCORE_2;
+  let acc: Record<string, unknown>[] = [];
+  let fetchFrom = 0;
+  for (;;) {
+    const { data, error } = await buildFilteredQuery(selectCols).range(
+      fetchFrom,
+      fetchFrom + STUDENT_PAGE - 1,
+    );
+    if (error) {
+      if (hasScore2Column && isMissingScore2ColumnError(error.message)) {
+        hasScore2Column = false;
+        selectCols = QL_HV_TN_STUDENT_SELECT_LEGACY;
+        acc = [];
+        fetchFrom = 0;
+        continue;
+      }
+      return { ok: false, error: error.message };
+    }
+    const batch = ((data ?? []) as unknown as Record<string, unknown>[]) ?? [];
+    if (!batch.length) break;
+    acc.push(...batch);
+    if (batch.length < STUDENT_PAGE) break;
+    fetchFrom += STUDENT_PAGE;
   }
 
-  const { data, error, count } = result;
-  if (error) return { ok: false, error: error.message };
-
-  const acc = ((data ?? []) as unknown as Record<string, unknown>[]) ?? [];
-  const total = typeof count === "number" ? count : acc.length;
+  acc.sort(compareDhStudentRawByExamScore);
+  const total = acc.length;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const safeOffset = (safePage - 1) * pageSize;
+  const pageSlice = acc.slice(safeOffset, safeOffset + pageSize);
 
   const hvIds = [
-    ...new Set(acc.map((r) => nIdLoose(r.hoc_vien)).filter((x): x is number => x != null)),
+    ...new Set(pageSlice.map((r) => nIdLoose(r.hoc_vien)).filter((x): x is number => x != null)),
   ];
   const ngIds = [
-    ...new Set(acc.map((r) => nIdLoose(r.nganh_dao_tao)).filter((x): x is number => x != null)),
+    ...new Set(pageSlice.map((r) => nIdLoose(r.nganh_dao_tao)).filter((x): x is number => x != null)),
   ];
 
   const hvMap = new Map<
@@ -1210,7 +1248,7 @@ export async function fetchAdminDhStudentsByTruongPaged(
   const namThiHeals: { rowId: number; nam_thi: number | null }[] = [];
 
   const rows: AdminDhStudentExamRow[] = [];
-  for (const raw of acc) {
+  for (const raw of pageSlice) {
     const id = nIdLoose(raw.id);
     if (id == null) continue;
     const hvId = nIdLoose(raw.hoc_vien);
@@ -1246,7 +1284,7 @@ export async function fetchAdminDhStudentsByTruongPaged(
 
   return {
     ok: true,
-    result: { rows, total, page, pageSize, pageCount },
+    result: { rows, total, page: safePage, pageSize, pageCount },
   };
 }
 

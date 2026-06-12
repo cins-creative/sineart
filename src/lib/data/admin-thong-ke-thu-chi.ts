@@ -1,5 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-
 import type { AdminChiTietDisplay, AdminHpDonRow } from "@/lib/data/admin-quan-ly-hoa-don";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import {
@@ -7,12 +5,18 @@ import {
   hpParseMoney,
   hpResolveHocPhiDong,
 } from "@/lib/data/hp-goi-payable";
+import { computePayrollNetSalary, type PayslipSnapshot } from "@/lib/payroll-snapshot";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const MAX_HP_DONS = 4000;
 const MAX_HC_DONS = 2000;
 const MAX_TC_KHAC = 5000;
+const MAX_LUONG = 5000;
 
-export type ThongKeThuChiNguon = "hoc-phi" | "hoa-cu" | "hoa-cu-nhap" | "thu-chi-khac";
+/** Tạm tắt nguồn «Lương» trên trang thống kê thu chi — bật lại khi cần. */
+export const THONG_KE_THU_CHI_INCLUDE_LUONG = false;
+
+export type ThongKeThuChiNguon = "hoc-phi" | "hoa-cu" | "hoa-cu-nhap" | "thu-chi-khac" | "luong";
 
 export type AdminThongKeThuChiRow = {
   id: string;
@@ -29,6 +33,8 @@ export type AdminThongKeThuChiRow = {
   lopHoc?: string;
   /** Môn / khóa học (`ql_mon_hoc`) theo gói hoặc lớp. */
   khoaHoc?: string;
+  /** Kỳ lương (vd. `5/2026`) — nguồn `luong`. */
+  kyLuong?: string;
 };
 
 export type AdminThongKeThuChiBundle = {
@@ -38,6 +44,12 @@ export type AdminThongKeThuChiBundle = {
 function nId(v: unknown): number | null {
   const n = typeof v === "bigint" ? Number(v) : Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function nNum(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 function parseMoney(v: unknown): number {
@@ -74,6 +86,25 @@ function khoaHocLabelForChi(
   const monId = goiMon ?? lopMon;
   if (!monId) return null;
   return monNameById.get(monId) ?? `Môn #${monId}`;
+}
+
+function formatKyLuong(thang: string | null, nam: string | null): string {
+  const t = thang?.trim();
+  const n = nam?.trim();
+  if (t && n) return `${t}/${n}`;
+  if (n) return n;
+  return t ?? "";
+}
+
+/** Ngày giờ hiển thị / lọc — ưu tiên cuối tháng kỳ lương, fallback `created_at`. */
+function payrollPeriodIso(thang: string | null, nam: string | null, createdAt: string | null): string {
+  const monthMatch = thang ? /(\d{1,2})/.exec(thang) : null;
+  const mm = monthMatch ? Number(monthMatch[1]) : NaN;
+  const yy = nam ? Number(String(nam).trim()) : NaN;
+  if (Number.isFinite(mm) && mm >= 1 && mm <= 12 && Number.isFinite(yy) && yy >= 2000) {
+    return new Date(Date.UTC(yy, mm, 0, 12)).toISOString();
+  }
+  return isoOrEmpty(createdAt);
 }
 
 type ChiBanRow = {
@@ -115,6 +146,7 @@ function unwrapSpNhap(
 /**
  * Gộp học phí (đã thanh toán), bán họa cụ (thu), nhập họa cụ (chi), thu chi khác cho trang thống kê.
  * Không gồm `hp_giao_dich_thanh_toan` (SePay) — tránh trùng với dòng Học phí đã match đơn.
+ * Nguồn lương nhân sự: bật qua `THONG_KE_THU_CHI_INCLUDE_LUONG` (hiện tắt tạm).
  * Tiền học phí = tổng dòng `hp_thu_hp_chi_tiet` (theo gói) trừ `giam_gia` và `giam_gia_vnd` đơn — cùng logic «Quản lý hóa đơn».
  */
 export async function fetchAdminThongKeThuChiBundle(
@@ -583,6 +615,133 @@ export async function fetchAdminThongKeThuChiBundle(
       trangThai,
       ghiChu: ghiChuParts.join(" · "),
     });
+  }
+
+  if (THONG_KE_THU_CHI_INCLUDE_LUONG) {
+  const payrollSelects = [
+    "id, created_at, nhan_vien, tam_ung, thuong, luong_co_ban, tro_cap, hinh_thuc_tinh_luong",
+    "id, created_at, nhan_vien, tam_ung, thuong, luong_co_ban, tro_cap",
+    "id, created_at, nhan_vien, tam_ung, thuong",
+  ];
+
+  let payrollRaw: Record<string, unknown>[] = [];
+  let payrollFetchErr: string | null = null;
+  for (const sel of payrollSelects) {
+    const { data, error } = await supabase
+      .from("hr_bang_tinh_luong")
+      .select(sel)
+      .order("created_at", { ascending: false })
+      .limit(MAX_LUONG);
+    if (!error && data) {
+      payrollRaw = (data ?? []) as unknown as Record<string, unknown>[];
+      payrollFetchErr = null;
+      break;
+    }
+    payrollFetchErr = error?.message || "Không đọc được bảng lương nhân sự.";
+  }
+
+  if (payrollFetchErr && payrollRaw.length === 0) {
+    return { ok: false, error: payrollFetchErr };
+  }
+
+  if (payrollRaw.length > 0) {
+    const bangIds = payrollRaw.map((r) => nId(r.id)).filter((x): x is number => x != null);
+    const staffIds = [...new Set(payrollRaw.map((r) => nId(r.nhan_vien)).filter((x): x is number => x != null))];
+
+    const [staffRes, lichRes] = await Promise.all([
+      staffIds.length
+        ? supabase
+            .from("hr_nhan_su")
+            .select("id, full_name, hinh_thuc_tinh_luong, luong_co_ban, tro_cap")
+            .in("id", staffIds)
+        : Promise.resolve({ data: [] as unknown[], error: null }),
+      bangIds.length
+        ? supabase
+            .from("hr_lich_diem_danh")
+            .select("id, bang_tinh_luong, thang, nam, so_buoi_lam_viec")
+            .in("bang_tinh_luong", bangIds)
+            .order("id", { ascending: true })
+        : Promise.resolve({ data: [] as unknown[], error: null }),
+    ]);
+
+    if (staffRes.error || lichRes.error) {
+      return {
+        ok: false,
+        error:
+          staffRes.error?.message ||
+          lichRes.error?.message ||
+          "Không đọc được dữ liệu kỳ lương nhân sự.",
+      };
+    }
+
+    const staffById = new Map<number, Record<string, unknown>>();
+    for (const raw of staffRes.data ?? []) {
+      const row = raw as Record<string, unknown>;
+      const id = nId(row.id);
+      if (id) staffById.set(id, row);
+    }
+
+    const lichByBangId = new Map<
+      number,
+      { thang: string | null; nam: string | null; so_buoi_lam_viec: number | null }
+    >();
+    for (const raw of lichRes.data ?? []) {
+      const row = raw as Record<string, unknown>;
+      const bangId = nId(row.bang_tinh_luong);
+      if (!bangId || lichByBangId.has(bangId)) continue;
+      lichByBangId.set(bangId, {
+        thang: row.thang != null ? String(row.thang).trim() || null : null,
+        nam: row.nam != null ? String(row.nam).trim() || null : null,
+        so_buoi_lam_viec: nNum(row.so_buoi_lam_viec),
+      });
+    }
+
+    for (const raw of payrollRaw) {
+      const bangId = nId(raw.id);
+      const staffId = nId(raw.nhan_vien);
+      if (!bangId) continue;
+
+      const staff = staffId != null ? staffById.get(staffId) : undefined;
+      const lich = lichByBangId.get(bangId);
+      const snap: PayslipSnapshot = {
+        hinh_thuc_tinh_luong:
+          String(raw.hinh_thuc_tinh_luong ?? staff?.hinh_thuc_tinh_luong ?? "").trim() || null,
+        luong_co_ban: nNum(raw.luong_co_ban) ?? nNum(staff?.luong_co_ban),
+        tro_cap: nNum(raw.tro_cap) ?? nNum(staff?.tro_cap),
+        bhxh: null,
+      };
+      const net = computePayrollNetSalary(snap, {
+        tam_ung: nNum(raw.tam_ung),
+        thuong: nNum(raw.thuong),
+        so_buoi_lam_viec: lich?.so_buoi_lam_viec ?? null,
+      });
+      if (net <= 0) continue;
+
+      const tenNV =
+        staffId != null
+          ? String(staff?.full_name ?? "").trim() || `NS #${staffId}`
+          : "—";
+      const kyLabel = formatKyLuong(lich?.thang ?? null, lich?.nam ?? null);
+
+      rows.push({
+        id: `luong_${bangId}`,
+        nguon: "luong",
+        datetime: payrollPeriodIso(
+          lich?.thang ?? null,
+          lich?.nam ?? null,
+          raw.created_at != null ? String(raw.created_at) : null,
+        ),
+        maDon: `BL-${bangId}`,
+        tieude: `Lương: ${tenNV}`,
+        hinhThuc: snap.hinh_thuc_tinh_luong ?? "",
+        thu: 0,
+        chi: net,
+        trangThai: "Chi",
+        ghiChu: kyLabel ? `Kỳ ${kyLabel}` : "",
+        kyLuong: kyLabel || undefined,
+      });
+    }
+  }
   }
 
   rows.sort((a, b) => {

@@ -1,7 +1,7 @@
 /**
  * Trạng thái tổng học viên / từng khoá — đồng bộ với «Quản lý học viên» (`QuanLyHocVienView`).
  */
-import type { AdminQlhvEnrollment, AdminQlhvStudent } from "@/lib/data/admin-quan-ly-hoc-vien";
+import type { AdminQlhvEnrollment, AdminQlhvStudent, QlhvTrangThaiTuVan } from "@/lib/data/admin-quan-ly-hoc-vien";
 
 const ISO_YMD = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -48,6 +48,19 @@ export function computeOverallStatus(khs: AdminQlhvEnrollment[]): string {
   if (statuses.includes("Đang học")) return "Đang học";
   if (statuses.includes("Chưa học")) return "Chưa học";
   return "Nghỉ";
+}
+
+/**
+ * Nhãn badge trạng thái trên admin (DH, v.v.).
+ * «TT tư vấn» = Nghỉ (`trang_thai_tu_van`) luôn ưu tiên — khớp cột TT tư vấn ở Quản lý học viên.
+ * Còn lại suy từ kỳ học phí (`computeOverallStatus`).
+ */
+export function displayHvTinhTrangForAdmin(
+  trangThaiTuVan: QlhvTrangThaiTuVan | string | null | undefined,
+  enrollments: AdminQlhvEnrollment[],
+): string {
+  if (trangThaiTuVan === "nghi") return "Nghỉ";
+  return computeOverallStatus(enrollments);
 }
 
 export type EnrollmentKyPartial = Pick<AdminQlhvEnrollment, "ngay_dau_ky" | "ngay_cuoi_ky">;

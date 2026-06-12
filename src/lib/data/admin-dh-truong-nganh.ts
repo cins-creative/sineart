@@ -4,10 +4,11 @@ import {
   DH_MON_THI_ARRAY_MAX_COUNT,
   DH_MON_THI_ITEM_MAX_LEN,
 } from "@/lib/agent/dh-exam-profiles";
+import { escapeIlikePattern } from "@/lib/admin/admin-list-params";
 import { slugifyVi } from "@/lib/admin/tra-cuu-schema";
-import type { AdminQlhvEnrollment } from "@/lib/data/admin-quan-ly-hoc-vien";
+import type { AdminQlhvEnrollment, QlhvTrangThaiTuVan } from "@/lib/data/admin-quan-ly-hoc-vien";
 import {
-  computeOverallStatus,
+  displayHvTinhTrangForAdmin,
   formatThangHocTaiSineArt,
   isEnrollmentDangHocByKy,
 } from "@/lib/data/admin-qlhv-tinh-trang";
@@ -86,7 +87,7 @@ export type AdminDhStudentExamRow = {
   mon_thi_chon: string | null;
   /** Số tháng học tại Sine Art — đồng bộ Quản lý học viên. */
   thang_hoc_tai_sine: string | null;
-  /** «Đang học» | «Chưa học» | «Nghỉ» — đồng bộ Quản lý học viên (`computeOverallStatus`). */
+  /** «Đang học» | «Chưa học» | «Nghỉ» — TT tư vấn «Nghỉ» ưu tiên, còn lại theo kỳ HP (`displayHvTinhTrangForAdmin`). */
   tinh_trang: string;
   created_at: string | null;
   ngay_bat_dau: string | null;
@@ -330,6 +331,86 @@ function parseNamThi(v: unknown): number | null {
   return Math.trunc(n);
 }
 
+async function fetchHvIdsByProfileNamThi(supabase: SupabaseClient, namThi: number): Promise<number[]> {
+  const { data, error } = await supabase.from("ql_thong_tin_hoc_vien").select("id").eq("nam_thi", namThi);
+  if (error) return [];
+  return (data ?? [])
+    .map((r) => nIdLoose((r as { id?: unknown }).id))
+    .filter((x): x is number => x != null);
+}
+
+/** Học viên có `nam_thi` hồ sơ khác năm đang lọc (profile override row). */
+async function fetchHvIdsWithProfileNamThiNot(
+  supabase: SupabaseClient,
+  namThi: number,
+): Promise<number[]> {
+  const { data, error } = await supabase
+    .from("ql_thong_tin_hoc_vien")
+    .select("id")
+    .not("nam_thi", "is", null)
+    .neq("nam_thi", namThi);
+  if (error) return [];
+  return (data ?? [])
+    .map((r) => nIdLoose((r as { id?: unknown }).id))
+    .filter((x): x is number => x != null);
+}
+
+type NamThiFilterContext = {
+  profileYIds: number[];
+  profileOtherIds: number[];
+};
+
+async function loadNamThiFilterContext(
+  supabase: SupabaseClient,
+  namThi: number,
+): Promise<NamThiFilterContext> {
+  const [profileYIds, profileOtherIds] = await Promise.all([
+    fetchHvIdsByProfileNamThi(supabase, namThi),
+    fetchHvIdsWithProfileNamThiNot(supabase, namThi),
+  ]);
+  return { profileYIds, profileOtherIds };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyResolvedNamThiFilter(q: any, ctx: NamThiFilterContext, namThi: number): any {
+  if (ctx.profileYIds.length > 0) {
+    q = q.or(`nam_thi.eq.${namThi},hoc_vien.in.(${ctx.profileYIds.join(",")})`);
+  } else {
+    q = q.eq("nam_thi", namThi);
+  }
+  if (ctx.profileOtherIds.length > 0) {
+    q = q.not("hoc_vien", "in", `(${ctx.profileOtherIds.join(",")})`);
+  }
+  return q;
+}
+
+async function healNamThiMismatches(
+  supabase: SupabaseClient,
+  heals: ReadonlyArray<{ rowId: number; nam_thi: number | null }>,
+): Promise<void> {
+  if (!heals.length) return;
+  await Promise.all(
+    heals.map(({ rowId, nam_thi }) =>
+      supabase.from("ql_hv_truong_nganh").update({ nam_thi }).eq("id", rowId),
+    ),
+  );
+}
+
+function collectNamThiHeal(
+  rowId: number,
+  rowNamRaw: unknown,
+  profileNamRaw: unknown,
+  heals: { rowId: number; nam_thi: number | null }[],
+): number | null {
+  const rowNam = parseNamThi(rowNamRaw);
+  const profileNam = parseNamThi(profileNamRaw);
+  const resolved = profileNam ?? rowNam;
+  if (profileNam != null && profileNam !== rowNam) {
+    heals.push({ rowId, nam_thi: profileNam });
+  }
+  return resolved;
+}
+
 /**
  * `ql_hv_truong_nganh.score` — điểm thi học viên (có thể là số thập phân, ví dụ
  * 7.5). Giữ nguyên giá trị (không trunc) miễn là number hợp lệ.
@@ -430,22 +511,29 @@ async function fetchHvEnrollmentBriefByHvIds(
 
   const profileByHv = new Map<
     number,
-    { created_at: string | null; ngay_bat_dau: string | null; ngay_ket_thuc: string | null }
+    {
+      created_at: string | null;
+      ngay_bat_dau: string | null;
+      ngay_ket_thuc: string | null;
+      trang_thai_tu_van: QlhvTrangThaiTuVan;
+    }
   >();
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const chunk = ids.slice(i, i + IN_CHUNK);
     const { data, error } = await supabase
       .from("ql_thong_tin_hoc_vien")
-      .select("id, created_at, ngay_bat_dau, ngay_ket_thuc")
+      .select("id, created_at, ngay_bat_dau, ngay_ket_thuc, trang_thai_tu_van")
       .in("id", chunk);
     if (error) return out;
     for (const row of (data ?? []) as Record<string, unknown>[]) {
       const id = nIdLoose(row.id);
       if (id == null) continue;
+      const tvRaw = String(row.trang_thai_tu_van ?? "").trim().toLowerCase();
       profileByHv.set(id, {
         created_at: row.created_at != null ? String(row.created_at) : null,
         ngay_bat_dau: row.ngay_bat_dau != null ? String(row.ngay_bat_dau) : null,
         ngay_ket_thuc: row.ngay_ket_thuc != null ? String(row.ngay_ket_thuc) : null,
+        trang_thai_tu_van: tvRaw === "nghi" ? "nghi" : "dang_hoc",
       });
     }
   }
@@ -494,7 +582,10 @@ async function fetchHvEnrollmentBriefByHvIds(
         ngay_bat_dau: prof?.ngay_bat_dau,
         ngay_ket_thuc: prof?.ngay_ket_thuc,
       }),
-      tinh_trang: computeOverallStatus(enrollments as AdminQlhvEnrollment[]),
+      tinh_trang: displayHvTinhTrangForAdmin(
+        prof?.trang_thai_tu_van,
+        enrollments as AdminQlhvEnrollment[],
+      ),
     });
   }
 
@@ -503,6 +594,35 @@ async function fetchHvEnrollmentBriefByHvIds(
 
 function isMissingScore2ColumnError(message: string): boolean {
   return /score_2/i.test(message) && /column|schema cache/i.test(message);
+}
+
+/** Học viên khớp tên hoặc email (ilike) — dùng lọc danh sách DH. */
+async function resolveHvIdsMatchingNameOrEmail(
+  supabase: SupabaseClient,
+  q: string,
+): Promise<number[]> {
+  const qq = q.trim();
+  if (!qq) return [];
+  const esc = escapeIlikePattern(qq);
+  const ids: number[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("ql_thong_tin_hoc_vien")
+      .select("id")
+      .or(`full_name.ilike.%${esc}%,email.ilike.%${esc}%`)
+      .range(from, from + STUDENT_PAGE - 1);
+    if (error) break;
+    const batch = (data ?? []) as Record<string, unknown>[];
+    if (!batch.length) break;
+    for (const row of batch) {
+      const id = nIdLoose(row.id);
+      if (id != null) ids.push(id);
+    }
+    if (batch.length < STUDENT_PAGE) break;
+    from += STUDENT_PAGE;
+  }
+  return [...new Set(ids)];
 }
 
 const QL_HV_TN_STUDENT_SELECT_WITH_SCORE_2 =
@@ -539,7 +659,8 @@ export async function fetchAdminDhStudentsByTruong(
     q = q.eq("truong_dai_hoc", truongFilterId);
   }
   if (namThiFilter != null && Number.isFinite(namThiFilter)) {
-    q = q.eq("nam_thi", namThiFilter);
+    const namCtx = await loadNamThiFilterContext(supabase, namThiFilter);
+    q = applyResolvedNamThiFilter(q, namCtx, namThiFilter);
   }
 
   const acc: Record<string, unknown>[] = [];
@@ -574,6 +695,7 @@ export async function fetchAdminDhStudentsByTruong(
       created_at: string | null;
       ngay_bat_dau: string | null;
       ngay_ket_thuc: string | null;
+      nam_thi: number | null;
     }
   >();
   for (let i = 0; i < hvIds.length; i += IN_CHUNK) {
@@ -581,7 +703,7 @@ export async function fetchAdminDhStudentsByTruong(
     if (!chunk.length) break;
     const { data, error } = await supabase
       .from("ql_thong_tin_hoc_vien")
-      .select("id, full_name, sdt, email, facebook, created_at, ngay_bat_dau, ngay_ket_thuc")
+      .select("id, full_name, sdt, email, facebook, created_at, ngay_bat_dau, ngay_ket_thuc, nam_thi")
       .in("id", chunk);
     if (error) return { ok: false, error: error.message };
     for (const row of (data ?? []) as Record<string, unknown>[]) {
@@ -595,6 +717,7 @@ export async function fetchAdminDhStudentsByTruong(
         created_at: row.created_at != null ? String(row.created_at) : null,
         ngay_bat_dau: row.ngay_bat_dau != null ? String(row.ngay_bat_dau) : null,
         ngay_ket_thuc: row.ngay_ket_thuc != null ? String(row.ngay_ket_thuc) : null,
+        nam_thi: parseNamThi(row.nam_thi),
       });
     }
   }
@@ -646,6 +769,7 @@ export async function fetchAdminDhStudentsByTruong(
         );
 
   const hvBriefByHv = await fetchHvEnrollmentBriefByHvIds(supabase, hvIds);
+  const namThiHeals: { rowId: number; nam_thi: number | null }[] = [];
 
   for (const raw of acc) {
     const id = nIdLoose(raw.id);
@@ -668,7 +792,7 @@ export async function fetchAdminDhStudentsByTruong(
       ten_truong: trMap.get(tid) ?? `Trường #${tid}`,
       nganh_id: nid,
       ten_nganh: nid != null ? ngMap.get(nid) ?? `Ngành #${nid}` : "—",
-      nam_thi: parseNamThi(raw.nam_thi),
+      nam_thi: collectNamThiHeal(id, raw.nam_thi, hv?.nam_thi, namThiHeals),
       ghi_chu: typeof raw.ghi_chu === "string" && raw.ghi_chu.trim() ? raw.ghi_chu.trim() : null,
       score: parseExamScore(raw.score),
       score_2: parseExamScore(raw.score_2),
@@ -690,6 +814,8 @@ export async function fetchAdminDhStudentsByTruong(
     if (nc !== 0) return nc;
     return a.ten_nganh.localeCompare(b.ten_nganh, "vi");
   });
+
+  await healNamThiMismatches(supabase, namThiHeals);
 
   return { ok: true, rows: mapped };
 }
@@ -784,14 +910,15 @@ export async function fetchAdminDhHvDistinctCountsByNganhForNam(
 
   const hvByNganh = new Map<number, Set<number>>();
   const allHv = new Set<number>();
+  const namCtx = await loadNamThiFilterContext(supabase, namThi);
   let from = 0;
   for (;;) {
-    const { data, error } = await supabase
+    let q = supabase
       .from("ql_hv_truong_nganh")
       .select("hoc_vien, nganh_dao_tao")
-      .eq("truong_dai_hoc", truongId)
-      .eq("nam_thi", namThi)
-      .range(from, from + STUDENT_PAGE - 1);
+      .eq("truong_dai_hoc", truongId);
+    q = applyResolvedNamThiFilter(q, namCtx, namThi);
+    const { data, error } = await q.range(from, from + STUDENT_PAGE - 1);
     if (error) return { ok: false, error: error.message };
     const batch = (data ?? []) as Record<string, unknown>[];
     if (!batch.length) break;
@@ -948,6 +1075,8 @@ export async function fetchAdminDhStudentsByTruongPaged(
     namThi?: number | null;
     /** Lọc `mon_thi_chon` — khớp đúng chuỗi; `null`/bỏ qua = mọi môn. */
     monThiChon?: string | null;
+    /** Tìm theo tên hoặc email học viên (ilike). */
+    search?: string | null;
     page: number;
     pageSize?: number;
   },
@@ -955,6 +1084,21 @@ export async function fetchAdminDhStudentsByTruongPaged(
   const pageSize = Math.max(1, Math.trunc(args.pageSize ?? DH_STUDENTS_PAGE_SIZE));
   const page = Math.max(1, Math.trunc(args.page || 1));
   const offset = (page - 1) * pageSize;
+  const searchQ = args.search != null ? String(args.search).trim() : "";
+
+  const hvIdsForSearch =
+    searchQ !== "" ? await resolveHvIdsMatchingNameOrEmail(supabase, searchQ) : null;
+  if (hvIdsForSearch != null && hvIdsForSearch.length === 0) {
+    return {
+      ok: true,
+      result: { rows: [], total: 0, page: 1, pageSize, pageCount: 1 },
+    };
+  }
+
+  const namCtx =
+    args.namThi != null && Number.isFinite(args.namThi)
+      ? await loadNamThiFilterContext(supabase, args.namThi)
+      : null;
 
   const buildPagedQuery = (selectCols: string) => {
     let q = supabase
@@ -968,11 +1112,14 @@ export async function fetchAdminDhStudentsByTruongPaged(
     if (args.nganhId != null && Number.isFinite(args.nganhId) && args.nganhId > 0) {
       q = q.eq("nganh_dao_tao", args.nganhId);
     }
-    if (args.namThi != null && Number.isFinite(args.namThi)) {
-      q = q.eq("nam_thi", args.namThi);
+    if (args.namThi != null && Number.isFinite(args.namThi) && namCtx) {
+      q = applyResolvedNamThiFilter(q, namCtx, args.namThi);
     }
     if (args.monThiChon != null && String(args.monThiChon).trim() !== "") {
       q = q.eq("mon_thi_chon", String(args.monThiChon).trim());
+    }
+    if (hvIdsForSearch != null && hvIdsForSearch.length > 0) {
+      q = q.in("hoc_vien", hvIdsForSearch);
     }
     return q;
   };
@@ -1008,12 +1155,13 @@ export async function fetchAdminDhStudentsByTruongPaged(
       created_at: string | null;
       ngay_bat_dau: string | null;
       ngay_ket_thuc: string | null;
+      nam_thi: number | null;
     }
   >();
   if (hvIds.length) {
     const { data: hvData, error: hvErr } = await supabase
       .from("ql_thong_tin_hoc_vien")
-      .select("id, full_name, sdt, email, facebook, created_at, ngay_bat_dau, ngay_ket_thuc")
+      .select("id, full_name, sdt, email, facebook, created_at, ngay_bat_dau, ngay_ket_thuc, nam_thi")
       .in("id", hvIds);
     if (hvErr) return { ok: false, error: hvErr.message };
     for (const row of (hvData ?? []) as Record<string, unknown>[]) {
@@ -1027,6 +1175,7 @@ export async function fetchAdminDhStudentsByTruongPaged(
         created_at: row.created_at != null ? String(row.created_at) : null,
         ngay_bat_dau: row.ngay_bat_dau != null ? String(row.ngay_bat_dau) : null,
         ngay_ket_thuc: row.ngay_ket_thuc != null ? String(row.ngay_ket_thuc) : null,
+        nam_thi: parseNamThi(row.nam_thi),
       });
     }
   }
@@ -1058,6 +1207,7 @@ export async function fetchAdminDhStudentsByTruongPaged(
 
   const monThiByNganh = await fetchMonThiByNganhForTruong(supabase, args.truongId, ngIds);
   const hvBriefByHv = await fetchHvEnrollmentBriefByHvIds(supabase, hvIds);
+  const namThiHeals: { rowId: number; nam_thi: number | null }[] = [];
 
   const rows: AdminDhStudentExamRow[] = [];
   for (const raw of acc) {
@@ -1078,7 +1228,7 @@ export async function fetchAdminDhStudentsByTruongPaged(
       ten_truong: tenTruong,
       nganh_id: nid,
       ten_nganh: nid != null ? ngMap.get(nid) ?? `Ngành #${nid}` : "—",
-      nam_thi: parseNamThi(raw.nam_thi),
+      nam_thi: collectNamThiHeal(id, raw.nam_thi, hv?.nam_thi, namThiHeals),
       ghi_chu: typeof raw.ghi_chu === "string" && raw.ghi_chu.trim() ? raw.ghi_chu.trim() : null,
       score: parseExamScore(raw.score),
       score_2: hasScore2Column ? parseExamScore(raw.score_2) : null,
@@ -1091,6 +1241,8 @@ export async function fetchAdminDhStudentsByTruongPaged(
       ngay_ket_thuc: hv?.ngay_ket_thuc ?? null,
     });
   }
+
+  await healNamThiMismatches(supabase, namThiHeals);
 
   return {
     ok: true,

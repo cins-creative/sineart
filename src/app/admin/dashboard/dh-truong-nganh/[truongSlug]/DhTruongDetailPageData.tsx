@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { parseAdminListQuery } from "@/lib/admin/admin-list-params";
 import {
   buildAdminDhNganhFilterRows,
   DH_STUDENTS_PAGE_SIZE,
@@ -55,6 +56,7 @@ export default async function DhTruongDetailPageData({
   const page = parseIntQuery(sp.page) ?? 1;
   const namFromQuery = parseNamQuery(sp.nam);
   const nganhSlugFromQuery = parseNganhSlugQuery(sp.nganh);
+  const searchQuery = parseAdminListQuery(sp.q);
 
   const supabase = createServiceRoleClient();
   if (!supabase) {
@@ -74,6 +76,7 @@ export default async function DhTruongDetailPageData({
         stats={null}
         page={1}
         pageSize={DH_STUDENTS_PAGE_SIZE}
+        searchQuery=""
         loadError={null}
       />
     );
@@ -96,6 +99,7 @@ export default async function DhTruongDetailPageData({
         stats={null}
         page={1}
         pageSize={DH_STUDENTS_PAGE_SIZE}
+        searchQuery={searchQuery}
         loadError={truongRes.error}
       />
     );
@@ -126,6 +130,7 @@ export default async function DhTruongDetailPageData({
       truongId: truong.id,
       nganhId: selectedNganhId,
       namThi: nam,
+      search: searchQuery || null,
       page,
       pageSize: DH_STUDENTS_PAGE_SIZE,
     }),
@@ -166,6 +171,7 @@ export default async function DhTruongDetailPageData({
       stats={stats}
       page={students?.page ?? page}
       pageSize={DH_STUDENTS_PAGE_SIZE}
+      searchQuery={searchQuery}
       loadError={loadError}
     />
   );

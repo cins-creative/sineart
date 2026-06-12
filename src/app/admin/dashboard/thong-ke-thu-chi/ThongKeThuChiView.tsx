@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BarChart3, BookOpen, Calendar, Download, GraduationCap, Hash, Layers, Search, Wallet, X } from "lucide-react";
 
-import type { AdminThongKeThuChiRow, ThongKeThuChiNguon } from "@/lib/data/admin-thong-ke-thu-chi";
+import {
+  THONG_KE_THU_CHI_INCLUDE_LUONG,
+  type AdminThongKeThuChiRow,
+  type ThongKeThuChiNguon,
+} from "@/lib/data/admin-thong-ke-thu-chi";
 import { cn } from "@/lib/utils";
 
 const NGUON_LABEL: Record<ThongKeThuChiNguon, string> = {
@@ -11,6 +15,7 @@ const NGUON_LABEL: Record<ThongKeThuChiNguon, string> = {
   "hoa-cu": "Bán họa cụ",
   "hoa-cu-nhap": "Nhập họa cụ",
   "thu-chi-khac": "Thu chi khác",
+  luong: "Lương",
 };
 
 const NGUON_BADGE: Record<ThongKeThuChiNguon, { bg: string; color: string }> = {
@@ -18,6 +23,7 @@ const NGUON_BADGE: Record<ThongKeThuChiNguon, { bg: string; color: string }> = {
   "hoa-cu": { bg: "#fffbeb", color: "#d97706" },
   "hoa-cu-nhap": { bg: "#fff1f2", color: "#e11d48" },
   "thu-chi-khac": { bg: "#ecfdf5", color: "#059669" },
+  luong: { bg: "#f5f3ff", color: "#7c3aed" },
 };
 
 const PAGE_SIZE = 50;
@@ -163,6 +169,7 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
           s2l(r.ghiChu).includes(q) ||
           s2l(r.lopHoc ?? "").includes(q) ||
           s2l(r.khoaHoc ?? "").includes(q) ||
+          s2l(r.kyLuong ?? "").includes(q) ||
           s2l(NGUON_LABEL[r.nguon]).includes(q),
       );
     }
@@ -249,7 +256,8 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
           <div className="min-w-0">
             <div className="text-[17px] font-bold tracking-tight text-[#323232]">Thống kê thu chi</div>
             <div className="text-xs text-[#AAAAAA]">
-              {initialRows.length} dòng · học phí, họa cụ, thu chi khác
+              {initialRows.length} dòng · học phí, họa cụ
+              {THONG_KE_THU_CHI_INCLUDE_LUONG ? ", lương" : ""}, thu chi khác
             </div>
           </div>
         </div>
@@ -358,6 +366,7 @@ export default function ThongKeThuChiView({ rows: initialRows }: Props) {
                     <option value="hoc-phi">Học phí</option>
                     <option value="hoa-cu">Bán họa cụ</option>
                     <option value="hoa-cu-nhap">Nhập họa cụ</option>
+                    {THONG_KE_THU_CHI_INCLUDE_LUONG ? <option value="luong">Lương</option> : null}
                     <option value="thu-chi-khac">Thu chi khác</option>
                   </select>
                   <select
@@ -532,9 +541,12 @@ function TransactionDetailModal({
   const title =
     row.nguon === "hoc-phi"
       ? row.ghiChu?.trim() || row.tieude.replace(/^HP:\s*/i, "").trim() || row.tieude
-      : row.tieude || NGUON_LABEL[row.nguon];
+      : row.nguon === "luong"
+        ? row.tieude.replace(/^Lương:\s*/i, "").trim() || row.tieude
+        : row.tieude || NGUON_LABEL[row.nguon];
   const showGhiChu =
     Boolean(row.ghiChu?.trim()) &&
+    row.nguon !== "luong" &&
     s2l(row.ghiChu) !== s2l(title) &&
     s2l(row.ghiChu) !== s2l(row.tieude.replace(/^HP:\s*/i, ""));
 
@@ -664,6 +676,31 @@ function TransactionDetailModal({
                 </div>
               </div>
             </div>
+          ) : row.nguon === "luong" ? (
+            <div
+              className="overflow-hidden rounded-xl border border-[#EAEAEA]"
+              style={{ background: `linear-gradient(135deg, ${badge.bg} 0%, #ffffff 72%)` }}
+            >
+              <div className="border-b border-[#EAEAEA]/80 px-4 py-2.5">
+                <p className="m-0 text-[10px] font-extrabold uppercase tracking-wide" style={{ color: badge.color }}>
+                  Phiếu lương
+                </p>
+              </div>
+              <div className="flex gap-3 px-4 py-3">
+                <span
+                  className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                  style={{ background: badge.bg, color: badge.color }}
+                >
+                  <Calendar className="h-4 w-4" strokeWidth={2} aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-black/40">Kỳ lương</p>
+                  <p className="m-0 mt-0.5 break-words text-[13px] font-bold leading-snug text-[#1a1a2e]">
+                    {row.kyLuong?.trim() || "—"}
+                  </p>
+                </div>
+              </div>
+            </div>
           ) : row.tieude ? (
             <div className="rounded-xl border border-[#EAEAEA] bg-[#F5F7F7]/60 px-4 py-3">
               <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-black/40">Nội dung</p>
@@ -674,7 +711,7 @@ function TransactionDetailModal({
           <div className="grid gap-3 sm:grid-cols-2">
             <DetailMetaCell
               icon={Wallet}
-              label="Hình thức"
+              label={row.nguon === "luong" ? "Hình thức tính lương" : "Hình thức"}
               value={row.hinhThuc?.trim() || "—"}
             />
             <DetailMetaCell icon={Layers} label="Loại" value={loai || "—"} tone={loaiTone} />

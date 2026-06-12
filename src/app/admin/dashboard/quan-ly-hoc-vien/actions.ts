@@ -332,7 +332,18 @@ export async function updateHocVienProfile(studentId: number, payload: HocVienPr
     }
     return { ok: false, error: error.message || "Không lưu được hồ sơ." };
   }
+
+  const { error: syncNvErr } = await supabase
+    .from("ql_hv_truong_nganh")
+    .update({ nam_thi: body.nam_thi })
+    .eq("hoc_vien", studentId);
+  if (syncNvErr) {
+    return { ok: false, error: syncNvErr.message || "Đã lưu hồ sơ nhưng không đồng bộ được năm thi nguyện vọng." };
+  }
+
   revalidate();
+  revalidatePath("/admin/dashboard/dh-truong-nganh/[truongSlug]", "page");
+  revalidatePath("/admin/dashboard/dh-truong-nganh/[truongSlug]/nganh/[nganhSlug]", "page");
   return { ok: true, message: "Đã lưu." };
 }
 
@@ -390,8 +401,27 @@ export async function updateQlHvTruongNganhRow(
   const ghi_chu =
     payload.ghi_chu != null && String(payload.ghi_chu).trim() !== "" ? String(payload.ghi_chu).trim() : null;
 
+  const { data: existing, error: readErr } = await supabase
+    .from("ql_hv_truong_nganh")
+    .select("hoc_vien")
+    .eq("id", rowId)
+    .maybeSingle();
+  if (readErr) return { ok: false, error: readErr.message || "Không đọc được dòng nguyện vọng." };
+
   const { error } = await supabase.from("ql_hv_truong_nganh").update({ nam_thi, ghi_chu }).eq("id", rowId);
   if (error) return { ok: false, error: error.message || "Không lưu được trường/ngành." };
+
+  const hvId = existing?.hoc_vien != null ? Number(existing.hoc_vien) : NaN;
+  if (Number.isFinite(hvId) && hvId > 0) {
+    const { error: profileErr } = await supabase
+      .from("ql_thong_tin_hoc_vien")
+      .update({ nam_thi })
+      .eq("id", hvId);
+    if (profileErr) {
+      return { ok: false, error: profileErr.message || "Đã lưu nguyện vọng nhưng không cập nhậ được năm thi hồ sơ." };
+    }
+  }
+
   revalidate();
   revalidatePath("/admin/dashboard/dh-truong-nganh/[truongSlug]", "page");
   revalidatePath("/admin/dashboard/dh-truong-nganh/[truongSlug]/nganh/[nganhSlug]", "page");

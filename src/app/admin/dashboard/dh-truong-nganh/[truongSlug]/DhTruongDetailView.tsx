@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, GraduationCap, ListChecks, Plus, Users } from "lucide-react";
+import { ArrowLeft, GraduationCap, ListChecks, Plus, Search, Users, X } from "lucide-react";
 
 import type {
   AdminDhNganhFilterRow,
@@ -34,6 +34,7 @@ type Props = {
   stats: AdminDhOverviewStats | null;
   page: number;
   pageSize: number;
+  searchQuery: string;
   missingServiceRole?: boolean;
   loadError?: string | null;
 };
@@ -52,11 +53,17 @@ export default function DhTruongDetailView({
   stats,
   page,
   pageSize,
+  searchQuery,
   missingServiceRole,
   loadError,
 }: Props) {
   const router = useRouter();
   const basePath = `/admin/dashboard/dh-truong-nganh/${truongSlug}`;
+  const [searchDraft, setSearchDraft] = useState(searchQuery);
+
+  useEffect(() => {
+    setSearchDraft(searchQuery);
+  }, [searchQuery]);
 
   const selectYears = useMemo(() => {
     const set = new Set(yearOptions);
@@ -67,13 +74,29 @@ export default function DhTruongDetailView({
 
   const existingYears = useMemo(() => new Set(selectYears), [selectYears]);
 
-  function hrefForFilters(nextNam: number, nextNganhSlug: string | null, nextPage = 1): string {
+  function hrefForFilters(
+    nextNam: number,
+    nextNganhSlug: string | null,
+    nextPage = 1,
+    nextSearch: string | null = searchQuery,
+  ): string {
     const params = new URLSearchParams();
     params.set("nam", String(nextNam));
     if (nextNganhSlug) params.set("nganh", nextNganhSlug);
     if (nextPage > 1) params.set("page", String(nextPage));
+    const q = nextSearch?.trim() ?? "";
+    if (q) params.set("q", q);
     return `${basePath}?${params.toString()}`;
   }
+
+  useEffect(() => {
+    const trimmed = searchDraft.trim();
+    if (trimmed === searchQuery.trim()) return;
+    const t = window.setTimeout(() => {
+      router.push(hrefForFilters(nam, selectedNganhSlug, 1, trimmed || null));
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [searchDraft, searchQuery, nam, selectedNganhSlug, router]);
 
   function openYear(year: number): void {
     router.push(hrefForFilters(year, selectedNganhSlug));
@@ -205,14 +228,44 @@ export default function DhTruongDetailView({
       ) : null}
 
       <section className="flex min-h-0 flex-1 flex-col gap-2">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <h2 className="m-0 text-[14px] font-extrabold text-[#2d2020] md:text-[15px]">
-            {selectedNganh ? selectedNganh.ten_nganh : "Danh sách học viên"}
-          </h2>
-          <p className="m-0 text-[11px] font-semibold text-black/45">
-            Năm {nam}
-            {selectedNganh ? ` · ${totalRows.toLocaleString("vi-VN")} dòng` : null}
-          </p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="m-0 text-[14px] font-extrabold text-[#2d2020] md:text-[15px]">
+              {selectedNganh ? selectedNganh.ten_nganh : "Danh sách học viên"}
+            </h2>
+            <p className="m-0 mt-0.5 text-[11px] font-semibold text-black/45">
+              Năm {nam}
+              {searchQuery.trim()
+                ? ` · ${totalRows.toLocaleString("vi-VN")} kết quả`
+                : selectedNganh
+                  ? ` · ${totalRows.toLocaleString("vi-VN")} dòng`
+                  : null}
+            </p>
+          </div>
+          <div className="relative min-w-0 w-full sm:max-w-[280px]">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/35"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              placeholder="Tìm tên, email…"
+              aria-label="Tìm học viên theo tên hoặc email"
+              className="h-9 w-full rounded-lg border border-[#EAEAEA] bg-white py-0 pl-8 pr-8 text-xs text-[#1a1a2e] outline-none focus:border-[#BC8AF9]"
+            />
+            {searchDraft ? (
+              <button
+                type="button"
+                aria-label="Xóa tìm kiếm"
+                onClick={() => setSearchDraft("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-black/35 hover:text-black/60"
+              >
+                <X size={14} aria-hidden />
+              </button>
+            ) : null}
+          </div>
         </div>
         <DhStudentsTable
           rows={students?.rows ?? []}
@@ -225,9 +278,11 @@ export default function DhTruongDetailView({
           }}
           emptyText={
             totalRows === 0
-              ? selectedNganh
-                ? `Chưa có học viên nào đăng ký ngành «${selectedNganh.ten_nganh}» vào năm ${nam}.`
-                : `Chưa có học viên nào đăng ký thi trường này vào năm ${nam}.`
+              ? searchQuery.trim()
+                ? `Không có học viên nào khớp «${searchQuery.trim()}».`
+                : selectedNganh
+                  ? `Chưa có học viên nào đăng ký ngành «${selectedNganh.ten_nganh}» vào năm ${nam}.`
+                  : `Chưa có học viên nào đăng ký thi trường này vào năm ${nam}.`
               : "Trang này không còn bản ghi."
           }
         />

@@ -590,7 +590,7 @@ function HeroSlidesSection({
           <p className="qlh-section-sub qlh-collapsible-sub">
             Slide bên phải Hero trên trang chủ. Ảnh tuỳ chọn — khuyến nghị{" "}
             <b>{HERO_SLIDE_IMAGE_SPEC.label}</b> (tỷ lệ {HERO_SLIDE_IMAGE_SPEC.ratio.replace(/\s/g, "")}
-            ). Không có ảnh sẽ dùng gradient nền.
+            ). Không có ảnh sẽ dùng màu mặc định theo tag slide.
           </p>
           {data.length > 0 ? (
             <ul className="qlh-slide-rows">
@@ -638,14 +638,6 @@ function HeroSlidesSection({
                         placeholder="Mô tả"
                         aria-label={`Mô tả slide ${i + 1}`}
                         onChange={(e) => setSlide(i, { ...slide, subtitle: e.target.value })}
-                      />
-                      <input
-                        type="text"
-                        className="qlh-field-input qlh-slide-bg"
-                        value={slide.bg}
-                        placeholder="Gradient nền (CSS)"
-                        aria-label={`Gradient slide ${i + 1}`}
-                        onChange={(e) => setSlide(i, { ...slide, bg: e.target.value })}
                       />
                     </div>
                   </div>
@@ -1466,7 +1458,7 @@ const QLH_CSS = `
 .qlh-slide-thumb-err{font-size:10px;color:#c04444;line-height:1.3;text-align:center}
 .qlh-slide-fields{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .qlh-slide-fields .qlh-field-input{padding:8px 10px;font-size:13px}
-.qlh-slide-sub,.qlh-slide-bg{grid-column:1/-1}
+.qlh-slide-sub{grid-column:1/-1}
 .qlh-preview-link{color:#b31e62;font-weight:700;text-decoration:underline;text-underline-offset:2px}
 .qlh-preview-link:hover{color:#ee5b9f}
 .qlh-pillar-card{background:#fff;border:1px solid rgba(45,32,32,.08);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}

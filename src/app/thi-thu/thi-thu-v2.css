@@ -114,12 +114,21 @@
   line-height: 1.65;
 }
 
+.sa-thi-thu .tti-list {
+  background: var(--tti-card);
+  padding: 32px 24px 28px;
+}
 .sa-thi-thu .tti-grid3 {
   display: grid;
   grid-template-columns: repeat(1, 1fr);
   gap: 18px;
-  padding: 32px 24px 28px;
-  background: var(--tti-card);
+  padding: 0;
+  background: transparent;
+}
+.sa-thi-thu .tti-grid3 + .tti-grid3--ended {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--tti-ink3);
 }
 @media (min-width: 768px) {
   .sa-thi-thu .tti-grid3 {
@@ -137,6 +146,37 @@
 .sa-thi-thu .tti-ttc:hover {
   transform: translateY(-3px);
   box-shadow: var(--tti-sh-lg);
+}
+.sa-thi-thu .tti-ttc--ended {
+  border-color: var(--tti-ink4);
+  box-shadow: none;
+}
+.sa-thi-thu .tti-ttc--ended:hover {
+  transform: none;
+  box-shadow: none;
+}
+.sa-thi-thu .tti-ttc--ended .tti-ttc-img-hh,
+.sa-thi-thu .tti-ttc--ended .tti-ttc-img-tt,
+.sa-thi-thu .tti-ttc--ended .tti-ttc-img-bc {
+  background: linear-gradient(135deg, #ececec, #d8d8d8);
+}
+.sa-thi-thu .tti-ttc--ended .tti-ttc-img > img {
+  filter: grayscale(1);
+  opacity: 0.72;
+}
+.sa-thi-thu .tti-ttc--ended .tti-ttc-img-icon {
+  opacity: 0.22;
+}
+.sa-thi-thu .tti-ttc--ended .tti-badge {
+  background: var(--tti-ink4) !important;
+  color: var(--tti-ink2) !important;
+}
+.sa-thi-thu .tti-ttc--ended h2 {
+  color: var(--tti-ink2);
+}
+.sa-thi-thu .tti-ttc--ended .tti-btn-yt {
+  border-color: var(--tti-ink3);
+  color: var(--tti-ink2) !important;
 }
 .sa-thi-thu .tti-ttc-img {
   aspect-ratio: 16/9;

@@ -14,6 +14,7 @@ import {
 import type { ListCardStatus } from "@/lib/thi-thu/phase";
 import { computeKyListSortKey, formatThoiGianSuaBaiLabel } from "@/lib/thi-thu/replay-time";
 import { getMonConfig, type MonThiKey } from "@/lib/thi-thu-config";
+import { cn } from "@/lib/utils";
 import type { ThiThuKyThiRow } from "@/types/thi-thu";
 
 const OPEN_ROOM_MS = 15 * 60 * 1000;
@@ -63,6 +64,103 @@ function dotCls(st: ListCardStatus): string {
   return "tti-dot-n";
 }
 
+type EnrichedCard = {
+  row: ThiThuKyThiRow;
+  mon: MonThiKey;
+  cfg: ReturnType<typeof getMonConfig>;
+  T: number;
+  endMs: number;
+  st: ListCardStatus;
+  roomOpen: boolean;
+  sortKey: number;
+};
+
+function sortCards(list: EnrichedCard[]): EnrichedCard[] {
+  return [...list].sort((a, b) => {
+    if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey;
+    return a.row.thoi_gian_bat_dau.localeCompare(b.row.thoi_gian_bat_dau);
+  });
+}
+
+function ThiThuCard({
+  row,
+  mon,
+  cfg,
+  st,
+  roomOpen,
+  endMs,
+  now,
+  ended = false,
+}: EnrichedCard & { now: number; ended?: boolean }) {
+  const canEnter = roomOpen && st !== "da_ket_thuc";
+  const graceLeftMs =
+    st === "gia_han_nop_bai" ? Math.max(0, endMs + SUBMIT_GRACE_MS - now) : 0;
+  const suaLabel =
+    st === "da_ket_thuc" || st === "gia_han_nop_bai"
+      ? formatThoiGianSuaBaiLabel(row.thoi_gian_bat_dau, row.thoi_gian_sua_bai)
+      : null;
+  const yt = row.video_sua_bai?.trim() ?? "";
+
+  return (
+    <article className={cn("tti-ttc", ended && "tti-ttc--ended")}>
+      <div className={`tti-ttc-img ${imgCls(mon)}`}>
+        {row.thumbnail_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={row.thumbnail_url}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <span className="tti-ttc-img-icon" aria-hidden>
+            {mon === "hinh_hoa" ? "✏" : mon === "trang_tri_mau" ? "🎨" : "🖼"}
+          </span>
+        )}
+        {!ended ? <div className="tti-ttc-status-bar" style={statusBarStyle(mon)} /> : null}
+      </div>
+      <div className="tti-ttc-b">
+        <span className={`tti-badge ${badgeCls(mon)}`}>{cfg.label}</span>
+        <h2>{row.tieu_de}</h2>
+        <p className="tti-ttc-meta">{fmtDayHour(row.thoi_gian_bat_dau)}</p>
+        <p className="tti-ttc-state">
+          <span className={`tti-dot-live ${dotCls(st)}`} aria-hidden />
+          {listCardStatusLabel(st)}
+        </p>
+        {suaLabel ? (
+          <p className="tti-ttc-sua">
+            <span className="tti-ttc-sua-k">Lịch sửa bài:</span> {suaLabel}
+          </p>
+        ) : null}
+        {st === "gia_han_nop_bai" && graceLeftMs > 0 ? (
+          <p className="tti-ttc-meta font-semibold text-[#b91c5c]" style={{ marginTop: "0.35rem" }}>
+            Gia hạn nộp bài: <span className="tabular-nums">{fmtGraceMMSS(graceLeftMs)}</span>
+          </p>
+        ) : null}
+        {canEnter ? (
+          <Link href={`/thi-thu/${row.id}`} className="tti-ttc-btn tti-btn-grad">
+            Vào phòng thi →
+          </Link>
+        ) : (
+          <span className="tti-ttc-btn tti-btn-off">
+            {st === "da_ket_thuc" ? "Đã kết thúc" : "Chưa mở phòng"}
+          </span>
+        )}
+        {st === "da_ket_thuc" && yt ? (
+          <a
+            href={yt}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="tti-ttc-btn tti-btn-yt"
+          >
+            Xem video sửa bài ↗
+          </a>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
   const [offsetMs, setOffsetMs] = useState(0);
 
@@ -83,8 +181,8 @@ export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
   // eslint-disable-next-line react-hooks/purity -- now + server clock offset for card status
   const now = Date.now() + offsetMs;
 
-  const cards = useMemo(() => {
-    const enriched = rows.map((row) => {
+  const { activeCards, endedCards } = useMemo(() => {
+    const enriched: EnrichedCard[] = rows.map((row) => {
       const mon = row.mon_thi as MonThiKey;
       const cfg = getMonConfig(mon);
       const examPhut = resolveExamDurationPhut(row);
@@ -100,11 +198,11 @@ export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
       });
       return { row, mon, cfg, T, endMs, st, roomOpen, sortKey };
     });
-    enriched.sort((a, b) => {
-      if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey;
-      return a.row.thoi_gian_bat_dau.localeCompare(b.row.thoi_gian_bat_dau);
-    });
-    return enriched;
+
+    return {
+      activeCards: sortCards(enriched.filter((c) => c.st !== "da_ket_thuc")),
+      endedCards: sortCards(enriched.filter((c) => c.st === "da_ket_thuc")),
+    };
   }, [rows, now]);
 
   if (rows.length === 0) {
@@ -116,75 +214,21 @@ export default function ThiThuListClient({ rows }: { rows: ThiThuKyThiRow[] }) {
   }
 
   return (
-    <div className="tti-grid3">
-      {cards.map(({ row, mon, cfg, st, roomOpen, endMs }) => {
-        const canEnter = roomOpen && st !== "da_ket_thuc";
-        const graceLeftMs =
-          st === "gia_han_nop_bai" ? Math.max(0, endMs + SUBMIT_GRACE_MS - now) : 0;
-        const suaLabel =
-          st === "da_ket_thuc" || st === "gia_han_nop_bai"
-            ? formatThoiGianSuaBaiLabel(row.thoi_gian_bat_dau, row.thoi_gian_sua_bai)
-            : null;
-        const yt = row.video_sua_bai?.trim() ?? "";
-        return (
-          <article key={row.id} className="tti-ttc">
-            <div className={`tti-ttc-img ${imgCls(mon)}`}>
-              {row.thumbnail_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={row.thumbnail_url}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="tti-ttc-img-icon" aria-hidden>
-                  {mon === "hinh_hoa" ? "✏" : mon === "trang_tri_mau" ? "🎨" : "🖼"}
-                </span>
-              )}
-              <div className="tti-ttc-status-bar" style={statusBarStyle(mon)} />
-            </div>
-            <div className="tti-ttc-b">
-              <span className={`tti-badge ${badgeCls(mon)}`}>{cfg.label}</span>
-              <h2>{row.tieu_de}</h2>
-              <p className="tti-ttc-meta">{fmtDayHour(row.thoi_gian_bat_dau)}</p>
-              <p className="tti-ttc-state">
-                <span className={`tti-dot-live ${dotCls(st)}`} aria-hidden />
-                {listCardStatusLabel(st)}
-              </p>
-              {suaLabel ? (
-                <p className="tti-ttc-sua">
-                  <span className="tti-ttc-sua-k">Lịch sửa bài:</span> {suaLabel}
-                </p>
-              ) : null}
-              {st === "gia_han_nop_bai" && graceLeftMs > 0 ? (
-                <p className="tti-ttc-meta font-semibold text-[#b91c5c]" style={{ marginTop: "0.35rem" }}>
-                  Gia hạn nộp bài: <span className="tabular-nums">{fmtGraceMMSS(graceLeftMs)}</span>
-                </p>
-              ) : null}
-              {canEnter ? (
-                <Link href={`/thi-thu/${row.id}`} className="tti-ttc-btn tti-btn-grad">
-                  Vào phòng thi →
-                </Link>
-              ) : (
-                <span className="tti-ttc-btn tti-btn-off">
-                  {st === "da_ket_thuc" ? "Đã kết thúc" : "Chưa mở phòng"}
-                </span>
-              )}
-              {st === "da_ket_thuc" && yt ? (
-                <a
-                  href={yt}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="tti-ttc-btn tti-btn-yt"
-                >
-                  Xem video sửa bài ↗
-                </a>
-              ) : null}
-            </div>
-          </article>
-        );
-      })}
+    <div className="tti-list">
+      {activeCards.length > 0 ? (
+        <div className="tti-grid3">
+          {activeCards.map((card) => (
+            <ThiThuCard key={card.row.id} {...card} now={now} />
+          ))}
+        </div>
+      ) : null}
+      {endedCards.length > 0 ? (
+        <div className="tti-grid3 tti-grid3--ended">
+          {endedCards.map((card) => (
+            <ThiThuCard key={card.row.id} {...card} now={now} ended />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -21,10 +21,12 @@ function ThiThuListCardSkeleton() {
 /** Khớp `.tti-grid3` + `.tti-ttc` — tránh layout shift khi list load. */
 export function ThiThuListSectionSkeleton() {
   return (
-    <div className="tti-grid3">
-      <ThiThuListCardSkeleton />
-      <ThiThuListCardSkeleton />
-      <ThiThuListCardSkeleton />
+    <div className="tti-list">
+      <div className="tti-grid3">
+        <ThiThuListCardSkeleton />
+        <ThiThuListCardSkeleton />
+        <ThiThuListCardSkeleton />
+      </div>
     </div>
   );
 }

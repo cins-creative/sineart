@@ -1,7 +1,8 @@
 "use client";
 
 import { Bell, ChevronLeft, ChevronRight, Loader2, Search, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 
 import type { SepayIncomingTransfer } from "@/lib/data/admin-sepay-transfers";
 import {
@@ -13,6 +14,37 @@ import { cn } from "@/lib/utils";
 const POLL_MS = 45_000;
 const SEEN_KEY_PREFIX = "sineart-sepay-tuvan-seen-at";
 const HISTORY_PAGE_SIZE = 20;
+const DROPDOWN_Z = 200;
+const MOBILE_PANEL_MAX = 640;
+
+function computeDropdownStyle(anchor: DOMRect): CSSProperties {
+  const vw = window.innerWidth;
+  const margin = 16;
+  const top = anchor.bottom + 6;
+
+  if (vw < MOBILE_PANEL_MAX) {
+    return {
+      position: "fixed",
+      top,
+      left: margin,
+      right: margin,
+      width: "auto",
+      zIndex: DROPDOWN_Z,
+    };
+  }
+
+  const panelW = Math.min(320, vw - margin * 2);
+  let left = anchor.right - panelW;
+  left = Math.max(margin, Math.min(left, vw - panelW - margin));
+
+  return {
+    position: "fixed",
+    top,
+    left,
+    width: panelW,
+    zIndex: DROPDOWN_Z,
+  };
+}
 
 function formatVnd(amount: number): string {
   return `${Math.round(amount).toLocaleString("vi-VN")} ₫`;
@@ -310,12 +342,32 @@ type Props = {
 
 export default function SepayTransferNotification({ staffId }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<SepayIncomingTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>({});
   const [historyOpen, setHistoryOpen] = useState(false);
   const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
+
+  const updateDropdownStyle = useCallback(() => {
+    const btn = buttonRef.current;
+    if (!btn) return;
+    setDropdownStyle(computeDropdownStyle(btn.getBoundingClientRect()));
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!dropdownOpen) return;
+    updateDropdownStyle();
+    window.addEventListener("resize", updateDropdownStyle);
+    window.addEventListener("scroll", updateDropdownStyle, true);
+    return () => {
+      window.removeEventListener("resize", updateDropdownStyle);
+      window.removeEventListener("scroll", updateDropdownStyle, true);
+    };
+  }, [dropdownOpen, updateDropdownStyle]);
 
   useEffect(() => {
     setLastSeenAt(readLastSeenAt(staffId));
@@ -381,16 +433,80 @@ export default function SepayTransferNotification({ staffId }: Props) {
   useEffect(() => {
     if (!dropdownOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setDropdownOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setDropdownOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [dropdownOpen]);
 
+  const dropdownPanel =
+    dropdownOpen && typeof document !== "undefined" ? (
+      <div
+        ref={panelRef}
+        style={dropdownStyle}
+        className="overflow-hidden rounded-xl border border-[#EDE8E9] bg-white shadow-[0_10px_32px_rgba(45,32,32,0.12)]"
+        role="dialog"
+        aria-label="Tin chuyển khoản chưa đọc"
+      >
+        <div className="border-b border-[#F3EEEF] px-3 py-2.5">
+          <p className="m-0 text-[12px] font-bold text-[#323232]">Chuyển khoản chưa đọc</p>
+          <p className="m-0 text-[10px] text-slate-500">
+            {unreadCount > 0 ? `${unreadCount} tin mới từ SePay` : "Không có tin mới"}
+          </p>
+        </div>
+
+        <div className="max-h-[min(280px,50vh)] overflow-y-auto px-3">
+          {loading && unreadItems.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 py-6 text-[11px] text-slate-500">
+              <Loader2 size={14} className="animate-spin" aria-hidden />
+              Đang tải…
+            </div>
+          ) : null}
+          {error ? <p className="py-4 text-[11px] text-red-700">{error}</p> : null}
+          {!loading && !error && unreadItems.length === 0 ? (
+            <p className="py-6 text-center text-[11px] text-slate-500">Bạn đã xem hết tin mới.</p>
+          ) : null}
+          {unreadItems.length > 0 ? (
+            <ul className="m-0 list-none divide-y divide-[#F3EEEF] p-0">
+              {unreadItems.map((tx) => (
+                <li key={tx.id}>
+                  <TransferRow tx={tx} compact />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-t border-[#F3EEEF] bg-slate-50/80 px-3 py-2">
+          {unreadCount > 0 ? (
+            <button
+              type="button"
+              onClick={markAllSeen}
+              className="text-[10px] font-semibold text-emerald-800 hover:underline"
+            >
+              Đánh dấu đã đọc
+            </button>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            onClick={openHistory}
+            className="rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#323232] hover:bg-white/90"
+          >
+            Xem tất cả
+          </button>
+        </div>
+      </div>
+    ) : null;
+
   return (
     <>
       <div ref={rootRef} className="relative shrink-0">
         <button
+          ref={buttonRef}
           type="button"
           onClick={toggleDropdown}
           title="Chuyển khoản SePay mới"
@@ -415,63 +531,7 @@ export default function SepayTransferNotification({ staffId }: Props) {
           ) : null}
         </button>
 
-        {dropdownOpen ? (
-          <div
-            className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-[#EDE8E9] bg-white shadow-[0_10px_32px_rgba(45,32,32,0.12)]"
-            role="dialog"
-            aria-label="Tin chuyển khoản chưa đọc"
-          >
-            <div className="border-b border-[#F3EEEF] px-3 py-2.5">
-              <p className="m-0 text-[12px] font-bold text-[#323232]">Chuyển khoản chưa đọc</p>
-              <p className="m-0 text-[10px] text-slate-500">
-                {unreadCount > 0 ? `${unreadCount} tin mới từ SePay` : "Không có tin mới"}
-              </p>
-            </div>
-
-            <div className="max-h-[min(280px,50vh)] overflow-y-auto px-3">
-              {loading && unreadItems.length === 0 ? (
-                <div className="flex items-center justify-center gap-2 py-6 text-[11px] text-slate-500">
-                  <Loader2 size={14} className="animate-spin" aria-hidden />
-                  Đang tải…
-                </div>
-              ) : null}
-              {error ? <p className="py-4 text-[11px] text-red-700">{error}</p> : null}
-              {!loading && !error && unreadItems.length === 0 ? (
-                <p className="py-6 text-center text-[11px] text-slate-500">Bạn đã xem hết tin mới.</p>
-              ) : null}
-              {unreadItems.length > 0 ? (
-                <ul className="m-0 list-none divide-y divide-[#F3EEEF] p-0">
-                  {unreadItems.map((tx) => (
-                    <li key={tx.id}>
-                      <TransferRow tx={tx} compact />
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-
-            <div className="flex items-center justify-between gap-2 border-t border-[#F3EEEF] bg-slate-50/80 px-3 py-2">
-              {unreadCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={markAllSeen}
-                  className="text-[10px] font-semibold text-emerald-800 hover:underline"
-                >
-                  Đánh dấu đã đọc
-                </button>
-              ) : (
-                <span />
-              )}
-              <button
-                type="button"
-                onClick={openHistory}
-                className="rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#323232] hover:bg-white/90"
-              >
-                Xem tất cả
-              </button>
-            </div>
-          </div>
-        ) : null}
+        {dropdownPanel ? createPortal(dropdownPanel, document.body) : null}
       </div>
 
       <SepayHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />

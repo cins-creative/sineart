@@ -191,8 +191,13 @@ export default function QuanLyTrangChuView({
           <h1 className="qlh-h1">Quản lý trang chủ</h1>
           <p className="qlh-updated">
             Layout mới — xem trước tại{" "}
-            <a href="/new" target="_blank" rel="noopener noreferrer" className="qlh-preview-link">
-              /new
+            <a href="/" target="_blank" rel="noopener noreferrer" className="qlh-preview-link">
+              /
+            </a>
+            {" · "}
+            Trang cũ:{" "}
+            <a href="/old" target="_blank" rel="noopener noreferrer" className="qlh-preview-link">
+              /old
             </a>
             {" · "}
             Cập nhật lần cuối: <b>{fmtUpdatedAt(updatedAt)}</b>
@@ -243,7 +248,7 @@ export default function QuanLyTrangChuView({
       <div className="qlh-note">
         <Info size={16} />
         <span>
-          Quản lý nội dung trang chủ mới (<a href="/new" target="_blank" rel="noopener noreferrer">/new</a>
+          Quản lý nội dung trang chủ (<a href="/" target="_blank" rel="noopener noreferrer">/</a>
           ): ticker, Hero + carousel, số liệu luyện thi, video, CTA, footer, ảnh lớp và banner quảng cáo.
           Khóa học, review, giáo viên, gallery, matcher trường–ngành (CINS) lấy từ DB tự động.
         </span>
@@ -583,7 +588,7 @@ function HeroSlidesSection({
       {open ? (
         <div className="qlh-collapsible-body">
           <p className="qlh-section-sub qlh-collapsible-sub">
-            Slide bên phải Hero trên /new. Ảnh tuỳ chọn — khuyến nghị{" "}
+            Slide bên phải Hero trên trang chủ. Ảnh tuỳ chọn — khuyến nghị{" "}
             <b>{HERO_SLIDE_IMAGE_SPEC.label}</b> (tỷ lệ {HERO_SLIDE_IMAGE_SPEC.ratio.replace(/\s/g, "")}
             ). Không có ảnh sẽ dùng gradient nền.
           </p>
@@ -829,7 +834,7 @@ function MarqueeSection({
       {open ? (
         <div className="qlh-collapsible-body">
           <p className="qlh-section-sub qlh-collapsible-sub">
-            Dòng chạy ngang dưới menu trên <code>/new</code>. Chỉ hiển thị mục đã có nội dung.
+            Dòng chạy ngang dưới menu trên trang chủ. Chỉ hiển thị mục đã có nội dung.
           </p>
 
           <MarqueeAdminPreview items={data} />
@@ -1015,7 +1020,7 @@ function VideoSection({
         <div>
           <h2 className="qlh-section-title">Video lớp online</h2>
           <p className="qlh-section-sub">
-            Trang /new dùng tab 1 (Online). Tab 2 giữ cho trang chủ cũ nếu cần.
+            Trang chủ dùng tab 1 (Online). Tab 2 giữ cho trang cũ (<code>/old</code>) nếu cần.
           </p>
         </div>
       </header>

@@ -136,7 +136,7 @@ export function HomeMockupHero({
                   className="slide"
                   style={{
                     background: s.imageUrl
-                      ? `linear-gradient(160deg,rgba(45,32,32,.35),rgba(45,32,32,.15)), url(${s.imageUrl}) center/cover no-repeat`
+                      ? `url(${s.imageUrl}) center/cover no-repeat`
                       : s.bg,
                   }}
                 >

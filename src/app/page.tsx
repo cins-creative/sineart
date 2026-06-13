@@ -1,26 +1,16 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+
+import { HomeMockupPage } from "@/app/_components/home-mockup/HomeMockupPage";
 import HomePageJsonLd from "./_components/HomePageJsonLd";
-import CtaBandSection from "./_components/CtaBandSection";
-import LuuBaiHocVienFab from "./_components/LuuBaiHocVienFab";
-import { HomeCareerSection } from "./_components/home/HomeCareerSection";
-import { HomeCareerSectionSkeleton } from "./_components/home/HomeCareerSection.skeleton";
-import { HomeGallerySection } from "./_components/home/HomeGallerySection";
-import { HomeGallerySectionSkeleton } from "./_components/home/HomeGallerySection.skeleton";
+import { HomeSectionErrorBoundary } from "./_components/home/HomeSectionErrorBoundary";
 import { HomeLeadLoadingFallback } from "./_components/home/HomeLeadLoadingFallback";
-import { HomeLeadSections } from "./_components/home/HomeLeadSections";
 import { HomeNavSection } from "./_components/home/HomeNavSection";
 import { HomeNavSectionSkeleton } from "./_components/home/HomeNavSection.skeleton";
-import { HomeReviewsSection } from "./_components/home/HomeReviewsSection";
-import { HomeReviewsSectionSkeleton } from "./_components/home/HomeReviewsSection.skeleton";
-import { HomeClassroomPhotosSection } from "./_components/home/HomeClassroomPhotosSection";
-import { HomeTeachersSection } from "./_components/home/HomeTeachersSection";
-import { HomeTeachersSectionSkeleton } from "./_components/home/HomeTeachersSection.skeleton";
-import { HomeSectionErrorBoundary } from "./_components/home/HomeSectionErrorBoundary";
 import "./sineart-home.css";
+import "./sineart-home-mockup.css";
 import { SITE_OG_DEFAULT_IMAGE } from "@/lib/seo/site-jsonld";
 
-/** ISR — dữ liệu public; admin có `revalidatePath` khi đổi môn/lớp. */
 export const revalidate = 300;
 
 export const metadata: Metadata = {
@@ -47,56 +37,22 @@ export const metadata: Metadata = {
 
 export default function Home() {
   return (
-    <div className="sa-root">
+    <>
       <HomePageJsonLd />
-      <Suspense fallback={<HomeNavSectionSkeleton />}>
-        <HomeSectionErrorBoundary label="HomeNavSection">
-          <HomeNavSection />
-        </HomeSectionErrorBoundary>
-      </Suspense>
-
-      <Suspense fallback={<HomeLeadLoadingFallback />}>
-        <HomeSectionErrorBoundary label="HomeLeadSections">
-          <HomeLeadSections>
-            <Suspense fallback={<HomeReviewsSectionSkeleton />}>
-              <HomeSectionErrorBoundary label="HomeReviewsSection">
-                <HomeReviewsSection />
-              </HomeSectionErrorBoundary>
-            </Suspense>
-            <Suspense fallback={<HomeGallerySectionSkeleton />}>
-              <HomeSectionErrorBoundary label="HomeGallerySection">
-                <HomeGallerySection />
-              </HomeSectionErrorBoundary>
-            </Suspense>
-          </HomeLeadSections>
-        </HomeSectionErrorBoundary>
-      </Suspense>
-
-      <Suspense fallback={<HomeCareerSectionSkeleton />}>
-        <HomeSectionErrorBoundary label="HomeCareerSection">
-          <HomeCareerSection />
-        </HomeSectionErrorBoundary>
-      </Suspense>
-
-      <Suspense fallback={<HomeTeachersSectionSkeleton />}>
-        <HomeSectionErrorBoundary label="HomeTeachersSection">
-          <HomeTeachersSection />
-        </HomeSectionErrorBoundary>
-      </Suspense>
-
-      <Suspense fallback={null}>
-        <HomeSectionErrorBoundary label="HomeClassroomPhotosSection">
-          <HomeClassroomPhotosSection />
-        </HomeSectionErrorBoundary>
-      </Suspense>
-
-      <HomeSectionErrorBoundary label="CtaBandSection">
-        <CtaBandSection />
-      </HomeSectionErrorBoundary>
-
-      <HomeSectionErrorBoundary label="LuuBaiHocVienFab">
-        <LuuBaiHocVienFab />
-      </HomeSectionErrorBoundary>
-    </div>
+      <div className="sa-root">
+        <Suspense fallback={<HomeNavSectionSkeleton />}>
+          <HomeSectionErrorBoundary label="HomeNavSection">
+            <HomeNavSection />
+          </HomeSectionErrorBoundary>
+        </Suspense>
+      </div>
+      <div className="sa-mockup">
+        <Suspense fallback={<HomeLeadLoadingFallback />}>
+          <HomeSectionErrorBoundary label="HomeMockupPage">
+            <HomeMockupPage />
+          </HomeSectionErrorBoundary>
+        </Suspense>
+      </div>
+    </>
   );
 }

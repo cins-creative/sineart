@@ -52,6 +52,11 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/new",
+        destination: "/",
+        permanent: true,
+      },
+      {
         source: "/admin/dashboard/dh-truong-nganh/:truongSlug/tuyen-sinh/:nam",
         destination: "/admin/dashboard/dh-truong-nganh/:truongSlug?nam=:nam",
         permanent: true,

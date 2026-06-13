@@ -12,7 +12,7 @@ export default function ConditionalCta() {
   if (pathname === "/admin" || pathname?.startsWith("/admin/")) {
     return null;
   }
-  if (pathname === "/new") {
+  if (pathname === "/") {
     return null;
   }
   return <CtaSection />;

@@ -95,8 +95,8 @@ export async function POST(req: Request) {
 
   revalidatePath("/", "page");
   revalidatePath("/", "layout");
-  revalidatePath("/new", "page");
-  revalidatePath("/new", "layout");
+  revalidatePath("/old", "page");
+  revalidatePath("/old", "layout");
   revalidatePath("/admin/dashboard/quan-ly-trang-chu", "page");
   revalidateTag(MKT_HOME_CONTENT_TAG, "max");
 

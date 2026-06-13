@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import {
   ArrowRight,
   Edit3,
@@ -23,13 +22,6 @@ import { HomeMockupTeachersSection } from "@/app/_components/home-mockup/HomeMoc
 import { HomeMockupVideo } from "@/app/_components/home-mockup/HomeMockupVideo";
 import { HomeMockupHero } from "@/app/_components/home-mockup/HomeMockupHero";
 import { getHomeMockupPayload } from "@/lib/data/home-mockup";
-import { nextImageShouldUnoptimize } from "@/lib/nextImageRemote";
-
-const KIENG_LABEL = {
-  hh: "Hình họa",
-  tt: "Trang trí màu",
-  bc: "Bố cục màu",
-} as const;
 
 function GalleryArt({ photo, grad, label }: { photo: string | null | undefined; grad: string; label: string }) {
   if (photo) {
@@ -153,66 +145,6 @@ export async function HomeMockupPage() {
               })}
             </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="section" id="curr">
-        <div className="wrap">
-          <div className="sec-head">
-            <span className="eyebrow">Giáo trình</span>
-            <h2>
-              Lộ trình tuần tự, <span className="grad-text">có kiểm tra</span>
-            </h2>
-            <p>Mỗi buổi bắt đầu bằng demo của giáo viên, kết thúc bằng bài chấm 1-1. Đây là phần đầu lộ trình mỗi môn.</p>
-          </div>
-          <div className="curr-grid">
-            {data.curriculum.map((c) => (
-              <article key={c.key} className="curr-card">
-                <div
-                  className={`curr-art${c.thumbnail ? " curr-art--has-img" : " ph"}`}
-                  style={{ background: c.thumbGrad }}
-                >
-                  {c.thumbnail ? (
-                    <Image
-                      src={c.thumbnail}
-                      alt={c.title}
-                      fill
-                      sizes="(max-width: 991.98px) 100vw, 33vw"
-                      className="curr-art-img"
-                      loading="lazy"
-                      unoptimized={nextImageShouldUnoptimize(c.thumbnail)}
-                    />
-                  ) : (
-                    <>
-                      <ImageIcon className="feather" aria-hidden />
-                      <span className="ph-label">Bài học viên · {KIENG_LABEL[c.key]}</span>
-                    </>
-                  )}
-                </div>
-                <div className="curr-body">
-                  <span className="curr-cat" style={{ background: c.catBg, color: c.catColor }}>
-                    <span className="d" style={{ background: `var(--cat-${c.key})` }} aria-hidden />
-                    {KIENG_LABEL[c.key]}
-                  </span>
-                  <h3>{c.title}</h3>
-                  <p className="desc">{c.desc}</p>
-                  <ul className="steps">
-                    {c.steps.map((st) => (
-                      <li key={st.n + st.text} className={st.last ? "last" : undefined}>
-                        <span className="b">{st.n}</span>
-                        {st.text}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="curr-foot">
-                    <Link href={`/khoa-hoc/${c.slug}`}>
-                      Lộ trình đầy đủ <ArrowRight className="feather" aria-hidden />
-                    </Link>
-                  </div>
-                </div>
-              </article>
-            ))}
           </div>
         </div>
       </section>

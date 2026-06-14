@@ -17,6 +17,7 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ClipboardList,
+  DollarSign,
   Loader2,
   Package,
   Pencil,
@@ -24,6 +25,7 @@ import {
   RefreshCw,
   Search,
   ShoppingCart,
+  Smartphone,
   Trash2,
   Truck,
   User,
@@ -41,6 +43,8 @@ import {
   deleteHoaCuSanPham,
   loadHoaCuDonBanChiTietAction,
   loadHoaCuDonNhapChiTietAction,
+  loadKhoPageAction,
+  pollHoaCuDonBanAction,
   updateHoaCuDonBanMeta,
   updateHoaCuDonNhapMeta,
   updateHoaCuSanPham,
@@ -61,6 +65,7 @@ import {
 import type { AdminChiNhanhOption } from "@/lib/data/admin-chi-nhanh";
 import type { AdminHoaCuBanChiTietLine, AdminHoaCuNhapChiTietLine } from "@/app/admin/dashboard/quan-ly-hoa-cu/actions";
 import { cn } from "@/lib/utils";
+import { buildVietQrImageUrl, getTpBankQrRecipient, resolveQrPaymentAmounts } from "@/lib/payment/vietqr";
 
 const KHACH_PICKER_MAX = 10;
 const KHACH_PICKER_PANEL_MIN_PX = 420;
@@ -77,6 +82,17 @@ const LOAI_BADGE: Record<string, { bg: string; text: string }> = {
   "Phụ kiện": { bg: "#f3f4f6", text: "#374151" },
 };
 
+function fmtDateVi(iso: string): string {
+  const d = iso.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return iso;
+  const [y, m, day] = d.split("-");
+  return `${day}/${m}/${y}`;
+}
+
+function isHcChuyenKhoanUi(h: string): boolean {
+  return h.trim() === "Chuyển khoản";
+}
+
 function fmtVnd(n: number): string {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Math.max(0, Math.round(n))) + " ₫";
 }
@@ -87,45 +103,50 @@ function KhoFilters({
   searchQ,
   chiNhanhId,
   chiNhanhOptions,
+  onApply,
+  pending,
 }: {
   searchQ: string;
   chiNhanhId: number;
   chiNhanhOptions: AdminChiNhanhOption[];
+  onApply: (q: string, branchId: number, page?: number) => void;
+  pending?: boolean;
 }) {
-  const router = useRouter();
   const [qInput, setQInput] = useState(searchQ);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const applyToUrl = useCallback(
-    (rawQ: string, branchId: number) => {
-      const p = new URLSearchParams();
-      const t = rawQ.trim();
-      if (t) p.set("q", t);
-      p.set("chi_nhanh", String(branchId));
-      p.set("page", "1");
-      router.replace(`${HOA_CU_KHO_PATH}?${p.toString()}`, { scroll: false });
-    },
-    [router],
-  );
+  useEffect(() => {
+    setQInput(searchQ);
+  }, [searchQ]);
+
+  const flushSearchNow = useCallback(() => {
+    if (debounceTimerRef.current != null) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    onApply(qInput, chiNhanhId, 1);
+  }, [qInput, chiNhanhId, onApply]);
 
   useEffect(() => {
     if (qInput.trim() === searchQ.trim()) return;
     if (debounceTimerRef.current != null) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
       debounceTimerRef.current = null;
-      applyToUrl(qInput, chiNhanhId);
+      onApply(qInput, chiNhanhId, 1);
     }, KHO_SEARCH_DEBOUNCE_MS);
     return () => {
       if (debounceTimerRef.current != null) clearTimeout(debounceTimerRef.current);
     };
-  }, [qInput, searchQ, chiNhanhId, applyToUrl]);
+  }, [qInput, searchQ, chiNhanhId, onApply]);
 
-  function flushSearchNow() {
-    if (debounceTimerRef.current != null) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-    applyToUrl(qInput, chiNhanhId);
+  function syncKhoUrl(q: string, branchId: number, page = 1) {
+    const p = new URLSearchParams();
+    p.set("chi_nhanh", String(branchId));
+    const t = q.trim();
+    if (t) p.set("q", t);
+    if (page > 1) p.set("page", String(page));
+    const qs = p.toString();
+    window.history.replaceState(null, "", qs ? `${HOA_CU_KHO_PATH}?${qs}` : HOA_CU_KHO_PATH);
   }
 
   return (
@@ -134,9 +155,18 @@ function KhoFilters({
         <span className="sr-only">Chi nhánh</span>
         <select
           value={String(chiNhanhId)}
-          onChange={(e) => applyToUrl(qInput, Number(e.target.value))}
-          className="h-10 w-full min-w-[140px] rounded-[10px] border border-[#EAEAEA] bg-white px-2.5 text-[13px] outline-none focus:border-[#BC8AF9] md:max-w-[200px]"
+          disabled={pending}
+          onChange={(e) => {
+            const branchId = Number(e.target.value);
+            syncKhoUrl(qInput, branchId, 1);
+            onApply(qInput, branchId, 1);
+          }}
+          className={cn(
+            "h-10 w-full min-w-[140px] rounded-[10px] border border-[#EAEAEA] bg-white px-2.5 text-[13px] outline-none focus:border-[#BC8AF9] md:max-w-[200px]",
+            pending && "opacity-70",
+          )}
           aria-label="Chi nhánh kho"
+          aria-busy={pending}
         >
           {chiNhanhOptions.map((b) => (
             <option key={b.id} value={String(b.id)}>
@@ -156,9 +186,13 @@ function KhoFilters({
               flushSearchNow();
             }
           }}
+          disabled={pending}
           placeholder="Tìm tên hàng, loại…"
           aria-label="Tìm trong kho chi nhánh"
-          className="h-10 w-full min-w-0 rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-3 text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white"
+          className={cn(
+            "h-10 w-full min-w-0 rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-3 text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white",
+            pending && "opacity-70",
+          )}
         />
       </div>
     </div>
@@ -300,16 +334,58 @@ export default function QuanLyHoaCuView({
     window.setTimeout(() => setToast(null), 2800);
   };
 
+  const [khoLive, setKhoLive] = useState(khoPage);
+  const [khoPending, setKhoPending] = useState(false);
+  const khoReqRef = useRef(0);
+
+  useEffect(() => {
+    if (khoPage) setKhoLive(khoPage);
+  }, [khoPage]);
+
+  const applyKhoFilters = useCallback(
+    async (q: string, branchId: number, page = 1) => {
+      const reqId = ++khoReqRef.current;
+      setKhoPending(true);
+      const r = await loadKhoPageAction({
+        chi_nhanh_id: branchId,
+        q: q.trim() || undefined,
+        page,
+      });
+      if (reqId !== khoReqRef.current) return;
+      setKhoPending(false);
+      if (r.ok) {
+        const chiNhanhTen = chiNhanhOptions.find((b) => b.id === branchId)?.ten ?? "—";
+        setKhoLive({
+          rows: r.rows,
+          page: r.page,
+          pageSize: r.pageSize,
+          total: r.total,
+          searchQ: q.trim(),
+          chiNhanhId: branchId,
+          chiNhanhTen,
+          inventoryTotal: r.inventoryTotal,
+          inventoryHetHang: r.inventoryHetHang,
+          inventoryTonSum: r.inventoryTonSum,
+        });
+        prefetchHoaCuCatalog(branchId);
+      } else {
+        notify(r.error, false);
+      }
+    },
+    [chiNhanhOptions],
+  );
+
   const activeBranchId =
-    khoPage?.chiNhanhId ?? nhapPage?.chiNhanhId ?? banPage?.chiNhanhId ?? chiNhanhOptions[0]?.id ?? null;
+    khoLive?.chiNhanhId ?? khoPage?.chiNhanhId ?? nhapPage?.chiNhanhId ?? banPage?.chiNhanhId ?? chiNhanhOptions[0]?.id ?? null;
 
   useEffect(() => {
     prefetchHoaCuCatalog(activeBranchId);
   }, [activeBranchId]);
 
-  const inventoryTotal = khoPage?.inventoryTotal ?? 0;
-  const hetHang = khoPage?.inventoryHetHang ?? 0;
-  const inventoryTonSum = khoPage?.inventoryTonSum ?? 0;
+  const khoDisplay = activeSection === "kho" ? (khoLive ?? khoPage) : khoPage;
+  const inventoryTotal = khoDisplay?.inventoryTotal ?? 0;
+  const hetHang = khoDisplay?.inventoryHetHang ?? 0;
+  const inventoryTonSum = khoDisplay?.inventoryTonSum ?? 0;
 
   return (
     <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
@@ -332,12 +408,12 @@ export default function QuanLyHoaCuView({
                 {new Intl.NumberFormat("vi-VN").format(inventoryTonSum)}
               </span>{" "}
               đơn vị tồn · {inventoryTotal} mặt hàng · {hetHang} hết tồn
-              {(khoPage?.chiNhanhTen ?? nhapPage?.chiNhanhTen ?? banPage?.chiNhanhTen) ? (
+              {(khoDisplay?.chiNhanhTen ?? nhapPage?.chiNhanhTen ?? banPage?.chiNhanhTen) ? (
                 <>
                   {" "}
                   ·{" "}
                   <span className="font-semibold text-[#888]">
-                    {khoPage?.chiNhanhTen ?? nhapPage?.chiNhanhTen ?? banPage?.chiNhanhTen}
+                    {khoDisplay?.chiNhanhTen ?? nhapPage?.chiNhanhTen ?? banPage?.chiNhanhTen}
                   </span>
                 </>
               ) : null}
@@ -435,12 +511,13 @@ export default function QuanLyHoaCuView({
             </Link>
           ))}
         </div>
-        {activeSection === "kho" && khoPage ? (
+        {activeSection === "kho" && khoDisplay ? (
           <KhoFilters
-            key={`${khoPage.searchQ}-${khoPage.chiNhanhId}`}
-            searchQ={khoPage.searchQ}
-            chiNhanhId={khoPage.chiNhanhId}
+            searchQ={khoDisplay.searchQ}
+            chiNhanhId={khoDisplay.chiNhanhId}
             chiNhanhOptions={chiNhanhOptions}
+            onApply={applyKhoFilters}
+            pending={khoPending}
           />
         ) : activeSection === "nhap" && nhapPage ? (
           <DonChiNhanhFilter
@@ -460,16 +537,26 @@ export default function QuanLyHoaCuView({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 md:p-6">
-        {activeSection === "kho" && khoPage ? (
+        {activeSection === "kho" && khoDisplay ? (
           <KhoTab
-            rows={khoPage.rows}
+            rows={khoDisplay.rows}
+            loading={khoPending}
             pagination={{
-              page: khoPage.page,
-              total: khoPage.total,
-              pageSize: khoPage.pageSize,
+              page: khoDisplay.page,
+              total: khoDisplay.total,
+              pageSize: khoDisplay.pageSize,
               basePath: HOA_CU_KHO_PATH,
-              searchQ: khoPage.searchQ,
-              chiNhanhId: khoPage.chiNhanhId,
+              searchQ: khoDisplay.searchQ,
+              chiNhanhId: khoDisplay.chiNhanhId,
+            }}
+            onPageChange={(page) => {
+              const p = new URLSearchParams();
+              p.set("chi_nhanh", String(khoDisplay.chiNhanhId));
+              if (khoDisplay.searchQ.trim()) p.set("q", khoDisplay.searchQ.trim());
+              if (page > 1) p.set("page", String(page));
+              const qs = p.toString();
+              window.history.replaceState(null, "", qs ? `${HOA_CU_KHO_PATH}?${qs}` : HOA_CU_KHO_PATH);
+              void applyKhoFilters(khoDisplay.searchQ, khoDisplay.chiNhanhId, page);
             }}
             onEdit={(r) => {
               setSanPhamDraft(r);
@@ -477,7 +564,10 @@ export default function QuanLyHoaCuView({
             }}
             onInventoryChanged={(msg, ok) => {
               notify(msg, ok);
-              if (ok) router.refresh();
+              if (ok && khoDisplay) {
+                invalidateHoaCuCatalogCache(khoDisplay.chiNhanhId);
+                void applyKhoFilters(khoDisplay.searchQ, khoDisplay.chiNhanhId, khoDisplay.page);
+              }
             }}
           />
         ) : activeSection === "nhap" && nhapPage ? (
@@ -542,7 +632,11 @@ export default function QuanLyHoaCuView({
                 invalidateHoaCuCatalogCache(activeBranchId ?? undefined);
                 setSanPhamDraft(null);
                 setModal(null);
-                router.refresh();
+                if (activeSection === "kho" && khoDisplay) {
+                  void applyKhoFilters(khoDisplay.searchQ, khoDisplay.chiNhanhId, khoDisplay.page);
+                } else {
+                  router.refresh();
+                }
               }
             }}
           />
@@ -644,44 +738,67 @@ function HoaCuPager({
   pageSize,
   basePath,
   extraQuery,
+  onPageChange,
+  pending,
 }: {
   page: number;
   total: number;
   pageSize: number;
   basePath: string;
   extraQuery?: Record<string, string>;
+  onPageChange?: (page: number) => void;
+  pending?: boolean;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (totalPages <= 1) return null;
   const prev = Math.max(1, page - 1);
   const next = Math.min(totalPages, page + 1);
   const extra = extraQuery ?? {};
+  const btnClass = (disabled: boolean) =>
+    cn(
+      "rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1 font-semibold",
+      disabled ? "pointer-events-none opacity-40" : "hover:bg-[#f5f5f5]",
+    );
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#EAEAEA] bg-[#fafafa] px-3 py-2.5 text-[12px] text-[#555]">
       <span className="tabular-nums">
         Trang {page}/{totalPages} · {total} bản ghi
       </span>
       <div className="flex items-center gap-1">
-        <Link
-          href={buildPageHref(basePath, prev, extra)}
-          aria-disabled={page <= 1}
-          className={cn(
-            "rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1 font-semibold",
-            page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-[#f5f5f5]",
-          )}
-        >
-          ← Trước
-        </Link>
-        <Link
-          href={buildPageHref(basePath, next, extra)}
-          aria-disabled={page >= totalPages}
-          className={cn(
-            "rounded-lg border border-[#EAEAEA] bg-white px-2.5 py-1 font-semibold",
-            page >= totalPages ? "pointer-events-none opacity-40" : "hover:bg-[#f5f5f5]",
-          )}
-        >
-          Sau →
-        </Link>
+        {onPageChange ? (
+          <>
+            <button
+              type="button"
+              disabled={page <= 1 || pending}
+              onClick={() => onPageChange(prev)}
+              className={btnClass(page <= 1 || !!pending)}
+            >
+              ← Trước
+            </button>
+            <button
+              type="button"
+              disabled={page >= totalPages || pending}
+              onClick={() => onPageChange(next)}
+              className={btnClass(page >= totalPages || !!pending)}
+            >
+              Sau →
+            </button>
+          </>
+        ) : (
+          <>
+            <Link href={buildPageHref(basePath, prev, extra)} aria-disabled={page <= 1} className={btnClass(page <= 1)}>
+              ← Trước
+            </Link>
+            <Link
+              href={buildPageHref(basePath, next, extra)}
+              aria-disabled={page >= totalPages}
+              className={btnClass(page >= totalPages)}
+            >
+              Sau →
+            </Link>
+          </>
+        )}
       </div>
     </div>
   );
@@ -689,11 +806,14 @@ function HoaCuPager({
 
 function KhoTab({
   rows,
+  loading,
   pagination,
+  onPageChange,
   onEdit,
   onInventoryChanged,
 }: {
   rows: AdminHoaCuSanPham[];
+  loading?: boolean;
   pagination: {
     page: number;
     total: number;
@@ -702,6 +822,7 @@ function KhoTab({
     searchQ: string;
     chiNhanhId: number;
   };
+  onPageChange?: (page: number) => void;
   onEdit: (r: AdminHoaCuSanPham) => void;
   onInventoryChanged: (msg: string, ok: boolean) => void;
 }) {
@@ -720,7 +841,17 @@ function KhoTab({
   if (pagination.searchQ.trim()) pageExtra.q = pagination.searchQ.trim();
 
   return (
-    <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
+    <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
+      {loading ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center bg-white/60 backdrop-blur-[1px]"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <Loader2 className="h-6 w-6 animate-spin text-[#BC8AF9]" aria-hidden />
+          <span className="sr-only">Đang tải kho…</span>
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
         <table className="w-full min-w-[800px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
           <colgroup>
@@ -828,6 +959,8 @@ function KhoTab({
         pageSize={pagination.pageSize}
         basePath={pagination.basePath}
         extraQuery={pageExtra}
+        onPageChange={onPageChange}
+        pending={loading}
       />
     </div>
   );
@@ -2665,6 +2798,15 @@ function ModalBanHang({
   const [hv, setHv] = useState("");
   const [hinhThuc, setHinhThuc] = useState<string>(HINH_THUC[0]);
   const [lines, setLines] = useState<Line[]>([{ hangId: "", qty: "1" }]);
+  const [sessionStep, setSessionStep] = useState<"s1" | "s2">("s1");
+  const [createdDonId, setCreatedDonId] = useState<number | null>(null);
+  const [maDon, setMaDon] = useState("");
+  const [maDonSo, setMaDonSo] = useState("");
+  const [invoiceTotal, setInvoiceTotal] = useState(0);
+  const [trangThai, setTrangThai] = useState<string>("Chờ thanh toán");
+  const [ngayTT, setNgayTT] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [deletingDon, setDeletingDon] = useState(false);
   const initialBranchId = Number(defaultBranch);
   const cachedAtOpen =
     initialCatalog == null && Number.isFinite(initialBranchId) && initialBranchId > 0
@@ -2724,44 +2866,81 @@ function ModalBanHang({
     };
   }, [chiNhanhId, initialCatalog]);
 
-  const tenKhach = students.find((s) => String(s.id) === hv)?.full_name ?? "";
   const total = lines.reduce((s, l) => {
     const sp = sanPham.find((x) => String(x.id) === l.hangId);
     return s + (sp ? sp.gia_ban * (Number(l.qty) || 0) : 0);
   }, 0);
 
-  async function save() {
+  const displayTotal = sessionStep === "s2" && invoiceTotal > 0 ? invoiceTotal : total;
+
+  const qrPaymentResolved = useMemo(() => {
+    if (!maDonSo.trim() || displayTotal <= 0) return null;
+    return resolveQrPaymentAmounts(maDonSo, displayTotal);
+  }, [maDonSo, displayTotal]);
+
+  const qrRecipient = useMemo(
+    () => getTpBankQrRecipient(createdDonId),
+    [createdDonId],
+  );
+
+  const qrUrl = useMemo(() => {
+    if (sessionStep !== "s2" || !isHcChuyenKhoanUi(hinhThuc)) return "";
+    if (!qrPaymentResolved || createdDonId == null || !maDonSo.trim()) return "";
+    return buildVietQrImageUrl(maDonSo, qrPaymentResolved.qrAmountDong, createdDonId);
+  }, [sessionStep, hinhThuc, maDonSo, qrPaymentResolved, createdDonId]);
+
+  useEffect(() => {
+    if (sessionStep !== "s2" || createdDonId == null) return;
+    if (!isHcChuyenKhoanUi(hinhThuc) || trangThai === "Đã thanh toán") return;
+    const id = createdDonId;
+    const t = window.setInterval(() => {
+      void (async () => {
+        const r = await pollHoaCuDonBanAction(id);
+        if (!r.ok) return;
+        if (r.status && r.status !== trangThai) {
+          setTrangThai(r.status);
+          if (r.ma_don) setMaDon(r.ma_don);
+          if (r.ma_don_so) setMaDonSo(r.ma_don_so);
+          if (r.ngay_thanh_toan) setNgayTT(r.ngay_thanh_toan);
+        }
+      })();
+    }, 3000);
+    return () => window.clearInterval(t);
+  }, [sessionStep, createdDonId, hinhThuc, trangThai]);
+
+  function buildValidLines() {
+    return lines
+      .map((l) => ({ mat_hang: Number(l.hangId), so_luong_ban: Number(l.qty) }))
+      .filter((l) => l.mat_hang > 0 && l.so_luong_ban > 0);
+  }
+
+  function validateForm(): string | null {
+    const branchId = Number(chiNhanhId);
+    const valid = buildValidLines();
+    if (!Number.isFinite(branchId) || branchId <= 0) return "Chọn chi nhánh bán hàng.";
+    if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) return "Không xác định được nhân sự đăng nhập.";
+    if (!hv) return "Chọn khách hàng (học viên).";
+    if (!valid.length) return "Thêm ít nhất một mặt hàng.";
+    for (const l of valid) {
+      const sp = sanPham.find((x) => x.id === l.mat_hang);
+      const t = sp?.ton_kho ?? 0;
+      if (l.so_luong_ban > t) return `«${sp?.ten_hang ?? "#" + l.mat_hang}» chỉ còn ${t}.`;
+    }
+    return null;
+  }
+
+  async function submitDon() {
     if (saveLockRef.current) return;
     saveLockRef.current = true;
     try {
+      setErr(null);
+      const validationErr = validateForm();
+      if (validationErr) {
+        setErr(validationErr);
+        return;
+      }
       const branchId = Number(chiNhanhId);
-      const valid = lines
-        .map((l) => ({ mat_hang: Number(l.hangId), so_luong_ban: Number(l.qty) }))
-        .filter((l) => l.mat_hang > 0 && l.so_luong_ban > 0);
-      if (!Number.isFinite(branchId) || branchId <= 0) {
-        onDone("Chọn chi nhánh bán hàng.", false);
-        return;
-      }
-      if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) {
-        onDone("Không xác định được nhân sự đăng nhập.", false);
-        return;
-      }
-      if (!hv) {
-        onDone("Chọn khách hàng (học viên).", false);
-        return;
-      }
-      if (!valid.length) {
-        onDone("Thêm ít nhất một mặt hàng.", false);
-        return;
-      }
-      for (const l of valid) {
-        const sp = sanPham.find((x) => x.id === l.mat_hang);
-        const t = sp?.ton_kho ?? 0;
-        if (l.so_luong_ban > t) {
-          onDone(`«${sp?.ten_hang ?? "#" + l.mat_hang}» chỉ còn ${t}.`, false);
-          return;
-        }
-      }
+      const valid = buildValidLines();
       setBusy(true);
       const idempotency_key =
         typeof globalThis.crypto !== "undefined" && "randomUUID" in globalThis.crypto
@@ -2775,18 +2954,54 @@ function ModalBanHang({
         lines: valid,
         idempotency_key,
       });
-      if (r.ok) onDone(r.message ?? "Đã lưu.", true);
-      else onDone(r.error, false);
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
+      if (isHcChuyenKhoanUi(hinhThuc) && r.donId > 0) {
+        setCreatedDonId(r.donId);
+        setMaDon(r.maDon);
+        setMaDonSo(r.maDonSo);
+        setInvoiceTotal(r.tongTien);
+        setTrangThai(r.status);
+        setSessionStep("s2");
+        return;
+      }
+      onDone(r.message ?? "Đã lưu.", true);
     } finally {
       saveLockRef.current = false;
       setBusy(false);
     }
   }
 
-  const qrUrl =
-    hinhThuc === "Chuyển khoản" && tenKhach && total > 0
-      ? `https://img.vietqr.io/image/TPB-00375554360-qr_only.png?amount=${Math.round(total)}&addInfo=${encodeURIComponent(`${tenKhach} Hoa cu`)}&accountName=SINE%20ART`
-      : "";
+  async function handleQuayLaiSua() {
+    if (trangThai === "Đã thanh toán" || deletingDon) return;
+    setErr(null);
+    if (createdDonId != null) {
+      setDeletingDon(true);
+      const r = await deleteHoaCuDonBan(createdDonId);
+      setDeletingDon(false);
+      if (!r.ok) {
+        setErr(r.error || "Không xoá được đơn tạm để quay lại.");
+        return;
+      }
+    }
+    setCreatedDonId(null);
+    setMaDon("");
+    setMaDonSo("");
+    setInvoiceTotal(0);
+    setTrangThai("Chờ thanh toán");
+    setNgayTT(null);
+    setSessionStep("s1");
+  }
+
+  function handleCloseModal() {
+    if (sessionStep === "s2" && trangThai === "Đã thanh toán") {
+      onDone("Đã xác nhận thanh toán đơn bán.", true);
+      return;
+    }
+    onClose();
+  }
 
   const hangBanLines = (
     <>
@@ -2835,116 +3050,185 @@ function ModalBanHang({
     </>
   );
 
+  const tenKhach = students.find((s) => String(s.id) === hv)?.full_name ?? "";
+
   return (
     <ModalShell
       subtitle="Bán họa cụ"
-      title="Tạo đơn bán"
-      onClose={onClose}
+      title={sessionStep === "s1" ? "Tạo đơn bán" : "Thanh toán đơn bán"}
+      onClose={handleCloseModal}
       footer={
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2 text-[13px] text-[#666]">
-            Hủy
-          </button>
-          <button
-            type="button"
-            disabled={busy || catalogLoading}
-            onClick={() => void save()}
-            className="flex items-center gap-2 rounded-[10px] bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-5 py-2 text-[13px] font-bold text-white disabled:opacity-50"
-          >
-            {busy ? <Loader2 className="animate-spin" size={16} /> : null}
-            Lưu đơn bán
-          </button>
-        </div>
+        sessionStep === "s1" ? (
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="rounded-[10px] border border-[#EAEAEA] bg-white px-4 py-2 text-[13px] text-[#666]">
+              Hủy
+            </button>
+            <button
+              type="button"
+              disabled={busy || catalogLoading}
+              onClick={() => void submitDon()}
+              className="flex items-center gap-2 rounded-[10px] bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-5 py-2 text-[13px] font-bold text-white disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="animate-spin" size={16} /> : null}
+              {isHcChuyenKhoanUi(hinhThuc) ? "Tạo đơn" : "Lưu đơn bán"}
+            </button>
+          </div>
+        ) : (
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              disabled={deletingDon || trangThai === "Đã thanh toán"}
+              onClick={() => void handleQuayLaiSua()}
+              className="rounded-[10px] border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] font-semibold text-black/55 disabled:opacity-50"
+            >
+              {deletingDon ? <Loader2 className="inline h-3.5 w-3.5 animate-spin" /> : null}
+              Quay lại sửa
+            </button>
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              className="rounded-[10px] bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-4 py-2 text-[13px] font-bold text-white"
+            >
+              {trangThai === "Đã thanh toán" ? "Hoàn tất" : "Đóng"}
+            </button>
+          </div>
+        )
       }
     >
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
-        <div className="min-w-0 space-y-4">
-          <label className="block">
-            <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Chi nhánh bán *</span>
-            <select
-              value={chiNhanhId}
-              onChange={(e) => setChiNhanhId(e.target.value)}
-              className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
-            >
-              {chiNhanhOptions.map((b) => (
-                <option key={b.id} value={String(b.id)}>
-                  {b.ten}
-                </option>
-              ))}
-            </select>
-            <p className="m-0 mt-1 text-[11px] leading-snug text-[#888]">
-              Chỉ bán hàng từ kho <span className="font-semibold text-[#555]">{chiNhanhLabel}</span>.
-            </p>
-          </label>
-          {catalogLoading ? (
-            <div className="flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#fafafa] px-4 py-8 text-[13px] text-[#666]">
-              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#BC8AF9]" aria-hidden />
-              Đang tải danh mục mặt hàng…
+      {sessionStep === "s1" ? (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+          <div className="min-w-0 space-y-4">
+            <label className="block">
+              <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Chi nhánh bán *</span>
+              <select
+                value={chiNhanhId}
+                onChange={(e) => setChiNhanhId(e.target.value)}
+                className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+              >
+                {chiNhanhOptions.map((b) => (
+                  <option key={b.id} value={String(b.id)}>
+                    {b.ten}
+                  </option>
+                ))}
+              </select>
+              <p className="m-0 mt-1 text-[11px] leading-snug text-[#888]">
+                Chỉ bán hàng từ kho <span className="font-semibold text-[#555]">{chiNhanhLabel}</span>.
+              </p>
+            </label>
+            {catalogLoading ? (
+              <div className="flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#fafafa] px-4 py-8 text-[13px] text-[#666]">
+                <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#BC8AF9]" aria-hidden />
+                Đang tải danh mục mặt hàng…
+              </div>
+            ) : null}
+            {catalogError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-700" role="alert">
+                {catalogError}
+              </div>
+            ) : null}
+            <FieldLoggedInStaffRow label="Người bán *" name={loggedInStaffName} />
+            <label className="block min-w-0">
+              <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Khách (học viên) *</span>
+              <HoaCuKhachPicker students={students} value={hv} onChange={setHv} />
+            </label>
+            <div>
+              <p className="mb-1.5 text-[10px] font-bold uppercase text-[#AAA]">Hình thức thu</p>
+              <div className="flex gap-2">
+                {HINH_THUC.map((h) => {
+                  const active = hinhThuc === h;
+                  const Icon = h === "Chuyển khoản" ? Smartphone : DollarSign;
+                  return (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => setHinhThuc(h)}
+                      className={cn(
+                        "flex flex-1 flex-col items-center gap-1 rounded-[11px] border-[1.5px] py-2.5 text-[10px] font-semibold transition",
+                        active
+                          ? "border-[#F8A568] bg-[#FFF7F0] text-[#F8A568]"
+                          : "border-[#EAEAEA] bg-white text-[#888]",
+                      )}
+                    >
+                      <Icon size={15} strokeWidth={2} className={active ? "text-[#F8A568]" : "text-[#9ca3af]"} aria-hidden />
+                      {h}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          ) : null}
-          {catalogError ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-700" role="alert">
-              {catalogError}
-            </div>
-          ) : null}
-          <FieldLoggedInStaffRow label="Người bán *" name={loggedInStaffName} />
-          <label className="block min-w-0">
-            <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Khách (học viên) *</span>
-            <HoaCuKhachPicker students={students} value={hv} onChange={setHv} />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Hình thức thu</span>
-            <select value={hinhThuc} onChange={(e) => setHinhThuc(e.target.value)} className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px]">
-              {HINH_THUC.map((h) => (
-                <option key={h} value={h}>
-                  {h}
-                </option>
-              ))}
-            </select>
-          </label>
-          {!qrUrl && hinhThuc === "Chuyển khoản" ? (
-            <p className="m-0 text-[11px] leading-snug text-[#AAA]">
-              Chọn học viên và thêm mặt hàng để hiện mã QR thanh toán.
-            </p>
-          ) : null}
-          {!qrUrl ? (
             <div className="flex items-center justify-between rounded-lg bg-[#fafafa] px-3 py-2">
               <span className="text-xs font-bold uppercase text-[#AAA]">Tạm tính</span>
               <span className="text-sm font-extrabold text-[#1a1a2e]">{fmtVnd(total)}</span>
             </div>
-          ) : null}
-          {qrUrl ? <div className="space-y-3">{hangBanLines}</div> : null}
-        </div>
-        {qrUrl ? (
-          <aside className="flex min-w-0 flex-col gap-3 rounded-xl border border-[#EAEAEA] bg-[#fafafa] p-3 lg:sticky lg:top-0 lg:max-h-[min(72vh,560px)] lg:overflow-y-auto lg:self-start">
-            <div className="flex items-center justify-between rounded-lg border border-[#EAEAEA] bg-white px-3 py-2.5 shadow-sm">
-              <span className="text-xs font-bold uppercase text-[#AAA]">Tạm tính</span>
-              <span className="text-sm font-extrabold text-[#1a1a2e]">{fmtVnd(total)}</span>
-            </div>
-            <div className="space-y-2 text-[12px] leading-snug text-[#555]">
-              <p className="m-0">
-                <span className="font-semibold text-[#323232]">Ngân hàng:</span> TPBank (TPB)
-              </p>
-              <p className="m-0">
-                <span className="font-semibold text-[#323232]">STK nhận:</span> 00375554360
-              </p>
-              <p className="m-0">
-                <span className="font-semibold text-[#323232]">Chủ TK:</span> SINE ART
-              </p>
-              <p className="m-0 break-words">
-                <span className="font-semibold text-[#323232]">Nội dung CK:</span> {tenKhach} Hoa cu
-              </p>
-            </div>
-            <div className="flex flex-col items-center gap-2 border-t border-[#f0f0f0] pt-3">
-              <p className="m-0 text-center text-xs font-semibold text-[#555]">Quét mã VietQR</p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qrUrl} alt="QR thanh toán" className="h-auto w-full max-w-[200px] rounded-lg border border-[#EAEAEA] bg-white p-2" />
-            </div>
-          </aside>
-        ) : (
+            {err ? <p className="rounded-lg bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-700">{err}</p> : null}
+          </div>
           <div className="min-w-0 space-y-3">{hangBanLines}</div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+          <div className="min-w-0 space-y-3">
+            <div className="rounded-xl bg-[#F8F9FA] px-3.5 py-2.5 text-[12px]">
+              <div className="flex justify-between border-b border-[#f0f0f0] py-1.5">
+                <span className="text-[10px] font-bold uppercase text-[#BBB]">Khách hàng</span>
+                <span className="max-w-[60%] text-right font-bold text-[#1a1a2e]">{tenKhach || "—"}</span>
+              </div>
+              <div className="flex justify-between border-b border-[#f0f0f0] py-1.5">
+                <span className="text-[10px] font-bold uppercase text-[#BBB]">Mã đơn</span>
+                <span className="text-right font-bold text-[#1a1a2e]">{maDon || "—"}</span>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <span className="text-[10px] font-bold uppercase text-[#BBB]">Tổng tiền</span>
+                <span className="text-right font-extrabold text-[#1a1a2e]">{fmtVnd(displayTotal)}</span>
+              </div>
+            </div>
+            {trangThai === "Đã thanh toán" ? (
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-600" />
+                <div>
+                  <p className="m-0 text-[12px] font-bold text-emerald-700">Đã thanh toán</p>
+                  {ngayTT ? <p className="m-0 mt-0.5 text-[11px] text-black/45">Ngày: {fmtDateVi(ngayTT)}</p> : null}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50/80 px-3 py-2.5">
+                <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#F8A568]" />
+                <div>
+                  <p className="m-0 text-[12px] font-bold text-[#ea580c]">Chờ thanh toán tự động</p>
+                  <p className="m-0 mt-0.5 text-[11px] text-black/45">Tự cập nhật khi nhận CK · kiểm tra mỗi 3 giây</p>
+                </div>
+              </div>
+            )}
+            {err ? <p className="rounded-lg bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-700">{err}</p> : null}
+          </div>
+          {qrUrl && qrPaymentResolved ? (
+            <aside className="flex min-w-0 flex-col gap-3 rounded-xl border border-[#EAEAEA] bg-[#fafafa] p-3 lg:sticky lg:top-0 lg:max-h-[min(72vh,560px)] lg:overflow-y-auto lg:self-start">
+              <div className="flex items-center justify-between rounded-lg border border-[#EAEAEA] bg-white px-3 py-2.5 shadow-sm">
+                <span className="text-xs font-bold uppercase text-[#AAA]">Tạm tính</span>
+                <span className="text-sm font-extrabold text-[#1a1a2e]">{fmtVnd(qrPaymentResolved.qrAmountDong)}</span>
+              </div>
+              <div className="space-y-2 text-[12px] leading-snug text-[#555]">
+                <p className="m-0">
+                  <span className="font-semibold text-[#323232]">Ngân hàng:</span> TPBank (TPB)
+                </p>
+                <p className="m-0">
+                  <span className="font-semibold text-[#323232]">STK nhận:</span> {qrRecipient.stk}
+                </p>
+                <p className="m-0">
+                  <span className="font-semibold text-[#323232]">Chủ TK:</span> {qrRecipient.accountName}
+                </p>
+                <p className="m-0 break-words">
+                  <span className="font-semibold text-[#323232]">Nội dung CK:</span> {maDonSo || maDon}
+                </p>
+              </div>
+              <div className="flex flex-col items-center gap-2 border-t border-[#f0f0f0] pt-3">
+                <p className="m-0 text-center text-xs font-semibold text-[#555]">Quét mã VietQR</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={qrUrl} alt="QR thanh toán" className="h-auto w-full max-w-[200px] rounded-lg border border-[#EAEAEA] bg-white p-2" />
+              </div>
+            </aside>
+          ) : null}
+        </div>
+      )}
     </ModalShell>
   );
 }

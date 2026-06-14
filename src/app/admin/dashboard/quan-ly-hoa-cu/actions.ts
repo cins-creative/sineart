@@ -4,13 +4,25 @@ import { revalidatePath } from "next/cache";
 
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
-import { fetchAllHoaCuSanPham, fetchTonKhoTheoPhieuForIds, type AdminHoaCuSanPham } from "@/lib/data/admin-hoa-cu";
+import { fetchAllHoaCuSanPham, fetchKhoInventoryStats, fetchKhoSanPhamPage, fetchTonKhoTheoPhieuForIds, type AdminHoaCuSanPham } from "@/lib/data/admin-hoa-cu";
 import { fetchAdminChiNhanhOptions } from "@/lib/data/admin-chi-nhanh";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const ADMIN_PATH = "/admin/dashboard/quan-ly-hoa-cu";
 
 export type HoaCuActionResult = { ok: true; message?: string } | { ok: false; error: string };
+
+export type HoaCuCreateDonBanResult =
+  | {
+      ok: true;
+      donId: number;
+      maDon: string;
+      maDonSo: string;
+      tongTien: number;
+      status: string;
+      message?: string;
+    }
+  | { ok: false; error: string };
 
 async function gateHoaCuDonMutate(
   supabase: NonNullable<ReturnType<typeof createServiceRoleClient>>,
@@ -119,6 +131,24 @@ function chiNhanhColumnHint(msg: string): string | null {
     return "Chưa có cột chi_nhanh_id trên phiếu. Chạy scripts/sql/hc-don-nhap-ban-chi-nhanh-id.sql trong Supabase SQL Editor.";
   }
   return null;
+}
+
+function hcThanhToanColumnHint(msg: string): string | null {
+  const m = msg.toLowerCase();
+  if (m.includes("ma_don") || m.includes("status") || (m.includes("column") && m.includes("ngay_thanh_toan"))) {
+    return "Chưa có cột thanh toán trên đơn bán. Chạy scripts/sql/hc-don-ban-thanh-toan.sql trong Supabase SQL Editor.";
+  }
+  return null;
+}
+
+function isHcChuyenKhoan(hinhThuc: string): boolean {
+  return hinhThuc.trim() === "Chuyển khoản";
+}
+
+function hcDonCodesFromId(donId: number): { ma_don: string; ma_don_so: string } {
+  const ma_don_so = `SC${String(donId).padStart(6, "0").slice(-6)}`;
+  const ma_don = `HC-${String(donId).padStart(8, "0")}`;
+  return { ma_don, ma_don_so };
 }
 
 async function rollbackNhapDon(
@@ -257,6 +287,60 @@ export async function loadHoaCuSanPhamCatalogAction(
   });
   if (error) return { ok: false, error };
   return { ok: true, data };
+}
+
+export type LoadKhoPageActionResult =
+  | {
+      ok: true;
+      rows: AdminHoaCuSanPham[];
+      page: number;
+      pageSize: number;
+      total: number;
+      inventoryTotal: number;
+      inventoryHetHang: number;
+      inventoryTonSum: number;
+    }
+  | { ok: false; error: string };
+
+/** Tải lại kho theo chi nhánh — chỉ query kho, không load lại staff/học viên (dùng khi đổi filter). */
+export async function loadKhoPageAction(input: {
+  chi_nhanh_id: number;
+  page?: number;
+  q?: string;
+}): Promise<LoadKhoPageActionResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const branchId = input.chi_nhanh_id;
+  if (!Number.isFinite(branchId) || branchId <= 0) {
+    return { ok: false, error: "Chọn chi nhánh kho." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const branchRes = await fetchAdminChiNhanhOptions(supabase);
+  const branchNames = new Map(branchRes.options.map((b) => [b.id, b.ten]));
+  const page = Math.max(1, Math.floor(Number(input.page)) || 1);
+  const q = (input.q ?? "").trim() || undefined;
+
+  const [kho, inv] = await Promise.all([
+    fetchKhoSanPhamPage(supabase, { page, q, chi_nhanh_id: branchId, branchNames }),
+    fetchKhoInventoryStats(supabase, { chi_nhanh_id: branchId }),
+  ]);
+
+  if (!kho.ok) return { ok: false, error: kho.error };
+
+  return {
+    ok: true,
+    rows: kho.rows,
+    page: kho.page,
+    pageSize: kho.pageSize,
+    total: kho.total,
+    inventoryTotal: inv.total,
+    inventoryHetHang: inv.hetHang,
+    inventoryTonSum: inv.tonSum,
+  };
 }
 
 export type AdminHoaCuNhapChiTietLine = {
@@ -598,7 +682,7 @@ export async function createHoaCuDonBan(input: {
   hinh_thuc_thu: string;
   lines: { mat_hang: number; so_luong_ban: number }[];
   idempotency_key?: string | null;
-}): Promise<HoaCuActionResult> {
+}): Promise<HoaCuCreateDonBanResult> {
   const session = await getAdminSessionOrNull();
   if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
 
@@ -652,11 +736,15 @@ export async function createHoaCuDonBan(input: {
   }
 
   const idem = input.idempotency_key?.trim() || null;
+  const isTransfer = isHcChuyenKhoan(input.hinh_thuc_thu);
+  const today = new Date().toISOString().slice(0, 10);
   const banHeader: Record<string, unknown> = {
     nguoi_ban: input.nguoi_ban,
     khach_hang: input.khach_hang,
     chi_nhanh_id: input.chi_nhanh_id,
     hinh_thuc_thu: input.hinh_thuc_thu.trim() || "Tiền mặt",
+    status: isTransfer ? "Chờ thanh toán" : "Đã thanh toán",
+    ngay_thanh_toan: isTransfer ? null : today,
   };
   if (idem) banHeader.idempotency_key = idem;
 
@@ -665,9 +753,9 @@ export async function createHoaCuDonBan(input: {
   if (e1) {
     if (idem && isPgUniqueViolation(e1)) {
       revalidatePath(ADMIN_PATH, "layout");
-      return { ok: true, message: "Đã lưu đơn bán." };
+      return { ok: true, donId: 0, maDon: "", maDonSo: "", tongTien: 0, status: "Đã thanh toán", message: "Đã lưu đơn bán." };
     }
-    const hint = chiNhanhColumnHint(e1.message ?? "");
+    const hint = hcThanhToanColumnHint(e1.message ?? "") ?? chiNhanhColumnHint(e1.message ?? "");
     return { ok: false, error: hint ?? e1.message ?? "Không tạo được đơn bán." };
   }
   if (!don?.id) return { ok: false, error: "Không tạo được đơn bán." };
@@ -699,9 +787,72 @@ export async function createHoaCuDonBan(input: {
     return { ok: false, error: refreshed.error || "Không cập nhật tổng đơn bán." };
   }
 
+  const { data: sumRow, error: sumErr } = await supabase
+    .from("hc_don_ban_hoa_cu")
+    .select("tong_tien")
+    .eq("id", donId)
+    .maybeSingle();
+  if (sumErr) {
+    await rollbackBanDon(supabase, donId);
+    return { ok: false, error: sumErr.message || "Không đọc được tổng đơn." };
+  }
+  const tongTien = numMoney((sumRow as { tong_tien?: unknown } | null)?.tong_tien);
+
+  const codes = hcDonCodesFromId(donId);
+  const { error: codeErr } = await supabase
+    .from("hc_don_ban_hoa_cu")
+    .update({ ma_don: codes.ma_don, ma_don_so: codes.ma_don_so })
+    .eq("id", donId);
+  if (codeErr) {
+    const hint = hcThanhToanColumnHint(codeErr.message ?? "");
+    if (isTransfer) {
+      await rollbackBanDon(supabase, donId);
+      return { ok: false, error: hint ?? codeErr.message ?? "Không gán được mã đơn." };
+    }
+  }
+
   // ton_kho: DB trigger trên INSERT hc_ban_hc_chi_tiet — không trừ thêm ở app.
   revalidatePath(ADMIN_PATH, "layout");
-  return { ok: true, message: "Đã lưu đơn bán." };
+  return {
+    ok: true,
+    donId,
+    maDon: codes.ma_don,
+    maDonSo: codes.ma_don_so,
+    tongTien,
+    status: isTransfer ? "Chờ thanh toán" : "Đã thanh toán",
+    message: isTransfer ? "Đã tạo đơn — chờ chuyển khoản." : "Đã lưu đơn bán.",
+  };
+}
+
+export async function pollHoaCuDonBanAction(
+  donId: number
+): Promise<
+  | { ok: true; status: string | null; ma_don: string | null; ma_don_so: string | null; ngay_thanh_toan: string | null }
+  | { ok: false; error: string }
+> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(donId) || donId <= 0) return { ok: false, error: "ID đơn không hợp lệ." };
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+  const { data, error } = await supabase
+    .from("hc_don_ban_hoa_cu")
+    .select("status, ma_don, ma_don_so, ngay_thanh_toan")
+    .eq("id", donId)
+    .maybeSingle();
+  if (error) {
+    const hint = hcThanhToanColumnHint(error.message);
+    return { ok: false, error: hint ?? error.message };
+  }
+  const row = data as Record<string, unknown> | null;
+  if (!row) return { ok: false, error: "Không tìm thấy đơn." };
+  return {
+    ok: true,
+    status: row.status != null ? String(row.status) : null,
+    ma_don: row.ma_don != null ? String(row.ma_don) : null,
+    ma_don_so: row.ma_don_so != null ? String(row.ma_don_so) : null,
+    ngay_thanh_toan: row.ngay_thanh_toan != null ? String(row.ngay_thanh_toan).slice(0, 10) : null,
+  };
 }
 
 export async function updateHoaCuDonBanMeta(input: {

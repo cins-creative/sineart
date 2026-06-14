@@ -1,6 +1,6 @@
 /**
  * VietQR (TPBank) — STK luân phiên theo `donId` chẵn/lẻ; chủ TK khớp đăng ký VietQR.
- * `addInfo` = mã ngắn (SA…) — VietQR giới hạn độ dài; n8n regex `/SA\d+/`
+ * `addInfo` = mã ngắn (SA… học phí, SC… họa cụ) — VietQR giới hạn độ dài; webhook `/SA|SC\d{6}/`
  */
 export const TPBANK_VIETQR_ACCOUNTS = [
   { stk: "00375554360", accountName: "DO NGOC LINH" },

@@ -248,7 +248,7 @@ export default {
       }
 
       const content = payload.content || "";
-      const match = content.match(/SA\d{6}/i);
+      const match = content.match(/(?:SA|SC)\d{6}/i);
       const maDonSo = match ? match[0].toUpperCase() : null;
 
       await fetch(`${SUPABASE_URL}/rest/v1/hp_giao_dich_thanh_toan`, {
@@ -270,39 +270,72 @@ export default {
         return json({ ok: true, matched: false, reason: "no_ma_don" });
       }
 
-      const donRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/hp_don_thu_hoc_phi?ma_don_so=eq.${encodeURIComponent(maDonSo)}&select=id,status`,
-        { headers: sbH }
-      );
-      const donList = await donRes.json();
-      const don = Array.isArray(donList) ? donList[0] : null;
-
-      if (!don) {
-        return json({ ok: true, matched: false, reason: "don_not_found" });
-      }
-
-      if (don.status === "Đã thanh toán") {
-        return json({ ok: true, matched: true, reason: "already_paid" });
-      }
-
       const today = new Date().toISOString().split("T")[0];
+      const prefix = maDonSo.slice(0, 2);
 
-      await fetch(`${SUPABASE_URL}/rest/v1/hp_don_thu_hoc_phi?id=eq.${don.id}`, {
-        method: "PATCH",
-        headers: sbH,
-        body: JSON.stringify({
-          status: "Đã thanh toán",
-          ngay_thanh_toan: today,
-        }),
-      });
+      if (prefix === "SA") {
+        const donRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/hp_don_thu_hoc_phi?ma_don_so=eq.${encodeURIComponent(maDonSo)}&select=id,status`,
+          { headers: sbH }
+        );
+        const donList = await donRes.json();
+        const don = Array.isArray(donList) ? donList[0] : null;
 
-      await fetch(`${SUPABASE_URL}/rest/v1/hp_thu_hp_chi_tiet?don_thu=eq.${don.id}`, {
-        method: "PATCH",
-        headers: sbH,
-        body: JSON.stringify({ status: "Đã thanh toán" }),
-      });
+        if (!don) {
+          return json({ ok: true, matched: false, reason: "don_not_found" });
+        }
 
-      return json({ ok: true, matched: true, don_id: don.id });
+        if (don.status === "Đã thanh toán") {
+          return json({ ok: true, matched: true, reason: "already_paid", kind: "hp" });
+        }
+
+        await fetch(`${SUPABASE_URL}/rest/v1/hp_don_thu_hoc_phi?id=eq.${don.id}`, {
+          method: "PATCH",
+          headers: sbH,
+          body: JSON.stringify({
+            status: "Đã thanh toán",
+            ngay_thanh_toan: today,
+          }),
+        });
+
+        await fetch(`${SUPABASE_URL}/rest/v1/hp_thu_hp_chi_tiet?don_thu=eq.${don.id}`, {
+          method: "PATCH",
+          headers: sbH,
+          body: JSON.stringify({ status: "Đã thanh toán" }),
+        });
+
+        return json({ ok: true, matched: true, don_id: don.id, kind: "hp" });
+      }
+
+      if (prefix === "SC") {
+        const donRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/hc_don_ban_hoa_cu?ma_don_so=eq.${encodeURIComponent(maDonSo)}&select=id,status`,
+          { headers: sbH }
+        );
+        const donList = await donRes.json();
+        const don = Array.isArray(donList) ? donList[0] : null;
+
+        if (!don) {
+          return json({ ok: true, matched: false, reason: "don_not_found" });
+        }
+
+        if (don.status === "Đã thanh toán") {
+          return json({ ok: true, matched: true, reason: "already_paid", kind: "hc" });
+        }
+
+        await fetch(`${SUPABASE_URL}/rest/v1/hc_don_ban_hoa_cu?id=eq.${don.id}`, {
+          method: "PATCH",
+          headers: sbH,
+          body: JSON.stringify({
+            status: "Đã thanh toán",
+            ngay_thanh_toan: today,
+          }),
+        });
+
+        return json({ ok: true, matched: true, don_id: don.id, kind: "hc" });
+      }
+
+      return json({ ok: true, matched: false, reason: "unknown_prefix" });
     }
 
     // ─── Agent admin: conversations / toggle (không x-api-secret) ─────────

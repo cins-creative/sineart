@@ -701,11 +701,13 @@ export async function fetchKhoInventoryStats(
     return { total: 0, hetHang: 0, tonSum: 0 };
   }
 
+  if (total === 0) {
+    return { total: 0, hetHang: 0, tonSum: 0 };
+  }
+
   try {
-    const [tonMap, ids] = await Promise.all([
-      fetchTonKhoMapTuPhieuToanCuc(supabase),
-      fetchSanPhamIdsByBranch(supabase, branchId),
-    ]);
+    const ids = await fetchSanPhamIdsByBranch(supabase, branchId);
+    const tonMap = await fetchTonKhoTheoPhieuForIds(supabase, ids);
     let hetHang = 0;
     let tonSum = 0;
     for (const id of ids) {

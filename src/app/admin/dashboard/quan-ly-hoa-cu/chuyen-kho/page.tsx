@@ -50,12 +50,22 @@ export default async function QuanLyHoaCuChuyenKhoPage({ searchParams }: Props) 
   const don = await fetchDonChuyenPage(supabase, ctx.data, { page, branchNames });
 
   if (!don.ok) {
+    const errLower = don.error.toLowerCase();
+    const missingTable = errLower.includes("does not exist") || errLower.includes("relation");
+    const permission = errLower.includes("permission denied") || errLower.includes("42501");
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
         Không tải phiếu chuyển: {don.error}
-        {don.error.toLowerCase().includes("does not exist") || don.error.toLowerCase().includes("relation") ? (
+        {missingTable ? (
           <p className="mt-2 text-xs">
             Chạy <code className="rounded bg-red-100 px-1">scripts/sql/hc-chuyen-kho.sql</code> trong Supabase SQL Editor.
+          </p>
+        ) : null}
+        {permission ? (
+          <p className="mt-2 text-xs">
+            Bảng đã tạo nhưng thiếu quyền — chạy{" "}
+            <code className="rounded bg-red-100 px-1">scripts/sql/hc-chuyen-kho-grants.sql</code> (hoặc chạy lại file{" "}
+            <code className="rounded bg-red-100 px-1">hc-chuyen-kho.sql</code> bản mới có GRANT).
           </p>
         ) : null}
       </div>

@@ -1,7 +1,9 @@
 "use client";
 
+import PhongHocCanvasMeetOverlay from "@/components/phong-hoc/PhongHocCanvasMeetOverlay";
 import PhongHocLiveKitCanvas from "@/components/phong-hoc/PhongHocLiveKitCanvas";
 import PhongHocMeetTab from "@/components/phong-hoc/PhongHocMeetTab";
+import { PHONG_HOC_LIVEKIT_DISABLED } from "@/lib/phong-hoc/livekit-feature-flag";
 import { useState } from "react";
 
 export type PhongHocVideoAreaProps = {
@@ -52,6 +54,29 @@ export default function PhongHocVideoArea({
   onClearGmeet,
 }: PhongHocVideoAreaProps) {
   const [activeTab, setActiveTab] = useState<VideoTab>("livekit");
+
+  if (PHONG_HOC_LIVEKIT_DISABLED) {
+    return (
+      <>
+        <div className="canvas-ph canvas-ph--livekit canvas-ph--maint-bg" aria-hidden />
+        <PhongHocCanvasMeetOverlay
+          isTeacher={isTeacher}
+          gmeetFormOpen={gmeetFormOpen}
+          gmeetInput={gmeetInput}
+          gmeetSaving={gmeetSaving}
+          gmeetJustSaved={gmeetJustSaved}
+          gmeetRowReady={gmeetRowReady}
+          googleMeetUrl={googleMeetUrl}
+          studentMeetUrl={studentMeetUrl}
+          onGmeetInputChange={onGmeetInputChange}
+          onOpenGmeetForm={onOpenGmeetForm}
+          onCloseGmeetForm={onCloseGmeetForm}
+          onSaveGmeet={onSaveGmeet}
+          onClearGmeet={onClearGmeet}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="phc-video-area">

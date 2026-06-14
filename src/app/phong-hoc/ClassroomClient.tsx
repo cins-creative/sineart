@@ -82,6 +82,7 @@ import {
 } from "@/lib/phong-hoc/classroom-gallery";
 import ClassroomSignInOverlay from "@/app/_components/ClassroomSignInOverlay";
 import PhongHocVideoArea from "@/components/phong-hoc/PhongHocVideoArea";
+import { PHONG_HOC_LIVEKIT_DISABLED } from "@/lib/phong-hoc/livekit-feature-flag";
 import StudentAvatarMenu from "@/components/StudentAvatarMenu";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import Link from "next/link";
@@ -2975,7 +2976,10 @@ export default function ClassroomClient({
 
       <div className="main">
         <LayoutGroup id="phc-main-layout">
-          <motion.div className="canvas-wrap" transition={PHC_SIDEBAR_TWEEN}>
+          <motion.div
+            className={cx("canvas-wrap", PHONG_HOC_LIVEKIT_DISABLED && "canvas-wrap--maint")}
+            transition={PHC_SIDEBAR_TWEEN}
+          >
             <PhongHocVideoArea
               roomName={liveKitRoomName ?? "preview"}
               participantName={liveKitParticipantName}

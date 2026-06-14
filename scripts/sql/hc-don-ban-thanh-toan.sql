@@ -1,14 +1,10 @@
-﻿-- Đơn bán họa cụ: mã CK (SC######) + trạng thái thanh toán (SePay / VietQR)
--- Chạy trong Supabase SQL Editor trước khi dùng luồng QR tự xác thực.
+-- Don ban hoa cu: ma CK (SC######) + trang thai thanh toan (SePay / VietQR)
 
 ALTER TABLE public.hc_don_ban_hoa_cu
   ADD COLUMN IF NOT EXISTS ma_don text,
   ADD COLUMN IF NOT EXISTS ma_don_so text,
   ADD COLUMN IF NOT EXISTS status text DEFAULT 'Đã thanh toán',
   ADD COLUMN IF NOT EXISTS ngay_thanh_toan date;
-
-COMMENT ON COLUMN public.hc_don_ban_hoa_cu.ma_don_so IS 'Mã ngắn nội dung CK, vd SC000123 — webhook SePay regex SC\d{6}';
-COMMENT ON COLUMN public.hc_don_ban_hoa_cu.status IS 'Chờ thanh toán | Đã thanh toán';
 
 UPDATE public.hc_don_ban_hoa_cu
 SET status = COALESCE(NULLIF(trim(status), ''), 'Đã thanh toán')

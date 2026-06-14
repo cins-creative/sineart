@@ -57,7 +57,8 @@ export async function fetchHoaCuCatalogForBranch(
 
   const request = loadHoaCuSanPhamCatalogAction(branchId).then((r) => {
     inflight.delete(branchId);
-    if (r.ok) setCachedHoaCuCatalog(branchId, r.data);
+    if (r.ok && r.data.length > 0) setCachedHoaCuCatalog(branchId, r.data);
+    else if (r.ok) cache.delete(branchId);
     return r;
   });
 
@@ -70,4 +71,44 @@ export function prefetchHoaCuCatalog(branchId: number | null | undefined) {
   if (branchId == null || !Number.isFinite(branchId) || branchId <= 0) return;
   if (getCachedHoaCuCatalog(branchId)) return;
   void fetchHoaCuCatalogForBranch(branchId);
+}
+
+/**
+ * Modal bán: ưu tiên chi nhánh có mặt hàng (vd. kho chỉ gắn Tân Phú nhưng filter tab đang Online).
+ * Trả `autoSwitchedFrom` khi đã chuyển sang chi nhánh khác có danh mục.
+ */
+export async function fetchHoaCuCatalogBestBranch(
+  preferredBranchId: number,
+  allBranchIds: number[],
+): Promise<
+  | { ok: true; data: AdminHoaCuSanPham[]; branchId: number; autoSwitchedFrom: number | null }
+  | { ok: false; error: string }
+> {
+  if (!Number.isFinite(preferredBranchId) || preferredBranchId <= 0) {
+    return { ok: false, error: "Chi nhánh không hợp lệ." };
+  }
+  const order = [
+    preferredBranchId,
+    ...allBranchIds.filter((id) => Number.isFinite(id) && id > 0 && id !== preferredBranchId),
+  ];
+  for (const branchId of order) {
+    const r = await fetchHoaCuCatalogForBranch(branchId);
+    if (!r.ok) return r;
+    if (r.data.length > 0) {
+      return {
+        ok: true,
+        data: r.data,
+        branchId,
+        autoSwitchedFrom: branchId !== preferredBranchId ? preferredBranchId : null,
+      };
+    }
+  }
+  const fallback = await fetchHoaCuCatalogForBranch(preferredBranchId);
+  if (!fallback.ok) return fallback;
+  return {
+    ok: true,
+    data: fallback.data,
+    branchId: preferredBranchId,
+    autoSwitchedFrom: null,
+  };
 }

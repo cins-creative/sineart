@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChuyenTab, ModalChuyenHang } from "@/app/admin/dashboard/quan-ly-hoa-cu/HoaCuChuyenUi";
 import {
+  fetchHoaCuCatalogBestBranch,
   fetchHoaCuCatalogForBranch,
   getCachedHoaCuCatalog,
   invalidateHoaCuCatalogCache,
@@ -45,6 +46,7 @@ import {
   loadHoaCuDonNhapChiTietAction,
   loadKhoPageAction,
   pollHoaCuDonBanAction,
+  confirmHoaCuDonBanDaThuAction,
   updateHoaCuDonBanMeta,
   updateHoaCuDonNhapMeta,
   updateHoaCuSanPham,
@@ -1914,11 +1916,14 @@ function HoaCuSanPhamPicker({
   value,
   onChange,
   variant,
+  branchLabel,
 }: {
   sanPham: AdminHoaCuSanPham[];
   value: string;
   onChange: (hangId: string) => void;
   variant: "nhap" | "ban";
+  /** Nhãn chi nhánh — hiện gợi ý khi danh mục rỗng (không phải do tìm kiếm). */
+  branchLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -2032,7 +2037,27 @@ function HoaCuSanPhamPicker({
             </button>
           </li>
           {filtered.length === 0 ? (
-            <li className="px-2 py-6 text-center text-xs text-[#AAA]">Không có mặt hàng khớp.</li>
+            <li className="px-2 py-6 text-center text-xs leading-snug text-[#AAA]">
+              {sanPham.length === 0 && !search.trim() ? (
+                <>
+                  Chi nhánh <span className="font-semibold text-[#666]">{branchLabel?.trim() || "đã chọn"}</span> chưa
+                  có mặt hàng trong kho.
+                  {variant === "ban" ? (
+                    <>
+                      <br />
+                      Chọn chi nhánh khác (vd. Tân Phú) hoặc thêm hàng tại tab Danh mục kho.
+                    </>
+                  ) : (
+                    <>
+                      <br />
+                      Thêm mặt hàng mới tại tab Danh mục kho trước khi nhập phiếu.
+                    </>
+                  )}
+                </>
+              ) : (
+                "Không có mặt hàng khớp từ khóa tìm kiếm."
+              )}
+            </li>
           ) : (
             filtered.map((s) => {
               const het = isHet(s);
@@ -2533,10 +2558,11 @@ function ModalNhapHang({
   const [hinhThucChi, setHinhThucChi] = useState<string>(HINH_THUC[0]);
   const [lines, setLines] = useState<Line[]>([{ hangId: "", qty: "1" }]);
   const initialBranchId = Number(defaultBranch);
-  const cachedAtOpen =
+  const cachedAtOpenRaw =
     initialCatalog == null && Number.isFinite(initialBranchId) && initialBranchId > 0
       ? getCachedHoaCuCatalog(initialBranchId)
       : null;
+  const cachedAtOpen = cachedAtOpenRaw && cachedAtOpenRaw.length > 0 ? cachedAtOpenRaw : null;
   const [sanPham, setSanPham] = useState<AdminHoaCuSanPham[]>(
     initialCatalog != null && Number.isFinite(initialBranchId) && initialBranchId > 0
       ? initialCatalog.filter((sp) => sp.chi_nhanh_id === initialBranchId)
@@ -2565,7 +2591,7 @@ function ModalNhapHang({
       return;
     }
     const cached = getCachedHoaCuCatalog(branchId);
-    if (cached) {
+    if (cached && cached.length > 0) {
       setSanPham(cached);
       setCatalogError(null);
       setCatalogLoading(false);
@@ -2731,6 +2757,7 @@ function ModalNhapHang({
           <div key={i} className="flex flex-wrap items-end gap-2">
             <HoaCuSanPhamPicker
               variant="nhap"
+              branchLabel={chiNhanhLabel}
               sanPham={sanPham}
               value={l.hangId}
               onChange={(id) => setLines((p) => p.map((x, j) => (j === i ? { ...x, hangId: id } : x)))}
@@ -2807,11 +2834,13 @@ function ModalBanHang({
   const [ngayTT, setNgayTT] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [deletingDon, setDeletingDon] = useState(false);
+  const [confirmingPaid, setConfirmingPaid] = useState(false);
   const initialBranchId = Number(defaultBranch);
-  const cachedAtOpen =
+  const cachedAtOpenRaw =
     initialCatalog == null && Number.isFinite(initialBranchId) && initialBranchId > 0
       ? getCachedHoaCuCatalog(initialBranchId)
       : null;
+  const cachedAtOpen = cachedAtOpenRaw && cachedAtOpenRaw.length > 0 ? cachedAtOpenRaw : null;
   const [sanPham, setSanPham] = useState<AdminHoaCuSanPham[]>(
     initialCatalog != null && Number.isFinite(initialBranchId) && initialBranchId > 0
       ? initialCatalog.filter((sp) => sp.chi_nhanh_id === initialBranchId)
@@ -2819,17 +2848,21 @@ function ModalBanHang({
   );
   const [catalogLoading, setCatalogLoading] = useState(initialCatalog == null && cachedAtOpen == null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogHint, setCatalogHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const saveLockRef = useRef(false);
+  const branchUserChangedRef = useRef(false);
 
   const chiNhanhLabel = chiNhanhOptions.find((b) => String(b.id) === chiNhanhId)?.ten ?? "—";
   const sanPhamCoTon = useMemo(() => sanPham.filter((s) => s.ton_kho > 0), [sanPham]);
+  const branchIds = useMemo(() => chiNhanhOptions.map((b) => b.id), [chiNhanhOptions]);
 
   useEffect(() => {
     const branchId = Number(chiNhanhId);
     if (!Number.isFinite(branchId) || branchId <= 0) {
       setSanPham([]);
       setCatalogError(null);
+      setCatalogHint(null);
       setCatalogLoading(false);
       return;
     }
@@ -2837,11 +2870,12 @@ function ModalBanHang({
     if (initialCatalog != null) {
       setSanPham(initialCatalog.filter((sp) => sp.chi_nhanh_id === branchId));
       setCatalogError(null);
+      setCatalogHint(null);
       setCatalogLoading(false);
       return;
     }
     const cached = getCachedHoaCuCatalog(branchId);
-    if (cached) {
+    if (cached && cached.length > 0) {
       setSanPham(cached);
       setCatalogError(null);
       setCatalogLoading(false);
@@ -2849,22 +2883,32 @@ function ModalBanHang({
     }
     let cancelled = false;
     setCatalogError(null);
+    setCatalogHint(null);
     setCatalogLoading(true);
-    void fetchHoaCuCatalogForBranch(branchId).then((r) => {
+    void (async () => {
+      const r = branchUserChangedRef.current
+        ? await fetchHoaCuCatalogForBranch(branchId)
+        : await fetchHoaCuCatalogBestBranch(branchId, branchIds);
       if (cancelled) return;
       setCatalogLoading(false);
-      if (r.ok) {
-        setSanPham(r.data);
-        setCatalogError(null);
-      } else {
+      if (!r.ok) {
         setSanPham([]);
         setCatalogError(r.error);
+        return;
       }
-    });
+      if ("autoSwitchedFrom" in r && r.autoSwitchedFrom != null && r.branchId !== branchId) {
+        const fromTen = chiNhanhOptions.find((b) => b.id === r.autoSwitchedFrom)?.ten ?? `#${r.autoSwitchedFrom}`;
+        const toTen = chiNhanhOptions.find((b) => b.id === r.branchId)?.ten ?? `#${r.branchId}`;
+        setCatalogHint(`Chi nhánh «${fromTen}» chưa có mặt hàng — đã chuyển sang «${toTen}».`);
+        setChiNhanhId(String(r.branchId));
+      }
+      setSanPham(r.data);
+      setCatalogError(null);
+    })();
     return () => {
       cancelled = true;
     };
-  }, [chiNhanhId, initialCatalog]);
+  }, [chiNhanhId, initialCatalog, branchIds, chiNhanhOptions]);
 
   const total = lines.reduce((s, l) => {
     const sp = sanPham.find((x) => String(x.id) === l.hangId);
@@ -2893,20 +2937,35 @@ function ModalBanHang({
     if (sessionStep !== "s2" || createdDonId == null) return;
     if (!isHcChuyenKhoanUi(hinhThuc) || trangThai === "Đã thanh toán") return;
     const id = createdDonId;
+
+    const applyPoll = (r: Awaited<ReturnType<typeof pollHoaCuDonBanAction>>) => {
+      if (!r.ok) return;
+      if (r.status) setTrangThai(r.status);
+      if (r.ma_don) setMaDon(r.ma_don);
+      if (r.ma_don_so) setMaDonSo(r.ma_don_so);
+      if (r.ngay_thanh_toan) setNgayTT(r.ngay_thanh_toan);
+    };
+
+    void pollHoaCuDonBanAction(id).then(applyPoll);
     const t = window.setInterval(() => {
-      void (async () => {
-        const r = await pollHoaCuDonBanAction(id);
-        if (!r.ok) return;
-        if (r.status && r.status !== trangThai) {
-          setTrangThai(r.status);
-          if (r.ma_don) setMaDon(r.ma_don);
-          if (r.ma_don_so) setMaDonSo(r.ma_don_so);
-          if (r.ngay_thanh_toan) setNgayTT(r.ngay_thanh_toan);
-        }
-      })();
+      void pollHoaCuDonBanAction(id).then(applyPoll);
     }, 3000);
     return () => window.clearInterval(t);
   }, [sessionStep, createdDonId, hinhThuc, trangThai]);
+
+  async function handleConfirmDaThu() {
+    if (createdDonId == null || confirmingPaid || trangThai === "Đã thanh toán") return;
+    setConfirmingPaid(true);
+    setErr(null);
+    const r = await confirmHoaCuDonBanDaThuAction(createdDonId);
+    setConfirmingPaid(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    setTrangThai("Đã thanh toán");
+    setNgayTT(new Date().toISOString().slice(0, 10));
+  }
 
   function buildValidLines() {
     return lines
@@ -3015,6 +3074,7 @@ function ModalBanHang({
         <div key={i} className="flex flex-wrap items-end gap-2">
           <HoaCuSanPhamPicker
             variant="ban"
+            branchLabel={chiNhanhLabel}
             sanPham={sanPhamCoTon.length > 0 ? sanPhamCoTon : sanPham}
             value={l.hangId}
             onChange={(id) => setLines((p) => p.map((x, j) => (j === i ? { ...x, hangId: id } : x)))}
@@ -3084,13 +3144,26 @@ function ModalBanHang({
               {deletingDon ? <Loader2 className="inline h-3.5 w-3.5 animate-spin" /> : null}
               Quay lại sửa
             </button>
-            <button
-              type="button"
-              onClick={handleCloseModal}
-              className="rounded-[10px] bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-4 py-2 text-[13px] font-bold text-white"
-            >
-              {trangThai === "Đã thanh toán" ? "Hoàn tất" : "Đóng"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {trangThai !== "Đã thanh toán" ? (
+                <button
+                  type="button"
+                  disabled={confirmingPaid}
+                  onClick={() => void handleConfirmDaThu()}
+                  className="rounded-[10px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-semibold text-emerald-700 disabled:opacity-50"
+                >
+                  {confirmingPaid ? <Loader2 className="inline h-3.5 w-3.5 animate-spin" /> : null}
+                  Xác nhận đã nhận CK
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="rounded-[10px] bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-4 py-2 text-[13px] font-bold text-white"
+              >
+                {trangThai === "Đã thanh toán" ? "Hoàn tất" : "Đóng"}
+              </button>
+            </div>
           </div>
         )
       }
@@ -3099,12 +3172,15 @@ function ModalBanHang({
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
           <div className="min-w-0 space-y-4">
             <label className="block">
-              <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Chi nhánh bán *</span>
-              <select
-                value={chiNhanhId}
-                onChange={(e) => setChiNhanhId(e.target.value)}
-                className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
-              >
+            <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Chi nhánh bán *</span>
+            <select
+              value={chiNhanhId}
+              onChange={(e) => {
+                branchUserChangedRef.current = true;
+                setChiNhanhId(e.target.value);
+              }}
+              className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+            >
                 {chiNhanhOptions.map((b) => (
                   <option key={b.id} value={String(b.id)}>
                     {b.ten}
@@ -3124,6 +3200,11 @@ function ModalBanHang({
             {catalogError ? (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-700" role="alert">
                 {catalogError}
+              </div>
+            ) : null}
+            {catalogHint ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-snug text-amber-900" role="status">
+                {catalogHint}
               </div>
             ) : null}
             <FieldLoggedInStaffRow label="Người bán *" name={loggedInStaffName} />

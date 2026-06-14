@@ -133,12 +133,22 @@ function chiNhanhColumnHint(msg: string): string | null {
   return null;
 }
 
-function hcThanhToanColumnHint(msg: string): string | null {
+function isHcThanhToanColumnError(msg: string): boolean {
   const m = msg.toLowerCase();
-  if (m.includes("ma_don") || m.includes("status") || (m.includes("column") && m.includes("ngay_thanh_toan"))) {
-    return "Chưa có cột thanh toán trên đơn bán. Chạy scripts/sql/hc-don-ban-thanh-toan.sql trong Supabase SQL Editor.";
-  }
-  return null;
+  return m.includes("ma_don") || m.includes("status") || (m.includes("column") && m.includes("ngay_thanh_toan"));
+}
+
+function supabaseProjectRefFromEnv(): string | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CINS_NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const m = url.match(/https:\/\/([^.]+)\.supabase\.co/i);
+  return m?.[1] ?? null;
+}
+
+function hcThanhToanColumnHint(msg: string): string | null {
+  if (!isHcThanhToanColumnError(msg)) return null;
+  const ref = supabaseProjectRefFromEnv();
+  const editor = ref ? `https://supabase.com/dashboard/project/${ref}/sql/new` : "Supabase SQL Editor";
+  return `Chưa có cột thanh toán trên đơn bán (ma_don, ma_don_so, status, ngay_thanh_toan). Mở ${editor}, dán nội dung file scripts/sql/hc-don-ban-thanh-toan.sql và bấm Run.`;
 }
 
 function isHcChuyenKhoan(hinhThuc: string): boolean {
@@ -149,6 +159,63 @@ function hcDonCodesFromId(donId: number): { ma_don: string; ma_don_so: string } 
   const ma_don_so = `SC${String(donId).padStart(6, "0").slice(-6)}`;
   const ma_don = `HC-${String(donId).padStart(8, "0")}`;
   return { ma_don, ma_don_so };
+}
+
+function extractMaDonSoFromTxContent(content: string): string | null {
+  const m = content.match(/(?:SA|SC)\d{6}/i);
+  return m ? m[0].toUpperCase() : null;
+}
+
+/** Đối soát SePay đã log nhưng webhook chưa cập nhật đơn (vd. worker chưa deploy bản SC). */
+async function trySyncHcDonBanFromSepay(
+  supabase: NonNullable<ReturnType<typeof createServiceRoleClient>>,
+  donId: number,
+  maDonSo: string | null,
+  tongTien: number,
+): Promise<boolean> {
+  const code = maDonSo?.trim().toUpperCase();
+  if (!code || !/^SC\d{6}$/.test(code)) return false;
+
+  const { data: txs, error } = await supabase
+    .from("hp_giao_dich_thanh_toan")
+    .select("id, transfer_amount, content, ma_don_trich_xuat, transfer_type")
+    .or(`ma_don_trich_xuat.eq.${code},content.ilike.%${code}%`)
+    .order("transaction_date", { ascending: false })
+    .limit(10);
+
+  if (error || !txs?.length) return false;
+
+  const expected = Math.max(0, Math.round(tongTien));
+  const hit = txs.find((raw) => {
+    const t = raw as Record<string, unknown>;
+    const transferType = t.transfer_type != null ? String(t.transfer_type) : "in";
+    if (transferType !== "in") return false;
+    const amt = Math.round(Number(t.transfer_amount) || 0);
+    if (expected > 0 && amt !== expected) return false;
+    const extracted =
+      (t.ma_don_trich_xuat != null ? String(t.ma_don_trich_xuat).trim().toUpperCase() : "") ||
+      extractMaDonSoFromTxContent(String(t.content ?? "")) ||
+      "";
+    return extracted === code || String(t.content ?? "").toUpperCase().includes(code);
+  });
+
+  if (!hit) return false;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const { error: uErr } = await supabase
+    .from("hc_don_ban_hoa_cu")
+    .update({ status: "Đã thanh toán", ngay_thanh_toan: today })
+    .eq("id", donId);
+
+  if (uErr) return false;
+
+  const txId = Number((hit as { id?: unknown }).id);
+  const txMa = (hit as { ma_don_trich_xuat?: unknown }).ma_don_trich_xuat;
+  if (Number.isFinite(txId) && txId > 0 && !String(txMa ?? "").trim()) {
+    await supabase.from("hp_giao_dich_thanh_toan").update({ ma_don_trich_xuat: code }).eq("id", txId);
+  }
+
+  return true;
 }
 
 async function rollbackNhapDon(
@@ -738,17 +805,35 @@ export async function createHoaCuDonBan(input: {
   const idem = input.idempotency_key?.trim() || null;
   const isTransfer = isHcChuyenKhoan(input.hinh_thuc_thu);
   const today = new Date().toISOString().slice(0, 10);
-  const banHeader: Record<string, unknown> = {
+  const baseHeader: Record<string, unknown> = {
     nguoi_ban: input.nguoi_ban,
     khach_hang: input.khach_hang,
     chi_nhanh_id: input.chi_nhanh_id,
     hinh_thuc_thu: input.hinh_thuc_thu.trim() || "Tiền mặt",
+  };
+  const paymentHeader: Record<string, unknown> = {
     status: isTransfer ? "Chờ thanh toán" : "Đã thanh toán",
     ngay_thanh_toan: isTransfer ? null : today,
   };
+  const banHeader: Record<string, unknown> = { ...baseHeader, ...paymentHeader };
   if (idem) banHeader.idempotency_key = idem;
 
-  const { data: don, error: e1 } = await supabase.from("hc_don_ban_hoa_cu").insert(banHeader).select("id").single();
+  let don: { id?: unknown } | null = null;
+  let e1: { message?: string } | null = null;
+  let paymentColumnsOk = true;
+
+  ({ data: don, error: e1 } = await supabase.from("hc_don_ban_hoa_cu").insert(banHeader).select("id").single());
+
+  if (e1 && isHcThanhToanColumnError(e1.message ?? "")) {
+    if (isTransfer) {
+      const hint = hcThanhToanColumnHint(e1.message ?? "");
+      return { ok: false, error: hint ?? e1.message ?? "Không tạo được đơn bán." };
+    }
+    paymentColumnsOk = false;
+    const legacyHeader: Record<string, unknown> = { ...baseHeader };
+    if (idem) legacyHeader.idempotency_key = idem;
+    ({ data: don, error: e1 } = await supabase.from("hc_don_ban_hoa_cu").insert(legacyHeader).select("id").single());
+  }
 
   if (e1) {
     if (idem && isPgUniqueViolation(e1)) {
@@ -799,16 +884,21 @@ export async function createHoaCuDonBan(input: {
   const tongTien = numMoney((sumRow as { tong_tien?: unknown } | null)?.tong_tien);
 
   const codes = hcDonCodesFromId(donId);
-  const { error: codeErr } = await supabase
-    .from("hc_don_ban_hoa_cu")
-    .update({ ma_don: codes.ma_don, ma_don_so: codes.ma_don_so })
-    .eq("id", donId);
-  if (codeErr) {
-    const hint = hcThanhToanColumnHint(codeErr.message ?? "");
-    if (isTransfer) {
-      await rollbackBanDon(supabase, donId);
-      return { ok: false, error: hint ?? codeErr.message ?? "Không gán được mã đơn." };
+  if (paymentColumnsOk) {
+    const { error: codeErr } = await supabase
+      .from("hc_don_ban_hoa_cu")
+      .update({ ma_don: codes.ma_don, ma_don_so: codes.ma_don_so })
+      .eq("id", donId);
+    if (codeErr) {
+      const hint = hcThanhToanColumnHint(codeErr.message ?? "");
+      if (isTransfer) {
+        await rollbackBanDon(supabase, donId);
+        return { ok: false, error: hint ?? codeErr.message ?? "Không gán được mã đơn." };
+      }
     }
+  } else if (isTransfer) {
+    await rollbackBanDon(supabase, donId);
+    return { ok: false, error: hcThanhToanColumnHint("status") ?? "Thiếu cột thanh toán trên đơn bán." };
   }
 
   // ton_kho: DB trigger trên INSERT hc_ban_hc_chi_tiet — không trừ thêm ở app.
@@ -835,17 +925,37 @@ export async function pollHoaCuDonBanAction(
   if (!Number.isFinite(donId) || donId <= 0) return { ok: false, error: "ID đơn không hợp lệ." };
   const supabase = createServiceRoleClient();
   if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
-  const { data, error } = await supabase
-    .from("hc_don_ban_hoa_cu")
-    .select("status, ma_don, ma_don_so, ngay_thanh_toan")
-    .eq("id", donId)
-    .maybeSingle();
+
+  const readDon = async () => {
+    const { data, error } = await supabase
+      .from("hc_don_ban_hoa_cu")
+      .select("status, ma_don, ma_don_so, ngay_thanh_toan, tong_tien, hinh_thuc_thu")
+      .eq("id", donId)
+      .maybeSingle();
+    return { data: data as Record<string, unknown> | null, error };
+  };
+
+  let { data, error } = await readDon();
   if (error) {
     const hint = hcThanhToanColumnHint(error.message);
     return { ok: false, error: hint ?? error.message };
   }
-  const row = data as Record<string, unknown> | null;
-  if (!row) return { ok: false, error: "Không tìm thấy đơn." };
+  if (!data) return { ok: false, error: "Không tìm thấy đơn." };
+
+  const status = data.status != null ? String(data.status) : null;
+  const hinhThuc = data.hinh_thuc_thu != null ? String(data.hinh_thuc_thu) : "";
+  const maDonSo = data.ma_don_so != null ? String(data.ma_don_so) : null;
+  const tongTien = numMoney(data.tong_tien);
+
+  if (isHcChuyenKhoan(hinhThuc) && status !== "Đã thanh toán") {
+    const synced = await trySyncHcDonBanFromSepay(supabase, donId, maDonSo, tongTien);
+    if (synced) {
+      const again = await readDon();
+      if (!again.error && again.data) data = again.data;
+    }
+  }
+
+  const row = data;
   return {
     ok: true,
     status: row.status != null ? String(row.status) : null,
@@ -853,6 +963,38 @@ export async function pollHoaCuDonBanAction(
     ma_don_so: row.ma_don_so != null ? String(row.ma_don_so) : null,
     ngay_thanh_toan: row.ngay_thanh_toan != null ? String(row.ngay_thanh_toan).slice(0, 10) : null,
   };
+}
+
+export async function confirmHoaCuDonBanDaThuAction(donId: number): Promise<HoaCuActionResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(donId) || donId <= 0) return { ok: false, error: "ID đơn không hợp lệ." };
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase." };
+
+  const { data, error } = await supabase
+    .from("hc_don_ban_hoa_cu")
+    .select("status, hinh_thuc_thu")
+    .eq("id", donId)
+    .maybeSingle();
+  if (error) {
+    const hint = hcThanhToanColumnHint(error.message);
+    return { ok: false, error: hint ?? error.message };
+  }
+  if (!data) return { ok: false, error: "Không tìm thấy đơn." };
+  if (String((data as { status?: unknown }).status ?? "") === "Đã thanh toán") {
+    return { ok: true, message: "Đơn đã được đánh dấu thanh toán." };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const { error: uErr } = await supabase
+    .from("hc_don_ban_hoa_cu")
+    .update({ status: "Đã thanh toán", ngay_thanh_toan: today })
+    .eq("id", donId);
+  if (uErr) return { ok: false, error: uErr.message };
+
+  revalidatePath(ADMIN_PATH, "layout");
+  return { ok: true, message: "Đã xác nhận thu đơn bán." };
 }
 
 export async function updateHoaCuDonBanMeta(input: {

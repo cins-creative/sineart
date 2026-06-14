@@ -19,7 +19,10 @@ import {
   YAxis,
 } from "recharts";
 
-import type { HvEnrollmentTrackingResult } from "@/lib/data/admin-hv-enrollment-tracking";
+import type {
+  HvEnrollmentTrackingResult,
+  HvTrackingGroupMetrics,
+} from "@/lib/data/admin-hv-enrollment-tracking";
 import { cn } from "@/lib/utils";
 
 import {
@@ -43,6 +46,27 @@ const C = {
 } as const;
 
 type ChartFocus = "compare" | "moi" | "nghi" | "net";
+type MetricGroup = "enrollment" | "student";
+
+const GROUP_LABELS: Record<
+  MetricGroup,
+  { title: string; hint: string; moi: string; nghi: string; netSub: string }
+> = {
+  enrollment: {
+    title: "Theo ghi danh lớp",
+    hint: "Đã thu HP · theo từng dòng ghi danh (lọc môn/lớp nếu chọn)",
+    moi: "Ghi danh mới",
+    nghi: "Nghỉ ghi danh",
+    netSub: "ghi danh mới − nghỉ ghi danh",
+  },
+  student: {
+    title: "Theo học viên",
+    hint: "Hồ sơ mới / TT tư vấn Nghỉ · mỗi HV tối đa 1 lần trong kỳ",
+    moi: "Học viên mới",
+    nghi: "Học viên nghỉ",
+    netSub: "học viên mới − học viên nghỉ",
+  },
+};
 
 function fNum(v: number): string {
   return Math.round(v).toLocaleString("vi-VN");
@@ -136,6 +160,63 @@ function SecTitle({ children, color }: { children: React.ReactNode; color: strin
   );
 }
 
+function KpiGroupSection({
+  group,
+  metrics,
+  metricGroup,
+  chartFocus,
+  onSelect,
+  children,
+}: {
+  group: MetricGroup;
+  metrics: HvTrackingGroupMetrics;
+  metricGroup: MetricGroup;
+  chartFocus: ChartFocus;
+  onSelect: (group: MetricGroup, focus: ChartFocus) => void;
+  children?: React.ReactNode;
+}) {
+  const meta = GROUP_LABELS[group];
+  const isActiveGroup = metricGroup === group;
+
+  return (
+    <section className="rounded-[14px] border border-[#EDE8E9] bg-white/90 p-3 shadow-[0_1px_6px_rgba(0,0,0,0.04)] md:p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="m-0 text-[13px] font-bold tracking-tight text-[#323232]">{meta.title}</h3>
+          <p className="mt-0.5 text-[11px] text-black/45">{meta.hint}</p>
+        </div>
+        {children}
+      </div>
+      <div className="flex flex-wrap gap-2.5">
+        <KpiCard
+          label={meta.moi}
+          value={fNum(metrics.moi)}
+          sub="trong khoảng chọn"
+          color={C.green}
+          active={isActiveGroup && chartFocus === "moi"}
+          onClick={() => onSelect(group, "moi")}
+        />
+        <KpiCard
+          label={meta.nghi}
+          value={fNum(metrics.nghi)}
+          sub="trong khoảng chọn"
+          color={C.red}
+          active={isActiveGroup && chartFocus === "nghi"}
+          onClick={() => onSelect(group, "nghi")}
+        />
+        <KpiCard
+          label="Net"
+          value={`${metrics.net >= 0 ? "+" : ""}${fNum(metrics.net)}`}
+          sub={meta.netSub}
+          color={C.net}
+          active={isActiveGroup && chartFocus === "net"}
+          onClick={() => onSelect(group, "net")}
+        />
+      </div>
+    </section>
+  );
+}
+
 function KpiCard({
   label,
   value,
@@ -202,11 +283,13 @@ export default function HvEnrollmentTrackingCharts({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<HvEnrollmentTrackingResult | null>(null);
+  const [metricGroup, setMetricGroup] = useState<MetricGroup>("enrollment");
   const [chartFocus, setChartFocus] = useState<ChartFocus>("compare");
 
-  const toggleChartFocus = useCallback((focus: ChartFocus) => {
-    setChartFocus((prev) => (prev === focus ? "compare" : focus));
-  }, []);
+  const selectMetric = useCallback((group: MetricGroup, focus: ChartFocus) => {
+    setMetricGroup(group);
+    setChartFocus((prev) => (metricGroup === group && prev === focus ? "compare" : focus));
+  }, [metricGroup]);
 
   useEffect(() => {
     setCustomFrom(customFromInitial);
@@ -232,9 +315,9 @@ export default function HvEnrollmentTrackingCharts({
       }
       setPayload({
         series: json.series,
-        totals: json.totals,
+        enrollment: json.enrollment,
+        student: json.student,
         activeEnrollments: json.activeEnrollments ?? 0,
-        newProfilesInRange: json.newProfilesInRange ?? 0,
         rangeLabel: json.rangeLabel,
         granularity: json.granularity ?? "day",
         mode: json.mode,
@@ -255,11 +338,14 @@ export default function HvEnrollmentTrackingCharts({
   const chartData = useMemo(
     () =>
       (payload?.series ?? []).map((row) => ({
-        ...row,
+        ...row[metricGroup],
         periodLabel: row.label,
       })),
-    [payload],
+    [payload, metricGroup],
   );
+
+  const activeGroupMetrics = payload?.[metricGroup];
+  const groupMeta = GROUP_LABELS[metricGroup];
 
   const netCumulative = useMemo(() => {
     let acc = 0;
@@ -270,25 +356,25 @@ export default function HvEnrollmentTrackingCharts({
   }, [chartData]);
 
   const pieData = useMemo(() => {
-    if (!payload) return [];
+    if (!activeGroupMetrics) return [];
     return [
-      { name: "Mới", value: payload.totals.moi, color: C.green },
-      { name: "Nghỉ", value: payload.totals.nghi, color: C.red },
+      { name: groupMeta.moi, value: activeGroupMetrics.moi, color: C.green },
+      { name: groupMeta.nghi, value: activeGroupMetrics.nghi, color: C.red },
     ].filter((d) => d.value > 0);
-  }, [payload]);
+  }, [activeGroupMetrics, groupMeta]);
 
   const chartTitle = useMemo(() => {
     switch (chartFocus) {
       case "moi":
-        return "Ghi danh mới theo kỳ";
+        return `${groupMeta.moi} theo kỳ`;
       case "nghi":
-        return "Học viên nghỉ theo kỳ";
+        return `${groupMeta.nghi} theo kỳ`;
       case "net":
-        return "Net tích lũy theo kỳ";
+        return `Net ${groupMeta.title.toLowerCase()} (tích lũy)`;
       default:
-        return "Ghi danh mới vs Nghỉ theo kỳ";
+        return `${groupMeta.moi} vs ${groupMeta.nghi} theo kỳ`;
     }
-  }, [chartFocus]);
+  }, [chartFocus, groupMeta]);
 
   const chartTitleColor = useMemo(() => {
     switch (chartFocus) {
@@ -451,11 +537,11 @@ export default function HvEnrollmentTrackingCharts({
         </label>
         {payload?.mode === "enrollment" ? (
           <p className="mb-1 text-[11px] text-black/45">
-            Lọc môn/lớp — mới = ngày ghi danh (hoặc ngày đầu kỳ HP), nghỉ = hết kỳ học phí.
+            Lọc môn/lớp chỉ áp dụng nhóm <strong>ghi danh</strong>. Nhóm học viên luôn toàn trung tâm.
           </p>
         ) : (
           <p className="mb-1 text-[11px] text-black/45">
-            Toàn trung tâm — mới = ghi danh lớp mới; nghỉ = TT «Nghỉ» và ngày kết thúc ≤ hôm nay (không tính ngày nghỉ dự kiến).
+            Ghi danh: đã thu HP · ngày đầu / cuối kỳ. Học viên: tạo hồ sơ / TT tư vấn Nghỉ.
           </p>
         )}
       </div>
@@ -471,45 +557,27 @@ export default function HvEnrollmentTrackingCharts({
         </div>
       ) : payload ? (
         <>
-          <div className="flex flex-wrap gap-2.5">
-            <KpiCard
-              label="Ghi danh mới"
-              value={fNum(payload.totals.moi)}
-              sub="lần vào lớp trong kỳ"
-              color={C.green}
-              active={chartFocus === "moi"}
-              onClick={() => toggleChartFocus("moi")}
+          <div className="flex flex-col gap-3">
+            <KpiGroupSection
+              group="enrollment"
+              metrics={payload.enrollment}
+              metricGroup={metricGroup}
+              chartFocus={chartFocus}
+              onSelect={selectMetric}
             />
-            <KpiCard
-              label="HV nghỉ"
-              value={fNum(payload.totals.nghi)}
-              sub="trong khoảng chọn"
-              color={C.red}
-              active={chartFocus === "nghi"}
-              onClick={() => toggleChartFocus("nghi")}
-            />
-            <KpiCard
-              label="Net"
-              value={`${payload.totals.net >= 0 ? "+" : ""}${fNum(payload.totals.net)}`}
-              sub="ghi danh mới − nghỉ"
-              color={C.net}
-              active={chartFocus === "net"}
-              onClick={() => toggleChartFocus("net")}
+            <KpiGroupSection
+              group="student"
+              metrics={payload.student}
+              metricGroup={metricGroup}
+              chartFocus={chartFocus}
+              onSelect={selectMetric}
             />
             <KpiCard
               label="Còn hạn (hôm nay)"
               value={fNum(payload.activeEnrollments)}
-              sub="snapshot — như QLHV"
+              sub="ghi danh đang học · snapshot QLHV"
               color={C.violet}
             />
-            {payload.mode === "center" && payload.newProfilesInRange > 0 ? (
-              <KpiCard
-                label="Hồ sơ mới"
-                value={fNum(payload.newProfilesInRange)}
-                sub="tài khoản tạo trong kỳ"
-                color={C.orange}
-              />
-            ) : null}
           </div>
 
           {chartData.length === 0 ? (
@@ -544,10 +612,10 @@ export default function HvEnrollmentTrackingCharts({
                     </div>
                     <div className="mt-1 flex justify-center gap-4 text-[11px] text-[#9E8A90]">
                       <span className="flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full" style={{ background: C.green }} /> Mới
+                        <span className="h-2 w-2 rounded-full" style={{ background: C.green }} /> {groupMeta.moi}
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full" style={{ background: C.red }} /> Nghỉ
+                        <span className="h-2 w-2 rounded-full" style={{ background: C.red }} /> {groupMeta.nghi}
                       </span>
                     </div>
                   </Card>
@@ -580,7 +648,7 @@ export default function HvEnrollmentTrackingCharts({
                           <Line
                             type="monotone"
                             dataKey="moi"
-                            name="Ghi danh mới"
+                            name={groupMeta.moi}
                             stroke={C.green}
                             strokeWidth={2.5}
                             dot={{ r: 3, fill: C.green }}
@@ -591,7 +659,7 @@ export default function HvEnrollmentTrackingCharts({
                           <Line
                             type="monotone"
                             dataKey="nghi"
-                            name="Nghỉ"
+                            name={groupMeta.nghi}
                             stroke={C.red}
                             strokeWidth={2.5}
                             strokeDasharray={chartFocus === "compare" ? "5 4" : undefined}

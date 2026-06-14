@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   computeOverallStatus,
   deriveEnrollmentStatus,
+  hasHpTuitionKy,
 } from "@/lib/data/admin-qlhv-tinh-trang";
 import type {
   AdminQlhvEnrollment,
@@ -13,14 +14,21 @@ import { fetchAdminQuanLyHocVienBundle } from "@/lib/data/admin-quan-ly-hoc-vien
 
 const ISO_YMD = /^\d{4}-\d{2}-\d{2}$/;
 
+export type HvTrackingGroupMetrics = {
+  moi: number;
+  nghi: number;
+  net: number;
+};
+
 export type HvTrackingBucket = {
   key: string;
   label: string;
   startYmd: string;
   endYmd: string;
-  moi: number;
-  nghi: number;
-  net: number;
+  /** Theo dòng ghi danh lớp (đã thu HP). */
+  enrollment: HvTrackingGroupMetrics;
+  /** Theo hồ sơ học viên (tạo mới / TT tư vấn Nghỉ). */
+  student: HvTrackingGroupMetrics;
 };
 
 export type HvTrackingMonOption = { id: number; ten: string };
@@ -30,14 +38,13 @@ export type HvTrackingGranularity = "day" | "month";
 
 export type HvEnrollmentTrackingResult = {
   series: HvTrackingBucket[];
-  totals: { moi: number; nghi: number; net: number };
+  enrollment: HvTrackingGroupMetrics;
+  student: HvTrackingGroupMetrics;
   /** Ghi danh còn trong kỳ HP hôm nay — snapshot, không phụ thuộc khoảng lọc. */
   activeEnrollments: number;
-  /** Hồ sơ mới (created_at) trong khoảng — chỉ toàn trung tâm. */
-  newProfilesInRange: number;
   rangeLabel: string;
   granularity: HvTrackingGranularity;
-  /** `center` = toàn TT; `enrollment` = lọc môn/lớp. */
+  /** `center` = toàn TT; `enrollment` = lọc môn/lớp (chỉ ảnh hưởng nhóm ghi danh). */
   mode: "center" | "enrollment";
   filters: {
     monHoc: HvTrackingMonOption[];
@@ -140,7 +147,7 @@ export function buildTrackingBuckets(
   endYmd: string,
   todayYmd: string = todayYmdLocal(),
   granularity: HvTrackingGranularity = "day",
-): Omit<HvTrackingBucket, "moi" | "nghi" | "net">[] {
+): Omit<HvTrackingBucket, "enrollment" | "student">[] {
   if (!ISO_YMD.test(startYmd) || !ISO_YMD.test(endYmd) || startYmd > endYmd) return [];
 
   const effectiveEnd = endYmd > todayYmd ? todayYmd : endYmd;
@@ -149,7 +156,7 @@ export function buildTrackingBuckets(
   const useDaily = granularity === "day";
 
   if (useDaily) {
-    const out: Omit<HvTrackingBucket, "moi" | "nghi" | "net">[] = [];
+    const out: Omit<HvTrackingBucket, "enrollment" | "student">[] = [];
     for (let d = parseYmd(startYmd); ; d.setDate(d.getDate() + 1)) {
       const ymd = formatYMDLocal(d);
       out.push({ key: ymd, label: formatDayLabel(ymd), startYmd: ymd, endYmd: ymd });
@@ -158,7 +165,7 @@ export function buildTrackingBuckets(
     return out;
   }
 
-  const out: Omit<HvTrackingBucket, "moi" | "nghi" | "net">[] = [];
+  const out: Omit<HvTrackingBucket, "enrollment" | "student">[] = [];
   let cursor = parseYmd(startYmd);
   cursor.setDate(1);
   const end = parseYmd(effectiveEnd);
@@ -197,6 +204,7 @@ function enrollmentMatchesFilter(
 }
 
 function enrollmentQuitYmd(e: AdminQlhvEnrollment): string | null {
+  if (!hasHpTuitionKy(e)) return null;
   if (deriveEnrollmentStatus(e) !== "Nghỉ") return null;
   const d = e.ngay_cuoi_ky?.trim().slice(0, 10);
   return d && ISO_YMD.test(d) ? d : null;
@@ -247,51 +255,64 @@ export function computeHvEnrollmentTracking(params: {
     : filteredEnrollments;
 
   const series: HvTrackingBucket[] = bucketDefs.map((b) => {
-    let moi = 0;
-    let nghi = 0;
+    let enrollmentMoi = 0;
+    let enrollmentNghi = 0;
+    let studentMoi = 0;
+    let studentNghi = 0;
 
     for (const e of enrollmentsForStats) {
-      const created = enrollmentNewYmd(e);
-      if (isRealizedEventYmd(created, todayYmd) && dateInInclusiveRange(created, b.startYmd, b.endYmd)) moi++;
-      if (!centerMode) {
-        const quitD = enrollmentQuitYmd(e);
-        if (isRealizedEventYmd(quitD, todayYmd) && dateInInclusiveRange(quitD, b.startYmd, b.endYmd)) nghi++;
+      const newD = enrollmentNewYmd(e);
+      if (isRealizedEventYmd(newD, todayYmd) && dateInInclusiveRange(newD, b.startYmd, b.endYmd)) {
+        enrollmentMoi++;
+      }
+      const quitD = enrollmentQuitYmd(e);
+      if (isRealizedEventYmd(quitD, todayYmd) && dateInInclusiveRange(quitD, b.startYmd, b.endYmd)) {
+        enrollmentNghi++;
       }
     }
 
-    if (centerMode) {
-      for (const hv of students) {
-        if (hv.is_hoc_vien_mau) continue;
-        const khs = byHv.get(hv.id) ?? [];
-        const quitD = quitStatsReferenceYmd(hv, khs);
-        if (isRealizedEventYmd(quitD, todayYmd) && dateInInclusiveRange(quitD, b.startYmd, b.endYmd)) nghi++;
-      }
-    }
-
-    return { ...b, moi, nghi, net: moi - nghi };
-  });
-
-  let newProfilesInRange = 0;
-  if (centerMode) {
     for (const hv of students) {
       if (hv.is_hoc_vien_mau) continue;
       const created = isoDateFromCreatedAt(hv.created_at);
-      if (isRealizedEventYmd(created, todayYmd) && dateInInclusiveRange(created, startYmd, chartEndYmd)) {
-        newProfilesInRange++;
+      if (isRealizedEventYmd(created, todayYmd) && dateInInclusiveRange(created, b.startYmd, b.endYmd)) {
+        studentMoi++;
+      }
+      const khs = byHv.get(hv.id) ?? [];
+      const quitD = quitStatsReferenceYmd(hv, khs);
+      if (isRealizedEventYmd(quitD, todayYmd) && dateInInclusiveRange(quitD, b.startYmd, b.endYmd)) {
+        studentNghi++;
       }
     }
-  }
+
+    return {
+      ...b,
+      enrollment: {
+        moi: enrollmentMoi,
+        nghi: enrollmentNghi,
+        net: enrollmentMoi - enrollmentNghi,
+      },
+      student: {
+        moi: studentMoi,
+        nghi: studentNghi,
+        net: studentMoi - studentNghi,
+      },
+    };
+  });
 
   const activeEnrollments = countActiveEnrollments(enrollments, mauIds);
 
-  const totals = series.reduce(
-    (acc, row) => ({
-      moi: acc.moi + row.moi,
-      nghi: acc.nghi + row.nghi,
-      net: acc.net + row.net,
-    }),
-    { moi: 0, nghi: 0, net: 0 },
-  );
+  const sumGroup = (key: "enrollment" | "student"): HvTrackingGroupMetrics =>
+    series.reduce(
+      (acc, row) => ({
+        moi: acc.moi + row[key].moi,
+        nghi: acc.nghi + row[key].nghi,
+        net: acc.net + row[key].net,
+      }),
+      { moi: 0, nghi: 0, net: 0 },
+    );
+
+  const enrollment = sumGroup("enrollment");
+  const student = sumGroup("student");
 
   const monIds = new Set<number>();
   for (const lop of Object.values(lopById)) {
@@ -317,9 +338,9 @@ export function computeHvEnrollmentTracking(params: {
 
   return {
     series,
-    totals,
+    enrollment,
+    student,
     activeEnrollments,
-    newProfilesInRange,
     rangeLabel,
     granularity,
     mode: centerMode ? "center" : "enrollment",
@@ -328,7 +349,8 @@ export function computeHvEnrollmentTracking(params: {
 }
 
 function enrollmentNewYmd(e: AdminQlhvEnrollment): string | null {
-  return isoDateFromCreatedAt(e.created_at) ?? isoDateFromCreatedAt(e.ngay_dau_ky);
+  if (!hasHpTuitionKy(e)) return null;
+  return isoDateFromCreatedAt(e.ngay_dau_ky);
 }
 
 function startOfIsoWeekMonday(ref: Date): Date {

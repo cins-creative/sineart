@@ -422,6 +422,18 @@
 .sa-mockup .foot-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:36px;padding-bottom:32px;border-bottom:1px solid var(--ink-06)}
 .sa-mockup .foot-grid h4{font-family:var(--display);font-size:15px;margin-bottom:16px}
 .sa-mockup .foot-grid p, .sa-mockup .foot-grid a{font-size:14px;color:var(--ink-60);display:block;margin-bottom:9px}
+.sa-mockup .foot-grid a.foot-privacy-btn{
+  display:inline-flex;align-items:center;gap:8px;width:fit-content;margin-top:6px;margin-bottom:0;
+  padding:8px 14px;border-radius:999px;font-size:13px;font-weight:600;color:var(--ink);
+  background:rgba(187,137,248,.1);border:1px solid rgba(238,91,159,.22);
+  transition:background .2s ease,color .2s ease,box-shadow .2s ease,transform .15s ease
+}
+.sa-mockup .foot-grid a.foot-privacy-btn:hover{
+  color:#fff;background:var(--grad);border-color:transparent;
+  box-shadow:0 6px 20px rgba(238,91,159,.28);transform:translateY(-1px)
+}
+.sa-mockup .foot-grid a.foot-privacy-btn .feather{color:#ee5b9f;stroke-width:2}
+.sa-mockup .foot-grid a.foot-privacy-btn:hover .feather{color:#fff}
 .sa-mockup .foot-grid .logo{font-family:var(--display);font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:9px;font-size:24px;margin-bottom:14px}
 .sa-mockup .foot-grid .logo .dot{width:11px;height:11px;border-radius:50%;background:var(--grad);display:inline-block}
 .sa-mockup .branch{display:flex;gap:10px;margin-bottom:14px}

@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Paintbrush,
   Phone,
+  Shield,
   User,
 } from "lucide-react";
 
@@ -358,6 +359,14 @@ export async function HomeMockupPage() {
                 {data.footer.email}
               </a>
               <Link href="#dang-ky">Đăng ký nhận lộ trình luyện thi vẽ</Link>
+              <Link href="/privacy" className="foot-privacy-btn">
+                <Shield
+                  className="feather"
+                  style={{ width: 14, height: 14, display: "inline", verticalAlign: "-2px" }}
+                  aria-hidden
+                />{" "}
+                Privacy Policy
+              </Link>
             </div>
           </div>
           <div className="foot-bottom">

@@ -1,5 +1,5 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { getGvHrIdFromSyncedCookie } from "@/lib/phong-hoc/gv-session-cookie";
+import { getGvHrIdForRequest } from "@/lib/phong-hoc/gv-session-cookie";
 import { getHvIdFromSyncedCookie } from "@/lib/phong-hoc/hv-session-cookie";
 import { fetchLopHocMeetRow } from "@/lib/phong-hoc/lop-hoc-meet-fields";
 import { NextResponse } from "next/server";
@@ -46,7 +46,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     }
   }
 
-  const gvHrId = await getGvHrIdFromSyncedCookie();
+  const gvHrId = await getGvHrIdForRequest(req);
   if (gvHrId != null && gvHrId > 0) {
     const { data: lop, error: lopErr } = await sb
       .from("ql_lop_hoc")

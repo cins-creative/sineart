@@ -1,5 +1,5 @@
 import { fetchDiemDanhForLopRange } from "@/lib/phong-hoc/diem-danh";
-import { getGvHrIdFromSyncedCookie } from "@/lib/phong-hoc/gv-session-cookie";
+import { getGvHrIdForRequest } from "@/lib/phong-hoc/gv-session-cookie";
 import { phongHocJsonResponse, phongHocOptionsResponse } from "@/lib/phong-hoc/mobile-api-cors";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -22,12 +22,13 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   const url = new URL(req.url);
-  const teacherHrIdParam = Number(url.searchParams.get("teacherHrId"));
-  let hrId: number | null = null;
-  if (Number.isFinite(teacherHrIdParam) && teacherHrIdParam > 0) {
-    hrId = teacherHrIdParam;
-  } else {
-    hrId = await getGvHrIdFromSyncedCookie();
+  let hrId = await getGvHrIdForRequest(req);
+
+  if (hrId == null) {
+    const teacherHrIdParam = Number(url.searchParams.get("teacherHrId"));
+    if (Number.isFinite(teacherHrIdParam) && teacherHrIdParam > 0) {
+      hrId = teacherHrIdParam;
+    }
   }
 
   if (hrId == null || hrId <= 0) {

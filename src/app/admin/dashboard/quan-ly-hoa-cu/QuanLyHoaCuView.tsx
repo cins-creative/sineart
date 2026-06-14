@@ -5,8 +5,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
+import { ChuyenTab, ModalChuyenHang } from "@/app/admin/dashboard/quan-ly-hoa-cu/HoaCuChuyenUi";
+import {
+  fetchHoaCuCatalogForBranch,
+  getCachedHoaCuCatalog,
+  invalidateHoaCuCatalogCache,
+  prefetchHoaCuCatalog,
+} from "@/app/admin/dashboard/quan-ly-hoa-cu/hoa-cu-catalog-cache";
 import {
   AlertTriangle,
+  ArrowRightLeft,
   ChevronDown,
   ClipboardList,
   Loader2,
@@ -33,7 +41,6 @@ import {
   deleteHoaCuSanPham,
   loadHoaCuDonBanChiTietAction,
   loadHoaCuDonNhapChiTietAction,
-  loadHoaCuSanPhamCatalogAction,
   updateHoaCuDonBanMeta,
   updateHoaCuDonNhapMeta,
   updateHoaCuSanPham,
@@ -41,14 +48,17 @@ import {
 import { ADMIN_MODAL_ROOT_ELEMENT_ID } from "@/lib/admin/constants";
 import {
   HOA_CU_BAN_PATH,
+  HOA_CU_CHUYEN_PATH,
   HOA_CU_KHO_PATH,
   HOA_CU_NHAP_PATH,
   type AdminHoaCuBanDon,
+  type AdminHoaCuChuyenDon,
   type AdminHoaCuHvOpt,
   type AdminHoaCuNhapDon,
   type AdminHoaCuSanPham,
   type AdminHoaCuStaffOpt,
 } from "@/lib/data/admin-hoa-cu";
+import type { AdminChiNhanhOption } from "@/lib/data/admin-chi-nhanh";
 import type { AdminHoaCuBanChiTietLine, AdminHoaCuNhapChiTietLine } from "@/app/admin/dashboard/quan-ly-hoa-cu/actions";
 import { cn } from "@/lib/utils";
 
@@ -73,22 +83,29 @@ function fmtVnd(n: number): string {
 
 const KHO_SEARCH_DEBOUNCE_MS = 320;
 
-function KhoSearchBox({ searchQ }: { searchQ: string }) {
+function KhoFilters({
+  searchQ,
+  chiNhanhId,
+  chiNhanhOptions,
+}: {
+  searchQ: string;
+  chiNhanhId: number;
+  chiNhanhOptions: AdminChiNhanhOption[];
+}) {
   const router = useRouter();
   const [qInput, setQInput] = useState(searchQ);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const applySearchToUrl = useCallback(
-    (raw: string) => {
-      const t = raw.trim();
+  const applyToUrl = useCallback(
+    (rawQ: string, branchId: number) => {
       const p = new URLSearchParams();
+      const t = rawQ.trim();
       if (t) p.set("q", t);
+      p.set("chi_nhanh", String(branchId));
       p.set("page", "1");
-      const qs = p.toString();
-      const href = qs ? `${HOA_CU_KHO_PATH}?${qs}` : HOA_CU_KHO_PATH;
-      router.replace(href, { scroll: false });
+      router.replace(`${HOA_CU_KHO_PATH}?${p.toString()}`, { scroll: false });
     },
-    [router]
+    [router],
   );
 
   useEffect(() => {
@@ -96,37 +113,91 @@ function KhoSearchBox({ searchQ }: { searchQ: string }) {
     if (debounceTimerRef.current != null) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
       debounceTimerRef.current = null;
-      applySearchToUrl(qInput);
+      applyToUrl(qInput, chiNhanhId);
     }, KHO_SEARCH_DEBOUNCE_MS);
     return () => {
       if (debounceTimerRef.current != null) clearTimeout(debounceTimerRef.current);
     };
-  }, [qInput, searchQ, applySearchToUrl]);
+  }, [qInput, searchQ, chiNhanhId, applyToUrl]);
 
   function flushSearchNow() {
     if (debounceTimerRef.current != null) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
     }
-    applySearchToUrl(qInput);
+    applyToUrl(qInput, chiNhanhId);
   }
 
   return (
-    <div className="relative flex w-full min-w-0 flex-wrap gap-2 sm:max-w-md md:flex-1 md:max-w-none lg:max-w-xl">
-      <Search className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
-      <input
-        value={qInput}
-        onChange={(e) => setQInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            flushSearchNow();
-          }
-        }}
-        placeholder="Tìm tên hàng, loại… (gõ để lọc)"
-        aria-label="Tìm trong danh mục kho"
-        className="h-10 w-full min-w-0 rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-3 text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white"
-      />
+    <div className="flex w-full min-w-0 flex-wrap items-center gap-2 md:flex-1 md:justify-end">
+      <label className="flex min-w-[140px] shrink-0 items-center gap-2">
+        <span className="sr-only">Chi nhánh</span>
+        <select
+          value={String(chiNhanhId)}
+          onChange={(e) => applyToUrl(qInput, Number(e.target.value))}
+          className="h-10 w-full min-w-[140px] rounded-[10px] border border-[#EAEAEA] bg-white px-2.5 text-[13px] outline-none focus:border-[#BC8AF9] md:max-w-[200px]"
+          aria-label="Chi nhánh kho"
+        >
+          {chiNhanhOptions.map((b) => (
+            <option key={b.id} value={String(b.id)}>
+              {b.ten}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="relative flex min-w-0 flex-1 sm:min-w-[200px] md:max-w-xl">
+        <Search className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+        <input
+          value={qInput}
+          onChange={(e) => setQInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              flushSearchNow();
+            }
+          }}
+          placeholder="Tìm tên hàng, loại…"
+          aria-label="Tìm trong kho chi nhánh"
+          className="h-10 w-full min-w-0 rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-3 text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white"
+        />
+      </div>
+    </div>
+  );
+}
+
+function DonChiNhanhFilter({
+  basePath,
+  chiNhanhId,
+  chiNhanhOptions,
+}: {
+  basePath: string;
+  chiNhanhId: number;
+  chiNhanhOptions: AdminChiNhanhOption[];
+}) {
+  const router = useRouter();
+
+  return (
+    <div className="flex w-full min-w-0 flex-wrap items-center gap-2 md:flex-1 md:justify-end">
+      <label className="flex min-w-[140px] shrink-0 items-center gap-2">
+        <span className="sr-only">Chi nhánh</span>
+        <select
+          value={String(chiNhanhId)}
+          onChange={(e) => {
+            const p = new URLSearchParams();
+            p.set("chi_nhanh", e.target.value);
+            p.set("page", "1");
+            router.replace(`${basePath}?${p.toString()}`, { scroll: false });
+          }}
+          className="h-10 w-full min-w-[140px] rounded-[10px] border border-[#EAEAEA] bg-white px-2.5 text-[13px] outline-none focus:border-[#BC8AF9] md:max-w-[200px]"
+          aria-label="Chi nhánh"
+        >
+          {chiNhanhOptions.map((b) => (
+            <option key={b.id} value={String(b.id)}>
+              {b.ten}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }
@@ -170,72 +241,71 @@ type Props = {
   loggedInStaffName: string;
   staffOptions: AdminHoaCuStaffOpt[];
   studentOptions: AdminHoaCuHvOpt[];
+  chiNhanhOptions: AdminChiNhanhOption[];
   /** null = chỉ tải full danh mục khi mở modal nhập/bán (trang kho). */
   sanPhamCatalog: AdminHoaCuSanPham[] | null;
-  activeSection: "kho" | "nhap" | "ban";
+  activeSection: "kho" | "nhap" | "ban" | "chuyen";
   khoPage?: {
     rows: AdminHoaCuSanPham[];
     page: number;
     pageSize: number;
     total: number;
     searchQ: string;
+    chiNhanhId: number;
+    chiNhanhTen: string;
     inventoryTotal: number;
     inventoryHetHang: number;
-    /** Σ tồn theo phiếu (nhập − bán) toàn danh mục. */
     inventoryTonSum: number;
   };
-  nhapPage?: { rows: AdminHoaCuNhapDon[]; page: number; pageSize: number; total: number };
-  banPage?: { rows: AdminHoaCuBanDon[]; page: number; pageSize: number; total: number };
+  nhapPage?: {
+    rows: AdminHoaCuNhapDon[];
+    page: number;
+    pageSize: number;
+    total: number;
+    chiNhanhId: number;
+    chiNhanhTen: string;
+  };
+  banPage?: {
+    rows: AdminHoaCuBanDon[];
+    page: number;
+    pageSize: number;
+    total: number;
+    chiNhanhId: number;
+    chiNhanhTen: string;
+  };
+  chuyenPage?: { rows: AdminHoaCuChuyenDon[]; page: number; pageSize: number; total: number };
 };
 
 export default function QuanLyHoaCuView({
   defaultStaffId,
   loggedInStaffName,
   studentOptions,
+  chiNhanhOptions,
   sanPhamCatalog: initialCatalog,
   activeSection,
   khoPage,
   nhapPage,
   banPage,
+  chuyenPage,
 }: Props) {
   const router = useRouter();
   const { canDelete: canMutateBanDon } = useAdminDashboardAbilities();
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
-  const [modal, setModal] = useState<"sp" | "nhap" | "ban" | null>(null);
+  const [modal, setModal] = useState<"sp" | "nhap" | "ban" | "chuyen" | null>(null);
   /** `null` = thêm mới; có giá trị = sửa mặt hàng đó. */
   const [sanPhamDraft, setSanPhamDraft] = useState<AdminHoaCuSanPham | null>(null);
-  const [lazyCatalog, setLazyCatalog] = useState<AdminHoaCuSanPham[] | null>(null);
-  const [catalogLoading, setCatalogLoading] = useState(false);
 
   const notify = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
     window.setTimeout(() => setToast(null), 2800);
   };
 
-  const sanPhamForPickers = useMemo(() => {
-    if (initialCatalog != null) return initialCatalog;
-    return lazyCatalog ?? [];
-  }, [initialCatalog, lazyCatalog]);
+  const activeBranchId =
+    khoPage?.chiNhanhId ?? nhapPage?.chiNhanhId ?? banPage?.chiNhanhId ?? chiNhanhOptions[0]?.id ?? null;
 
   useEffect(() => {
-    if (modal !== "nhap" && modal !== "ban") return;
-    if (initialCatalog != null) return;
-    if (lazyCatalog != null) return;
-    let cancelled = false;
-    const raf = requestAnimationFrame(() => {
-      if (!cancelled) setCatalogLoading(true);
-    });
-    void loadHoaCuSanPhamCatalogAction().then((r) => {
-      if (cancelled) return;
-      setCatalogLoading(false);
-      if (r.ok) setLazyCatalog(r.data);
-      else notify(r.error, false);
-    });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf);
-    };
-  }, [modal, initialCatalog, lazyCatalog]);
+    prefetchHoaCuCatalog(activeBranchId);
+  }, [activeBranchId]);
 
   const inventoryTotal = khoPage?.inventoryTotal ?? 0;
   const hetHang = khoPage?.inventoryHetHang ?? 0;
@@ -262,6 +332,15 @@ export default function QuanLyHoaCuView({
                 {new Intl.NumberFormat("vi-VN").format(inventoryTonSum)}
               </span>{" "}
               đơn vị tồn · {inventoryTotal} mặt hàng · {hetHang} hết tồn
+              {(khoPage?.chiNhanhTen ?? nhapPage?.chiNhanhTen ?? banPage?.chiNhanhTen) ? (
+                <>
+                  {" "}
+                  ·{" "}
+                  <span className="font-semibold text-[#888]">
+                    {khoPage?.chiNhanhTen ?? nhapPage?.chiNhanhTen ?? banPage?.chiNhanhTen}
+                  </span>
+                </>
+              ) : null}
             </p>
           </div>
         </div>
@@ -275,6 +354,8 @@ export default function QuanLyHoaCuView({
           </button>
           <button
             type="button"
+            onMouseEnter={() => prefetchHoaCuCatalog(activeBranchId)}
+            onFocus={() => prefetchHoaCuCatalog(activeBranchId)}
             onClick={() => setModal("nhap")}
             className="rounded-xl border border-[#EAEAEA] bg-white px-[14px] py-2.5 text-[13px] font-semibold text-[#666] hover:bg-[#fafafa]"
           >
@@ -283,11 +364,23 @@ export default function QuanLyHoaCuView({
           </button>
           <button
             type="button"
+            onMouseEnter={() => prefetchHoaCuCatalog(activeBranchId)}
+            onFocus={() => prefetchHoaCuCatalog(activeBranchId)}
             onClick={() => setModal("ban")}
             className="rounded-xl border border-[#EAEAEA] bg-white px-[14px] py-2.5 text-[13px] font-semibold text-[#666] hover:bg-[#fafafa]"
           >
             <ShoppingCart className="mb-0.5 mr-1 inline" size={15} />
             Bán hàng
+          </button>
+          <button
+            type="button"
+            onMouseEnter={() => prefetchHoaCuCatalog(activeBranchId)}
+            onFocus={() => prefetchHoaCuCatalog(activeBranchId)}
+            onClick={() => setModal("chuyen")}
+            className="rounded-xl border border-[#EAEAEA] bg-white px-[14px] py-2.5 text-[13px] font-semibold text-[#666] hover:bg-[#fafafa]"
+          >
+            <ArrowRightLeft className="mb-0.5 mr-1 inline" size={15} />
+            Chuyển kho
           </button>
           <button
             type="button"
@@ -306,9 +399,25 @@ export default function QuanLyHoaCuView({
         <div className="flex min-w-0 flex-wrap gap-1">
           {(
             [
-              { id: "kho" as const, label: "Danh mục kho", icon: Package, href: HOA_CU_KHO_PATH },
-              { id: "nhap" as const, label: "Đơn nhập", icon: Truck, href: HOA_CU_NHAP_PATH },
-              { id: "ban" as const, label: "Đơn bán", icon: ShoppingCart, href: HOA_CU_BAN_PATH },
+              {
+                id: "kho" as const,
+                label: "Kho chi nhánh",
+                icon: Package,
+                href: `${HOA_CU_KHO_PATH}?chi_nhanh=${activeBranchId ?? chiNhanhOptions[0]?.id ?? ""}`,
+              },
+              { id: "chuyen" as const, label: "Chuyển kho", icon: ArrowRightLeft, href: HOA_CU_CHUYEN_PATH },
+              {
+                id: "nhap" as const,
+                label: "Đơn nhập",
+                icon: Truck,
+                href: `${HOA_CU_NHAP_PATH}?chi_nhanh=${activeBranchId ?? chiNhanhOptions[0]?.id ?? ""}`,
+              },
+              {
+                id: "ban" as const,
+                label: "Đơn bán",
+                icon: ShoppingCart,
+                href: `${HOA_CU_BAN_PATH}?chi_nhanh=${activeBranchId ?? chiNhanhOptions[0]?.id ?? ""}`,
+              },
             ] as const
           ).map(({ id, label, icon: Icon, href }) => (
             <Link
@@ -326,8 +435,27 @@ export default function QuanLyHoaCuView({
             </Link>
           ))}
         </div>
-        {activeSection === "kho" ? (
-          <KhoSearchBox key={khoPage?.searchQ ?? ""} searchQ={khoPage?.searchQ ?? ""} />
+        {activeSection === "kho" && khoPage ? (
+          <KhoFilters
+            key={`${khoPage.searchQ}-${khoPage.chiNhanhId}`}
+            searchQ={khoPage.searchQ}
+            chiNhanhId={khoPage.chiNhanhId}
+            chiNhanhOptions={chiNhanhOptions}
+          />
+        ) : activeSection === "nhap" && nhapPage ? (
+          <DonChiNhanhFilter
+            key={`nhap-${nhapPage.chiNhanhId}`}
+            basePath={HOA_CU_NHAP_PATH}
+            chiNhanhId={nhapPage.chiNhanhId}
+            chiNhanhOptions={chiNhanhOptions}
+          />
+        ) : activeSection === "ban" && banPage ? (
+          <DonChiNhanhFilter
+            key={`ban-${banPage.chiNhanhId}`}
+            basePath={HOA_CU_BAN_PATH}
+            chiNhanhId={banPage.chiNhanhId}
+            chiNhanhOptions={chiNhanhOptions}
+          />
         ) : null}
       </div>
 
@@ -341,6 +469,7 @@ export default function QuanLyHoaCuView({
               pageSize: khoPage.pageSize,
               basePath: HOA_CU_KHO_PATH,
               searchQ: khoPage.searchQ,
+              chiNhanhId: khoPage.chiNhanhId,
             }}
             onEdit={(r) => {
               setSanPhamDraft(r);
@@ -354,7 +483,13 @@ export default function QuanLyHoaCuView({
         ) : activeSection === "nhap" && nhapPage ? (
           <NhapTab
             rows={nhapPage.rows}
-            pagination={{ ...nhapPage, basePath: HOA_CU_NHAP_PATH }}
+            pagination={{
+              page: nhapPage.page,
+              pageSize: nhapPage.pageSize,
+              total: nhapPage.total,
+              basePath: HOA_CU_NHAP_PATH,
+              chiNhanhId: nhapPage.chiNhanhId,
+            }}
             onListChanged={(msg, ok) => {
               notify(msg, ok);
               if (ok) router.refresh();
@@ -363,8 +498,24 @@ export default function QuanLyHoaCuView({
         ) : activeSection === "ban" && banPage ? (
           <BanTab
             rows={banPage.rows}
-            pagination={{ ...banPage, basePath: HOA_CU_BAN_PATH }}
+            pagination={{
+              page: banPage.page,
+              pageSize: banPage.pageSize,
+              total: banPage.total,
+              basePath: HOA_CU_BAN_PATH,
+              chiNhanhId: banPage.chiNhanhId,
+            }}
             students={studentOptions}
+            canMutate={canMutateBanDon}
+            onListChanged={(msg, ok) => {
+              notify(msg, ok);
+              if (ok) router.refresh();
+            }}
+          />
+        ) : activeSection === "chuyen" && chuyenPage ? (
+          <ChuyenTab
+            rows={chuyenPage.rows}
+            pagination={{ ...chuyenPage, basePath: HOA_CU_CHUYEN_PATH }}
             canMutate={canMutateBanDon}
             onListChanged={(msg, ok) => {
               notify(msg, ok);
@@ -379,6 +530,8 @@ export default function QuanLyHoaCuView({
           <ModalThemHang
             key={sanPhamDraft ? `sp-${sanPhamDraft.id}` : "sp-new"}
             initial={sanPhamDraft}
+            chiNhanhOptions={chiNhanhOptions}
+            defaultChiNhanhId={activeBranchId}
             onClose={() => {
               setSanPhamDraft(null);
               setModal(null);
@@ -386,6 +539,7 @@ export default function QuanLyHoaCuView({
             onDone={(msg, ok) => {
               notify(msg, ok);
               if (ok) {
+                invalidateHoaCuCatalogCache(activeBranchId ?? undefined);
                 setSanPhamDraft(null);
                 setModal(null);
                 router.refresh();
@@ -396,14 +550,16 @@ export default function QuanLyHoaCuView({
         {modal === "nhap" ? (
           <ModalNhapHang
             key="nhap"
-            sanPham={sanPhamForPickers}
-            catalogLoading={catalogLoading && sanPhamForPickers.length === 0}
+            chiNhanhOptions={chiNhanhOptions}
+            defaultChiNhanhId={activeBranchId}
+            initialCatalog={initialCatalog}
             defaultStaffId={defaultStaffId}
             loggedInStaffName={loggedInStaffName}
             onClose={() => setModal(null)}
             onDone={(msg, ok) => {
               notify(msg, ok);
               if (ok) {
+                invalidateHoaCuCatalogCache(activeBranchId ?? undefined);
                 setModal(null);
                 router.refresh();
               }
@@ -413,8 +569,9 @@ export default function QuanLyHoaCuView({
         {modal === "ban" ? (
           <ModalBanHang
             key="ban"
-            sanPham={sanPhamForPickers}
-            catalogLoading={catalogLoading && sanPhamForPickers.length === 0}
+            chiNhanhOptions={chiNhanhOptions}
+            defaultChiNhanhId={activeBranchId}
+            initialCatalog={initialCatalog}
             students={studentOptions}
             defaultStaffId={defaultStaffId}
             loggedInStaffName={loggedInStaffName}
@@ -422,6 +579,25 @@ export default function QuanLyHoaCuView({
             onDone={(msg, ok) => {
               notify(msg, ok);
               if (ok) {
+                invalidateHoaCuCatalogCache(activeBranchId ?? undefined);
+                setModal(null);
+                router.refresh();
+              }
+            }}
+          />
+        ) : null}
+        {modal === "chuyen" ? (
+          <ModalChuyenHang
+            key="chuyen"
+            chiNhanhOptions={chiNhanhOptions}
+            defaultNguonId={activeBranchId}
+            defaultStaffId={defaultStaffId}
+            loggedInStaffName={loggedInStaffName}
+            onClose={() => setModal(null)}
+            onDone={(msg, ok) => {
+              notify(msg, ok);
+              if (ok) {
+                invalidateHoaCuCatalogCache();
                 setModal(null);
                 router.refresh();
               }
@@ -524,6 +700,7 @@ function KhoTab({
     pageSize: number;
     basePath: string;
     searchQ: string;
+    chiNhanhId: number;
   };
   onEdit: (r: AdminHoaCuSanPham) => void;
   onInventoryChanged: (msg: string, ok: boolean) => void;
@@ -539,7 +716,8 @@ function KhoTab({
     else onInventoryChanged(res.error, false);
   }
 
-  const pageExtra = pagination.searchQ.trim() ? { q: pagination.searchQ.trim() } : undefined;
+  const pageExtra: Record<string, string> = { chi_nhanh: String(pagination.chiNhanhId) };
+  if (pagination.searchQ.trim()) pageExtra.q = pagination.searchQ.trim();
 
   return (
     <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
@@ -883,6 +1061,9 @@ function ModalChiTietDonNhap({
           <div className="min-w-0 flex-1 space-y-1">
             <p className="m-0 font-semibold text-[#1a1a2e]">{fmtDt(don.created_at)}</p>
             <p className="m-0">
+              Chi nhánh: <span className="font-medium text-[#BC8AF9]">{don.chi_nhanh_ten?.trim() || "—"}</span>
+            </p>
+            <p className="m-0">
               Người nhập: <span className="font-medium">{don.nguoi_nhap_name}</span>
               {don.nha_cung_cap?.trim() ? (
                 <>
@@ -1013,6 +1194,9 @@ function ModalChiTietDonBan({
           <div className="min-w-0 flex-1 space-y-1">
             <p className="m-0 font-semibold text-[#1a1a2e]">{fmtDt(don.created_at)}</p>
             <p className="m-0">
+              Chi nhánh: <span className="font-medium text-[#BC8AF9]">{don.chi_nhanh_ten?.trim() || "—"}</span>
+            </p>
+            <p className="m-0">
               Người bán: <span className="font-medium">{don.nguoi_ban_name}</span>
               {" · "}
               Khách: <span className="font-medium">{don.khach_hang_name}</span>
@@ -1092,7 +1276,7 @@ function NhapTab({
   onListChanged,
 }: {
   rows: AdminHoaCuNhapDon[];
-  pagination: { page: number; pageSize: number; total: number; basePath: string };
+  pagination: { page: number; pageSize: number; total: number; basePath: string; chiNhanhId: number };
   onListChanged: (msg: string, ok: boolean) => void;
 }) {
   const [editDon, setEditDon] = useState<AdminHoaCuNhapDon | null>(null);
@@ -1112,19 +1296,21 @@ function NhapTab({
     <>
       <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
         <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
-          <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
+          <table className="w-full min-w-[1020px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
             <colgroup>
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "22%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "14%" }} />
               <col style={{ width: "12%" }} />
-              <col style={{ width: "15%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "16%" }} />
             </colgroup>
             <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
               <tr>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Thời gian</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Chi nhánh</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Người nhập</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Nhà cung cấp</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Dòng</th>
@@ -1137,7 +1323,7 @@ function NhapTab({
               {rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="border-b border-[#f8fafc] px-4 py-10 text-center align-middle text-sm text-[#888] min-h-[min(50dvh,520px)]"
                   >
                     Chưa có đơn nhập.
@@ -1154,6 +1340,9 @@ function NhapTab({
                     >
                       <td className="border-b border-[#f8fafc] px-2 py-2 align-middle whitespace-nowrap text-[#666] sm:px-3">
                         {fmtDt(r.created_at)}
+                      </td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle font-medium text-[#BC8AF9] sm:px-3">
+                        {r.chi_nhanh_ten?.trim() || "—"}
                       </td>
                       <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">{r.nguoi_nhap_name}</td>
                       <td className="border-b border-[#f8fafc] px-2 py-2 align-middle break-words text-[#555] sm:px-3">
@@ -1204,6 +1393,7 @@ function NhapTab({
           total={pagination.total}
           pageSize={pagination.pageSize}
           basePath={pagination.basePath}
+          extraQuery={{ chi_nhanh: String(pagination.chiNhanhId) }}
         />
       </div>
       <AnimatePresence>
@@ -1296,6 +1486,10 @@ function DeleteDonBanConfirmModal({
 
           <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-[#fafafa]">
             <div className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] px-3 py-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF]">Chi nhánh</span>
+              <span className="text-[13px] font-semibold text-[#BC8AF9]">{target.chi_nhanh_ten?.trim() || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] px-3 py-2.5">
               <span className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF]">Người bán</span>
               <span className="text-[13px] font-semibold text-[#1a1a2e]">{target.nguoi_ban_name}</span>
             </div>
@@ -1357,7 +1551,7 @@ function BanTab({
   onListChanged,
 }: {
   rows: AdminHoaCuBanDon[];
-  pagination: { page: number; pageSize: number; total: number; basePath: string };
+  pagination: { page: number; pageSize: number; total: number; basePath: string; chiNhanhId: number };
   students: AdminHoaCuHvOpt[];
   canMutate: boolean;
   onListChanged: (msg: string, ok: boolean) => void;
@@ -1393,25 +1587,27 @@ function BanTab({
     }
   }
 
-  const colCount = canMutate ? 7 : 6;
+  const colCount = canMutate ? 8 : 7;
 
   return (
     <>
       <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
         <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
-          <table className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
+          <table className="w-full min-w-[820px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
             <colgroup>
+              <col style={{ width: canMutate ? "12%" : "13%" }} />
+              <col style={{ width: canMutate ? "11%" : "12%" }} />
+              <col style={{ width: canMutate ? "12%" : "13%" }} />
               <col style={{ width: canMutate ? "14%" : "16%" }} />
-              <col style={{ width: canMutate ? "14%" : "16%" }} />
-              <col style={{ width: canMutate ? "16%" : "18%" }} />
-              <col style={{ width: canMutate ? "12%" : "14%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: canMutate ? "18%" : "26%" }} />
+              <col style={{ width: canMutate ? "11%" : "12%" }} />
+              <col style={{ width: "7%" }} />
+              <col style={{ width: canMutate ? "15%" : "20%" }} />
               {canMutate ? <col style={{ width: "18%" }} /> : null}
             </colgroup>
             <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
               <tr>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Thời gian</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Chi nhánh</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Người bán</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Khách</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Hình thức</th>
@@ -1443,6 +1639,9 @@ function BanTab({
                     >
                       <td className="border-b border-[#f8fafc] px-2 py-2 align-middle whitespace-nowrap text-[#666] sm:px-3">
                         {fmtDt(r.created_at)}
+                      </td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle font-medium text-[#BC8AF9] sm:px-3">
+                        {r.chi_nhanh_ten?.trim() || "—"}
                       </td>
                       <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">{r.nguoi_ban_name}</td>
                       <td className="border-b border-[#f8fafc] px-2 py-2 align-middle break-words sm:px-3">{r.khach_hang_name}</td>
@@ -1493,6 +1692,7 @@ function BanTab({
           total={pagination.total}
           pageSize={pagination.pageSize}
           basePath={pagination.basePath}
+          extraQuery={{ chi_nhanh: String(pagination.chiNhanhId) }}
         />
       </div>
       <DeleteDonBanConfirmModal
@@ -2014,10 +2214,14 @@ function HoaCuKhachPicker({
 
 function ModalThemHang({
   initial,
+  chiNhanhOptions,
+  defaultChiNhanhId,
   onClose,
   onDone,
 }: {
   initial: AdminHoaCuSanPham | null;
+  chiNhanhOptions: AdminChiNhanhOption[];
+  defaultChiNhanhId: number | null;
   onClose: () => void;
   onDone: (msg: string, ok: boolean) => void;
 }) {
@@ -2027,11 +2231,21 @@ function ModalThemHang({
   const [giaNhap, setGiaNhap] = useState(() => (initial ? String(initial.gia_nhap ?? 0) : ""));
   const [giaBan, setGiaBan] = useState(() => (initial ? String(initial.gia_ban ?? 0) : ""));
   const [thumb, setThumb] = useState(() => initial?.thumbnail?.trim() ?? "");
+  const [chiNhanhId, setChiNhanhId] = useState(() => {
+    if (initial?.chi_nhanh_id != null && initial.chi_nhanh_id > 0) return String(initial.chi_nhanh_id);
+    if (defaultChiNhanhId != null && defaultChiNhanhId > 0) return String(defaultChiNhanhId);
+    return chiNhanhOptions[0] ? String(chiNhanhOptions[0].id) : "";
+  });
   const [busy, setBusy] = useState(false);
 
   async function save() {
     if (!ten.trim()) {
       onDone("Nhập tên hàng.", false);
+      return;
+    }
+    const branchId = Number(chiNhanhId);
+    if (!Number.isFinite(branchId) || branchId <= 0) {
+      onDone("Chọn chi nhánh kho.", false);
       return;
     }
     setBusy(true);
@@ -2041,6 +2255,7 @@ function ModalThemHang({
       gia_nhap: Number(giaNhap.replace(/\s/g, "")) || 0,
       gia_ban: Number(giaBan.replace(/\s/g, "")) || 0,
       thumbnail: thumb.trim() || null,
+      chi_nhanh_id: branchId,
     };
     const r = isEdit
       ? await updateHoaCuSanPham({ id: initial!.id, ...payload })
@@ -2074,6 +2289,20 @@ function ModalThemHang({
     >
       <div className="space-y-3">
         <AdminCfImageInput label="Ảnh sản phẩm" value={thumb} onValueChange={setThumb} />
+        <label className="block">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Chi nhánh kho *</span>
+          <select
+            value={chiNhanhId}
+            onChange={(e) => setChiNhanhId(e.target.value)}
+            className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+          >
+            {chiNhanhOptions.map((b) => (
+              <option key={b.id} value={String(b.id)}>
+                {b.ten}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="block">
           <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Tên hàng *</span>
           <input
@@ -2143,25 +2372,90 @@ function FieldLoggedInStaffRow({ label, name }: { label: string; name: string })
 }
 
 function ModalNhapHang({
-  sanPham,
-  catalogLoading,
+  chiNhanhOptions,
+  defaultChiNhanhId,
+  initialCatalog,
   defaultStaffId,
   loggedInStaffName,
   onClose,
   onDone,
 }: {
-  sanPham: AdminHoaCuSanPham[];
-  catalogLoading?: boolean;
+  chiNhanhOptions: AdminChiNhanhOption[];
+  defaultChiNhanhId: number | null;
+  initialCatalog: AdminHoaCuSanPham[] | null;
   defaultStaffId: number;
   loggedInStaffName: string;
   onClose: () => void;
   onDone: (msg: string, ok: boolean) => void;
 }) {
+  const defaultBranch =
+    defaultChiNhanhId != null && defaultChiNhanhId > 0
+      ? String(defaultChiNhanhId)
+      : chiNhanhOptions[0]
+        ? String(chiNhanhOptions[0].id)
+        : "";
+
+  const [chiNhanhId, setChiNhanhId] = useState(defaultBranch);
   const [ncc, setNcc] = useState("");
   const [hinhThucChi, setHinhThucChi] = useState<string>(HINH_THUC[0]);
   const [lines, setLines] = useState<Line[]>([{ hangId: "", qty: "1" }]);
+  const initialBranchId = Number(defaultBranch);
+  const cachedAtOpen =
+    initialCatalog == null && Number.isFinite(initialBranchId) && initialBranchId > 0
+      ? getCachedHoaCuCatalog(initialBranchId)
+      : null;
+  const [sanPham, setSanPham] = useState<AdminHoaCuSanPham[]>(
+    initialCatalog != null && Number.isFinite(initialBranchId) && initialBranchId > 0
+      ? initialCatalog.filter((sp) => sp.chi_nhanh_id === initialBranchId)
+      : (cachedAtOpen ?? []),
+  );
+  const [catalogLoading, setCatalogLoading] = useState(initialCatalog == null && cachedAtOpen == null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const saveLockRef = useRef(false);
+
+  const chiNhanhLabel = chiNhanhOptions.find((b) => String(b.id) === chiNhanhId)?.ten ?? "—";
+
+  useEffect(() => {
+    const branchId = Number(chiNhanhId);
+    if (!Number.isFinite(branchId) || branchId <= 0) {
+      setSanPham([]);
+      setCatalogError(null);
+      setCatalogLoading(false);
+      return;
+    }
+    setLines([{ hangId: "", qty: "1" }]);
+    if (initialCatalog != null) {
+      setSanPham(initialCatalog.filter((sp) => sp.chi_nhanh_id === branchId));
+      setCatalogError(null);
+      setCatalogLoading(false);
+      return;
+    }
+    const cached = getCachedHoaCuCatalog(branchId);
+    if (cached) {
+      setSanPham(cached);
+      setCatalogError(null);
+      setCatalogLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setCatalogError(null);
+    setCatalogLoading(true);
+    void fetchHoaCuCatalogForBranch(branchId).then((r) => {
+      if (cancelled) return;
+      setCatalogLoading(false);
+      if (r.ok) {
+        setSanPham(r.data);
+        setCatalogError(null);
+      } else {
+        setSanPham([]);
+        setCatalogError(r.error);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [chiNhanhId, initialCatalog]);
 
   const tamTinhNhap = useMemo(() => {
     return lines.reduce((s, l) => {
@@ -2174,9 +2468,14 @@ function ModalNhapHang({
     if (saveLockRef.current) return;
     saveLockRef.current = true;
     try {
+      const branchId = Number(chiNhanhId);
       const valid = lines
         .map((l) => ({ mat_hang: Number(l.hangId), so_luong_nhap: Number(l.qty) }))
         .filter((l) => l.mat_hang > 0 && l.so_luong_nhap > 0);
+      if (!Number.isFinite(branchId) || branchId <= 0) {
+        onDone("Chọn chi nhánh nhập hàng.", false);
+        return;
+      }
       if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) {
         onDone("Không xác định được nhân sự đăng nhập.", false);
         return;
@@ -2192,6 +2491,7 @@ function ModalNhapHang({
           : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const r = await createHoaCuDonNhap({
         nguoi_nhap: defaultStaffId,
+        chi_nhanh_id: branchId,
         nha_cung_cap: ncc.trim() || null,
         hinh_thuc_chi: hinhThucChi.trim() || HINH_THUC[0],
         lines: valid,
@@ -2217,7 +2517,7 @@ function ModalNhapHang({
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || catalogLoading}
             onClick={() => void save()}
             className="flex items-center gap-2 rounded-[10px] bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-5 py-2 text-[13px] font-bold text-white disabled:opacity-50"
           >
@@ -2228,10 +2528,32 @@ function ModalNhapHang({
       }
     >
       <div className="space-y-4">
+        <label className="block">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Chi nhánh nhập *</span>
+          <select
+            value={chiNhanhId}
+            onChange={(e) => setChiNhanhId(e.target.value)}
+            className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+          >
+            {chiNhanhOptions.map((b) => (
+              <option key={b.id} value={String(b.id)}>
+                {b.ten}
+              </option>
+            ))}
+          </select>
+          <p className="m-0 mt-1 text-[11px] leading-snug text-[#888]">
+            Chỉ chọn mặt hàng thuộc kho <span className="font-semibold text-[#555]">{chiNhanhLabel}</span>.
+          </p>
+        </label>
         {catalogLoading ? (
           <div className="flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#fafafa] px-4 py-8 text-[13px] text-[#666]">
             <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#BC8AF9]" aria-hidden />
             Đang tải danh mục mặt hàng…
+          </div>
+        ) : null}
+        {catalogError ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-700" role="alert">
+            {catalogError}
           </div>
         ) : null}
         <FieldLoggedInStaffRow label="Người nhập *" name={loggedInStaffName} />
@@ -2314,27 +2636,93 @@ function ModalNhapHang({
 }
 
 function ModalBanHang({
-  sanPham,
-  catalogLoading,
+  chiNhanhOptions,
+  defaultChiNhanhId,
+  initialCatalog,
   students,
   defaultStaffId,
   loggedInStaffName,
   onClose,
   onDone,
 }: {
-  sanPham: AdminHoaCuSanPham[];
-  catalogLoading?: boolean;
+  chiNhanhOptions: AdminChiNhanhOption[];
+  defaultChiNhanhId: number | null;
+  initialCatalog: AdminHoaCuSanPham[] | null;
   students: AdminHoaCuHvOpt[];
   defaultStaffId: number;
   loggedInStaffName: string;
   onClose: () => void;
   onDone: (msg: string, ok: boolean) => void;
 }) {
+  const defaultBranch =
+    defaultChiNhanhId != null && defaultChiNhanhId > 0
+      ? String(defaultChiNhanhId)
+      : chiNhanhOptions[0]
+        ? String(chiNhanhOptions[0].id)
+        : "";
+
+  const [chiNhanhId, setChiNhanhId] = useState(defaultBranch);
   const [hv, setHv] = useState("");
   const [hinhThuc, setHinhThuc] = useState<string>(HINH_THUC[0]);
   const [lines, setLines] = useState<Line[]>([{ hangId: "", qty: "1" }]);
+  const initialBranchId = Number(defaultBranch);
+  const cachedAtOpen =
+    initialCatalog == null && Number.isFinite(initialBranchId) && initialBranchId > 0
+      ? getCachedHoaCuCatalog(initialBranchId)
+      : null;
+  const [sanPham, setSanPham] = useState<AdminHoaCuSanPham[]>(
+    initialCatalog != null && Number.isFinite(initialBranchId) && initialBranchId > 0
+      ? initialCatalog.filter((sp) => sp.chi_nhanh_id === initialBranchId)
+      : (cachedAtOpen ?? []),
+  );
+  const [catalogLoading, setCatalogLoading] = useState(initialCatalog == null && cachedAtOpen == null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const saveLockRef = useRef(false);
+
+  const chiNhanhLabel = chiNhanhOptions.find((b) => String(b.id) === chiNhanhId)?.ten ?? "—";
+  const sanPhamCoTon = useMemo(() => sanPham.filter((s) => s.ton_kho > 0), [sanPham]);
+
+  useEffect(() => {
+    const branchId = Number(chiNhanhId);
+    if (!Number.isFinite(branchId) || branchId <= 0) {
+      setSanPham([]);
+      setCatalogError(null);
+      setCatalogLoading(false);
+      return;
+    }
+    setLines([{ hangId: "", qty: "1" }]);
+    if (initialCatalog != null) {
+      setSanPham(initialCatalog.filter((sp) => sp.chi_nhanh_id === branchId));
+      setCatalogError(null);
+      setCatalogLoading(false);
+      return;
+    }
+    const cached = getCachedHoaCuCatalog(branchId);
+    if (cached) {
+      setSanPham(cached);
+      setCatalogError(null);
+      setCatalogLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setCatalogError(null);
+    setCatalogLoading(true);
+    void fetchHoaCuCatalogForBranch(branchId).then((r) => {
+      if (cancelled) return;
+      setCatalogLoading(false);
+      if (r.ok) {
+        setSanPham(r.data);
+        setCatalogError(null);
+      } else {
+        setSanPham([]);
+        setCatalogError(r.error);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [chiNhanhId, initialCatalog]);
 
   const tenKhach = students.find((s) => String(s.id) === hv)?.full_name ?? "";
   const total = lines.reduce((s, l) => {
@@ -2346,9 +2734,14 @@ function ModalBanHang({
     if (saveLockRef.current) return;
     saveLockRef.current = true;
     try {
+      const branchId = Number(chiNhanhId);
       const valid = lines
         .map((l) => ({ mat_hang: Number(l.hangId), so_luong_ban: Number(l.qty) }))
         .filter((l) => l.mat_hang > 0 && l.so_luong_ban > 0);
+      if (!Number.isFinite(branchId) || branchId <= 0) {
+        onDone("Chọn chi nhánh bán hàng.", false);
+        return;
+      }
       if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) {
         onDone("Không xác định được nhân sự đăng nhập.", false);
         return;
@@ -2377,6 +2770,7 @@ function ModalBanHang({
       const r = await createHoaCuDonBan({
         nguoi_ban: defaultStaffId,
         khach_hang: Number(hv),
+        chi_nhanh_id: branchId,
         hinh_thuc_thu: hinhThuc,
         lines: valid,
         idempotency_key,
@@ -2406,7 +2800,7 @@ function ModalBanHang({
         <div key={i} className="flex flex-wrap items-end gap-2">
           <HoaCuSanPhamPicker
             variant="ban"
-            sanPham={sanPham}
+            sanPham={sanPhamCoTon.length > 0 ? sanPhamCoTon : sanPham}
             value={l.hangId}
             onChange={(id) => setLines((p) => p.map((x, j) => (j === i ? { ...x, hangId: id } : x)))}
           />
@@ -2453,7 +2847,7 @@ function ModalBanHang({
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || catalogLoading}
             onClick={() => void save()}
             className="flex items-center gap-2 rounded-[10px] bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-5 py-2 text-[13px] font-bold text-white disabled:opacity-50"
           >
@@ -2465,10 +2859,32 @@ function ModalBanHang({
     >
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
         <div className="min-w-0 space-y-4">
+          <label className="block">
+            <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Chi nhánh bán *</span>
+            <select
+              value={chiNhanhId}
+              onChange={(e) => setChiNhanhId(e.target.value)}
+              className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
+            >
+              {chiNhanhOptions.map((b) => (
+                <option key={b.id} value={String(b.id)}>
+                  {b.ten}
+                </option>
+              ))}
+            </select>
+            <p className="m-0 mt-1 text-[11px] leading-snug text-[#888]">
+              Chỉ bán hàng từ kho <span className="font-semibold text-[#555]">{chiNhanhLabel}</span>.
+            </p>
+          </label>
           {catalogLoading ? (
             <div className="flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#fafafa] px-4 py-8 text-[13px] text-[#666]">
               <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#BC8AF9]" aria-hidden />
               Đang tải danh mục mặt hàng…
+            </div>
+          ) : null}
+          {catalogError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-700" role="alert">
+              {catalogError}
             </div>
           ) : null}
           <FieldLoggedInStaffRow label="Người bán *" name={loggedInStaffName} />

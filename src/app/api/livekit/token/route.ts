@@ -1,11 +1,16 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { getGvHrIdFromSyncedCookie } from "@/lib/phong-hoc/gv-session-cookie";
+import { getGvHrIdForRequest } from "@/lib/phong-hoc/gv-session-cookie";
 import { getHvIdFromSyncedCookie } from "@/lib/phong-hoc/hv-session-cookie";
+import { phongHocJsonResponse, phongHocOptionsResponse } from "@/lib/phong-hoc/mobile-api-cors";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
 import { AccessToken, TrackSource } from "livekit-server-sdk";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+
+export function OPTIONS(): NextResponse {
+  return phongHocOptionsResponse();
+}
 
 type LiveKitRole = "host" | "participant";
 
@@ -52,12 +57,12 @@ async function resolveRoleForLop(
 
 /**
  * GET `/api/livekit/token?roomName=...&participantName=...&lopHocId=123`
- * Chỉ cấp token khi cookie HV/GV thuộc đúng lớp.
+ * Chỉ cấp token khi Bearer `gvSyncToken` hoặc cookie HV/GV thuộc đúng lớp.
  */
 export async function GET(req: Request): Promise<NextResponse> {
   const env = liveKitEnv();
   if (!env) {
-    return NextResponse.json(
+    return phongHocJsonResponse(
       { error: "Thiếu cấu hình LiveKit (LIVEKIT_URL / API key / secret).", code: "NO_LIVEKIT" },
       { status: 503 }
     );
@@ -69,26 +74,26 @@ export async function GET(req: Request): Promise<NextResponse> {
   const lopHocId = Number(url.searchParams.get("lopHocId"));
 
   if (!roomName || roomName.length > 128) {
-    return NextResponse.json({ error: "roomName không hợp lệ.", code: "BAD_ROOM" }, { status: 400 });
+    return phongHocJsonResponse({ error: "roomName không hợp lệ.", code: "BAD_ROOM" }, { status: 400 });
   }
   if (!participantName || participantName.length > 128) {
-    return NextResponse.json(
+    return phongHocJsonResponse(
       { error: "participantName không hợp lệ.", code: "BAD_NAME" },
       { status: 400 }
     );
   }
   if (!Number.isFinite(lopHocId) || lopHocId <= 0) {
-    return NextResponse.json({ error: "lopHocId không hợp lệ.", code: "BAD_LOP" }, { status: 400 });
+    return phongHocJsonResponse({ error: "lopHocId không hợp lệ.", code: "BAD_LOP" }, { status: 400 });
   }
 
   const hvPk = await getHvIdFromSyncedCookie();
-  const gvHrId = await getGvHrIdFromSyncedCookie();
+  const gvHrId = await getGvHrIdForRequest(req);
   const role = await resolveRoleForLop(lopHocId, hvPk, gvHrId);
 
   if (!role) {
-    return NextResponse.json(
+    return phongHocJsonResponse(
       {
-        error: "Chưa xác thực Phòng học (cookie HV/GV) hoặc không thuộc lớp này.",
+        error: "Chưa xác thực Phòng học (Bearer/cookie HV/GV) hoặc không thuộc lớp này.",
         code: "FORBIDDEN",
       },
       { status: 403 }
@@ -138,7 +143,7 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   const token = await at.toJwt();
 
-  return NextResponse.json(
+  return phongHocJsonResponse(
     { token, serverUrl: env.url, role },
     { headers: { "Cache-Control": "private, no-store, max-age=0" } }
   );

@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export type AdminChiNhanhOption = { id: number; ten: string };
+
 /** Dòng admin — bảng `ql_chi_nhanh` (Framer), FK `chi_nhanh_id` trên lớp/nhân sự trùng `id`. */
 export type AdminChiNhanhRow = {
   id: number;
@@ -103,5 +105,18 @@ export async function fetchAdminChiNhanhRows(supabase: SupabaseClient): Promise<
     rows: rows.filter((r) => r.id > 0),
     error: null,
     usedMinimalSelect,
+  };
+}
+
+/** Dropdown admin — `id` + `ten`. */
+export async function fetchAdminChiNhanhOptions(supabase: SupabaseClient): Promise<{
+  options: AdminChiNhanhOption[];
+  error: string | null;
+}> {
+  const { rows, error } = await fetchAdminChiNhanhRows(supabase);
+  if (error) return { options: [], error };
+  return {
+    options: rows.map((r) => ({ id: r.id, ten: r.ten })),
+    error: null,
   };
 }

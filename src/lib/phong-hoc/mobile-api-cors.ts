@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export const PHONG_HOC_MOBILE_CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Accept, Cookie",
+  "Access-Control-Allow-Headers": "Content-Type, Accept, Cookie, Authorization",
 };
 
 export function phongHocOptionsResponse(): NextResponse {

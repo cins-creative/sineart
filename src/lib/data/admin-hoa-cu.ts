@@ -9,8 +9,9 @@ export const HOA_CU_BASE_PATH = "/admin/dashboard/quan-ly-hoa-cu";
 export const HOA_CU_KHO_PATH = `${HOA_CU_BASE_PATH}/danh-muc-kho`;
 export const HOA_CU_NHAP_PATH = `${HOA_CU_BASE_PATH}/don-nhap`;
 export const HOA_CU_BAN_PATH = `${HOA_CU_BASE_PATH}/don-ban`;
+export const HOA_CU_CHUYEN_PATH = `${HOA_CU_BASE_PATH}/chuyen-kho`;
 
-const KHO_SELECT_BASE = "id, ten_hang, loai_san_pham, gia_nhap, gia_ban, thumbnail";
+const KHO_SELECT_BASE = "id, ten_hang, loai_san_pham, gia_nhap, gia_ban, thumbnail, chi_nhanh_id";
 
 export type AdminHoaCuSanPham = {
   id: number;
@@ -21,16 +22,19 @@ export type AdminHoaCuSanPham = {
   /** Σ nhập − Σ bán từ `hc_*_chi_tiet` (không đọc cột `ton_kho` DB). */
   ton_kho: number;
   thumbnail: string | null;
+  chi_nhanh_id: number | null;
+  chi_nhanh_ten: string | null;
 };
 
 export type AdminHoaCuNhapDon = {
   id: number;
   created_at: string;
   nha_cung_cap: string | null;
-  /** Tiền mặt / Chuyển khoản — chi phí nhập kho. */
   hinh_thuc_chi: string | null;
   nguoi_nhap: number | null;
   nguoi_nhap_name: string;
+  chi_nhanh_id: number | null;
+  chi_nhanh_ten: string | null;
   so_mat_hang: number;
   tong_tien: number;
 };
@@ -43,8 +47,23 @@ export type AdminHoaCuBanDon = {
   khach_hang: number | null;
   nguoi_ban_name: string;
   khach_hang_name: string;
+  chi_nhanh_id: number | null;
+  chi_nhanh_ten: string | null;
   so_mat_hang: number;
   tong_tien: number;
+};
+
+export type AdminHoaCuChuyenDon = {
+  id: number;
+  created_at: string;
+  nguoi_chuyen: number | null;
+  nguoi_chuyen_name: string;
+  chi_nhanh_nguon: number;
+  chi_nhanh_nguon_ten: string;
+  chi_nhanh_dich: number;
+  chi_nhanh_dich_ten: string;
+  so_mat_hang: number;
+  ghi_chu: string | null;
 };
 
 export type AdminHoaCuStaffOpt = { id: number; full_name: string };
@@ -215,7 +234,38 @@ function groupByDon<T extends { don_nhap?: number; don_ban?: number }>(
   return m;
 }
 
-/** Tồn theo phiếu toàn hệ thống: Σ `so_luong_nhap` − Σ `so_luong_ban` (không dùng cột `ton_kho`). */
+function isSkippableChuyenKhoReadError(message: string): boolean {
+  const msg = message.toLowerCase();
+  return (
+    msg.includes("does not exist") ||
+    msg.includes("schema") ||
+    msg.includes("relation") ||
+    msg.includes("permission denied") ||
+    msg.includes("permission") ||
+    msg.includes("42501")
+  );
+}
+
+/** Áp dụng chuyển kho vào map tồn (trừ nguồn, cộng đích). Bỏ qua nếu bảng chưa có hoặc chưa grant. */
+async function applyChuyenKhoToTonMap(supabase: SupabaseClient, m: Map<number, number>): Promise<void> {
+  const { data: rows, error } = await supabase
+    .from("hc_chuyen_kho_chi_tiet")
+    .select("mat_hang_nguon, mat_hang_dich, so_luong");
+  if (error) {
+    if (isSkippableChuyenKhoReadError(error.message ?? "")) return;
+    throw new Error(error.message);
+  }
+  for (const r of rows ?? []) {
+    const src = Number((r as { mat_hang_nguon?: unknown }).mat_hang_nguon);
+    const dst = Number((r as { mat_hang_dich?: unknown }).mat_hang_dich);
+    const q = Math.trunc(Number((r as { so_luong?: unknown }).so_luong) || 0);
+    if (q <= 0) continue;
+    if (Number.isFinite(src) && src > 0) m.set(src, (m.get(src) ?? 0) - q);
+    if (Number.isFinite(dst) && dst > 0) m.set(dst, (m.get(dst) ?? 0) + q);
+  }
+}
+
+/** Tồn theo phiếu toàn hệ thống: Σ nhập − Σ bán ± chuyển kho (không dùng cột `ton_kho`). */
 async function fetchTonKhoMapTuPhieuToanCuc(supabase: SupabaseClient): Promise<Map<number, number>> {
   const m = new Map<number, number>();
   const { data: nRows, error: ne } = await supabase.from("hc_nhap_hoa_cu_chi_tiet").select("mat_hang, so_luong_nhap");
@@ -234,6 +284,7 @@ async function fetchTonKhoMapTuPhieuToanCuc(supabase: SupabaseClient): Promise<M
     if (!Number.isFinite(mh) || mh <= 0 || q <= 0) continue;
     m.set(mh, (m.get(mh) ?? 0) - q);
   }
+  await applyChuyenKhoToTonMap(supabase, m);
   return m;
 }
 
@@ -273,6 +324,24 @@ export async function fetchTonKhoTheoPhieuForIds(
       if (!Number.isFinite(mh) || mh <= 0 || q <= 0) continue;
       m.set(mh, (m.get(mh) ?? 0) - q);
     }
+    const { data: cRows, error: ce } = await supabase
+      .from("hc_chuyen_kho_chi_tiet")
+      .select("mat_hang_nguon, mat_hang_dich, so_luong")
+      .or(`mat_hang_nguon.in.(${chunk.join(",")}),mat_hang_dich.in.(${chunk.join(",")})`);
+    if (ce) {
+      if (!isSkippableChuyenKhoReadError(ce.message ?? "")) {
+        throw new Error(ce.message);
+      }
+    } else {
+      for (const r of cRows ?? []) {
+        const src = Number((r as { mat_hang_nguon?: unknown }).mat_hang_nguon);
+        const dst = Number((r as { mat_hang_dich?: unknown }).mat_hang_dich);
+        const q = Math.trunc(Number((r as { so_luong?: unknown }).so_luong) || 0);
+        if (q <= 0) continue;
+        if (chunk.includes(src)) m.set(src, (m.get(src) ?? 0) - q);
+        if (chunk.includes(dst)) m.set(dst, (m.get(dst) ?? 0) + q);
+      }
+    }
   }
   return m;
 }
@@ -302,24 +371,43 @@ async function fetchAllSanPhamIds(supabase: SupabaseClient): Promise<number[]> {
 /** Toàn bộ danh mục kho (modal nhập/bán / picker). `ton_kho` = Σ nhập − Σ bán theo phiếu, không đọc cột DB. */
 export async function fetchAllHoaCuSanPham(
   supabase: SupabaseClient,
+  opts?: { chi_nhanh_id?: number | null; branchNames?: Map<number, string> },
 ): Promise<{ data: AdminHoaCuSanPham[]; error: string | null }> {
-  const tRes = await supabase.from("hc_danh_sach_san_pham").select(KHO_SELECT_BASE).order("ten_hang");
+  let qb = supabase.from("hc_danh_sach_san_pham").select(KHO_SELECT_BASE);
+  const branchId = opts?.chi_nhanh_id;
+  if (branchId != null && Number.isFinite(branchId) && branchId > 0) {
+    qb = qb.eq("chi_nhanh_id", branchId);
+  }
+  const tRes = await qb.order("ten_hang");
   if (tRes.error) return { data: [], error: tRes.error.message };
+  const rawRows = (tRes.data ?? []) as Record<string, unknown>[];
+  const pageIds = rawRows.map((r) => Number(r.id)).filter((id) => Number.isFinite(id) && id > 0);
   try {
-    const tonMap = await fetchTonKhoMapTuPhieuToanCuc(supabase);
-    return { data: normalizeSanPham(tRes.data ?? [], tonMap), error: null };
+    const tonMap =
+      branchId != null && Number.isFinite(branchId) && branchId > 0
+        ? await fetchTonKhoTheoPhieuForIds(supabase, pageIds)
+        : await fetchTonKhoMapTuPhieuToanCuc(supabase);
+    return { data: normalizeSanPham(rawRows, tonMap, opts?.branchNames), error: null };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Không tổng hợp được tồn theo phiếu.";
     return { data: [], error: msg };
   }
 }
 
-function normalizeSanPham(rows: Record<string, unknown>[], tonTheoPhieu: Map<number, number>): AdminHoaCuSanPham[] {
+function normalizeSanPham(
+  rows: Record<string, unknown>[],
+  tonTheoPhieu: Map<number, number>,
+  branchNames?: Map<number, string>,
+): AdminHoaCuSanPham[] {
   return rows
     .map((r) => {
       const id = Number(r.id);
       if (!Number.isFinite(id) || id <= 0) return null;
       const computedTon = Math.trunc(tonTheoPhieu.get(id) ?? 0);
+      const chi_nhanh_id =
+        r.chi_nhanh_id != null && Number.isFinite(Number(r.chi_nhanh_id)) ? Number(r.chi_nhanh_id) : null;
+      const chi_nhanh_ten =
+        chi_nhanh_id != null && branchNames?.has(chi_nhanh_id) ? branchNames.get(chi_nhanh_id)! : null;
       return {
         id,
         ten_hang: String(r.ten_hang ?? "").trim() || "—",
@@ -328,6 +416,8 @@ function normalizeSanPham(rows: Record<string, unknown>[], tonTheoPhieu: Map<num
         gia_ban: Number(r.gia_ban) || 0,
         ton_kho: computedTon,
         thumbnail: r.thumbnail != null ? String(r.thumbnail).trim() || null : null,
+        chi_nhanh_id,
+        chi_nhanh_ten,
       };
     })
     .filter((x): x is AdminHoaCuSanPham => x != null);
@@ -398,10 +488,19 @@ export async function fetchAdminHoaCuBundle(
 
   const { data: nhapRecs, error: nhapErr } = await supabase
     .from("hc_nhap_hoa_cu")
-    .select("id, created_at, nha_cung_cap, hinh_thuc_chi, nguoi_nhap, tong_tien")
+    .select("id, created_at, nha_cung_cap, hinh_thuc_chi, nguoi_nhap, tong_tien, chi_nhanh_id")
     .order("created_at", { ascending: false })
     .limit(300);
   if (nhapErr) return { ok: false, error: nhapErr.message };
+
+  const { data: banRows, error: banBranchErr } = await supabase.from("hr_ban").select("id, ten_ban");
+  if (banBranchErr) return { ok: false, error: banBranchErr.message };
+  const branchNames = new Map<number, string>();
+  for (const b of banRows ?? []) {
+    const id = Number((b as { id?: unknown }).id);
+    const ten = String((b as { ten_ban?: unknown }).ten_ban ?? "").trim();
+    if (Number.isFinite(id) && id > 0 && ten) branchNames.set(id, ten);
+  }
 
   const nhapIds = (nhapRecs ?? []).map((r) => Number((r as { id?: unknown }).id)).filter((id) => id > 0);
   let nhapCtByDon = new Map<number, ChiNhapRow[]>();
@@ -422,10 +521,12 @@ export async function fetchAdminHoaCuBundle(
       hinh_thuc_chi?: string | null;
       nguoi_nhap?: number | null;
       tong_tien?: unknown;
+      chi_nhanh_id?: number | null;
     };
     const ct = nhapCtByDon.get(r.id) ?? [];
     const tong = tongTienHoaCuHeader(r.tong_tien, tongChiNhapLines(ct));
     const nv = r.nguoi_nhap != null ? staffMap.get(r.nguoi_nhap) ?? "—" : "—";
+    const cid = r.chi_nhanh_id != null && Number.isFinite(Number(r.chi_nhanh_id)) ? Number(r.chi_nhanh_id) : null;
     return {
       id: r.id,
       created_at: r.created_at,
@@ -433,6 +534,8 @@ export async function fetchAdminHoaCuBundle(
       hinh_thuc_chi: r.hinh_thuc_chi ?? null,
       nguoi_nhap: r.nguoi_nhap ?? null,
       nguoi_nhap_name: nv,
+      chi_nhanh_id: cid,
+      chi_nhanh_ten: cid != null && branchNames.has(cid) ? branchNames.get(cid)! : null,
       so_mat_hang: ct.length,
       tong_tien: tong,
     };
@@ -440,7 +543,7 @@ export async function fetchAdminHoaCuBundle(
 
   const { data: banRecs, error: banErr } = await supabase
     .from("hc_don_ban_hoa_cu")
-    .select("id, created_at, hinh_thuc_thu, nguoi_ban, khach_hang, tong_tien")
+    .select("id, created_at, hinh_thuc_thu, nguoi_ban, khach_hang, tong_tien, chi_nhanh_id")
     .order("created_at", { ascending: false })
     .limit(300);
   if (banErr) return { ok: false, error: banErr.message };
@@ -465,9 +568,11 @@ export async function fetchAdminHoaCuBundle(
       nguoi_ban?: number | null;
       khach_hang?: number | null;
       tong_tien?: unknown;
+      chi_nhanh_id?: number | null;
     };
     const ct = banCtByDon.get(r.id) ?? [];
     const tong = tongTienHoaCuHeader(r.tong_tien, tongChiBanLines(ct));
+    const cid = r.chi_nhanh_id != null && Number.isFinite(Number(r.chi_nhanh_id)) ? Number(r.chi_nhanh_id) : null;
     return {
       id: r.id,
       created_at: r.created_at,
@@ -476,6 +581,8 @@ export async function fetchAdminHoaCuBundle(
       khach_hang: r.khach_hang ?? null,
       nguoi_ban_name: r.nguoi_ban != null ? staffMap.get(r.nguoi_ban) ?? "—" : "—",
       khach_hang_name: r.khach_hang != null ? hvMap.get(r.khach_hang) ?? "—" : "—",
+      chi_nhanh_id: cid,
+      chi_nhanh_ten: cid != null && branchNames.has(cid) ? branchNames.get(cid)! : null,
       so_mat_hang: ct.length,
       tong_tien: tong,
     };
@@ -510,7 +617,13 @@ export type KhoSanPhamPage = {
 /** Một trang danh mục kho + tổng bản ghi. `ton_kho` hiển thị = Σ nhập − Σ bán (không đọc cột DB). */
 export async function fetchKhoSanPhamPage(
   supabase: SupabaseClient,
-  opts: { page: number; pageSize?: number; q?: string | null },
+  opts: {
+    page: number;
+    pageSize?: number;
+    q?: string | null;
+    chi_nhanh_id?: number | null;
+    branchNames?: Map<number, string>;
+  },
 ): Promise<{ ok: true } & KhoSanPhamPage | { ok: false; error: string }> {
   const pageSize = opts.pageSize ?? HOA_CU_PAGE_SIZE;
   const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
@@ -518,8 +631,12 @@ export async function fetchKhoSanPhamPage(
   const to = from + pageSize - 1;
   const rawQ = (opts.q ?? "").trim();
   const searchPat = rawQ ? `%${rawQ.replace(/%/g, "\\%")}%` : "";
+  const branchId = opts.chi_nhanh_id;
 
   let qb = supabase.from("hc_danh_sach_san_pham").select(KHO_SELECT_BASE, { count: "exact" });
+  if (branchId != null && Number.isFinite(branchId) && branchId > 0) {
+    qb = qb.eq("chi_nhanh_id", branchId);
+  }
   if (searchPat) {
     qb = qb.or(`ten_hang.ilike.${searchPat},loai_san_pham.ilike.${searchPat}`);
   }
@@ -532,7 +649,7 @@ export async function fetchKhoSanPhamPage(
     const tonMap = await fetchTonKhoTheoPhieuForIds(supabase, pageIds);
     return {
       ok: true,
-      rows: normalizeSanPham(rawRows, tonMap),
+      rows: normalizeSanPham(rawRows, tonMap, opts.branchNames),
       total: res.count ?? 0,
       page,
       pageSize,
@@ -543,18 +660,52 @@ export async function fetchKhoSanPhamPage(
   }
 }
 
+async function fetchSanPhamIdsByBranch(
+  supabase: SupabaseClient,
+  chi_nhanh_id?: number | null,
+): Promise<number[]> {
+  const ids: number[] = [];
+  const PAGE = 1000;
+  let from = 0;
+  for (;;) {
+    let qb = supabase.from("hc_danh_sach_san_pham").select("id").order("id", { ascending: true });
+    if (chi_nhanh_id != null && Number.isFinite(chi_nhanh_id) && chi_nhanh_id > 0) {
+      qb = qb.eq("chi_nhanh_id", chi_nhanh_id);
+    }
+    const { data, error } = await qb.range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data?.length) break;
+    for (const r of data) {
+      const id = Number((r as { id: unknown }).id);
+      if (Number.isFinite(id) && id > 0) ids.push(id);
+    }
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return ids;
+}
+
 /** Số mặt hàng, số hết tồn, Σ tồn — tồn theo phiếu (không dùng cột `ton_kho`). */
 export async function fetchKhoInventoryStats(
   supabase: SupabaseClient,
+  opts?: { chi_nhanh_id?: number | null },
 ): Promise<{ total: number; hetHang: number; tonSum: number }> {
-  const totalRes = await supabase.from("hc_danh_sach_san_pham").select("id", { count: "exact", head: true });
+  const branchId = opts?.chi_nhanh_id;
+  let countQb = supabase.from("hc_danh_sach_san_pham").select("id", { count: "exact", head: true });
+  if (branchId != null && Number.isFinite(branchId) && branchId > 0) {
+    countQb = countQb.eq("chi_nhanh_id", branchId);
+  }
+  const totalRes = await countQb;
   const total = totalRes.count ?? 0;
   if (totalRes.error) {
     return { total: 0, hetHang: 0, tonSum: 0 };
   }
 
   try {
-    const [tonMap, ids] = await Promise.all([fetchTonKhoMapTuPhieuToanCuc(supabase), fetchAllSanPhamIds(supabase)]);
+    const [tonMap, ids] = await Promise.all([
+      fetchTonKhoMapTuPhieuToanCuc(supabase),
+      fetchSanPhamIdsByBranch(supabase, branchId),
+    ]);
     let hetHang = 0;
     let tonSum = 0;
     for (const id of ids) {
@@ -577,6 +728,13 @@ export type DonNhapPage = {
 
 export type DonBanPage = {
   rows: AdminHoaCuBanDon[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type DonChuyenPage = {
+  rows: AdminHoaCuChuyenDon[];
   total: number;
   page: number;
   pageSize: number;
@@ -661,20 +819,24 @@ export async function fetchHoaCuStaffStudentContext(
 export async function fetchDonNhapPage(
   supabase: SupabaseClient,
   ctx: HoaCuStaffStudentContext,
-  opts: { page: number; pageSize?: number },
+  opts: { page: number; pageSize?: number; chi_nhanh_id?: number | null; branchNames?: Map<number, string> },
 ): Promise<{ ok: true } & DonNhapPage | { ok: false; error: string }> {
   const pageSize = opts.pageSize ?? HOA_CU_PAGE_SIZE;
   const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+  const branchNames = opts.branchNames;
 
   const { staffMap } = ctx;
 
-  const { data: nhapRecs, error: nhapErr, count } = await supabase
+  let qb = supabase
     .from("hc_nhap_hoa_cu")
-    .select("id, created_at, nha_cung_cap, hinh_thuc_chi, nguoi_nhap, tong_tien", { count: "exact" })
-    .order("created_at", { ascending: false })
-    .range(from, to);
+    .select("id, created_at, nha_cung_cap, hinh_thuc_chi, nguoi_nhap, tong_tien, chi_nhanh_id", { count: "exact" });
+  const branchId = opts.chi_nhanh_id;
+  if (branchId != null && Number.isFinite(branchId) && branchId > 0) {
+    qb = qb.eq("chi_nhanh_id", branchId);
+  }
+  const { data: nhapRecs, error: nhapErr, count } = await qb.order("created_at", { ascending: false }).range(from, to);
 
   if (nhapErr) return { ok: false, error: nhapErr.message };
 
@@ -697,10 +859,12 @@ export async function fetchDonNhapPage(
       hinh_thuc_chi?: string | null;
       nguoi_nhap?: number | null;
       tong_tien?: unknown;
+      chi_nhanh_id?: number | null;
     };
     const ct = nhapCtByDon.get(r.id) ?? [];
     const tong = tongTienHoaCuHeader(r.tong_tien, tongChiNhapLines(ct));
     const nv = r.nguoi_nhap != null ? staffMap.get(r.nguoi_nhap) ?? "—" : "—";
+    const cid = r.chi_nhanh_id != null && Number.isFinite(Number(r.chi_nhanh_id)) ? Number(r.chi_nhanh_id) : null;
     return {
       id: r.id,
       created_at: r.created_at,
@@ -708,6 +872,8 @@ export async function fetchDonNhapPage(
       hinh_thuc_chi: r.hinh_thuc_chi ?? null,
       nguoi_nhap: r.nguoi_nhap ?? null,
       nguoi_nhap_name: nv,
+      chi_nhanh_id: cid,
+      chi_nhanh_ten: cid != null && branchNames?.has(cid) ? branchNames.get(cid)! : null,
       so_mat_hang: ct.length,
       tong_tien: tong,
     };
@@ -725,20 +891,24 @@ export async function fetchDonNhapPage(
 export async function fetchDonBanPage(
   supabase: SupabaseClient,
   ctx: HoaCuStaffStudentContext,
-  opts: { page: number; pageSize?: number },
+  opts: { page: number; pageSize?: number; chi_nhanh_id?: number | null; branchNames?: Map<number, string> },
 ): Promise<{ ok: true } & DonBanPage | { ok: false; error: string }> {
   const pageSize = opts.pageSize ?? HOA_CU_PAGE_SIZE;
   const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+  const branchNames = opts.branchNames;
 
   const { staffMap, hvMap } = ctx;
 
-  const { data: banRecs, error: banErr, count } = await supabase
+  let qb = supabase
     .from("hc_don_ban_hoa_cu")
-    .select("id, created_at, hinh_thuc_thu, nguoi_ban, khach_hang, tong_tien", { count: "exact" })
-    .order("created_at", { ascending: false })
-    .range(from, to);
+    .select("id, created_at, hinh_thuc_thu, nguoi_ban, khach_hang, tong_tien, chi_nhanh_id", { count: "exact" });
+  const branchId = opts.chi_nhanh_id;
+  if (branchId != null && Number.isFinite(branchId) && branchId > 0) {
+    qb = qb.eq("chi_nhanh_id", branchId);
+  }
+  const { data: banRecs, error: banErr, count } = await qb.order("created_at", { ascending: false }).range(from, to);
 
   if (banErr) return { ok: false, error: banErr.message };
 
@@ -761,9 +931,11 @@ export async function fetchDonBanPage(
       nguoi_ban?: number | null;
       khach_hang?: number | null;
       tong_tien?: unknown;
+      chi_nhanh_id?: number | null;
     };
     const ct = banCtByDon.get(r.id) ?? [];
     const tong = tongTienHoaCuHeader(r.tong_tien, tongChiBanLines(ct));
+    const cid = r.chi_nhanh_id != null && Number.isFinite(Number(r.chi_nhanh_id)) ? Number(r.chi_nhanh_id) : null;
     return {
       id: r.id,
       created_at: r.created_at,
@@ -772,6 +944,8 @@ export async function fetchDonBanPage(
       khach_hang: r.khach_hang ?? null,
       nguoi_ban_name: r.nguoi_ban != null ? staffMap.get(r.nguoi_ban) ?? "—" : "—",
       khach_hang_name: r.khach_hang != null ? hvMap.get(r.khach_hang) ?? "—" : "—",
+      chi_nhanh_id: cid,
+      chi_nhanh_ten: cid != null && branchNames?.has(cid) ? branchNames.get(cid)! : null,
       so_mat_hang: ct.length,
       tong_tien: tong,
     };
@@ -784,4 +958,75 @@ export async function fetchDonBanPage(
     page,
     pageSize,
   };
+}
+
+type ChiChuyenRow = { don_chuyen?: number };
+
+export async function fetchDonChuyenPage(
+  supabase: SupabaseClient,
+  ctx: HoaCuStaffStudentContext,
+  opts: { page: number; pageSize?: number; branchNames: Map<number, string> },
+): Promise<{ ok: true } & DonChuyenPage | { ok: false; error: string }> {
+  const pageSize = opts.pageSize ?? HOA_CU_PAGE_SIZE;
+  const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { staffMap } = ctx;
+  const branchNames = opts.branchNames;
+
+  const { data: recs, error, count } = await supabase
+    .from("hc_chuyen_kho")
+    .select("id, created_at, nguoi_chuyen, chi_nhanh_nguon, chi_nhanh_dich, ghi_chu", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (error) {
+    const msg = error.message?.toLowerCase() ?? "";
+    if (msg.includes("does not exist") || msg.includes("schema") || msg.includes("relation")) {
+      return { ok: true, rows: [], total: 0, page, pageSize };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  const donIds = (recs ?? []).map((r) => Number((r as { id?: unknown }).id)).filter((id) => id > 0);
+  const ctCountByDon = new Map<number, number>();
+  if (donIds.length) {
+    const { data: ct, error: ctErr } = await supabase
+      .from("hc_chuyen_kho_chi_tiet")
+      .select("don_chuyen")
+      .in("don_chuyen", donIds);
+    if (ctErr) return { ok: false, error: ctErr.message };
+    for (const row of ct ?? []) {
+      const did = Number((row as ChiChuyenRow).don_chuyen);
+      if (!Number.isFinite(did) || did <= 0) continue;
+      ctCountByDon.set(did, (ctCountByDon.get(did) ?? 0) + 1);
+    }
+  }
+
+  const rows: AdminHoaCuChuyenDon[] = (recs ?? []).map((raw) => {
+    const r = raw as {
+      id: number;
+      created_at: string;
+      nguoi_chuyen?: number | null;
+      chi_nhanh_nguon?: number | null;
+      chi_nhanh_dich?: number | null;
+      ghi_chu?: string | null;
+    };
+    const src = Number(r.chi_nhanh_nguon);
+    const dst = Number(r.chi_nhanh_dich);
+    return {
+      id: r.id,
+      created_at: r.created_at,
+      nguoi_chuyen: r.nguoi_chuyen ?? null,
+      nguoi_chuyen_name: r.nguoi_chuyen != null ? staffMap.get(r.nguoi_chuyen) ?? "—" : "—",
+      chi_nhanh_nguon: src,
+      chi_nhanh_nguon_ten: branchNames.get(src) ?? (Number.isFinite(src) ? `#${src}` : "—"),
+      chi_nhanh_dich: dst,
+      chi_nhanh_dich_ten: branchNames.get(dst) ?? (Number.isFinite(dst) ? `#${dst}` : "—"),
+      so_mat_hang: ctCountByDon.get(r.id) ?? 0,
+      ghi_chu: r.ghi_chu != null ? String(r.ghi_chu).trim() || null : null,
+    };
+  });
+
+  return { ok: true, rows, total: count ?? 0, page, pageSize };
 }

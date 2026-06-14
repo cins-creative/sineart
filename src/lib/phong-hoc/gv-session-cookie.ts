@@ -54,3 +54,33 @@ export async function getGvHrIdFromSyncedCookie(): Promise<number | null> {
   if (!raw) return null;
   return verifyGvSessionToken(raw);
 }
+
+function extractGvSyncTokenFromCookieHeader(cookieHeader: string | null): string | null {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(/(?:^|;\s*)sine_gv_sync=([^;]+)/i);
+  return match ? decodeURIComponent(match[1].trim()) : null;
+}
+
+/** Bearer hoặc Cookie header trên Request (app mobile / proxy). */
+export function getGvSyncTokenFromRequest(req: Request): string | null {
+  const auth = req.headers.get("authorization")?.trim();
+  if (auth) {
+    const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+    if (bearer) return bearer;
+  }
+  return extractGvSyncTokenFromCookieHeader(req.headers.get("cookie"));
+}
+
+/** Xác thực GV từ Request — ưu tiên Authorization Bearer (React Native). */
+export function getGvHrIdFromRequest(req: Request): number | null {
+  const token = getGvSyncTokenFromRequest(req);
+  if (!token) return null;
+  return verifyGvSessionToken(token);
+}
+
+/** Bearer / Cookie header, rồi fallback cookie App Router (SSR web). */
+export async function getGvHrIdForRequest(req: Request): Promise<number | null> {
+  const fromReq = getGvHrIdFromRequest(req);
+  if (fromReq != null) return fromReq;
+  return getGvHrIdFromSyncedCookie();
+}

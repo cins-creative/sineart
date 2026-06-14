@@ -591,8 +591,37 @@ export async function deleteHoaCuSanPham(id: number): Promise<HoaCuActionResult>
     return { ok: false, error: "Không xoá được: mặt hàng đã có trong đơn bán." };
   }
 
+  const chuyenOr = `mat_hang_nguon.eq.${id},mat_hang_dich.eq.${id}`;
+  const { data: chuyenRefs, error: chuyenErr } = await supabase
+    .from("hc_chuyen_kho_chi_tiet")
+    .select("id")
+    .or(chuyenOr)
+    .limit(1);
+  if (chuyenErr) {
+    const msg = chuyenErr.message?.toLowerCase() ?? "";
+    if (!msg.includes("does not exist") && !msg.includes("relation")) {
+      return { ok: false, error: chuyenErr.message || "Không kiểm tra được phiếu chuyển kho." };
+    }
+  } else if (chuyenRefs?.length) {
+    return {
+      ok: false,
+      error:
+        "Không xoá được: mặt hàng đã có trong phiếu chuyển kho. Vào tab «Chuyển kho», xoá phiếu liên quan trước.",
+    };
+  }
+
   const { error } = await supabase.from("hc_danh_sach_san_pham").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message || "Không xoá được mặt hàng." };
+  if (error) {
+    const msg = error.message?.toLowerCase() ?? "";
+    if (msg.includes("foreign key") || msg.includes("violates")) {
+      return {
+        ok: false,
+        error:
+          "Không xoá được: mặt hàng đang được tham chiếu ở hệ thống (nhập, bán, chuyển kho…).",
+      };
+    }
+    return { ok: false, error: error.message || "Không xoá được mặt hàng." };
+  }
 
   revalidatePath(ADMIN_PATH, "layout");
   return { ok: true, message: "Đã xoá mặt hàng." };

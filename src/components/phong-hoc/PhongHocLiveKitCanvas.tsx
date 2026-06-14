@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { syncPhongHocCookiesWithStorage } from "@/lib/phong-hoc/classroom-session";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const PhongHocRoom = dynamic(() => import("./PhongHocRoom"), {
+const PhongHocRoom = dynamic(() => import("./LiveKitRoom"), {
   ssr: false,
   loading: () => (
     <div className="canvas-ph canvas-ph--livekit">

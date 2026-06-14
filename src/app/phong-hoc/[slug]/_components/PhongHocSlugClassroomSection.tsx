@@ -1,10 +1,10 @@
 import { getHomeAdConfig, shouldShowAd } from "@/lib/data/home-ad";
+import { getPhongHocClassroomShellBySlug } from "@/lib/data/phong-hoc-classroom-shell";
 
-import ClassroomClient from "../../ClassroomClient";
+import { PhongHocSlugClassroomClient } from "./PhongHocSlugClassroomClient";
 
 /**
- * Async Server Component: đọc slug từ `params`, `getHomeAdConfig` (mkt), render client phòng học.
- * Không đổi logic query — cùng `getHomeAdConfig` / `shouldShowAd` như trước.
+ * Async Server Component: song song ad + shell lớp theo slug; client bundle tách chunk (dynamic import).
  */
 export async function PhongHocSlugClassroomSection({
   params,
@@ -12,7 +12,16 @@ export async function PhongHocSlugClassroomSection({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const adConfig = await getHomeAdConfig();
+  const [adConfig, lopShell] = await Promise.all([
+    getHomeAdConfig(),
+    getPhongHocClassroomShellBySlug(slug),
+  ]);
   const adImageUrl = shouldShowAd(adConfig, "class") ? adConfig.ads : "";
-  return <ClassroomClient classSlug={slug} adImageUrl={adImageUrl} />;
+  return (
+    <PhongHocSlugClassroomClient
+      classSlug={slug}
+      adImageUrl={adImageUrl}
+      initialLopShell={lopShell}
+    />
+  );
 }

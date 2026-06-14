@@ -3,7 +3,7 @@ import { getGvHrIdForRequest } from "@/lib/phong-hoc/gv-session-cookie";
 import { getHvIdFromSyncedCookie } from "@/lib/phong-hoc/hv-session-cookie";
 import { phongHocJsonResponse, phongHocOptionsResponse } from "@/lib/phong-hoc/mobile-api-cors";
 import { parseTeacherIds } from "@/lib/utils/parse-teacher-ids";
-import { AccessToken, TrackSource } from "livekit-server-sdk";
+import { AccessToken } from "livekit-server-sdk";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -111,16 +111,6 @@ export async function GET(req: Request): Promise<NextResponse> {
     ttl: "4h",
   });
 
-  const publishSources =
-    role === "host"
-      ? [
-          TrackSource.CAMERA,
-          TrackSource.MICROPHONE,
-          TrackSource.SCREEN_SHARE,
-          TrackSource.SCREEN_SHARE_AUDIO,
-        ]
-      : [TrackSource.CAMERA, TrackSource.MICROPHONE];
-
   if (role === "host") {
     at.addGrant({
       roomJoin: true,
@@ -134,10 +124,9 @@ export async function GET(req: Request): Promise<NextResponse> {
     at.addGrant({
       roomJoin: true,
       room: roomName,
-      canPublish: true,
+      canPublish: false,
       canSubscribe: true,
       canPublishData: true,
-      canPublishSources: publishSources,
     });
   }
 

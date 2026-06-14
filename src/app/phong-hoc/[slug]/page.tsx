@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
+import { getPhongHocClassroomShellBySlug } from "@/lib/data/phong-hoc-classroom-shell";
+
 import { PhongHocSlugClassroomSection } from "./_components/PhongHocSlugClassroomSection";
 import { PhongHocSlugClassroomSectionSkeleton } from "./_components/PhongHocSlugClassroomSection.skeleton";
+
+/** Shell lớp (tiêu đề, Meet) — client vẫn refresh Realtime sau khi đăng nhập. */
+export const revalidate = 300;
 
 export async function generateMetadata({
   params,
@@ -10,8 +15,10 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const shell = await getPhongHocClassroomShellBySlug(slug);
+  const label = shell?.className ?? decodeURIComponent(slug);
   return {
-    title: `Phòng học — ${decodeURIComponent(slug)} — Sine Art`,
+    title: `Phòng học — ${label} — Sine Art`,
   };
 }
 

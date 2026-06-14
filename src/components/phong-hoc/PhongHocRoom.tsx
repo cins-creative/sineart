@@ -1,8 +1,10 @@
 "use client";
 
 import "@livekit/components-styles";
+import WaitingForTeacher from "@/components/phong-hoc/WaitingForTeacher";
 import {
   encodeRaiseHandPayload,
+  isHostIdentity,
   parseRaiseHandPayload,
   playRaiseHandChime,
   type RaiseHandPayload,
@@ -21,7 +23,21 @@ import {
   LiveKitRoom,
 } from "@livekit/components-react";
 import { isTrackReference, type TrackReference } from "@livekit/components-core";
-import { ParticipantEvent, RoomEvent, Track, type LocalAudioTrack, type LocalVideoTrack } from "livekit-client";
+import {
+  ParticipantEvent,
+  RoomEvent,
+  Track,
+  VideoQuality,
+  type LocalAudioTrack,
+  type LocalVideoTrack,
+  type RemoteParticipant,
+  type RemoteTrackPublication,
+  type Room,
+} from "livekit-client";
+import {
+  PHC_LIVEKIT_ROOM_OPTIONS,
+  phcScreenShareCaptureOptions,
+} from "@/lib/phong-hoc/livekit-room-options";
 import {
   ChevronUp,
   Hand,
@@ -201,7 +217,67 @@ function MeetVideoTile({
   );
 }
 
-function MeetConferenceLayout() {
+const HOST_VIDEO_SOURCES = new Set<Track.Source>([
+  Track.Source.Camera,
+  Track.Source.ScreenShare,
+  Track.Source.ScreenShareAudio,
+]);
+
+/** Remote participant đang phát camera/màn hình — chỉ GV có quyền publish trong token. */
+function remoteParticipantIsBroadcasting(participant: RemoteParticipant): boolean {
+  if (isHostIdentity(participant.identity)) return true;
+  for (const pub of participant.trackPublications.values()) {
+    if (HOST_VIDEO_SOURCES.has(pub.source)) return true;
+  }
+  return false;
+}
+
+function roomHasTeacherBroadcast(room: Room): boolean {
+  for (const p of room.remoteParticipants.values()) {
+    if (remoteParticipantIsBroadcasting(p)) return true;
+  }
+  return false;
+}
+
+function useTeacherBroadcastReady(isHost: boolean): boolean {
+  const room = useRoomContext();
+  const [ready, setReady] = useState(isHost);
+
+  useEffect(() => {
+    if (isHost) {
+      setReady(true);
+      return;
+    }
+
+    const sync = () => {
+      setReady(roomHasTeacherBroadcast(room));
+    };
+
+    sync();
+    room.on(RoomEvent.Connected, sync);
+    room.on(RoomEvent.Reconnected, sync);
+    room.on(RoomEvent.ParticipantConnected, sync);
+    room.on(RoomEvent.ParticipantDisconnected, sync);
+    room.on(RoomEvent.TrackPublished, sync);
+    room.on(RoomEvent.TrackUnpublished, sync);
+    room.on(RoomEvent.TrackSubscribed, sync);
+    room.on(RoomEvent.TrackUnsubscribed, sync);
+    return () => {
+      room.off(RoomEvent.Connected, sync);
+      room.off(RoomEvent.Reconnected, sync);
+      room.off(RoomEvent.ParticipantConnected, sync);
+      room.off(RoomEvent.ParticipantDisconnected, sync);
+      room.off(RoomEvent.TrackPublished, sync);
+      room.off(RoomEvent.TrackUnpublished, sync);
+      room.off(RoomEvent.TrackSubscribed, sync);
+      room.off(RoomEvent.TrackUnsubscribed, sync);
+    };
+  }, [room, isHost]);
+
+  return ready;
+}
+
+function MeetConferenceLayout({ isHost }: { isHost: boolean }) {
   const screenTracks = useTracks(
     [{ source: Track.Source.ScreenShare, withPlaceholder: false }],
     { onlySubscribed: false }
@@ -242,6 +318,16 @@ function MeetConferenceLayout() {
     return cameraRefs.filter((t) => trackRefKey(t) !== mainKey);
   }, [hasScreenShare, cameraRefs, mainCameraRef]);
 
+  const teacherReady = useTeacherBroadcastReady(isHost);
+
+  const hasRemoteMediaTracks =
+    screenRef != null ||
+    cameraRefs.some((t) => !t.participant.isLocal);
+
+  if (!isHost && !teacherReady && !hasRemoteMediaTracks) {
+    return <WaitingForTeacher />;
+  }
+
   return (
     <div className={cn("phc-lk-layout", hasScreenShare && "phc-lk-layout--share")}>
       <div className="phc-lk-main">
@@ -252,9 +338,15 @@ function MeetConferenceLayout() {
             showShareBadge={hasScreenShare}
           />
         ) : (
-          <div className="phc-lk-main-empty">
-            <span className="ico">📹</span>
-            <p>Chưa có video</p>
+          <div className="phc-lk-main-empty" role="status">
+            <div className="phc-lk-main-empty-icon" aria-hidden>
+              <Monitor size={28} strokeWidth={2} />
+            </div>
+            <p className="phc-lk-main-empty-text">
+              {isHost
+                ? "Bật camera hoặc chia sẻ màn hình để học viên xem"
+                : "Giáo viên chưa chia sẻ màn hình"}
+            </p>
           </div>
         )}
       </div>
@@ -291,7 +383,7 @@ function ScreenShareButton() {
     setShareBusy(true);
     const next = !shareEnabled;
     void localParticipant
-      .setScreenShareEnabled(next, { audio: true, selfBrowserSurface: "include" })
+      .setScreenShareEnabled(next, phcScreenShareCaptureOptions(next))
       .then(() => {
         setShareEnabled(localParticipant.isScreenShareEnabled);
       })
@@ -556,15 +648,26 @@ function CameraToolControl() {
   );
 }
 
-function MeetToolbar({ isHost, onLeave }: { isHost: boolean; onLeave: () => void }) {
+function MeetToolbar({
+  isHost,
+  onLeave,
+  canPublish,
+}: {
+  isHost: boolean;
+  onLeave: () => void;
+  canPublish: boolean;
+}) {
   const { localRaised, toggleRaiseHand } = useRaiseHandContext();
 
   return (
     <div className="phc-lk-toolbar-wrap">
-      <MicToolControl />
-      <CameraToolControl />
-
-      {isHost ? <ScreenShareButton /> : null}
+      {canPublish ? (
+        <>
+          <MicToolControl />
+          <CameraToolControl />
+          {isHost ? <ScreenShareButton /> : null}
+        </>
+      ) : null}
 
       {!isHost ? (
         <button
@@ -585,6 +688,48 @@ function MeetToolbar({ isHost, onLeave }: { isHost: boolean; onLeave: () => void
       </button>
     </div>
   );
+}
+
+function boostScreenSharePublication(pub: RemoteTrackPublication): void {
+  if (pub.kind !== Track.Kind.Video || pub.source !== Track.Source.ScreenShare) return;
+  pub.setVideoQuality(VideoQuality.HIGH);
+  pub.setVideoDimensions({ width: 1920, height: 1080 });
+}
+
+/** HV (và GV xem share): yêu cầu layer 1080p khi có simulcast. */
+function ScreenShareQualitySync() {
+  const room = useRoomContext();
+
+  useEffect(() => {
+    const syncParticipant = (participant: RemoteParticipant) => {
+      for (const pub of participant.trackPublications.values()) {
+        boostScreenSharePublication(pub);
+      }
+    };
+
+    const syncAll = () => {
+      for (const p of room.remoteParticipants.values()) syncParticipant(p);
+    };
+
+    const onTrackPublished = (pub: RemoteTrackPublication) => {
+      boostScreenSharePublication(pub);
+    };
+    const onTrackSubscribed = (_track: unknown, pub: RemoteTrackPublication) => {
+      boostScreenSharePublication(pub);
+    };
+
+    syncAll();
+    room.on(RoomEvent.ParticipantConnected, syncParticipant);
+    room.on(RoomEvent.TrackPublished, onTrackPublished);
+    room.on(RoomEvent.TrackSubscribed, onTrackSubscribed);
+    return () => {
+      room.off(RoomEvent.ParticipantConnected, syncParticipant);
+      room.off(RoomEvent.TrackPublished, onTrackPublished);
+      room.off(RoomEvent.TrackSubscribed, onTrackSubscribed);
+    };
+  }, [room]);
+
+  return null;
 }
 
 function LocalMetadataSync({ localAvatarUrl }: { localAvatarUrl?: string | null }) {
@@ -611,6 +756,7 @@ function RoomInner({
   onAfterLeave: () => void;
 }) {
   const room = useRoomContext();
+  const canPublish = isHost;
   const [controlsVisible, setControlsVisible] = useState(false);
   const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -667,6 +813,7 @@ function RoomInner({
   return (
     <RaiseHandProvider isHost={isHost}>
       <LocalMetadataSync localAvatarUrl={localAvatarUrl} />
+      <ScreenShareQualitySync />
       <div className="phc-lk-inner">
         <div
           className={cn("phc-lk-stage", controlsShown && "phc-lk-stage--controls-visible")}
@@ -674,7 +821,7 @@ function RoomInner({
           onMouseLeave={onStageMouseLeave}
           onPointerDown={onStagePointerDown}
         >
-          <MeetConferenceLayout />
+          <MeetConferenceLayout isHost={isHost} />
           <div
             className={cn(
               "phc-lk-toolbar-overlay",
@@ -682,7 +829,7 @@ function RoomInner({
             )}
             onMouseEnter={showControls}
           >
-            <MeetToolbar isHost={isHost} onLeave={handleLeave} />
+            <MeetToolbar isHost={isHost} onLeave={handleLeave} canPublish={canPublish} />
           </div>
         </div>
         <RoomAudioRenderer />
@@ -714,8 +861,9 @@ export default function PhongHocRoom({
       serverUrl={serverUrl}
       token={token}
       connect={connect}
-      video
-      audio
+      video={isHost}
+      audio={isHost}
+      options={PHC_LIVEKIT_ROOM_OPTIONS}
       onDisconnected={handleDisconnected}
       className="phc-lk-room"
       data-lk-theme="default"

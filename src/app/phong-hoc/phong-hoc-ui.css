@@ -2019,8 +2019,29 @@
   max-height: 96px;
 }
 
-.phc .chat-photo-wrap--album .chat-teacher-save-btn {
-  bottom: 10px;
+.phc .chat-photo-wrap--album .chat-teacher-save-btn--tile {
+  bottom: 4px;
+  right: 4px;
+}
+
+.phc .chat-photo-cell {
+  position: relative;
+  min-width: 0;
+}
+
+.phc .chat-photo-cell .chat-photo-btn {
+  height: 100%;
+}
+
+.phc .chat-teacher-save-btn--tile {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  z-index: 2;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 9px;
+  min-width: 2.25rem;
 }
 
 .phc .chat-photo-wrap {
@@ -5281,12 +5302,32 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 14px;
   color: rgba(255, 255, 255, 0.55);
+  padding: 24px;
+  text-align: center;
 }
 
-.phc .phc-lk-main-empty .ico {
-  font-size: 36px;
+.phc .phc-lk-main-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r, 12px);
+  background: linear-gradient(145deg, rgba(248, 166, 104, 0.18), rgba(238, 91, 159, 0.14));
+  border: 1.5px solid rgba(248, 166, 104, 0.35);
+  color: #f8c89a;
+  box-shadow: 0 10px 32px rgba(45, 32, 32, 0.12);
+}
+
+.phc .phc-lk-main-empty-text {
+  margin: 0;
+  max-width: 280px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .phc .phc-lk-filmstrip {
@@ -5672,3 +5713,195 @@
     height: 72px;
   }
 }
+
+/* Video area — tab LiveKit / Google Meet */
+.phc .phc-video-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: #000;
+}
+
+.phc .phc-video-tabs {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 0;
+  z-index: 20;
+}
+
+.phc .phc-video-tab {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: var(--phc-font);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.phc .phc-video-tab--secondary {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.phc .phc-video-tab:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.phc .phc-video-tab--active {
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(135deg, #f8a668 0%, #ee5b9f 100%);
+  box-shadow: 0 4px 14px rgba(238, 91, 159, 0.35);
+}
+
+.phc .phc-video-tab--secondary.phc-video-tab--active {
+  font-size: 11px;
+}
+
+.phc .phc-video-panels {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.phc .phc-video-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.phc .phc-video-panel[hidden] {
+  display: none !important;
+}
+
+.phc .phc-meet-tab-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.55);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.phc .phc-meet-tab-toolbar-btn {
+  font-size: 12px;
+}
+
+/* Chờ giáo viên vào lớp */
+.phc .phc-wait-teacher {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 45%, rgba(238, 91, 159, 0.14), transparent 68%),
+    linear-gradient(165deg, #14141c 0%, #08080c 100%);
+  overflow: hidden;
+}
+
+.phc .phc-wait-teacher-pulse {
+  position: absolute;
+  width: min(280px, 70vw);
+  height: min(280px, 70vw);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(248, 166, 104, 0.22) 0%, transparent 70%);
+  animation: phc-wait-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes phc-wait-pulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.85;
+  }
+}
+
+.phc .phc-wait-teacher-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 360px;
+  text-align: center;
+}
+
+.phc .phc-wait-teacher-ico {
+  display: block;
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 14px;
+}
+
+.phc .phc-wait-teacher-title {
+  margin: 0 0 10px;
+  font-size: clamp(17px, 3.5vw, 22px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fafafa;
+}
+
+.phc .phc-wait-teacher-desc {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.phc .phc-wait-teacher-dots {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.phc .phc-wait-teacher-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f8a668, #ee5b9f);
+  animation: phc-wait-dot 1.2s ease-in-out infinite;
+}
+
+.phc .phc-wait-teacher-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.phc .phc-wait-teacher-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes phc-wait-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+

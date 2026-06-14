@@ -64,11 +64,13 @@ import {
   phongHocSlugFromClassName,
 } from "@/lib/phong-hoc/classroom-url";
 import {
-  persistTeacherSavedChatMessageId,
-  readTeacherSavedChatMessageIds,
+  chatPhotoSaveKey,
+  persistTeacherSavedChatPhoto,
+  readTeacherSavedChatPhotoKeys,
 } from "@/lib/phong-hoc/chat-saved-student-work-ids";
 import { buildHeThongBaiTapHref } from "@/lib/he-thong-bai-tap/slug";
 import { cfImageForLightbox, cfImageForThumbnail } from "@/lib/cfImageUrl";
+import type { PhongHocClassroomShell } from "@/lib/data/phong-hoc-classroom-shell";
 import { postUploadChatImage } from "@/lib/chat-image-upload-client";
 import {
   ALL_SAMPLES_PAGE_SIZE,
@@ -79,12 +81,11 @@ import {
   type StudentProfileGalleryRow,
 } from "@/lib/phong-hoc/classroom-gallery";
 import ClassroomSignInOverlay from "@/app/_components/ClassroomSignInOverlay";
-import PhongHocLiveKitCanvas from "@/components/phong-hoc/PhongHocLiveKitCanvas";
-import PhongHocCanvasMeetOverlay from "@/components/phong-hoc/PhongHocCanvasMeetOverlay";
-import { PHONG_HOC_LIVEKIT_DISABLED } from "@/lib/phong-hoc/livekit-feature-flag";
+import PhongHocVideoArea from "@/components/phong-hoc/PhongHocVideoArea";
 import StudentAvatarMenu from "@/components/StudentAvatarMenu";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Be_Vietnam_Pro, Quicksand } from "next/font/google";
@@ -100,8 +101,14 @@ import {
 } from "react";
 import "../donghocphi/donghocphi.css";
 import "./phong-hoc-ui.css";
-import StudentManageLessonPicker from "./StudentManageLessonPicker";
-import StudentManageModal from "./StudentManageModal";
+import { PhongHocClassroomSkeleton } from "./[slug]/_components/PhongHocClassroomSkeleton";
+
+const StudentManageLessonPicker = dynamic(() => import("./StudentManageLessonPicker"), {
+  ssr: false,
+});
+const StudentManageModal = dynamic(() => import("./StudentManageModal"), {
+  ssr: false,
+});
 
 function cx(...parts: Array<string | false | undefined | null>): string {
   return parts.filter(Boolean).join(" ");
@@ -573,6 +580,8 @@ type ClassroomClientProps = {
   classSlug?: string;
   /** URL ảnh quảng cáo đến từ `mkt_home_content.ads`. Rỗng = ẩn hẳn banner. */
   adImageUrl?: string;
+  /** Prefetch server theo slug — tiêu đề, Meet, môn lớp (tránh chờ client fetch lần đầu). */
+  initialLopShell?: PhongHocClassroomShell | null;
 };
 
 type MediaPermissionState = "idle" | "checking" | "granted" | "denied" | "unsupported";
@@ -658,6 +667,7 @@ function MediaPermissionControl() {
 export default function ClassroomClient({
   classSlug,
   adImageUrl = "",
+  initialLopShell = null,
 }: ClassroomClientProps = {}) {
   const router = useRouter();
   const adSrc = adImageUrl.trim();
@@ -700,9 +710,9 @@ export default function ClassroomClient({
   >([]);
   const [chatFullImg, setChatFullImg] = useState<string | null>(null);
   /** Tin chat đang gọi API lưu bài (giáo viên). */
-  const [teacherSaveChatBusy, setTeacherSaveChatBusy] = useState<Record<number, boolean>>({});
-  /** Tin chat đã lưu thành công vào `hv_bai_hoc_vien` (theo id tin `hv_chatbox`). */
-  const [teacherChatSaved, setTeacherChatSaved] = useState<Record<number, boolean>>({});
+  const [teacherSaveChatBusy, setTeacherSaveChatBusy] = useState<Record<string, boolean>>({});
+  /** Tin chat đã lưu thành công — khóa `${messageId}:${photoIndex}`. */
+  const [teacherChatSaved, setTeacherChatSaved] = useState<Record<string, boolean>>({});
   /** Thông báo ngắn sau khi lưu (aria-live). */
   const [teacherSaveChatNotice, setTeacherSaveChatNotice] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
@@ -907,6 +917,12 @@ export default function ClassroomClient({
     return normalizePhongHocPathSlug(classSlug);
   }, [classSlug]);
 
+  const slugMatchedShell = useMemo(() => {
+    if (!initialLopShell) return null;
+    if (normalizedPathSlug == null) return initialLopShell;
+    return initialLopShell.pathSlug === normalizedPathSlug ? initialLopShell : null;
+  }, [initialLopShell, normalizedPathSlug]);
+
   const sessionSlug = useMemo(() => {
     if (!storedSession) return "";
     return phongHocSlugFromClassName(storedSession.data.class_name);
@@ -1008,8 +1024,8 @@ export default function ClassroomClient({
   }, [storedSession, d.lop_hoc_id]);
 
   useEffect(() => {
-    if (!isTeacher || !browserSb || !Number.isFinite(lopHocIdForDb)) {
-      setGalleryLopExercises([]);
+    if (!isTeacher || !browserSb || !Number.isFinite(lopHocIdForDb) || tab !== "gallery") {
+      if (tab !== "gallery") setGalleryLopExercises([]);
       return;
     }
     let cancelled = false;
@@ -1023,12 +1039,21 @@ export default function ClassroomClient({
     return () => {
       cancelled = true;
     };
-  }, [isTeacher, browserSb, lopHocIdForDb]);
+  }, [isTeacher, browserSb, lopHocIdForDb, tab]);
 
   useEffect(() => {
+    if (tab !== "gallery") {
+      return;
+    }
+    if (slugMatchedShell) {
+      setLopMonHocIdForSamples(slugMatchedShell.monHocId);
+      setLopTenMonHocLabel(slugMatchedShell.tenMonHoc);
+    }
     if (!browserSb || !Number.isFinite(lopHocIdForDb)) {
-      setLopMonHocIdForSamples(null);
-      setLopTenMonHocLabel(null);
+      if (!slugMatchedShell) {
+        setLopMonHocIdForSamples(null);
+        setLopTenMonHocLabel(null);
+      }
       setLopSamplesMonReady(true);
       return;
     }
@@ -1060,7 +1085,7 @@ export default function ClassroomClient({
     return () => {
       cancelled = true;
     };
-  }, [browserSb, lopHocIdForDb]);
+  }, [browserSb, lopHocIdForDb, tab, slugMatchedShell]);
 
   useEffect(() => {
     setGlobalSamplesLoaded(false);
@@ -1580,7 +1605,7 @@ export default function ClassroomClient({
   }, [storedSession, browserSb]);
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || tab !== "gallery") return;
     if (!storedSession) {
       setArtworks(ARTWORKS_SEED);
       setGalleryLoading(false);
@@ -1588,7 +1613,7 @@ export default function ClassroomClient({
     }
     if (!browserSb || !Number.isFinite(lopHocIdForDb)) return;
     void reloadGalleryFromDb();
-  }, [mounted, storedSession, browserSb, lopHocIdForDb, reloadGalleryFromDb]);
+  }, [mounted, tab, storedSession, browserSb, lopHocIdForDb, reloadGalleryFromDb]);
 
   useEffect(() => {
     if (!baiMauModalOpen || !browserSb || !Number.isFinite(lopHocIdForDb)) return;
@@ -1626,9 +1651,9 @@ export default function ClassroomClient({
       setTeacherChatSaved({});
       return;
     }
-    const ids = readTeacherSavedChatMessageIds(lopHocIdForDb);
-    const rec: Record<number, boolean> = {};
-    for (const id of ids) rec[id] = true;
+    const keys = readTeacherSavedChatPhotoKeys(lopHocIdForDb);
+    const rec: Record<string, boolean> = {};
+    for (const key of keys) rec[key] = true;
     setTeacherChatSaved(rec);
   }, [mounted, isTeacher, lopHocIdForDb]);
 
@@ -1681,13 +1706,14 @@ export default function ClassroomClient({
   );
 
   const handleTeacherSaveChatPhoto = useCallback(
-    async (m: HvChatboxRow, enrollmentQlhvId: number) => {
+    async (m: HvChatboxRow, enrollmentQlhvId: number, photo: string, photoIndex: number) => {
       if (!isTeacher || !Number.isFinite(lopHocIdForDb)) return;
       if (storedSession?.userType !== "Teacher" || !Number.isFinite(storedSession.data.id)) return;
-      const photo = (m.photos?.[0] ?? m.photo)?.trim();
-      if (!photo) return;
+      const photoUrl = photo.trim();
+      if (!photoUrl) return;
+      const saveKey = chatPhotoSaveKey(m.id, photoIndex);
       const teacherHrId = storedSession.data.id;
-      setTeacherSaveChatBusy((prev) => ({ ...prev, [m.id]: true }));
+      setTeacherSaveChatBusy((prev) => ({ ...prev, [saveKey]: true }));
       try {
         const res = await fetch("/api/phong-hoc/save-chat-student-work", {
           method: "POST",
@@ -1695,7 +1721,7 @@ export default function ClassroomClient({
           body: JSON.stringify({
             lopHocId: lopHocIdForDb,
             enrollmentQlhvId,
-            photo,
+            photo: photoUrl,
             teacherHrId,
           }),
         });
@@ -1706,8 +1732,8 @@ export default function ClassroomClient({
         };
         if (!res.ok) throw new Error(j.error || "Lưu thất bại");
         const label = j.tenBaiTapLabel?.trim();
-        persistTeacherSavedChatMessageId(lopHocIdForDb, m.id);
-        setTeacherChatSaved((prev) => ({ ...prev, [m.id]: true }));
+        persistTeacherSavedChatPhoto(lopHocIdForDb, m.id, photoIndex);
+        setTeacherChatSaved((prev) => ({ ...prev, [saveKey]: true }));
         const line = j.alreadySaved
           ? label
             ? `Ảnh đã được lưu trước đó (chờ xác nhận) — ${label}`
@@ -1726,7 +1752,7 @@ export default function ClassroomClient({
       } finally {
         setTeacherSaveChatBusy((prev) => {
           const next = { ...prev };
-          delete next[m.id];
+          delete next[saveKey];
           return next;
         });
       }
@@ -1735,15 +1761,23 @@ export default function ClassroomClient({
   );
 
   useEffect(() => {
+    if (!slugMatchedShell) return;
+    applyClassMeetRow(slugMatchedShell.meet);
+  }, [slugMatchedShell, applyClassMeetRow]);
+
+  useEffect(() => {
     if (!Number.isFinite(lopHocIdForDb)) {
-      setGoogleMeetUrl(null);
-      setGoogleMeetSetAt(null);
-      setLopDevice(null);
-      setGmeetRowReady(false);
+      if (!slugMatchedShell) {
+        setGoogleMeetUrl(null);
+        setGoogleMeetSetAt(null);
+        setLopDevice(null);
+        setGmeetRowReady(false);
+      }
       return;
     }
+    if (slugMatchedShell?.lopHocId === lopHocIdForDb && gmeetRowReady) return;
     void refreshClassMeetRow();
-  }, [lopHocIdForDb, refreshClassMeetRow]);
+  }, [lopHocIdForDb, refreshClassMeetRow, slugMatchedShell, gmeetRowReady]);
 
   /** HV: khi quay lại tab — tải lại link Meet ngay. */
   useEffect(() => {
@@ -1951,6 +1985,12 @@ export default function ClassroomClient({
     return normalizeMeetingRoomUrl(raw.trim()) ?? raw.trim();
   }, [googleMeetUrl, googleMeetSetAt, storedSession?.userType]);
 
+  /** Tab Google Meet: GV luôn thấy (quản lý link); HV chỉ khi có link trong ngày. */
+  const showMeetTab = useMemo(
+    () => isTeacher || studentSidebarMeetUrl != null,
+    [isTeacher, studentSidebarMeetUrl]
+  );
+
   /** Slug lớp dùng làm tên phòng LiveKit. */
   const liveKitRoomName = useMemo(
     () => normalizedPathSlug ?? sessionSlug ?? null,
@@ -1989,12 +2029,14 @@ export default function ClassroomClient({
 
   /** Tiêu đề topbar — tên lớp (`class_name`), fallback tên đầy đủ / slug URL. */
   const topbarTitle = useMemo(() => {
-    const short = (d.class_name ?? "").trim();
-    if (short) return short;
-    if (storedSession?.userType === "Teacher" || storedSession?.userType === "Student") {
+    if (storedSession) {
+      const short = (d.class_name ?? "").trim();
+      if (short) return short;
       const full = String(storedSession.data.class_full_name ?? "").trim();
       if (full) return full;
     }
+    if (slugMatchedShell?.className) return slugMatchedShell.className;
+    if (slugMatchedShell?.classFullName) return slugMatchedShell.classFullName;
     if (classSlug != null && String(classSlug).trim() !== "") {
       try {
         return decodeURIComponent(classSlug).replace(/_/g, " ");
@@ -2003,7 +2045,7 @@ export default function ClassroomClient({
       }
     }
     return "Phòng học";
-  }, [d.class_name, storedSession, classSlug]);
+  }, [d.class_name, storedSession, classSlug, slugMatchedShell]);
 
   const liveChatEnabled =
     mounted && storedSession !== null && Number.isFinite(lopHocIdForDb);
@@ -2175,6 +2217,12 @@ export default function ClassroomClient({
       setChatClassTeacherAvatarUrl(null);
       return;
     }
+    const chatTabActive = tab === "chat";
+    const teacherSession = storedSession?.userType === "Teacher";
+    if (!chatTabActive && !teacherSession) {
+      setChatClassTeacherAvatarUrl(null);
+      return;
+    }
     if (storedSession?.userType === "Teacher") {
       const av = d.staff_avatar_url?.trim();
       setChatClassTeacherAvatarUrl(av && av.length > 0 ? av : null);
@@ -2213,7 +2261,7 @@ export default function ClassroomClient({
     return () => {
       cancelled = true;
     };
-  }, [browserSb, lopHocIdForDb, storedSession, d.staff_avatar_url]);
+  }, [browserSb, lopHocIdForDb, storedSession, d.staff_avatar_url, tab]);
 
   useEffect(() => {
     if (tab !== "third" || !liveChatEnabled || !browserSb || !Number.isFinite(lopHocIdForDb)) {
@@ -2284,6 +2332,15 @@ export default function ClassroomClient({
       setChatStudentByQlhv({});
       hvKnownIdsRef.current = new Set();
       hvLatestCreatedAtRef.current = "";
+      if (browserSb && hvChatRealtimeChannelRef.current) {
+        browserSb.removeChannel(hvChatRealtimeChannelRef.current);
+        hvChatRealtimeChannelRef.current = null;
+      }
+      return;
+    }
+
+    const teacherSession = storedSession.userType === "Teacher";
+    if (tab !== "chat" && !teacherSession) {
       if (browserSb && hvChatRealtimeChannelRef.current) {
         browserSb.removeChannel(hvChatRealtimeChannelRef.current);
         hvChatRealtimeChannelRef.current = null;
@@ -2432,7 +2489,7 @@ export default function ClassroomClient({
         hvChatRealtimeChannelRef.current = null;
       }
     };
-  }, [browserSb, lopHocIdForDb, storedSession]);
+  }, [browserSb, lopHocIdForDb, storedSession, tab]);
 
   const toggleDark = () => {
     setDark((prev) => {
@@ -2762,11 +2819,7 @@ export default function ClassroomClient({
             : "var(--text)";
 
   if (!mounted && normalizedPathSlug !== null) {
-    return (
-      <div className={phcRootClass}>
-        <p style={{ padding: 24, textAlign: "center" }}>Đang tải phòng học…</p>
-      </div>
-    );
+    return <PhongHocClassroomSkeleton />;
   }
 
   if (mounted && normalizedPathSlug !== null && !hasRoomAccess) {
@@ -2922,45 +2975,35 @@ export default function ClassroomClient({
 
       <div className="main">
         <LayoutGroup id="phc-main-layout">
-          <motion.div
-            className={cx("canvas-wrap", PHONG_HOC_LIVEKIT_DISABLED && "canvas-wrap--maint")}
-            transition={PHC_SIDEBAR_TWEEN}
-          >
-            {!PHONG_HOC_LIVEKIT_DISABLED ? (
-              <PhongHocLiveKitCanvas
-                roomName={liveKitRoomName ?? "preview"}
-                participantName={liveKitParticipantName}
-                lopHocId={Number.isFinite(lopHocIdForDb) ? lopHocIdForDb : 0}
-                isHost={liveKitIsHost}
-                canJoin={liveKitCanJoin}
-                localAvatarUrl={liveKitAvatarUrl}
-              />
-            ) : (
-              <div className="canvas-ph canvas-ph--livekit canvas-ph--maint-bg" aria-hidden />
-            )}
-            {PHONG_HOC_LIVEKIT_DISABLED ? (
-              <PhongHocCanvasMeetOverlay
-                isTeacher={isTeacher}
-                gmeetFormOpen={gmeetFormOpen}
-                gmeetInput={gmeetInput}
-                gmeetSaving={gmeetSaving}
-                gmeetJustSaved={gmeetJustSaved}
-                gmeetRowReady={gmeetRowReady}
-                googleMeetUrl={googleMeetUrl}
-                studentMeetUrl={studentSidebarMeetUrl}
-                onGmeetInputChange={setGmeetInput}
-                onOpenGmeetForm={() => {
-                  setGmeetInput(googleMeetUrl?.trim() ?? "");
-                  setGmeetFormOpen(true);
-                }}
-                onCloseGmeetForm={() => {
-                  setGmeetFormOpen(false);
-                  setGmeetInput("");
-                }}
-                onSaveGmeet={() => void saveGoogleMeetUrl()}
-                onClearGmeet={() => void clearGoogleMeetUrl()}
-              />
-            ) : null}
+          <motion.div className="canvas-wrap" transition={PHC_SIDEBAR_TWEEN}>
+            <PhongHocVideoArea
+              roomName={liveKitRoomName ?? "preview"}
+              participantName={liveKitParticipantName}
+              lopHocId={Number.isFinite(lopHocIdForDb) ? lopHocIdForDb : 0}
+              isHost={liveKitIsHost}
+              canJoin={liveKitCanJoin}
+              localAvatarUrl={liveKitAvatarUrl}
+              isTeacher={isTeacher}
+              showMeetTab={showMeetTab}
+              gmeetFormOpen={gmeetFormOpen}
+              gmeetInput={gmeetInput}
+              gmeetSaving={gmeetSaving}
+              gmeetJustSaved={gmeetJustSaved}
+              gmeetRowReady={gmeetRowReady}
+              googleMeetUrl={googleMeetUrl}
+              studentMeetUrl={studentSidebarMeetUrl}
+              onGmeetInputChange={setGmeetInput}
+              onOpenGmeetForm={() => {
+                setGmeetInput(googleMeetUrl?.trim() ?? "");
+                setGmeetFormOpen(true);
+              }}
+              onCloseGmeetForm={() => {
+                setGmeetFormOpen(false);
+                setGmeetInput("");
+              }}
+              onSaveGmeet={() => void saveGoogleMeetUrl()}
+              onClearGmeet={() => void clearGoogleMeetUrl()}
+            />
           </motion.div>
 
           <motion.aside
@@ -3300,58 +3343,63 @@ export default function ClassroomClient({
                                       albumUrls.length >= 3 && "chat-photo-grid--many"
                                     )}
                                   >
-                                    {albumUrls.map((src, ix) => (
-                                      <button
-                                        key={`${m.id}-${ix}-${src.slice(0, 64)}`}
-                                        type="button"
-                                        className="chat-photo-btn"
-                                        onClick={() => setChatFullImg(src.trim())}
-                                        aria-label="Phóng to ảnh"
-                                      >
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={src.trim()} alt="" className="chat-cphoto" />
-                                      </button>
-                                    ))}
+                                    {albumUrls.map((src, ix) => {
+                                      const saveKey = chatPhotoSaveKey(m.id, ix);
+                                      const canSavePhoto =
+                                        isTeacher &&
+                                        !isGV &&
+                                        qlhvKey != null &&
+                                        m.id > 0 &&
+                                        storedSession?.userType === "Teacher" &&
+                                        Number.isFinite(storedSession.data.id);
+                                      const photoSaved = Boolean(teacherChatSaved[saveKey]);
+                                      const photoBusy = Boolean(teacherSaveChatBusy[saveKey]);
+                                      return (
+                                        <div key={`${m.id}-${ix}-${src.slice(0, 64)}`} className="chat-photo-cell">
+                                          <button
+                                            type="button"
+                                            className="chat-photo-btn"
+                                            onClick={() => setChatFullImg(src.trim())}
+                                            aria-label="Phóng to ảnh"
+                                          >
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={src.trim()} alt="" className="chat-cphoto" />
+                                          </button>
+                                          {canSavePhoto ? (
+                                            <button
+                                              type="button"
+                                              className={cx(
+                                                "chat-teacher-save-btn",
+                                                "chat-teacher-save-btn--tile",
+                                                photoSaved && "is-saved"
+                                              )}
+                                              disabled={photoBusy || photoSaved}
+                                              title={
+                                                photoSaved
+                                                  ? "Đã lưu vào bài học viên (chờ xác nhận)"
+                                                  : "Lưu ảnh này vào bài học viên (chờ xác nhận)"
+                                              }
+                                              onClick={(ev) => {
+                                                ev.stopPropagation();
+                                                if (photoSaved) return;
+                                                void handleTeacherSaveChatPhoto(m, qlhvKey, src, ix);
+                                              }}
+                                            >
+                                              {photoSaved
+                                                ? "Đã lưu"
+                                                : photoBusy
+                                                  ? "…"
+                                                  : "Lưu"}
+                                            </button>
+                                          ) : null}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                   {m.id < 0 ? (
                                     <p className="chat-upload-pending" aria-live="polite">
                                       Đang tải ảnh lên…
                                     </p>
-                                  ) : null}
-                                  {isTeacher &&
-                                  !isGV &&
-                                  qlhvKey != null &&
-                                  m.id > 0 &&
-                                  storedSession?.userType === "Teacher" &&
-                                  Number.isFinite(storedSession.data.id) ? (
-                                    <button
-                                      type="button"
-                                      className={cx(
-                                        "chat-teacher-save-btn",
-                                        teacherChatSaved[m.id] && "is-saved"
-                                      )}
-                                      disabled={
-                                        Boolean(teacherSaveChatBusy[m.id]) || Boolean(teacherChatSaved[m.id])
-                                      }
-                                      title={
-                                        teacherChatSaved[m.id]
-                                          ? "Đã lưu vào bài học viên (chờ xác nhận)"
-                                          : albumUrls.length > 1
-                                            ? "Lưu ảnh đầu tiên vào bài học viên (chờ xác nhận)"
-                                            : "Lưu vào bài học viên (chờ xác nhận)"
-                                      }
-                                      onClick={(ev) => {
-                                        ev.stopPropagation();
-                                        if (teacherChatSaved[m.id]) return;
-                                        void handleTeacherSaveChatPhoto(m, qlhvKey);
-                                      }}
-                                    >
-                                      {teacherChatSaved[m.id]
-                                        ? "Đã lưu"
-                                        : teacherSaveChatBusy[m.id]
-                                          ? "Đang lưu…"
-                                          : "Lưu bài"}
-                                    </button>
                                   ) : null}
                                 </div>
                               ) : null}
@@ -4161,14 +4209,16 @@ export default function ClassroomClient({
         </div>
       ) : null}
 
-      <StudentManageModal
-        open={studentManageOpen}
-        onClose={() => setStudentManageOpen(false)}
-        lopHocId={d.lop_hoc_id}
-        classDisplayName={d.class_name}
-        teacherHrId={Number.isFinite(teacherHrIdForDb) ? teacherHrIdForDb : 0}
-        onAfterProgressSave={refetchTeacherClassmates}
-      />
+      {studentManageOpen ? (
+        <StudentManageModal
+          open={studentManageOpen}
+          onClose={() => setStudentManageOpen(false)}
+          lopHocId={d.lop_hoc_id}
+          classDisplayName={d.class_name}
+          teacherHrId={Number.isFinite(teacherHrIdForDb) ? teacherHrIdForDb : 0}
+          onAfterProgressSave={refetchTeacherClassmates}
+        />
+      ) : null}
     </div>
   );
 }

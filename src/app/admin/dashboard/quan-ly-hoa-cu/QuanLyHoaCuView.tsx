@@ -11,6 +11,7 @@ import {
   fetchHoaCuCatalogForBranch,
   getCachedHoaCuCatalog,
   invalidateHoaCuCatalogCache,
+  isHoaCuCatalogBestBranchOk,
   prefetchHoaCuCatalog,
 } from "@/app/admin/dashboard/quan-ly-hoa-cu/hoa-cu-catalog-cache";
 import {
@@ -2896,7 +2897,7 @@ function ModalBanHang({
         setCatalogError(r.error);
         return;
       }
-      if ("autoSwitchedFrom" in r && r.autoSwitchedFrom != null && r.branchId !== branchId) {
+      if (isHoaCuCatalogBestBranchOk(r) && r.autoSwitchedFrom != null && r.branchId !== branchId) {
         const fromTen = chiNhanhOptions.find((b) => b.id === r.autoSwitchedFrom)?.ten ?? `#${r.autoSwitchedFrom}`;
         const toTen = chiNhanhOptions.find((b) => b.id === r.branchId)?.ten ?? `#${r.branchId}`;
         setCatalogHint(`Chi nhánh «${fromTen}» chưa có mặt hàng — đã chuyển sang «${toTen}».`);

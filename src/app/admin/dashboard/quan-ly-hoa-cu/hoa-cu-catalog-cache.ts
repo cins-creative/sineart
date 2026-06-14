@@ -77,13 +77,23 @@ export function prefetchHoaCuCatalog(branchId: number | null | undefined) {
  * Modal bán: ưu tiên chi nhánh có mặt hàng (vd. kho chỉ gắn Tân Phú nhưng filter tab đang Online).
  * Trả `autoSwitchedFrom` khi đã chuyển sang chi nhánh khác có danh mục.
  */
+export type HoaCuCatalogBestBranchOk = {
+  ok: true;
+  data: AdminHoaCuSanPham[];
+  branchId: number;
+  autoSwitchedFrom: number | null;
+};
+
+export function isHoaCuCatalogBestBranchOk(
+  r: { ok: true; data: AdminHoaCuSanPham[] } | HoaCuCatalogBestBranchOk,
+): r is HoaCuCatalogBestBranchOk {
+  return "branchId" in r && "autoSwitchedFrom" in r;
+}
+
 export async function fetchHoaCuCatalogBestBranch(
   preferredBranchId: number,
   allBranchIds: number[],
-): Promise<
-  | { ok: true; data: AdminHoaCuSanPham[]; branchId: number; autoSwitchedFrom: number | null }
-  | { ok: false; error: string }
-> {
+): Promise<HoaCuCatalogBestBranchOk | { ok: false; error: string }> {
   if (!Number.isFinite(preferredBranchId) || preferredBranchId <= 0) {
     return { ok: false, error: "Chi nhánh không hợp lệ." };
   }

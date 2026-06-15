@@ -7,6 +7,10 @@
 .phc {
   /* Breakpoints: Bootstrap 5 — dùng token global từ bootstrap-breakpoints.css */
 
+  /* Topbar phải cao hơn lớp phủ canvas (cùng 50 → main sau header che dropdown avatar). */
+  --phc-topbar-z: 100;
+  --phc-canvas-overlay-z: 10;
+
   --phc-ink: #2d2020;
   --phc-muted: rgba(45, 32, 32, 0.56);
   --phc-muted2: rgba(45, 32, 32, 0.45);
@@ -61,7 +65,7 @@
   align-items: center;
   gap: 14px;
   position: relative;
-  z-index: 50;
+  z-index: var(--phc-topbar-z);
   padding: 12px 20px;
   background: var(--phc-surface);
   border-bottom: 1px solid var(--phc-line);
@@ -278,6 +282,7 @@
 .phc .phc-topbar-avatar .nav-user-avatar-wrap {
   display: inline-flex;
   position: relative;
+  z-index: calc(var(--phc-topbar-z) + 1);
   flex-shrink: 0;
   align-items: center;
 }
@@ -317,7 +322,7 @@
   top: calc(100% + 8px);
   right: 0;
   left: auto;
-  z-index: 200;
+  z-index: calc(var(--phc-topbar-z) + 10);
   min-width: 220px;
   max-width: min(280px, calc(100vw - 24px));
   padding: 0;
@@ -3631,7 +3636,7 @@
     display: flex;
     position: sticky;
     top: 0;
-    z-index: 50;
+    z-index: var(--phc-topbar-z);
     flex-wrap: wrap;
     gap: 10px;
     padding: 12px var(--phc-mobile-pad-x);
@@ -3639,6 +3644,12 @@
 
   .phc .topbar-tools {
     margin-left: auto;
+  }
+
+  /* Avatar học viên — luôn sát phải hàng topbar (tránh wrap sang trái). */
+  .phc .phc-topbar-avatar {
+    margin-left: auto;
+    flex-shrink: 0;
   }
 
   .phc .media-check-btn {
@@ -3855,7 +3866,7 @@
     display: flex;
     position: sticky;
     top: 0;
-    z-index: 50;
+    z-index: var(--phc-topbar-z);
     flex-wrap: wrap;
     gap: 8px;
     padding: 10px var(--phc-mobile-pad-x);
@@ -4016,7 +4027,7 @@
     display: flex;
     position: sticky;
     top: 0;
-    z-index: 50;
+    z-index: var(--phc-topbar-z);
   }
 
   .phc .main {
@@ -4870,7 +4881,7 @@
 .phc .phc-canvas-maint-overlay {
   position: absolute;
   inset: 0;
-  z-index: 50;
+  z-index: var(--phc-canvas-overlay-z);
   display: flex;
   align-items: center;
   justify-content: center;

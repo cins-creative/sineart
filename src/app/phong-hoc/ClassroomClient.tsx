@@ -791,6 +791,10 @@ export default function ClassroomClient({
   const lopMeetRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
   /** Tránh async fetch/subscribe cũ ghi đè sau khi đổi lớp / unmount. */
   const hvChatEffectGenerationRef = useRef(0);
+  /** Meet fetch — hủy response cũ khi đổi `lop_hoc_id` (tránh ghi link lớp demo/khác). */
+  const meetFetchGenerationRef = useRef(0);
+  /** `lop_hoc_id` tương ứng với `googleMeetUrl` hiện tại. */
+  const gmeetLopIdRef = useRef<number | null>(null);
 
   const browserSb = useMemo(() => createBrowserSupabaseClient(), []);
 
@@ -1017,12 +1021,16 @@ export default function ClassroomClient({
   const studentTnPairs = panelTruongNganhPairs(d);
 
   const lopHocIdForDb = useMemo(() => {
-    if (storedSession != null && Number.isFinite(storedSession.data.lop_hoc_id)) {
-      return storedSession.data.lop_hoc_id;
+    const fromSession = storedSession?.data.lop_hoc_id;
+    if (fromSession != null && Number.isFinite(fromSession) && fromSession > 0) {
+      return fromSession;
     }
-    if (Number.isFinite(d.lop_hoc_id)) return d.lop_hoc_id;
+    /** Demo SA01 — chỉ `/phong-hoc` không slug và chưa đăng nhập; không dùng trên `/phong-hoc/[slug]`. */
+    if (normalizedPathSlug == null && Number.isFinite(d.lop_hoc_id) && d.lop_hoc_id > 0) {
+      return d.lop_hoc_id;
+    }
     return NaN;
-  }, [storedSession, d.lop_hoc_id]);
+  }, [storedSession, d.lop_hoc_id, normalizedPathSlug]);
 
   useEffect(() => {
     if (!isTeacher || !browserSb || !Number.isFinite(lopHocIdForDb) || tab !== "gallery") {
@@ -1292,7 +1300,9 @@ export default function ClassroomClient({
   }, [gWorkKind, gExerciseFilter, globalSamplesHasMore, loadMoreGlobalSamples, globalSamples.length]);
 
   /** Cập nhật state Google Meet + session localStorage khi có row `ql_lop_hoc`. */
-  const applyClassMeetRow = useCallback((row: LopHocMeetRow) => {
+  const applyClassMeetRow = useCallback((lopId: number, row: LopHocMeetRow) => {
+    if (!Number.isFinite(lopId) || lopId <= 0) return;
+    gmeetLopIdRef.current = lopId;
     setGoogleMeetUrl(row.url_google_meet);
     setGoogleMeetSetAt(row.url_google_meet_set_at);
     setLopDevice(row.device);
@@ -1320,13 +1330,20 @@ export default function ClassroomClient({
    * Realtime `UPDATE` áp `payload.new` qua `lopMeetRowFromRealtimeNewRow` — không poll 5s nữa.
    */
   const refreshClassMeetRow = useCallback(async () => {
-    if (!Number.isFinite(lopHocIdForDb)) return;
+    if (!Number.isFinite(lopHocIdForDb) || lopHocIdForDb <= 0) return;
     const id = lopHocIdForDb;
+    const gen = ++meetFetchGenerationRef.current;
+
+    const applyIfCurrent = (row: LopHocMeetRow) => {
+      if (gen !== meetFetchGenerationRef.current) return;
+      applyClassMeetRow(id, row);
+    };
 
     if (browserSb) {
       const direct = await fetchLopHocMeetRow(browserSb, id);
+      if (gen !== meetFetchGenerationRef.current) return;
       if (direct) {
-        applyClassMeetRow(direct);
+        applyIfCurrent(direct);
         return;
       }
     }
@@ -1336,29 +1353,35 @@ export default function ClassroomClient({
         `/api/phong-hoc/class-meet-row?lopHocId=${encodeURIComponent(String(id))}`,
         { credentials: "include" }
       );
+      if (gen !== meetFetchGenerationRef.current) return;
       if (res.ok) {
         const j = (await res.json()) as LopHocMeetRow;
-        applyClassMeetRow(j);
+        applyIfCurrent(j);
         return;
       }
     } catch {
       /* API lỗi mạng — xử lý dưới */
     }
 
+    if (gen !== meetFetchGenerationRef.current) return;
+
     const supabase = createBrowserSupabaseClient();
     if (!supabase) {
+      gmeetLopIdRef.current = id;
       setGmeetRowReady(true);
       return;
     }
     const row = await fetchLopHocMeetRow(supabase, id);
+    if (gen !== meetFetchGenerationRef.current) return;
     if (!row) {
+      gmeetLopIdRef.current = id;
       setGoogleMeetUrl(null);
       setGoogleMeetSetAt(null);
       setLopDevice(null);
       setGmeetRowReady(true);
       return;
     }
-    applyClassMeetRow(row);
+    applyIfCurrent(row);
   }, [lopHocIdForDb, browserSb, applyClassMeetRow]);
 
   /**
@@ -1762,12 +1785,20 @@ export default function ClassroomClient({
   );
 
   useEffect(() => {
-    if (!slugMatchedShell) return;
-    applyClassMeetRow(slugMatchedShell.meet);
-  }, [slugMatchedShell, applyClassMeetRow]);
+    if (!slugMatchedShell || !storedSession) return;
+    if (slugMatchedShell.lopHocId !== lopHocIdForDb) return;
+    applyClassMeetRow(lopHocIdForDb, slugMatchedShell.meet);
+  }, [slugMatchedShell, storedSession, lopHocIdForDb, applyClassMeetRow]);
 
   useEffect(() => {
-    if (!Number.isFinite(lopHocIdForDb)) {
+    meetFetchGenerationRef.current += 1;
+    gmeetLopIdRef.current = null;
+    setGmeetRowReady(false);
+  }, [lopHocIdForDb]);
+
+  useEffect(() => {
+    if (normalizedPathSlug != null && !storedSession) return;
+    if (!Number.isFinite(lopHocIdForDb) || lopHocIdForDb <= 0) {
       if (!slugMatchedShell) {
         setGoogleMeetUrl(null);
         setGoogleMeetSetAt(null);
@@ -1776,9 +1807,16 @@ export default function ClassroomClient({
       }
       return;
     }
-    if (slugMatchedShell?.lopHocId === lopHocIdForDb && gmeetRowReady) return;
+    if (gmeetRowReady && gmeetLopIdRef.current === lopHocIdForDb) return;
     void refreshClassMeetRow();
-  }, [lopHocIdForDb, refreshClassMeetRow, slugMatchedShell, gmeetRowReady]);
+  }, [
+    normalizedPathSlug,
+    storedSession,
+    lopHocIdForDb,
+    refreshClassMeetRow,
+    slugMatchedShell,
+    gmeetRowReady,
+  ]);
 
   /** HV: khi quay lại tab — tải lại link Meet ngay. */
   useEffect(() => {
@@ -1818,7 +1856,7 @@ export default function ClassroomClient({
         (payload) => {
           const n = payload.new as Record<string, unknown> | null;
           if (!n || typeof n !== "object") return;
-          applyClassMeetRow(lopMeetRowFromRealtimeNewRow(n));
+          applyClassMeetRow(lopHocIdForDb, lopMeetRowFromRealtimeNewRow(n));
         }
       )
       .subscribe();
@@ -1877,8 +1915,10 @@ export default function ClassroomClient({
 
       setGmeetSaving(false);
       if (!ok) return;
+      gmeetLopIdRef.current = lopHocIdForDb;
       setGoogleMeetUrl(url);
       setGoogleMeetSetAt(setAtIso);
+      setGmeetRowReady(true);
       setGmeetFormOpen(false);
       setGmeetInput("");
       setGmeetJustSaved(true);
@@ -1942,8 +1982,10 @@ export default function ClassroomClient({
 
       setGmeetSaving(false);
       if (!ok) return;
+      gmeetLopIdRef.current = lopHocIdForDb;
       setGoogleMeetUrl(null);
       setGoogleMeetSetAt(null);
+      setGmeetRowReady(true);
       setGmeetFormOpen(false);
       setGmeetInput("");
       setGmeetJustSaved(false);

@@ -542,7 +542,7 @@ function TransactionDetailModal({
     row.nguon === "hoc-phi"
       ? row.ghiChu?.trim() || row.tieude.replace(/^HP:\s*/i, "").trim() || row.tieude
       : row.nguon === "luong"
-        ? row.tieude.replace(/^Lương:\s*/i, "").trim() || row.tieude
+        ? row.tieude.trim() || row.tieude
         : row.tieude || NGUON_LABEL[row.nguon];
   const showGhiChu =
     Boolean(row.ghiChu?.trim()) &&
@@ -683,7 +683,7 @@ function TransactionDetailModal({
             >
               <div className="border-b border-[#EAEAEA]/80 px-4 py-2.5">
                 <p className="m-0 text-[10px] font-extrabold uppercase tracking-wide" style={{ color: badge.color }}>
-                  Phiếu lương
+                  Tổng hợp lương
                 </p>
               </div>
               <div className="flex gap-3 px-4 py-3">
@@ -711,8 +711,8 @@ function TransactionDetailModal({
           <div className="grid gap-3 sm:grid-cols-2">
             <DetailMetaCell
               icon={Wallet}
-              label={row.nguon === "luong" ? "Hình thức tính lương" : "Hình thức"}
-              value={row.hinhThuc?.trim() || "—"}
+              label="Hình thức"
+              value={row.hinhThuc?.trim() || (row.nguon === "luong" ? "Tổng hợp phiếu lương" : "—")}
             />
             <DetailMetaCell icon={Layers} label="Loại" value={loai || "—"} tone={loaiTone} />
           </div>

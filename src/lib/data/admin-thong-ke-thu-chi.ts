@@ -13,8 +13,8 @@ const MAX_HC_DONS = 2000;
 const MAX_TC_KHAC = 5000;
 const MAX_LUONG = 5000;
 
-/** Tạm tắt nguồn «Lương» trên trang thống kê thu chi — bật lại khi cần. */
-export const THONG_KE_THU_CHI_INCLUDE_LUONG = false;
+/** Nguồn «Lương» trên trang thống kê thu chi (gộp theo kỳ: Giáo viên / Vận hành). */
+export const THONG_KE_THU_CHI_INCLUDE_LUONG = true;
 
 export type ThongKeThuChiNguon = "hoc-phi" | "hoa-cu" | "hoa-cu-nhap" | "thu-chi-khac" | "luong";
 
@@ -96,6 +96,52 @@ function formatKyLuong(thang: string | null, nam: string | null): string {
   return t ?? "";
 }
 
+function isMissingColumnError(message: string): boolean {
+  const m = message.toLowerCase();
+  return m.includes("column") && (m.includes("does not exist") || m.includes("could not find"));
+}
+
+function tonelessVi(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/\u0111/g, "d")
+    .replace(/\u0110/g, "d")
+    .toLowerCase()
+    .trim();
+}
+
+function banLabelMatchesDaoTao(label: string): boolean {
+  const ascii = tonelessVi(label).replace(/\s+/g, " ");
+  if (ascii.includes("dao tao")) return true;
+  if (
+    ascii.includes("giang day") ||
+    ascii.includes("giao duc") ||
+    ascii.includes("giang vien") ||
+    ascii.includes("training")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+type LuongChiBucket = "giao-vien" | "van-hanh";
+
+/** Chỉ ban Đào tạo (một card) → Giáo viên; Đào tạo + ban khác hoặc không thuộc Đào tạo → Vận hành. */
+function classifyPayrollChiBucket(banIds: readonly number[], banById: Map<number, string>): LuongChiBucket {
+  const hasDaoTao = banIds.some((id) => banLabelMatchesDaoTao(banById.get(id) ?? ""));
+  if (hasDaoTao && banIds.length === 1) return "giao-vien";
+  return "van-hanh";
+}
+
+function luongChiBucketLabel(bucket: LuongChiBucket): string {
+  return bucket === "giao-vien" ? "Chi lương Giáo viên" : "Chi lương Vận hành";
+}
+
+function luongChiBucketMaPrefix(bucket: LuongChiBucket): string {
+  return bucket === "giao-vien" ? "BL-GV" : "BL-VH";
+}
+
 /** Ngày giờ hiển thị / lọc — ưu tiên cuối tháng kỳ lương, fallback `created_at`. */
 function payrollPeriodIso(thang: string | null, nam: string | null, createdAt: string | null): string {
   const monthMatch = thang ? /(\d{1,2})/.exec(thang) : null;
@@ -146,7 +192,7 @@ function unwrapSpNhap(
 /**
  * Gộp học phí (đã thanh toán), bán họa cụ (thu), nhập họa cụ (chi), thu chi khác cho trang thống kê.
  * Không gồm `hp_giao_dich_thanh_toan` (SePay) — tránh trùng với dòng Học phí đã match đơn.
- * Nguồn lương nhân sự: bật qua `THONG_KE_THU_CHI_INCLUDE_LUONG` (hiện tắt tạm).
+ * Nguồn lương nhân sự: gộp theo kỳ thành «Chi lương Giáo viên» / «Chi lương Vận hành».
  * Tiền học phí = tổng dòng `hp_thu_hp_chi_tiet` (theo gói) trừ `giam_gia` và `giam_gia_vnd` đơn — cùng logic «Quản lý hóa đơn».
  */
 export async function fetchAdminThongKeThuChiBundle(
@@ -648,11 +694,11 @@ export async function fetchAdminThongKeThuChiBundle(
     const bangIds = payrollRaw.map((r) => nId(r.id)).filter((x): x is number => x != null);
     const staffIds = [...new Set(payrollRaw.map((r) => nId(r.nhan_vien)).filter((x): x is number => x != null))];
 
-    const [staffRes, lichRes] = await Promise.all([
+    const [staffRes, lichRes, nvPhongRes] = await Promise.all([
       staffIds.length
         ? supabase
             .from("hr_nhan_su")
-            .select("id, full_name, hinh_thuc_tinh_luong, luong_co_ban, tro_cap")
+            .select("id, full_name, hinh_thuc_tinh_luong, luong_co_ban, tro_cap, ban")
             .in("id", staffIds)
         : Promise.resolve({ data: [] as unknown[], error: null }),
       bangIds.length
@@ -662,14 +708,18 @@ export async function fetchAdminThongKeThuChiBundle(
             .in("bang_tinh_luong", bangIds)
             .order("id", { ascending: true })
         : Promise.resolve({ data: [] as unknown[], error: null }),
+      staffIds.length
+        ? supabase.from("hr_nhan_su_phong").select("nhan_su_id, phong_id").in("nhan_su_id", staffIds)
+        : Promise.resolve({ data: [] as unknown[], error: null }),
     ]);
 
-    if (staffRes.error || lichRes.error) {
+    if (staffRes.error || lichRes.error || nvPhongRes.error) {
       return {
         ok: false,
         error:
           staffRes.error?.message ||
           lichRes.error?.message ||
+          nvPhongRes.error?.message ||
           "Không đọc được dữ liệu kỳ lương nhân sự.",
       };
     }
@@ -679,6 +729,66 @@ export async function fetchAdminThongKeThuChiBundle(
       const row = raw as Record<string, unknown>;
       const id = nId(row.id);
       if (id) staffById.set(id, row);
+    }
+
+    const phongIdsByStaff = new Map<number, number[]>();
+    const phongIds = new Set<number>();
+    for (const raw of nvPhongRes.data ?? []) {
+      const row = raw as Record<string, unknown>;
+      const sid = nId(row.nhan_su_id);
+      const pid = nId(row.phong_id);
+      if (!sid || !pid) continue;
+      phongIds.add(pid);
+      const cur = phongIdsByStaff.get(sid) ?? [];
+      if (!cur.includes(pid)) cur.push(pid);
+      phongIdsByStaff.set(sid, cur);
+    }
+
+    const phongToBanId = new Map<number, number>();
+    if (phongIds.size > 0) {
+      let phongRes = await supabase.from("hr_phong").select("id, ban").in("id", [...phongIds]);
+      if (phongRes.error && isMissingColumnError(phongRes.error.message ?? "")) {
+        phongRes = (await supabase.from("hr_phong").select("id").in("id", [...phongIds])) as typeof phongRes;
+      }
+      if (phongRes.error) {
+        return { ok: false, error: phongRes.error.message || "Không đọc được phòng nhân sự." };
+      }
+      for (const raw of phongRes.data ?? []) {
+        const row = raw as Record<string, unknown>;
+        const pid = nId(row.id);
+        const bid = nId(row.ban);
+        if (pid && bid) phongToBanId.set(pid, bid);
+      }
+    }
+
+    const banIdsByStaffId = new Map<number, number[]>();
+    const allBanIds = new Set<number>();
+    for (const sid of staffIds) {
+      const set = new Set<number>();
+      const staff = staffById.get(sid);
+      const directBan = nId(staff?.ban);
+      if (directBan) set.add(directBan);
+      for (const pid of phongIdsByStaff.get(sid) ?? []) {
+        const bid = phongToBanId.get(pid);
+        if (bid) set.add(bid);
+      }
+      const ids = [...set].sort((a, b) => a - b);
+      banIdsByStaffId.set(sid, ids);
+      for (const id of ids) allBanIds.add(id);
+    }
+
+    const banById = new Map<number, string>();
+    if (allBanIds.size > 0) {
+      const banRes = await supabase.from("hr_ban").select("id, ten_ban").in("id", [...allBanIds]);
+      if (banRes.error) {
+        return { ok: false, error: banRes.error.message || "Không đọc được ban nhân sự." };
+      }
+      for (const raw of banRes.data ?? []) {
+        const row = raw as Record<string, unknown>;
+        const id = nId(row.id);
+        if (!id) continue;
+        banById.set(id, String(row.ten_ban ?? "").trim() || `Ban #${id}`);
+      }
     }
 
     const lichByBangId = new Map<
@@ -695,6 +805,15 @@ export async function fetchAdminThongKeThuChiBundle(
         so_buoi_lam_viec: nNum(row.so_buoi_lam_viec),
       });
     }
+
+    type LuongAgg = {
+      total: number;
+      staffCount: number;
+      thang: string | null;
+      nam: string | null;
+      createdAt: string | null;
+    };
+    const aggByBucketKy = new Map<string, LuongAgg>();
 
     for (const raw of payrollRaw) {
       const bangId = nId(raw.id);
@@ -717,28 +836,51 @@ export async function fetchAdminThongKeThuChiBundle(
       });
       if (net <= 0) continue;
 
-      const tenNV =
-        staffId != null
-          ? String(staff?.full_name ?? "").trim() || `NS #${staffId}`
-          : "—";
       const kyLabel = formatKyLuong(lich?.thang ?? null, lich?.nam ?? null);
+      const bucket = classifyPayrollChiBucket(
+        staffId != null ? banIdsByStaffId.get(staffId) ?? [] : [],
+        banById,
+      );
+      const aggKey = `${bucket}|${kyLabel || "?"}`;
+
+      const cur = aggByBucketKy.get(aggKey) ?? {
+        total: 0,
+        staffCount: 0,
+        thang: lich?.thang ?? null,
+        nam: lich?.nam ?? null,
+        createdAt: raw.created_at != null ? String(raw.created_at) : null,
+      };
+      cur.total += net;
+      cur.staffCount += 1;
+      if (!cur.thang && lich?.thang) cur.thang = lich.thang;
+      if (!cur.nam && lich?.nam) cur.nam = lich.nam;
+      aggByBucketKy.set(aggKey, cur);
+    }
+
+    for (const [aggKey, agg] of aggByBucketKy) {
+      if (agg.total <= 0) continue;
+      const pipe = aggKey.indexOf("|");
+      const bucket = (pipe >= 0 ? aggKey.slice(0, pipe) : aggKey) as LuongChiBucket;
+      const kyLabel = pipe >= 0 ? aggKey.slice(pipe + 1) : "";
+      const safeKy = kyLabel && kyLabel !== "?" ? kyLabel : formatKyLuong(agg.thang, agg.nam);
 
       rows.push({
-        id: `luong_${bangId}`,
+        id: `luong_${bucket}_${safeKy.replace(/\//g, "-")}`,
         nguon: "luong",
-        datetime: payrollPeriodIso(
-          lich?.thang ?? null,
-          lich?.nam ?? null,
-          raw.created_at != null ? String(raw.created_at) : null,
-        ),
-        maDon: `BL-${bangId}`,
-        tieude: `Lương: ${tenNV}`,
-        hinhThuc: snap.hinh_thuc_tinh_luong ?? "",
+        datetime: payrollPeriodIso(agg.thang, agg.nam, agg.createdAt),
+        maDon: safeKy ? `${luongChiBucketMaPrefix(bucket)}-${safeKy}` : luongChiBucketMaPrefix(bucket),
+        tieude: luongChiBucketLabel(bucket),
+        hinhThuc: "",
         thu: 0,
-        chi: net,
+        chi: Math.round(agg.total),
         trangThai: "Chi",
-        ghiChu: kyLabel ? `Kỳ ${kyLabel}` : "",
-        kyLuong: kyLabel || undefined,
+        ghiChu: [
+          safeKy ? `Kỳ ${safeKy}` : "",
+          agg.staffCount > 0 ? `${agg.staffCount} phiếu lương` : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        kyLuong: safeKy || undefined,
       });
     }
   }

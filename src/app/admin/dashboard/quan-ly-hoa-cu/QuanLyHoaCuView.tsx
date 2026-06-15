@@ -119,7 +119,12 @@ function KhoFilters({
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setQInput(searchQ);
+    setQInput((prev) => {
+      if (prev.trim() === searchQ.trim()) return prev;
+      // Request cũ trả về trong lúc user gõ tiếp — giữ text đang nhập.
+      if (searchQ.trim() && prev.trim().startsWith(searchQ.trim())) return prev;
+      return searchQ;
+    });
   }, [searchQ]);
 
   const flushSearchNow = useCallback(() => {
@@ -127,6 +132,7 @@ function KhoFilters({
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
     }
+    syncKhoUrl(qInput, chiNhanhId, 1);
     onApply(qInput, chiNhanhId, 1);
   }, [qInput, chiNhanhId, onApply]);
 
@@ -135,6 +141,7 @@ function KhoFilters({
     if (debounceTimerRef.current != null) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
       debounceTimerRef.current = null;
+      syncKhoUrl(qInput, chiNhanhId, 1);
       onApply(qInput, chiNhanhId, 1);
     }, KHO_SEARCH_DEBOUNCE_MS);
     return () => {
@@ -153,8 +160,8 @@ function KhoFilters({
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-wrap items-center gap-2 md:flex-1 md:justify-end">
-      <label className="flex min-w-[140px] shrink-0 items-center gap-2">
+    <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+      <label className="flex min-w-[140px] shrink-0 items-center gap-2 sm:max-w-[220px]">
         <span className="sr-only">Chi nhánh</span>
         <select
           value={String(chiNhanhId)}
@@ -189,14 +196,20 @@ function KhoFilters({
               flushSearchNow();
             }
           }}
-          disabled={pending}
           placeholder="Tìm tên hàng, loại…"
           aria-label="Tìm trong kho chi nhánh"
+          aria-busy={pending}
           className={cn(
             "h-10 w-full min-w-0 rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-3 text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white",
-            pending && "opacity-70",
+            pending && "pr-9",
           )}
         />
+        {pending ? (
+          <Loader2
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[#BC8AF9]"
+            aria-hidden
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -236,6 +249,80 @@ function DonChiNhanhFilter({
         </select>
       </label>
     </div>
+  );
+}
+
+type HoaCuSectionId = "kho" | "chuyen" | "nhap" | "ban";
+
+const HC_SECTIONS: {
+  id: HoaCuSectionId;
+  label: string;
+  hint: string;
+  icon: typeof Package;
+  href: (branchId: number | null, fallbackId: number | undefined) => string;
+}[] = [
+  {
+    id: "kho",
+    label: "Danh mục kho",
+    hint: "Tồn kho theo chi nhánh",
+    icon: Package,
+    href: (branchId, fallbackId) =>
+      `${HOA_CU_KHO_PATH}?chi_nhanh=${branchId ?? fallbackId ?? ""}`,
+  },
+  {
+    id: "chuyen",
+    label: "Chuyển kho",
+    hint: "Phiếu chuyển giữa chi nhánh",
+    icon: ArrowRightLeft,
+    href: () => HOA_CU_CHUYEN_PATH,
+  },
+  {
+    id: "nhap",
+    label: "Đơn nhập",
+    hint: "Lịch sử nhập hàng",
+    icon: Truck,
+    href: (branchId, fallbackId) =>
+      `${HOA_CU_NHAP_PATH}?chi_nhanh=${branchId ?? fallbackId ?? ""}`,
+  },
+  {
+    id: "ban",
+    label: "Đơn bán",
+    hint: "Lịch sử bán & thu tiền",
+    icon: ShoppingCart,
+    href: (branchId, fallbackId) =>
+      `${HOA_CU_BAN_PATH}?chi_nhanh=${branchId ?? fallbackId ?? ""}`,
+  },
+];
+
+function HoaCuQuickAction({
+  icon: Icon,
+  label,
+  onClick,
+  onPrefetch,
+  variant = "ghost",
+}: {
+  icon: typeof Truck;
+  label: string;
+  onClick: () => void;
+  onPrefetch?: () => void;
+  variant?: "ghost" | "primary";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={onPrefetch}
+      onFocus={onPrefetch}
+      className={cn(
+        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 text-[12px] font-semibold transition",
+        variant === "primary"
+          ? "bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] text-white shadow-[0_4px_14px_rgba(238,91,159,0.22)] hover:brightness-105"
+          : "border border-[#EAEAEA] bg-white text-[#555] hover:border-[#BC8AF9]/35 hover:bg-[#fafafa] hover:text-[#323232]",
+      )}
+    >
+      <Icon size={14} strokeWidth={2} aria-hidden />
+      {label}
+    </button>
   );
 }
 
@@ -386,158 +473,179 @@ export default function QuanLyHoaCuView({
   }, [activeBranchId]);
 
   const khoDisplay = activeSection === "kho" ? (khoLive ?? khoPage) : khoPage;
-  const inventoryTotal = khoDisplay?.inventoryTotal ?? 0;
-  const hetHang = khoDisplay?.inventoryHetHang ?? 0;
-  const inventoryTonSum = khoDisplay?.inventoryTonSum ?? 0;
+  const activeSectionMeta = HC_SECTIONS.find((s) => s.id === activeSection);
+
+  const prefetchCatalog = () => prefetchHoaCuCatalog(activeBranchId);
 
   return (
     <div className="-m-4 flex min-h-[calc(100vh-5.5rem)] flex-col bg-[#F5F7F7] font-sans text-[#323232] md:-m-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAEAEA] bg-white px-6 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-white"
-            style={{ background: "linear-gradient(135deg, #BC8AF9, #ED5C9D)" }}
-          >
-            <Package size={20} strokeWidth={2} />
-          </div>
-          <div>
-            <p className="m-0 text-[9px] font-extrabold uppercase tracking-[0.12em]" style={{ color: "#BC8AF9" }}>
-              Kho
-            </p>
-            <h1 className="m-0 text-[17px] font-bold tracking-tight">Quản lý họa cụ</h1>
-            <p className="m-0 mt-0.5 text-xs text-[#AAAAAA]">
-              Tổng{" "}
-              <span className="font-semibold tabular-nums text-[#888]">
-                {new Intl.NumberFormat("vi-VN").format(inventoryTonSum)}
-              </span>{" "}
-              đơn vị tồn · {inventoryTotal} mặt hàng · {hetHang} hết tồn
-              {(khoDisplay?.chiNhanhTen ?? nhapPage?.chiNhanhTen ?? banPage?.chiNhanhTen) ? (
-                <>
-                  {" "}
-                  ·{" "}
-                  <span className="font-semibold text-[#888]">
-                    {khoDisplay?.chiNhanhTen ?? nhapPage?.chiNhanhTen ?? banPage?.chiNhanhTen}
-                  </span>
-                </>
+      <header className="sticky top-0 z-20 border-b border-[#EAEAEA] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        {/* Hàng 1 — tiêu đề module */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-[0_4px_14px_rgba(188,138,249,0.35)]"
+              style={{ background: "linear-gradient(135deg, #BC8AF9, #ED5C9D)" }}
+            >
+              <Package size={20} strokeWidth={2} aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <p className="m-0 text-[9px] font-extrabold uppercase tracking-[0.12em] text-[#BC8AF9]">
+                Họa cụ
+              </p>
+              <h1 className="m-0 truncate text-[17px] font-bold tracking-tight text-[#1a1a1a]">
+                Quản lý kho &amp; bán hàng
+              </h1>
+              {activeSectionMeta ? (
+                <p className="m-0 mt-0.5 truncate text-[12px] text-[#999]">{activeSectionMeta.hint}</p>
               ) : null}
-            </p>
+            </div>
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => router.refresh()}
-            className="flex h-10 items-center gap-1.5 rounded-xl border border-[#EAEAEA] bg-white px-3 text-[13px] font-semibold text-[#666]"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[#EAEAEA] bg-white px-3 text-[12px] font-semibold text-[#666] transition hover:border-[#BC8AF9]/35 hover:bg-[#fafafa]"
+            title="Tải lại trang"
           >
-            <RefreshCw size={15} /> Tải lại
-          </button>
-          <button
-            type="button"
-            onMouseEnter={() => prefetchHoaCuCatalog(activeBranchId)}
-            onFocus={() => prefetchHoaCuCatalog(activeBranchId)}
-            onClick={() => setModal("nhap")}
-            className="rounded-xl border border-[#EAEAEA] bg-white px-[14px] py-2.5 text-[13px] font-semibold text-[#666] hover:bg-[#fafafa]"
-          >
-            <Truck className="mb-0.5 mr-1 inline" size={15} />
-            Nhập hàng
-          </button>
-          <button
-            type="button"
-            onMouseEnter={() => prefetchHoaCuCatalog(activeBranchId)}
-            onFocus={() => prefetchHoaCuCatalog(activeBranchId)}
-            onClick={() => setModal("ban")}
-            className="rounded-xl border border-[#EAEAEA] bg-white px-[14px] py-2.5 text-[13px] font-semibold text-[#666] hover:bg-[#fafafa]"
-          >
-            <ShoppingCart className="mb-0.5 mr-1 inline" size={15} />
-            Bán hàng
-          </button>
-          <button
-            type="button"
-            onMouseEnter={() => prefetchHoaCuCatalog(activeBranchId)}
-            onFocus={() => prefetchHoaCuCatalog(activeBranchId)}
-            onClick={() => setModal("chuyen")}
-            className="rounded-xl border border-[#EAEAEA] bg-white px-[14px] py-2.5 text-[13px] font-semibold text-[#666] hover:bg-[#fafafa]"
-          >
-            <ArrowRightLeft className="mb-0.5 mr-1 inline" size={15} />
-            Chuyển kho
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSanPhamDraft(null);
-              setModal("sp");
-            }}
-            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#F8A568] to-[#EE5CA2] px-[18px] py-2.5 text-[13px] font-semibold text-white"
-          >
-            <Plus size={16} strokeWidth={2.5} /> Thêm mặt hàng
+            <RefreshCw size={14} aria-hidden />
+            <span className="hidden sm:inline">Tải lại</span>
           </button>
         </div>
-      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EAEAEA] bg-white px-4 py-2 md:px-6">
-        <div className="flex min-w-0 flex-wrap gap-1">
-          {(
-            [
-              {
-                id: "kho" as const,
-                label: "Kho chi nhánh",
-                icon: Package,
-                href: `${HOA_CU_KHO_PATH}?chi_nhanh=${activeBranchId ?? chiNhanhOptions[0]?.id ?? ""}`,
-              },
-              { id: "chuyen" as const, label: "Chuyển kho", icon: ArrowRightLeft, href: HOA_CU_CHUYEN_PATH },
-              {
-                id: "nhap" as const,
-                label: "Đơn nhập",
-                icon: Truck,
-                href: `${HOA_CU_NHAP_PATH}?chi_nhanh=${activeBranchId ?? chiNhanhOptions[0]?.id ?? ""}`,
-              },
-              {
-                id: "ban" as const,
-                label: "Đơn bán",
-                icon: ShoppingCart,
-                href: `${HOA_CU_BAN_PATH}?chi_nhanh=${activeBranchId ?? chiNhanhOptions[0]?.id ?? ""}`,
-              },
-            ] as const
-          ).map(({ id, label, icon: Icon, href }) => (
-            <Link
-              key={id}
-              href={href}
-              className={cn(
-                "flex items-center gap-1.5 rounded-t-lg border border-b-0 px-3 py-2.5 text-[13px] font-semibold transition",
-                activeSection === id
-                  ? "border-[#EAEAEA] bg-[#F5F7F7] text-[#1a1a2e]"
-                  : "border-transparent text-[#888] hover:bg-black/[0.02]"
-              )}
-            >
-              <Icon size={15} />
-              {label}
-            </Link>
-          ))}
+        {/* Hàng 2 — điều hướng mục (tab) */}
+        <nav
+          className="border-t border-[#EAEAEA]/80 px-4 py-2.5 md:px-6"
+          aria-label="Mục quản lý họa cụ"
+        >
+          <div className="flex gap-1 overflow-x-auto rounded-xl bg-[#F5F7F7] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {HC_SECTIONS.map(({ id, label, icon: Icon, href }) => {
+              const isActive = activeSection === id;
+              const tabHref = href(activeBranchId, chiNhanhOptions[0]?.id);
+              return (
+                <Link
+                  key={id}
+                  href={tabHref}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "flex min-w-[max-content] flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition sm:text-[13px]",
+                    isActive
+                      ? "bg-white text-[#1a1a1a] shadow-[0_1px_6px_rgba(0,0,0,0.08)] ring-1 ring-[#EAEAEA]"
+                      : "text-[#888] hover:bg-white/60 hover:text-[#555]",
+                  )}
+                >
+                  <Icon size={15} strokeWidth={2} aria-hidden />
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* Hàng 3 — toolbar theo mục đang mở */}
+        <div className="border-t border-[#EAEAEA]/80 bg-[#FAFAFA]/80 px-4 py-3 md:px-6">
+          {activeSection === "kho" && khoDisplay ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap gap-1.5">
+                <HoaCuQuickAction
+                  icon={Truck}
+                  label="Nhập hàng"
+                  onClick={() => setModal("nhap")}
+                  onPrefetch={prefetchCatalog}
+                />
+                <HoaCuQuickAction
+                  icon={ShoppingCart}
+                  label="Bán hàng"
+                  onClick={() => setModal("ban")}
+                  onPrefetch={prefetchCatalog}
+                />
+                <HoaCuQuickAction
+                  icon={ArrowRightLeft}
+                  label="Chuyển kho"
+                  onClick={() => setModal("chuyen")}
+                  onPrefetch={prefetchCatalog}
+                />
+                <HoaCuQuickAction
+                  icon={Plus}
+                  label="Thêm mặt hàng"
+                  variant="primary"
+                  onClick={() => {
+                    setSanPhamDraft(null);
+                    setModal("sp");
+                  }}
+                />
+              </div>
+              <KhoFilters
+                searchQ={khoDisplay.searchQ}
+                chiNhanhId={khoDisplay.chiNhanhId}
+                chiNhanhOptions={chiNhanhOptions}
+                onApply={applyKhoFilters}
+                pending={khoPending}
+              />
+            </div>
+          ) : null}
+
+          {activeSection === "nhap" && nhapPage ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+              <p className="m-0 max-w-md text-[12px] leading-relaxed text-[#777]">
+                Danh sách phiếu nhập — lọc theo chi nhánh, bấm dòng để xem chi tiết hoặc tạo đơn mới.
+              </p>
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <DonChiNhanhFilter
+                  key={`nhap-${nhapPage.chiNhanhId}`}
+                  basePath={HOA_CU_NHAP_PATH}
+                  chiNhanhId={nhapPage.chiNhanhId}
+                  chiNhanhOptions={chiNhanhOptions}
+                />
+                <HoaCuQuickAction
+                  icon={Plus}
+                  label="Tạo đơn nhập"
+                  variant="primary"
+                  onClick={() => setModal("nhap")}
+                  onPrefetch={prefetchCatalog}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {activeSection === "ban" && banPage ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+              <p className="m-0 max-w-md text-[12px] leading-relaxed text-[#777]">
+                Danh sách đơn bán — theo dõi thanh toán, QR chuyển khoản và xác nhận thu tiền.
+              </p>
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <DonChiNhanhFilter
+                  key={`ban-${banPage.chiNhanhId}`}
+                  basePath={HOA_CU_BAN_PATH}
+                  chiNhanhId={banPage.chiNhanhId}
+                  chiNhanhOptions={chiNhanhOptions}
+                />
+                <HoaCuQuickAction
+                  icon={Plus}
+                  label="Tạo đơn bán"
+                  variant="primary"
+                  onClick={() => setModal("ban")}
+                  onPrefetch={prefetchCatalog}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {activeSection === "chuyen" ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <p className="m-0 max-w-lg text-[12px] leading-relaxed text-[#777]">
+                Phiếu chuyển hàng giữa các chi nhánh — tạo phiếu mới hoặc xem lịch sử chuyển.
+              </p>
+              <HoaCuQuickAction
+                icon={Plus}
+                label="Tạo phiếu chuyển"
+                variant="primary"
+                onClick={() => setModal("chuyen")}
+                onPrefetch={prefetchCatalog}
+              />
+            </div>
+          ) : null}
         </div>
-        {activeSection === "kho" && khoDisplay ? (
-          <KhoFilters
-            searchQ={khoDisplay.searchQ}
-            chiNhanhId={khoDisplay.chiNhanhId}
-            chiNhanhOptions={chiNhanhOptions}
-            onApply={applyKhoFilters}
-            pending={khoPending}
-          />
-        ) : activeSection === "nhap" && nhapPage ? (
-          <DonChiNhanhFilter
-            key={`nhap-${nhapPage.chiNhanhId}`}
-            basePath={HOA_CU_NHAP_PATH}
-            chiNhanhId={nhapPage.chiNhanhId}
-            chiNhanhOptions={chiNhanhOptions}
-          />
-        ) : activeSection === "ban" && banPage ? (
-          <DonChiNhanhFilter
-            key={`ban-${banPage.chiNhanhId}`}
-            basePath={HOA_CU_BAN_PATH}
-            chiNhanhId={banPage.chiNhanhId}
-            chiNhanhOptions={chiNhanhOptions}
-          />
-        ) : null}
-      </div>
+      </header>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 md:p-6">
         {activeSection === "kho" && khoDisplay ? (

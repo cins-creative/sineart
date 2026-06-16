@@ -1,4 +1,4 @@
-import type { KbLinkAttachment, PickedFaqAttachments } from "@/app/admin/agent/knowledge-attachments";
+import type { KbLinkAttachment, PickedFaqAttachments } from "@/lib/agent/knowledge-attachments";
 
 /** Cùng thứ tự ảnh mẫu gửi kèm khi hội thoại nhắc tới môn (khớp `dh_truong_nganh.mon_thi`). */
 export const DH_MON_THI_SAMPLE_ORDER = [

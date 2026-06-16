@@ -7,11 +7,14 @@ import type { CaDay, ThuInWeek, NhomDay } from "@/lib/lich-day-gv/config";
 import { isCaDay, isNhomDay, addWeeksToMonday, parseMondayParam } from "@/lib/lich-day-gv/config";
 import { formatSupabaseWriteError } from "@/lib/supabase/postgres-permission-hint";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const REVALIDATE = "/admin/dashboard/lich-day-giao-vien";
 const TABLE = "hr_lich_day_giao_vien";
 
-export type LichDayGvActionResult = { ok: true } | { ok: false; error: string };
+export type LichDayGvActionResult =
+  | { ok: true; added?: number; copied?: number }
+  | { ok: false; error: string; needsNhomMigration?: boolean };
 
 function revalidateSchedule(): void {
   revalidatePath(REVALIDATE);
@@ -31,6 +34,51 @@ function parseThu(raw: unknown): ThuInWeek | null {
 function parseNhom(raw: unknown): NhomDay | null {
   const s = String(raw ?? "").trim();
   return isNhomDay(s) ? s : null;
+}
+
+function nhomLabel(nhom: NhomDay): string {
+  return nhom === "hinh" ? "Hình" : "Màu";
+}
+
+async function duplicateInsertResult(
+  supabase: SupabaseClient,
+  opts: {
+    chiNhanhId: number;
+    tuan: string;
+    thu: ThuInWeek;
+    ca: CaDay;
+    nhom: NhomDay;
+    nhanSuIds: number[];
+  },
+): Promise<Extract<LichDayGvActionResult, { ok: false }>> {
+  const { data } = await supabase
+    .from(TABLE)
+    .select("nhan_su_id")
+    .eq("chi_nhanh_id", opts.chiNhanhId)
+    .eq("tuan_bat_dau", opts.tuan)
+    .eq("thu", opts.thu)
+    .eq("ca", opts.ca)
+    .eq("nhom", opts.nhom)
+    .in("nhan_su_id", opts.nhanSuIds);
+
+  const inSameNhom = new Set(
+    (data ?? [])
+      .map((r) => nId((r as Record<string, unknown>).nhan_su_id))
+      .filter((x): x is number => x != null),
+  );
+  const allInSameNhom = opts.nhanSuIds.every((id) => inSameNhom.has(id));
+  if (allInSameNhom) {
+    return {
+      ok: false,
+      error: `Giáo viên đã có trong nhóm ${nhomLabel(opts.nhom)}.`,
+    };
+  }
+  return {
+    ok: false,
+    error:
+      "Database chưa hỗ trợ cùng một GV ở cả Hình và Màu. Chạy SQL migration bên dưới trong Supabase → SQL Editor, rồi tải lại trang.",
+    needsNhomMigration: true,
+  };
 }
 
 export async function assignLichDayGiaoVien(input: {
@@ -72,7 +120,14 @@ export async function assignLichDayGiaoVien(input: {
 
   if (error) {
     if (error.code === "23505") {
-      return { ok: false, error: "Giáo viên đã có trong ca này." };
+      return await duplicateInsertResult(supabase, {
+        chiNhanhId,
+        tuan,
+        thu,
+        ca,
+        nhom,
+        nhanSuIds: [nhanSuId],
+      });
     }
     return { ok: false, error: formatSupabaseWriteError(error, TABLE) || "Không gán được giáo viên." };
   }
@@ -88,7 +143,7 @@ export async function assignLichDayGiaoVienMany(input: {
   ca: string;
   nhom: string;
   nhan_su_ids: number[];
-}): Promise<LichDayGvActionResult & { added?: number }> {
+}): Promise<LichDayGvActionResult> {
   const session = await getAdminSessionOrNull();
   if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
 
@@ -141,6 +196,16 @@ export async function assignLichDayGiaoVienMany(input: {
 
   const { error } = await supabase.from(TABLE).insert(rows);
   if (error) {
+    if (error.code === "23505") {
+      return await duplicateInsertResult(supabase, {
+        chiNhanhId,
+        tuan,
+        thu,
+        ca,
+        nhom,
+        nhanSuIds: toInsert,
+      });
+    }
     return { ok: false, error: formatSupabaseWriteError(error, TABLE) || "Không gán được giáo viên." };
   }
 
@@ -177,7 +242,7 @@ function isMissingColumnError(message: string): boolean {
 export async function copyLichDayFromPreviousWeek(input: {
   chi_nhanh_id: number;
   tuan_bat_dau: string;
-}): Promise<LichDayGvActionResult & { copied?: number }> {
+}): Promise<LichDayGvActionResult> {
   const session = await getAdminSessionOrNull();
   if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
 

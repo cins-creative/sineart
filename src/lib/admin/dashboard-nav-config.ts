@@ -25,6 +25,7 @@ export type NavMainItem = {
 
 export const NAV_MAIN: NavMainItem[] = [
   { label: "Quản lý học viên", href: "/admin/dashboard/quan-ly-hoc-vien" },
+  { label: "Lịch dạy GV", href: "/admin/dashboard/lich-day-giao-vien" },
   { label: "Quản lý họa cụ", href: "/admin/dashboard/quan-ly-hoa-cu/danh-muc-kho" },
   { label: "Thu chi khác", href: "/admin/dashboard/thu-chi-khac" },
   {

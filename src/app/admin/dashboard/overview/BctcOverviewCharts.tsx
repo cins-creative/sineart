@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -29,6 +30,7 @@ import {
   resolveCurrentPreviousYears,
   rowFormulaValue,
   type BctcMonthAlignedDatum,
+  type YoYAlignedMetric,
   yoyPercentOrNull,
   yoYAlignedTotalsVsBaseline,
 } from "./bctc-chart-helpers";
@@ -51,6 +53,20 @@ const SERIES_KEYS = OVERVIEW_SERIES.map((s) => s.rowKey);
 
 const LABEL_BY_KEY = Object.fromEntries(OVERVIEW_SERIES.map((s) => [s.rowKey, s.label]));
 
+/** Chi tiết doanh thu thuần theo từng môn / nguồn (khớp cấu trúc BCTC). */
+const REVENUE_BY_SUBJECT: { rowKey: string; label: string }[] = [
+  { rowKey: "_dtHinhHoa", label: "Hình họa" },
+  { rowKey: "_dtTTM", label: "Trang trí màu" },
+  { rowKey: "_dtBCM", label: "BCM" },
+  { rowKey: "dtKids", label: "Kids" },
+  { rowKey: "dtBackground", label: "Lớp Background" },
+  { rowKey: "dtDichVu", label: "Dịch vụ" },
+  { rowKey: "dtHoaCu", label: "Họa cụ" },
+];
+
+const SUBJECT_ROW_KEYS = REVENUE_BY_SUBJECT.map((s) => s.rowKey);
+const SUBJECT_LABEL_BY_KEY = Object.fromEntries(REVENUE_BY_SUBJECT.map((s) => [s.rowKey, s.label]));
+
 /** Mốc KPI kỳ vọng so với tổng năm trước (cùng tập tháng đã gộp). */
 const KPI_TARGET_GROWTH_PCT = 20;
 
@@ -72,6 +88,11 @@ type Props = {
   /** Đã tải subset theo kỳ URL — idle fetch full + cache */
   deferFullBctcHydration?: boolean;
 };
+
+function avgMonthly(sum: number, months: number): string {
+  if (months <= 0 || !Number.isFinite(sum)) return "—";
+  return fmtMoneyCompact(sum / months);
+}
 
 function fmtPctSub(pct: number | null): string {
   if (pct === null || !Number.isFinite(pct)) return "—";
@@ -241,6 +262,81 @@ function extentForKeys(data: BctcMonthAlignedDatum[], keys: string[]): { min: nu
   return { min, max };
 }
 
+function renderSummaryRowCells({
+  rowKey,
+  row,
+  target,
+  met,
+  vsKpiPct,
+}: {
+  rowKey: string;
+  row: YoYAlignedMetric | undefined;
+  target: number | null;
+  met: boolean | null;
+  vsKpiPct: number | null;
+}) {
+  return (
+    <>
+      <td className="px-3 py-3 text-right tabular-nums text-black/75">
+        {row ? fmtMoneyCompact(row.baselineSum) : "—"}
+      </td>
+      <td className="px-3 py-3 text-right tabular-nums text-[#BC8AF9]">
+        {target != null ? fmtMoneyCompact(target) : "—"}
+      </td>
+      <td className="px-3 py-3 text-right tabular-nums font-semibold text-[#1a1a2e]">
+        {row ? fmtMoneyCompact(row.currentSum) : "—"}
+      </td>
+      <td
+        className="px-3 py-3 text-right tabular-nums text-black/70"
+        title={
+          row && row.pairedMonths > 0
+            ? `Trung bình ${row.pairedMonths} tháng có đủ dữ liệu so sánh`
+            : undefined
+        }
+      >
+        {row ? avgMonthly(row.currentSum, row.pairedMonths) : "—"}
+      </td>
+      <td className="px-3 py-3 text-right">
+        {row?.pct == null ? (
+          <span className="text-black/40">—</span>
+        ) : (
+          <span
+            className={cn(
+              "inline-block rounded-lg px-2 py-0.5 text-[12px] font-bold tabular-nums",
+              yoyToneClass(yoyTone(rowKey, row.pct), false),
+            )}
+          >
+            {row.pct >= 0 ? "+" : ""}
+            {row.pct.toFixed(1)}%
+          </span>
+        )}
+      </td>
+      <td className="px-4 py-3 text-right">
+        {met == null ? (
+          <span className="text-black/40">—</span>
+        ) : (
+          <div className="flex flex-col items-end gap-0.5">
+            <span
+              className={cn(
+                "inline-block rounded-lg px-2 py-0.5 text-[11px] font-extrabold",
+                met ? "bg-indigo-50 text-indigo-800" : "bg-amber-50 text-amber-900",
+              )}
+            >
+              {met ? "Đạt KPI" : "Chưa đạt"}
+            </span>
+            {vsKpiPct != null && Number.isFinite(vsKpiPct) ? (
+              <span className="text-[10px] font-semibold tabular-nums text-black/45">
+                {vsKpiPct >= 0 ? "+" : ""}
+                {vsKpiPct.toFixed(1)}% so mục tiêu
+              </span>
+            ) : null}
+          </div>
+        )}
+      </td>
+    </>
+  );
+}
+
 export default function BctcOverviewCharts({
   columns: columnsProp,
   deferFullBctcHydration = false,
@@ -338,6 +434,24 @@ export default function BctcOverviewCharts({
     [yoySummary],
   );
 
+  const subjectYoySummary = useMemo(() => {
+    if (!currentYear || !previousYear) return [];
+    return yoYAlignedTotalsVsBaseline(
+      columns,
+      previousYear,
+      currentYear,
+      SUBJECT_ROW_KEYS,
+      SUBJECT_LABEL_BY_KEY,
+    );
+  }, [columns, currentYear, previousYear]);
+
+  const subjectSummaryByKey = useMemo(
+    () => Object.fromEntries(subjectYoySummary.map((s) => [s.rowKey, s])),
+    [subjectYoySummary],
+  );
+
+  const [revenueBySubjectOpen, setRevenueBySubjectOpen] = useState(false);
+
   if (columns.length === 0) {
     return (
       <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-[#EAEAEA] bg-white px-6 py-12 text-center">
@@ -371,7 +485,7 @@ export default function BctcOverviewCharts({
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] border-separate border-spacing-0 text-[13px]">
+            <table className="w-full min-w-[1040px] border-separate border-spacing-0 text-[13px]">
               <thead>
                 <tr className="text-left text-[10px] font-bold uppercase tracking-wide text-[#9E8A90]">
                   <th className="sticky left-0 z-[1] border-b border-[#EDE8E9] bg-white px-4 py-3">Chỉ tiêu</th>
@@ -383,6 +497,9 @@ export default function BctcOverviewCharts({
                   </th>
                   <th className="border-b border-[#EDE8E9] px-3 py-3 text-right tabular-nums">
                     Tổng {currentYear}
+                  </th>
+                  <th className="border-b border-[#EDE8E9] px-3 py-3 text-right tabular-nums">
+                    TB/tháng
                   </th>
                   <th className="border-b border-[#EDE8E9] px-3 py-3 text-right tabular-nums">YoY</th>
                   <th className="border-b border-[#EDE8E9] px-4 py-3 text-right tabular-nums">Vs KPI</th>
@@ -401,59 +518,78 @@ export default function BctcOverviewCharts({
                     row != null && target != null && target !== 0
                       ? ((row.currentSum - target) / target) * 100
                       : null;
+                  const isRevenueParent = s.rowKey === "_dtThuan";
                   return (
-                    <tr key={s.rowKey} className="border-b border-[#f4f4f5] last:border-b-0">
-                      <td className="sticky left-0 bg-white px-4 py-3 font-semibold text-[#323232]">
-                        <span className="mr-2 inline-block h-2 w-2 rounded-full align-middle" style={{ background: s.color }} />
-                        {s.label}
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums text-black/75">
-                        {row ? fmtMoneyCompact(row.baselineSum) : "—"}
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums text-[#BC8AF9]">
-                        {target != null ? fmtMoneyCompact(target) : "—"}
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums font-semibold text-[#1a1a2e]">
-                        {row ? fmtMoneyCompact(row.currentSum) : "—"}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        {row?.pct == null ? (
-                          <span className="text-black/40">—</span>
-                        ) : (
-                          <span
-                            className={cn(
-                              "inline-block rounded-lg px-2 py-0.5 text-[12px] font-bold tabular-nums",
-                              yoyToneClass(yoyTone(s.rowKey, row.pct), false),
+                    <Fragment key={s.rowKey}>
+                      <tr className="border-b border-[#f4f4f5] last:border-b-0">
+                        <td className="sticky left-0 bg-white px-4 py-3 font-semibold text-[#323232]">
+                          <div className="flex items-center gap-1.5">
+                            {isRevenueParent ? (
+                              <button
+                                type="button"
+                                onClick={() => setRevenueBySubjectOpen((v) => !v)}
+                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-black/45 transition hover:bg-black/[0.05] hover:text-black/70"
+                                aria-expanded={revenueBySubjectOpen}
+                                aria-label={
+                                  revenueBySubjectOpen
+                                    ? "Thu gọn doanh thu theo môn học"
+                                    : "Xem doanh thu theo từng môn học"
+                                }
+                                title="Doanh thu theo từng môn học"
+                              >
+                                <ChevronDown
+                                  className={cn(
+                                    "h-4 w-4 transition-transform",
+                                    revenueBySubjectOpen && "rotate-180",
+                                  )}
+                                  aria-hidden
+                                />
+                              </button>
+                            ) : (
+                              <span className="inline-block h-6 w-6 shrink-0" aria-hidden />
                             )}
-                          >
-                            {row.pct >= 0 ? "+" : ""}
-                            {row.pct.toFixed(1)}%
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {met == null ? (
-                          <span className="text-black/40">—</span>
-                        ) : (
-                          <div className="flex flex-col items-end gap-0.5">
                             <span
-                              className={cn(
-                                "inline-block rounded-lg px-2 py-0.5 text-[11px] font-extrabold",
-                                met ? "bg-indigo-50 text-indigo-800" : "bg-amber-50 text-amber-900",
-                              )}
-                            >
-                              {met ? "Đạt KPI" : "Chưa đạt"}
-                            </span>
-                            {vsKpiPct != null && Number.isFinite(vsKpiPct) ? (
-                              <span className="text-[10px] font-semibold tabular-nums text-black/45">
-                                {vsKpiPct >= 0 ? "+" : ""}
-                                {vsKpiPct.toFixed(1)}% so mục tiêu
-                              </span>
-                            ) : null}
+                              className="inline-block h-2 w-2 shrink-0 rounded-full align-middle"
+                              style={{ background: s.color }}
+                            />
+                            <span className="min-w-0">{s.label}</span>
                           </div>
-                        )}
-                      </td>
-                    </tr>
+                        </td>
+                        {renderSummaryRowCells({ rowKey: s.rowKey, row, target, met, vsKpiPct })}
+                      </tr>
+                      {isRevenueParent && revenueBySubjectOpen
+                        ? REVENUE_BY_SUBJECT.map((sub) => {
+                            const subRow = subjectSummaryByKey[sub.rowKey];
+                            const subTarget =
+                              subRow != null ? targetSumFromBaseline(subRow.baselineSum) : null;
+                            const subMet =
+                              subRow != null && subTarget != null
+                                ? kpiTargetMet(sub.rowKey, subRow.currentSum, subTarget)
+                                : null;
+                            const subVsKpiPct =
+                              subRow != null && subTarget != null && subTarget !== 0
+                                ? ((subRow.currentSum - subTarget) / subTarget) * 100
+                                : null;
+                            return (
+                              <tr
+                                key={`${s.rowKey}__${sub.rowKey}`}
+                                className="border-b border-[#f4f4f5] bg-[#fafafa]/80 last:border-b-0"
+                              >
+                                <td className="sticky left-0 bg-[#fafafa] px-4 py-2.5 pl-12 text-[12px] font-medium text-black/65">
+                                  {sub.label}
+                                </td>
+                                {renderSummaryRowCells({
+                                  rowKey: sub.rowKey,
+                                  row: subRow,
+                                  target: subTarget,
+                                  met: subMet,
+                                  vsKpiPct: subVsKpiPct,
+                                })}
+                              </tr>
+                            );
+                          })
+                        : null}
+                    </Fragment>
                   );
                 })}
               </tbody>

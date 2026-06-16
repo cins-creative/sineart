@@ -2904,6 +2904,82 @@ function ModalNhapHang({
   );
 }
 
+function VietQrPaymentImage({
+  proxyUrl,
+  directUrl,
+  alt,
+  className,
+}: {
+  proxyUrl: string;
+  directUrl: string;
+  alt: string;
+  className: string;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!proxyUrl && !directUrl) {
+      setSrc(null);
+      setFailed(false);
+      return;
+    }
+
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    void (async () => {
+      setFailed(false);
+      setSrc(null);
+      try {
+        const res = await fetch(proxyUrl, { credentials: "include", cache: "no-store" });
+        if (!res.ok) throw new Error(String(res.status));
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      } catch {
+        if (cancelled) return;
+        setSrc(directUrl);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [proxyUrl, directUrl]);
+
+  if (!src && !failed) {
+    return (
+      <div className={className} aria-busy="true" aria-label="Đang tải mã QR">
+        <div className="h-full w-full animate-pulse rounded-md bg-[#ececec]" />
+      </div>
+    );
+  }
+
+  if (failed || !src) {
+    return (
+      <p className="m-0 px-2 text-center text-[11px] font-semibold text-red-600">
+        Không tải được QR — dùng thông tin CK bên trên.
+      </p>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- blob URL hoặc VietQR CDN
+    <img
+      src={src}
+      alt={alt}
+      width={180}
+      height={180}
+      className={className}
+      decoding="async"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function ModalBanHang({
   chiNhanhOptions,
   defaultChiNhanhId,
@@ -3036,10 +3112,17 @@ function ModalBanHang({
     [createdDonId],
   );
 
-  const qrUrl = useMemo(() => {
+  const qrDirectUrl = useMemo(() => {
     if (sessionStep !== "s2" || !isHcChuyenKhoanUi(hinhThuc)) return "";
     if (!qrPaymentResolved || createdDonId == null || !maDonSo.trim()) return "";
     return buildVietQrImageUrl(maDonSo, qrPaymentResolved.qrAmountDong, createdDonId);
+  }, [sessionStep, hinhThuc, maDonSo, qrPaymentResolved, createdDonId]);
+
+  const qrProxyUrl = useMemo(() => {
+    if (sessionStep !== "s2" || !isHcChuyenKhoanUi(hinhThuc)) return "";
+    if (!qrPaymentResolved || createdDonId == null || !maDonSo.trim()) return "";
+    const ma = maDonSo.trim();
+    return `/admin/api/quan-ly-hoa-don/qr-proxy?donId=${createdDonId}&maDonSo=${encodeURIComponent(ma)}&amount=${qrPaymentResolved.qrAmountDong}`;
   }, [sessionStep, hinhThuc, maDonSo, qrPaymentResolved, createdDonId]);
 
   useEffect(() => {
@@ -3390,7 +3473,7 @@ function ModalBanHang({
             )}
             {err ? <p className="rounded-lg bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-700">{err}</p> : null}
           </div>
-          {qrUrl && qrPaymentResolved ? (
+          {qrProxyUrl && qrDirectUrl && qrPaymentResolved ? (
             <aside className="flex min-w-0 flex-col gap-3 rounded-xl border border-[#EAEAEA] bg-[#fafafa] p-3 lg:sticky lg:top-0 lg:max-h-[min(72vh,560px)] lg:overflow-y-auto lg:self-start">
               <div className="flex items-center justify-between rounded-lg border border-[#EAEAEA] bg-white px-3 py-2.5 shadow-sm">
                 <span className="text-xs font-bold uppercase text-[#AAA]">Tạm tính</span>
@@ -3412,8 +3495,12 @@ function ModalBanHang({
               </div>
               <div className="flex flex-col items-center gap-2 border-t border-[#f0f0f0] pt-3">
                 <p className="m-0 text-center text-xs font-semibold text-[#555]">Quét mã VietQR</p>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={qrUrl} alt="QR thanh toán" className="h-auto w-full max-w-[200px] rounded-lg border border-[#EAEAEA] bg-white p-2" />
+                <VietQrPaymentImage
+                  proxyUrl={qrProxyUrl}
+                  directUrl={qrDirectUrl}
+                  alt="QR thanh toán"
+                  className="h-40 w-40 rounded-lg border border-[#EAEAEA] bg-white object-contain p-2"
+                />
               </div>
             </aside>
           ) : null}

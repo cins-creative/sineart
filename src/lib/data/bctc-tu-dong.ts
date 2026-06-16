@@ -1,5 +1,11 @@
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
-import { hpGoiHocPhiSelectForTable, hpResolveHocPhiDong } from "@/lib/data/hp-goi-payable";
+import { hpGoiHocPhiSelectForBctc, hpResolveHocPhiDong } from "@/lib/data/hp-goi-payable";
+import {
+  classifyHocPhiRevenueAllocations,
+  resolveHocPhiBctcLabel,
+  revenueAllocDiscriminator,
+  type HocPhiRevenueContext,
+} from "@/lib/data/bctc-revenue-alloc";
 import {
   depreciationExpenseForCalendarMonth,
   fetchAdminTaiSanRows,
@@ -226,6 +232,14 @@ function monthKeysBetweenDates(startRaw: unknown, endRaw: unknown): string[] {
   return out;
 }
 
+function tonelessVi(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
 function payrollNetSalary(args: {
   hinhThuc: unknown;
   luongCoBan: unknown;
@@ -242,14 +256,6 @@ function payrollNetSalary(args: {
   const soBuoiLam = parseMoney(args.soBuoiLam);
   if (isTheoBuoi) return Math.round(lcb * soBuoiLam + thuong - tamUng);
   return Math.round(lcb + troCap + thuong - tamUng);
-}
-
-function tonelessVi(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .trim();
 }
 
 function payrollGroupFromPhongNames(phongNames: readonly string[]): {
@@ -442,19 +448,79 @@ export async function fetchBctcTuDongBundle(
     }
 
     const chiList = (chiRaw ?? []) as Record<string, unknown>[];
+    const qlIds = [
+      ...new Set(chiList.map((c) => nId(c.khoa_hoc_vien)).filter((x): x is number => x != null)),
+    ];
     const goiIds = [...new Set(chiList.map((c) => nId(c.goi_hoc_phi)).filter((x): x is number => x != null))];
     const goiTable = hpGoiHocPhiTableName();
 
-    const { data: goiRes } =
+    const [{ data: qlRes }, { data: goiRes }] = await Promise.all([
+      qlIds.length > 0
+        ? supabase.from("ql_quan_ly_hoc_vien").select("id, lop_hoc").in("id", qlIds)
+        : Promise.resolve({ data: [] as unknown[] }),
       goiIds.length > 0
-        ? await supabase.from(goiTable).select(hpGoiHocPhiSelectForTable(goiTable)).in("id", goiIds)
-        : { data: [] as unknown[] };
+        ? supabase.from(goiTable).select(hpGoiHocPhiSelectForBctc(goiTable)).in("id", goiIds)
+        : Promise.resolve({ data: [] as unknown[] }),
+    ]);
+
+    const qlLopById = new Map<number, number>();
+    for (const raw of qlRes ?? []) {
+      const row = raw as Record<string, unknown>;
+      const qid = nId(row.id);
+      const lid = nId(row.lop_hoc);
+      if (qid && lid) qlLopById.set(qid, lid);
+    }
+
+    const lopIds = [...new Set(qlLopById.values())];
+    const lopNameById = new Map<number, string>();
+    const lopMonById = new Map<number, number>();
+    if (lopIds.length > 0) {
+      const { data: lopRows } = await supabase
+        .from("ql_lop_hoc")
+        .select("id, class_full_name, class_name, mon_hoc")
+        .in("id", lopIds);
+      for (const raw of lopRows ?? []) {
+        const row = raw as Record<string, unknown>;
+        const id = nId(row.id);
+        if (!id) continue;
+        lopNameById.set(
+          id,
+          String(row.class_full_name ?? "").trim() ||
+            String(row.class_name ?? "").trim() ||
+            `Lớp #${id}`,
+        );
+        const mid = nId(row.mon_hoc);
+        if (mid) lopMonById.set(id, mid);
+      }
+    }
 
     const goiRowById = new Map<number, Record<string, unknown>>();
+    const monIds = new Set<number>();
     for (const r of goiRes ?? []) {
       const row = r as Record<string, unknown>;
       const id = nId(row.id);
       if (id) goiRowById.set(id, row);
+      const mid = nId(row.mon_hoc);
+      if (mid) monIds.add(mid);
+    }
+    for (const mid of lopMonById.values()) monIds.add(mid);
+
+    const monMetaById = new Map<number, { ten: string; hinhThuc: string | null; loaiKhoaHoc: string | null }>();
+    if (monIds.size > 0) {
+      const { data: monRows } = await supabase
+        .from("ql_mon_hoc")
+        .select("id, ten_mon_hoc, hinh_thuc, loai_khoa_hoc")
+        .in("id", [...monIds]);
+      for (const raw of monRows ?? []) {
+        const row = raw as Record<string, unknown>;
+        const id = nId(row.id);
+        if (!id) continue;
+        monMetaById.set(id, {
+          ten: String(row.ten_mon_hoc ?? "").trim() || `Môn ${id}`,
+          hinhThuc: row.hinh_thuc != null ? String(row.hinh_thuc).trim() || null : null,
+          loaiKhoaHoc: row.loai_khoa_hoc != null ? String(row.loai_khoa_hoc).trim() || null : null,
+        });
+      }
     }
 
     const donById = new Map<number, Record<string, unknown>>();
@@ -487,6 +553,7 @@ export async function fetchBctcTuDongBundle(
         chiTietId: number | null;
         dmId: number | null;
         goiId: number | null;
+        khoaHocVienId: number | null;
         amt: number;
         kyMonthKeys: string[];
         ngayDauKy: string;
@@ -503,6 +570,7 @@ export async function fetchBctcTuDongBundle(
           chiTietId: nId(ln.id),
           dmId,
           goiId,
+          khoaHocVienId: nId(ln.khoa_hoc_vien),
           amt,
           kyMonthKeys,
           ngayDauKy: String(ln.ngay_dau_ky ?? "—").slice(0, 10),
@@ -517,10 +585,31 @@ export async function fetchBctcTuDongBundle(
         payableTotal,
       );
 
-      for (const [idx, { chiTietId, dmId, goiId, amt, kyMonthKeys, ngayDauKy, ngayCuoiKy }] of lineAmts.entries()) {
+      for (const [idx, { chiTietId, dmId, goiId, khoaHocVienId, amt, kyMonthKeys, ngayDauKy, ngayCuoiKy }] of lineAmts.entries()) {
         const alloc = allocatedAmounts[idx] ?? 0;
         if (alloc <= 0) continue;
-        const lb = labelForDm(dmId);
+        const goiRow = goiId != null ? goiRowById.get(goiId) : undefined;
+        const lopId = khoaHocVienId != null ? qlLopById.get(khoaHocVienId) ?? null : null;
+        const lopName = lopId != null ? lopNameById.get(lopId) ?? null : null;
+        const goiMonId = goiRow != null ? nId(goiRow.mon_hoc) : null;
+        const lopMonId = lopId != null ? lopMonById.get(lopId) ?? null : null;
+        const monId = goiMonId ?? lopMonId;
+        const monMeta = monId != null ? monMetaById.get(monId) : undefined;
+        const dmLabel = labelForDm(dmId);
+        const hpCtx: HocPhiRevenueContext = {
+          ma: dmLabel.ma,
+          ten: dmLabel.ten,
+          goiTen: goiRow != null ? String(goiRow.ten_goi_hoc_phi ?? "").trim() || null : null,
+          goiHinhThuc: goiRow != null ? String(goiRow.hinh_thuc ?? "").trim() || null : null,
+          goiSoMon: goiRow != null ? nId(goiRow.so_mon) : null,
+          monName: monMeta?.ten ?? null,
+          monHinhThuc: monMeta?.hinhThuc ?? null,
+          monLoaiKhoaHoc: monMeta?.loaiKhoaHoc ?? null,
+          lopName,
+        };
+        const lb = resolveHocPhiBctcLabel(dmLabel, hpCtx);
+        const revAllocs = classifyHocPhiRevenueAllocations(hpCtx, lb);
+        const revDisc = revenueAllocDiscriminator(revAllocs);
         const hasKyHoc = kyMonthKeys.length > 0;
         const revenueMonthKeys = hasKyHoc ? kyMonthKeys : fallbackPaymentMonthKey ? [fallbackPaymentMonthKey] : [];
         const monthAmounts = allocateEvenByThousand(alloc, revenueMonthKeys.length);
@@ -529,7 +618,7 @@ export async function fetchBctcTuDongBundle(
           if (!mk.startsWith(`${nam}-`)) continue;
           const monthAlloc = monthAmounts[monthIdx] ?? 0;
           if (monthAlloc <= 0) continue;
-          upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "hoc_phi", mk, monthAlloc, undefined, {
+          upsertRow(pool, dmId, lb.ma, lb.ten, "thu", "hoc_phi", mk, monthAlloc, revDisc, {
             label: `Đơn học phí #${donId}`,
             amount: monthAlloc,
             note: studentNoteLine(hvById, studentId),
@@ -551,6 +640,7 @@ export async function fetchBctcTuDongBundle(
               },
               { label: "Dòng chi tiết", value: chiTietId != null ? `#${chiTietId}` : "—" },
               { label: "Gói học phí", value: goiId != null ? `#${goiId}` : "—" },
+              { label: "Lớp học", value: lopName ?? "—" },
               { label: "Danh mục", value: `${lb.ten}${lb.ma ? ` · ${lb.ma}` : ""}` },
               { label: "Ngày đầu kỳ", value: ngayDauKy },
               { label: "Ngày cuối kỳ", value: ngayCuoiKy },

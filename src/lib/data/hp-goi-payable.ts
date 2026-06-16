@@ -32,6 +32,14 @@ export function hpGoiHocPhiSelectForTable(table: string): string {
   return table === "hp_goi_hoc_phi" ? "id, hoc_phi, gia_giam" : 'id, "number", don_vi, gia_goc, discount';
 }
 
+/** Gói HP — thêm môn + hình thức để BCTC tự động gán đúng Online/Offline & môn. */
+export function hpGoiHocPhiSelectForBctc(table: string): string {
+  if (table === "hp_goi_hoc_phi") {
+    return "id, hoc_phi, gia_giam, mon_hoc, hinh_thuc, ten_goi_hoc_phi, so_mon";
+  }
+  return 'id, "number", don_vi, gia_goc, discount, mon_hoc, hinh_thuc, ten_goi_hoc_phi, so_buoi, so_mon';
+}
+
 /**
  * Ưu tiên `hoc_phi_dong` snapshot trên `hp_thu_hp_chi_tiet`;
  * fallback sang giá gói hiện tại (dữ liệu cũ chưa backfill).

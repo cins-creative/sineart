@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
+import { OverviewBctcAutoPanel } from "@/app/admin/dashboard/overview/_components/OverviewBctcAutoPanel";
 import { OverviewBctcPanel } from "@/app/admin/dashboard/overview/_components/OverviewBctcPanel";
 import { OverviewBctcPanelSkeleton } from "@/app/admin/dashboard/overview/_components/OverviewBctcPanel.skeleton";
 import { OverviewHvTrackingPanel } from "@/app/admin/dashboard/overview/_components/OverviewHvTrackingPanel";
@@ -56,6 +57,11 @@ export default async function AdminDashboardOverviewSegmentPage({ params, search
         bctcContent={
           <Suspense fallback={<OverviewBctcPanelSkeleton />}>
             <OverviewBctcPanel period={period} />
+          </Suspense>
+        }
+        bctcAutoContent={
+          <Suspense fallback={<OverviewBctcPanelSkeleton />}>
+            <OverviewBctcAutoPanel period={period} />
           </Suspense>
         }
         hvTrackingContent={

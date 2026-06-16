@@ -4,11 +4,14 @@ import {
 } from "./marketing-date-range";
 import type { OverviewPeriodSlug } from "./overview-routes";
 import {
+  OVERVIEW_PERIOD_ALL,
+  OVERVIEW_PERIOD_CUSTOM,
   OVERVIEW_PERIOD_MONTH,
   OVERVIEW_PERIOD_QUARTER,
   OVERVIEW_PERIOD_WEEK,
   OVERVIEW_PERIOD_YEAR,
 } from "./overview-routes";
+import type { BaoCaoColumn } from "@/lib/data/bao-cao-tai-chinh-config";
 
 export type BctcMetaRow = { id: number; nam: string; thang: string };
 
@@ -61,4 +64,16 @@ export function filterBctcMetaIdsForOverviewPeriod(
     if (keySet.has(k)) ids.push(row.id);
   }
   return ids;
+}
+
+/** Lọc cột BCTC (thủ công hoặc tự động) theo segment kỳ URL. */
+export function filterBctcColumnsForOverviewPeriod(
+  columns: BaoCaoColumn[],
+  period: OverviewPeriodSlug,
+): BaoCaoColumn[] {
+  if (period === OVERVIEW_PERIOD_ALL || period === OVERVIEW_PERIOD_CUSTOM) return columns;
+  const pairs = bctcNamThangPairsForOverviewPeriod(period);
+  if (pairs.length === 0) return columns;
+  const keySet = new Set(pairs.map((p) => `${p.nam}|${p.thang}`));
+  return columns.filter((c) => keySet.has(`${c.nam}|${c.thang}`));
 }

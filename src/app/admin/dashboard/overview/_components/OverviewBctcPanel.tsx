@@ -58,7 +58,8 @@ export async function OverviewBctcPanel({ period }: { period: OverviewPeriodSlug
 
   return (
     <BctcOverviewCharts
-      key={`bctc-${period}`}
+      key={`bctc-manual-${period}`}
+      source="manual"
       columns={initialBctcColumns}
       deferFullBctcHydration={deferFullBctcHydration}
     />

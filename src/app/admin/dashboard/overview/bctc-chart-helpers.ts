@@ -94,6 +94,10 @@ export type YoYAlignedMetric = {
   currentSum: number;
   baselineSum: number;
   pairedMonths: number;
+  /** Tháng cặp có phát sinh khác 0 ở năm hiện tại (để TB/tháng). */
+  currentActiveMonths: number;
+  /** Tổng năm hiện tại chỉ các tháng dùng cho TB/tháng (YTD + có phát sinh). */
+  currentSumForAvg: number;
 };
 
 const WEAK_BASELINE_RATIO = 0.02;
@@ -112,6 +116,18 @@ export function yoyPercentOrNull(currentSum: number, baselineSum: number): numbe
   if (Math.abs(baselineSum) < scale * WEAK_BASELINE_RATIO) return null;
   if (Math.abs(raw) > EXTREME_YOY_ABS_PCT) return null;
   return raw;
+}
+
+/** Tháng đã qua trong năm lịch (không tính tháng tương lai cho TB/tháng). */
+function isThangEligibleForMonthlyAvg(thang: string, year: string): boolean {
+  const y = parseInt(year, 10);
+  if (!Number.isFinite(y)) return true;
+  const mi = THANG_FULL_ORDER.indexOf(thang);
+  if (mi < 0) return true;
+  const now = new Date();
+  if (y < now.getFullYear()) return true;
+  if (y > now.getFullYear()) return false;
+  return mi <= now.getMonth();
 }
 
 /**
@@ -135,13 +151,21 @@ export function yoYAlignedTotalsVsBaseline(
     let baselineSum = 0;
     let currentSum = 0;
     let pairedMonths = 0;
+    let currentActiveMonths = 0;
+    let currentSumForAvg = 0;
     for (const thang of THANG_FULL_ORDER) {
       const b = baseMap.get(thang);
       const c = curMap.get(thang);
       if (b === undefined || c === undefined) continue;
-      baselineSum += rowFormulaValue(key, b);
-      currentSum += rowFormulaValue(key, c);
+      const bv = rowFormulaValue(key, b);
+      const cv = rowFormulaValue(key, c);
+      baselineSum += bv;
+      currentSum += cv;
       pairedMonths++;
+      if (cv !== 0 && isThangEligibleForMonthlyAvg(thang, currentYear)) {
+        currentSumForAvg += cv;
+        currentActiveMonths++;
+      }
     }
 
     const pct = pairedMonths > 0 ? yoyPercentOrNull(currentSum, baselineSum) : null;
@@ -153,6 +177,8 @@ export function yoYAlignedTotalsVsBaseline(
       currentSum,
       baselineSum,
       pairedMonths,
+      currentActiveMonths,
+      currentSumForAvg,
     });
   }
   return out;

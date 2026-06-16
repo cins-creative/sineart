@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
@@ -55,6 +56,8 @@ const LABEL_BY_KEY = Object.fromEntries(OVERVIEW_SERIES.map((s) => [s.rowKey, s.
 
 /** Chi tiết doanh thu thuần theo từng môn / nguồn (khớp cấu trúc BCTC). */
 const REVENUE_BY_SUBJECT: { rowKey: string; label: string }[] = [
+  { rowKey: "_dtOnline", label: "Doanh thu Online" },
+  { rowKey: "_dtOffline", label: "Doanh thu Offline" },
   { rowKey: "_dtHinhHoa", label: "Hình họa" },
   { rowKey: "_dtTTM", label: "Trang trí màu" },
   { rowKey: "_dtBCM", label: "BCM" },
@@ -85,13 +88,31 @@ function kpiTargetMet(rowKey: string, currentSum: number, target: number): boole
 
 type Props = {
   columns: BaoCaoColumn[];
-  /** Đã tải subset theo kỳ URL — idle fetch full + cache */
+  /** Đã tải subset theo kỳ URL — idle fetch full + cache (chỉ BCTC thủ công). */
   deferFullBctcHydration?: boolean;
+  /** `manual` = tc_bao_cao_tai_chinh · `auto` = học phí, thu chi, lương, … */
+  source?: "manual" | "auto";
 };
 
-function avgMonthly(sum: number, months: number): string {
-  if (months <= 0 || !Number.isFinite(sum)) return "—";
-  return fmtMoneyCompact(sum / months);
+function avgMonthlyFromRow(row: YoYAlignedMetric): string {
+  const denom = row.currentActiveMonths > 0 ? row.currentActiveMonths : row.pairedMonths;
+  const sum = row.currentActiveMonths > 0 ? row.currentSumForAvg : row.currentSum;
+  if (denom <= 0 || !Number.isFinite(sum)) return "—";
+  return fmtMoneyCompact(sum / denom);
+}
+
+function avgMonthlyTooltip(row: YoYAlignedMetric, currentYear: string | null): string | undefined {
+  const denom = row.currentActiveMonths > 0 ? row.currentActiveMonths : row.pairedMonths;
+  if (denom <= 0) return undefined;
+  const sum = row.currentActiveMonths > 0 ? row.currentSumForAvg : row.currentSum;
+  const avg = sum / denom;
+  return [
+    `${fmtMoneyFull(sum)} ÷ ${denom} tháng có phát sinh`,
+    currentYear ? `(năm ${currentYear})` : "",
+    `= ${fmtMoneyFull(avg)}/tháng`,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function fmtPctSub(pct: number | null): string {
@@ -268,12 +289,14 @@ function renderSummaryRowCells({
   target,
   met,
   vsKpiPct,
+  currentYear,
 }: {
   rowKey: string;
   row: YoYAlignedMetric | undefined;
   target: number | null;
   met: boolean | null;
   vsKpiPct: number | null;
+  currentYear: string | null;
 }) {
   return (
     <>
@@ -288,13 +311,9 @@ function renderSummaryRowCells({
       </td>
       <td
         className="px-3 py-3 text-right tabular-nums text-black/70"
-        title={
-          row && row.pairedMonths > 0
-            ? `Trung bình ${row.pairedMonths} tháng có đủ dữ liệu so sánh`
-            : undefined
-        }
+        title={row ? avgMonthlyTooltip(row, currentYear) : undefined}
       >
-        {row ? avgMonthly(row.currentSum, row.pairedMonths) : "—"}
+        {row ? avgMonthlyFromRow(row) : "—"}
       </td>
       <td className="px-3 py-3 text-right">
         {row?.pct == null ? (
@@ -340,20 +359,22 @@ function renderSummaryRowCells({
 export default function BctcOverviewCharts({
   columns: columnsProp,
   deferFullBctcHydration = false,
+  source = "manual",
 }: Props) {
+  const isAuto = source === "auto";
   const [columns, setColumns] = useState<BaoCaoColumn[]>(() => {
     if (typeof window === "undefined") return columnsProp;
-    if (!deferFullBctcHydration) return columnsProp;
+    if (!deferFullBctcHydration || isAuto) return columnsProp;
     const cached = readOverviewBctcCache();
     return cached?.length ? rowsToInitialColumns(cached) : columnsProp;
   });
   useEffect(() => {
-    if (deferFullBctcHydration && readOverviewBctcCache()?.length) return;
+    if (deferFullBctcHydration && !isAuto && readOverviewBctcCache()?.length) return;
     setColumns(columnsProp);
-  }, [columnsProp, deferFullBctcHydration]);
+  }, [columnsProp, deferFullBctcHydration, isAuto]);
 
   useEffect(() => {
-    if (!deferFullBctcHydration) return;
+    if (!deferFullBctcHydration || isAuto) return;
     let cancelled = false;
     const run = async () => {
       try {
@@ -375,7 +396,7 @@ export default function BctcOverviewCharts({
       if (ric !== undefined) cancelIdleCallback(ric);
       if (tid !== undefined) window.clearTimeout(tid);
     };
-  }, [deferFullBctcHydration]);
+  }, [deferFullBctcHydration, isAuto]);
 
   const { currentYear, previousYear, plotYears } = useMemo(
     () => resolveCurrentPreviousYears(columns),
@@ -458,9 +479,21 @@ export default function BctcOverviewCharts({
         <span className="text-3xl" aria-hidden>
           📊
         </span>
-        <p className="m-0 text-sm font-semibold text-[#888]">Chưa có kỳ dữ liệu BCTC</p>
+        <p className="m-0 text-sm font-semibold text-[#888]">
+          {isAuto ? "Chưa có dữ liệu BCTC tự động" : "Chưa có kỳ dữ liệu BCTC"}
+        </p>
         <p className="m-0 max-w-sm text-[12px] text-black/45">
-          Nhập số tại Báo cáo tài chính để xem biểu đồ tổng quan.
+          {isAuto ? (
+            <>
+              Gom từ học phí đã thanh toán, thu chi khác, họa cụ, lương… Xem chi tiết tại{" "}
+              <Link href="/admin/dashboard/bctc-tu-dong" className="font-semibold text-[#7c3aed] underline">
+                BCTC — nguồn tự động
+              </Link>
+              .
+            </>
+          ) : (
+            "Nhập số tại Báo cáo tài chính để xem biểu đồ tổng quan."
+          )}
         </p>
       </div>
     );
@@ -469,7 +502,29 @@ export default function BctcOverviewCharts({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="m-0 text-lg font-bold tracking-tight text-[#323232]">BCTC tổng quan</h2>
+        <h2 className="m-0 text-lg font-bold tracking-tight text-[#323232]">
+          {isAuto ? "BCTC tổng quan — nguồn tự động" : "BCTC tổng quan"}
+        </h2>
+        {isAuto ? (
+          <p className="mt-1 mb-0 text-[12px] leading-snug text-black/50">
+            Tổng hợp từ giao dịch thực tế (học phí, thu chi khác, họa cụ, lương, khấu hao…), ánh xạ sang
+            cùng chỉ tiêu BCTC.{" "}
+            <Link href="/admin/dashboard/bctc-tu-dong" className="font-semibold text-[#7c3aed] hover:underline">
+              Xem ma trận chi tiết
+            </Link>
+          </p>
+        ) : (
+          <p className="mt-1 mb-0 text-[12px] leading-snug text-black/50">
+            Dữ liệu từ{" "}
+            <Link
+              href="/admin/dashboard/bao-cao-tai-chinh"
+              className="font-semibold text-[#7c3aed] hover:underline"
+            >
+              Báo cáo tài chính
+            </Link>{" "}
+            (nhập tay).
+          </p>
+        )}
       </div>
 
       {currentYear && previousYear && maxPairedMonths > 0 ? (
@@ -498,7 +553,10 @@ export default function BctcOverviewCharts({
                   <th className="border-b border-[#EDE8E9] px-3 py-3 text-right tabular-nums">
                     Tổng {currentYear}
                   </th>
-                  <th className="border-b border-[#EDE8E9] px-3 py-3 text-right tabular-nums">
+                  <th
+                    className="border-b border-[#EDE8E9] px-3 py-3 text-right tabular-nums"
+                    title="Tổng các tháng có phát sinh (đến tháng hiện tại) ÷ số tháng đó"
+                  >
                     TB/tháng
                   </th>
                   <th className="border-b border-[#EDE8E9] px-3 py-3 text-right tabular-nums">YoY</th>
@@ -555,7 +613,14 @@ export default function BctcOverviewCharts({
                             <span className="min-w-0">{s.label}</span>
                           </div>
                         </td>
-                        {renderSummaryRowCells({ rowKey: s.rowKey, row, target, met, vsKpiPct })}
+                        {renderSummaryRowCells({
+                          rowKey: s.rowKey,
+                          row,
+                          target,
+                          met,
+                          vsKpiPct,
+                          currentYear,
+                        })}
                       </tr>
                       {isRevenueParent && revenueBySubjectOpen
                         ? REVENUE_BY_SUBJECT.map((sub) => {
@@ -584,6 +649,7 @@ export default function BctcOverviewCharts({
                                   target: subTarget,
                                   met: subMet,
                                   vsKpiPct: subVsKpiPct,
+                                  currentYear,
                                 })}
                               </tr>
                             );

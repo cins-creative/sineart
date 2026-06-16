@@ -2,8 +2,10 @@ import type { MkDatePreset } from "./marketing-date-range";
 
 /** @deprecated Redirect → traffic-web. Tab nhập tay đã gỡ. */
 export const OVERVIEW_SECTION_MARKETING = "marketing-data-analysis" as const;
-/** Segment URL — tab BCTC */
+/** Segment URL — BCTC nhập tay (tc_bao_cao_tai_chinh) */
 export const OVERVIEW_SECTION_BCTC = "bctc-tong-quan" as const;
+/** Segment URL — BCTC gom từ giao dịch (cùng UI tổng quan) */
+export const OVERVIEW_SECTION_BCTC_AUTO = "bctc-nguon-tu-dong" as const;
 /** Segment URL — theo dõi HV từ DB */
 export const OVERVIEW_SECTION_HV_TRACKING = "theo-doi-hoc-vien" as const;
 /** MKT — traffic web GA4 */
@@ -21,8 +23,15 @@ export const MKT_OVERVIEW_SECTIONS = [
 
 export type MktOverviewSectionSlug = (typeof MKT_OVERVIEW_SECTIONS)[number];
 
+export const BCTC_OVERVIEW_SECTIONS = [
+  OVERVIEW_SECTION_BCTC,
+  OVERVIEW_SECTION_BCTC_AUTO,
+] as const;
+
+export type BctcOverviewSectionSlug = (typeof BCTC_OVERVIEW_SECTIONS)[number];
+
 export type OverviewSectionSlug =
-  | typeof OVERVIEW_SECTION_BCTC
+  | BctcOverviewSectionSlug
   | typeof OVERVIEW_SECTION_HV_TRACKING
   | MktOverviewSectionSlug;
 
@@ -42,7 +51,7 @@ export type OverviewPeriodSlug =
   | typeof OVERVIEW_PERIOD_CUSTOM;
 
 const SECTIONS = new Set<string>([
-  OVERVIEW_SECTION_BCTC,
+  ...BCTC_OVERVIEW_SECTIONS,
   OVERVIEW_SECTION_HV_TRACKING,
   ...MKT_OVERVIEW_SECTIONS,
 ]);
@@ -60,6 +69,10 @@ export const OVERVIEW_DEFAULT_PATH = `/admin/dashboard/overview/${OVERVIEW_SECTI
 
 export function isMktOverviewSection(v: string): v is MktOverviewSectionSlug {
   return (MKT_OVERVIEW_SECTIONS as readonly string[]).includes(v);
+}
+
+export function isBctcOverviewSection(v: string): v is BctcOverviewSectionSlug {
+  return (BCTC_OVERVIEW_SECTIONS as readonly string[]).includes(v);
 }
 
 export function isOverviewSectionSlug(v: string): v is OverviewSectionSlug {

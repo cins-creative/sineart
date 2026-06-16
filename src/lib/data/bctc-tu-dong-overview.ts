@@ -107,26 +107,17 @@ export function tuDongBundleToColumns(bundle: BctcTuDongBundle): BaoCaoColumn[] 
   }
 
   const cols: BaoCaoColumn[] = [];
-  let seq = 0;
-  for (const [mapKey, data] of byMonth) {
-    const pipe = mapKey.indexOf("|");
-    const namStr = mapKey.slice(0, pipe);
-    const thang = mapKey.slice(pipe + 1);
+  /** Luôn đủ 12 tháng/năm (kể cả 0 ₫) để YoY & TB/tháng khớp cấu trúc BCTC thủ công. */
+  for (const thang of THANG_FULL_ORDER) {
+    const mapKey = `${nam}|${thang}`;
     cols.push({
-      id: `auto-${bundle.nam}-${seq++}`,
-      nam: namStr,
+      id: `auto-${bundle.nam}-${thang}`,
+      nam,
       thang,
-      data,
+      data: byMonth.get(mapKey) ?? {},
       dirty: false,
     });
   }
-
-  cols.sort((a, b) => {
-    const ya = parseInt(a.nam, 10);
-    const yb = parseInt(b.nam, 10);
-    if (ya !== yb) return ya - yb;
-    return THANG_FULL_ORDER.indexOf(a.thang) - THANG_FULL_ORDER.indexOf(b.thang);
-  });
   return cols;
 }
 

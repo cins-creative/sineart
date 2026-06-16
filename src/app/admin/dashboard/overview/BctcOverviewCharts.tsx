@@ -121,6 +121,18 @@ function fmtPctSub(pct: number | null): string {
   return `${p >= 0 ? "+" : ""}${p.toFixed(1)}%`;
 }
 
+/** % một chỉ tiêu so với tổng doanh thu thuần (dòng cha). */
+function shareOfDtThuanPct(part: number, total: number): number | null {
+  if (!Number.isFinite(part) || !Number.isFinite(total) || total === 0) return null;
+  return (part / total) * 100;
+}
+
+function fmtShareOfDtThuan(pct: number | null): string | null {
+  if (pct == null || !Number.isFinite(pct)) return null;
+  const p = Math.round(pct * 10) / 10;
+  return `${p.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}% DT thuần`;
+}
+
 /** YoY %: chi phí giảm là tốt → xanh; các chỉ tiêu khác tăng là tốt → xanh. */
 function yoyTone(rowKey: string, pct: number): "good" | "bad" | "neutral" {
   if (rowKey === "_tongCP") {
@@ -290,6 +302,7 @@ function renderSummaryRowCells({
   met,
   vsKpiPct,
   currentYear,
+  shareParentRow,
 }: {
   rowKey: string;
   row: YoYAlignedMetric | undefined;
@@ -297,7 +310,26 @@ function renderSummaryRowCells({
   met: boolean | null;
   vsKpiPct: number | null;
   currentYear: string | null;
+  /** Dòng `_dtThuan` — dùng tính % cơ cấu cho dòng con doanh thu. */
+  shareParentRow?: YoYAlignedMetric;
 }) {
+  const shareTotalPct =
+    row != null && shareParentRow != null
+      ? shareOfDtThuanPct(row.currentSum, shareParentRow.currentSum)
+      : null;
+  const shareAvgNumerator =
+    row != null && row.currentActiveMonths > 0 ? row.currentSumForAvg : row?.currentSum;
+  const shareAvgDenominator =
+    shareParentRow != null && shareParentRow.currentActiveMonths > 0
+      ? shareParentRow.currentSumForAvg
+      : shareParentRow?.currentSum;
+  const shareAvgPct =
+    row != null && shareAvgNumerator != null && shareAvgDenominator != null
+      ? shareOfDtThuanPct(shareAvgNumerator, shareAvgDenominator)
+      : null;
+  const shareTotalLabel = fmtShareOfDtThuan(shareTotalPct);
+  const shareAvgLabel = fmtShareOfDtThuan(shareAvgPct);
+
   return (
     <>
       <td className="px-3 py-3 text-right tabular-nums text-black/75">
@@ -307,13 +339,40 @@ function renderSummaryRowCells({
         {target != null ? fmtMoneyCompact(target) : "—"}
       </td>
       <td className="px-3 py-3 text-right tabular-nums font-semibold text-[#1a1a2e]">
-        {row ? fmtMoneyCompact(row.currentSum) : "—"}
+        {row ? (
+          <div className="flex flex-col items-end gap-0.5">
+            <span>{fmtMoneyCompact(row.currentSum)}</span>
+            {shareTotalLabel ? (
+              <span className="text-[10px] font-semibold tabular-nums text-black/45">{shareTotalLabel}</span>
+            ) : null}
+          </div>
+        ) : (
+          "—"
+        )}
       </td>
       <td
         className="px-3 py-3 text-right tabular-nums text-black/70"
-        title={row ? avgMonthlyTooltip(row, currentYear) : undefined}
+        title={
+          row
+            ? [
+                avgMonthlyTooltip(row, currentYear),
+                shareAvgLabel ? `Cơ cấu TB/tháng: ${shareAvgLabel}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : undefined
+        }
       >
-        {row ? avgMonthlyFromRow(row) : "—"}
+        {row ? (
+          <div className="flex flex-col items-end gap-0.5">
+            <span>{avgMonthlyFromRow(row)}</span>
+            {shareAvgLabel ? (
+              <span className="text-[10px] font-semibold tabular-nums text-black/45">{shareAvgLabel}</span>
+            ) : null}
+          </div>
+        ) : (
+          "—"
+        )}
       </td>
       <td className="px-3 py-3 text-right">
         {row?.pct == null ? (
@@ -507,8 +566,9 @@ export default function BctcOverviewCharts({
         </h2>
         {isAuto ? (
           <p className="mt-1 mb-0 text-[12px] leading-snug text-black/50">
-            Tổng hợp từ giao dịch thực tế (học phí, thu chi khác, họa cụ, lương, khấu hao…), ánh xạ sang
-            cùng chỉ tiêu BCTC.{" "}
+            Tổng hợp từ giao dịch thực tế (học phí, thu chi khác, họa cụ, lương…), ánh xạ sang cùng chỉ tiêu BCTC.
+            Học phí phân bổ theo <span className="font-semibold text-black/60">kỳ học</span> (đầu–cuối kỳ), không
+            theo tháng thu tiền — TB/tháng thường thấp hơn BCTC nhập tay.{" "}
             <Link href="/admin/dashboard/bctc-tu-dong" className="font-semibold text-[#7c3aed] hover:underline">
               Xem ma trận chi tiết
             </Link>
@@ -566,6 +626,7 @@ export default function BctcOverviewCharts({
               <tbody>
                 {OVERVIEW_SERIES.map((s) => {
                   const row = summaryByKey[s.rowKey];
+                  const dtThuanParentRow = summaryByKey["_dtThuan"];
                   const target =
                     row != null ? targetSumFromBaseline(row.baselineSum) : null;
                   const met =
@@ -650,6 +711,7 @@ export default function BctcOverviewCharts({
                                   met: subMet,
                                   vsKpiPct: subVsKpiPct,
                                   currentYear,
+                                  shareParentRow: dtThuanParentRow,
                                 })}
                               </tr>
                             );

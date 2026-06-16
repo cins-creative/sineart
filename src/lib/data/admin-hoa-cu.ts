@@ -1,6 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveHinhThucFromMon } from "@/lib/data/courses-page";
+import {
+  parseBanDonIdFromQuery,
+  resolveBanDonCodes,
+} from "@/lib/data/hc-don-ban-helpers";
+
+export {
+  isHcBanDonDaThanhToan,
+  resolveBanDonCodes,
+  resolveHcBanDonTrangThai,
+} from "@/lib/data/hc-don-ban-helpers";
 
 export const HOA_CU_PAGE_SIZE = 15;
 
@@ -42,6 +52,10 @@ export type AdminHoaCuNhapDon = {
 export type AdminHoaCuBanDon = {
   id: number;
   created_at: string;
+  /** Mã đơn hiển thị, vd `HC-00000012`. */
+  ma_don: string;
+  /** Mã số nội dung CK, vd `SC000012`. */
+  ma_don_so: string;
   hinh_thuc_thu: string | null;
   /** `Chờ thanh toán` | `Đã thanh toán` — null nếu đơn cũ chưa có cột DB. */
   status: string | null;
@@ -147,6 +161,31 @@ function tongTienHoaCuHeader(header: unknown, chiTong: number): number {
     if (Number.isFinite(n)) return n;
   }
   return chiTong;
+}
+
+function buildBanDonSearchOr(
+  rawQ: string,
+  ctx: { staffMap: Map<number, string>; hvMap: Map<number, string> },
+): string | null {
+  const t = rawQ.trim();
+  if (!t) return null;
+  const searchPat = `%${t.replace(/%/g, "\\%")}%`;
+  const tl = t.toLowerCase();
+  const parts: string[] = [`ma_don.ilike.${searchPat}`, `ma_don_so.ilike.${searchPat}`, `hinh_thuc_thu.ilike.${searchPat}`, `status.ilike.${searchPat}`];
+
+  const donId = parseBanDonIdFromQuery(t);
+  if (donId != null) parts.push(`id.eq.${donId}`);
+
+  const staffIds = [...ctx.staffMap.entries()]
+    .filter(([, name]) => name.toLowerCase().includes(tl))
+    .map(([id]) => id);
+  const hvIds = [...ctx.hvMap.entries()]
+    .filter(([, name]) => name.toLowerCase().includes(tl))
+    .map(([id]) => id);
+  if (staffIds.length) parts.push(`nguoi_ban.in.(${staffIds.join(",")})`);
+  if (hvIds.length) parts.push(`khach_hang.in.(${hvIds.join(",")})`);
+
+  return parts.join(",");
 }
 
 /** Nhân sự thuộc ban «Vận hành» hoặc «Marketing» (qua `hr_nhan_su_phong` → `hr_phong` → `hr_ban`). */
@@ -545,7 +584,7 @@ export async function fetchAdminHoaCuBundle(
 
   const { data: banRecs, error: banErr } = await supabase
     .from("hc_don_ban_hoa_cu")
-    .select("id, created_at, hinh_thuc_thu, status, nguoi_ban, khach_hang, tong_tien, chi_nhanh_id")
+    .select("id, created_at, ma_don, ma_don_so, hinh_thuc_thu, status, nguoi_ban, khach_hang, tong_tien, chi_nhanh_id")
     .order("created_at", { ascending: false })
     .limit(300);
   if (banErr) return { ok: false, error: banErr.message };
@@ -566,6 +605,8 @@ export async function fetchAdminHoaCuBundle(
     const r = raw as {
       id: number;
       created_at: string;
+      ma_don?: string | null;
+      ma_don_so?: string | null;
       hinh_thuc_thu?: string | null;
       status?: string | null;
       nguoi_ban?: number | null;
@@ -576,9 +617,12 @@ export async function fetchAdminHoaCuBundle(
     const ct = banCtByDon.get(r.id) ?? [];
     const tong = tongTienHoaCuHeader(r.tong_tien, tongChiBanLines(ct));
     const cid = r.chi_nhanh_id != null && Number.isFinite(Number(r.chi_nhanh_id)) ? Number(r.chi_nhanh_id) : null;
+    const codes = resolveBanDonCodes(r.id, r);
     return {
       id: r.id,
       created_at: r.created_at,
+      ma_don: codes.ma_don,
+      ma_don_so: codes.ma_don_so,
       hinh_thuc_thu: r.hinh_thuc_thu ?? null,
       status: r.status != null ? String(r.status) : null,
       nguoi_ban: r.nguoi_ban ?? null,
@@ -897,7 +941,7 @@ export async function fetchDonNhapPage(
 export async function fetchDonBanPage(
   supabase: SupabaseClient,
   ctx: HoaCuStaffStudentContext,
-  opts: { page: number; pageSize?: number; chi_nhanh_id?: number | null; branchNames?: Map<number, string> },
+  opts: { page: number; pageSize?: number; q?: string | null; chi_nhanh_id?: number | null; branchNames?: Map<number, string> },
 ): Promise<{ ok: true } & DonBanPage | { ok: false; error: string }> {
   const pageSize = opts.pageSize ?? HOA_CU_PAGE_SIZE;
   const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
@@ -909,11 +953,13 @@ export async function fetchDonBanPage(
 
   let qb = supabase
     .from("hc_don_ban_hoa_cu")
-    .select("id, created_at, hinh_thuc_thu, status, nguoi_ban, khach_hang, tong_tien, chi_nhanh_id", { count: "exact" });
+    .select("id, created_at, ma_don, ma_don_so, hinh_thuc_thu, status, nguoi_ban, khach_hang, tong_tien, chi_nhanh_id", { count: "exact" });
   const branchId = opts.chi_nhanh_id;
   if (branchId != null && Number.isFinite(branchId) && branchId > 0) {
     qb = qb.eq("chi_nhanh_id", branchId);
   }
+  const searchOr = buildBanDonSearchOr((opts.q ?? "").trim(), { staffMap, hvMap });
+  if (searchOr) qb = qb.or(searchOr);
   const { data: banRecs, error: banErr, count } = await qb.order("created_at", { ascending: false }).range(from, to);
 
   if (banErr) return { ok: false, error: banErr.message };
@@ -933,6 +979,8 @@ export async function fetchDonBanPage(
     const r = raw as {
       id: number;
       created_at: string;
+      ma_don?: string | null;
+      ma_don_so?: string | null;
       hinh_thuc_thu?: string | null;
       status?: string | null;
       nguoi_ban?: number | null;
@@ -943,9 +991,12 @@ export async function fetchDonBanPage(
     const ct = banCtByDon.get(r.id) ?? [];
     const tong = tongTienHoaCuHeader(r.tong_tien, tongChiBanLines(ct));
     const cid = r.chi_nhanh_id != null && Number.isFinite(Number(r.chi_nhanh_id)) ? Number(r.chi_nhanh_id) : null;
+    const codes = resolveBanDonCodes(r.id, r);
     return {
       id: r.id,
       created_at: r.created_at,
+      ma_don: codes.ma_don,
+      ma_don_so: codes.ma_don_so,
       hinh_thuc_thu: r.hinh_thuc_thu ?? null,
       status: r.status != null ? String(r.status) : null,
       nguoi_ban: r.nguoi_ban ?? null,

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { assertStaffMayDeleteRecords } from "@/lib/admin/admin-delete-permission";
 import { getAdminSessionOrNull } from "@/lib/admin/require-admin-session";
-import { fetchAllHoaCuSanPham, fetchKhoInventoryStats, fetchKhoSanPhamPage, fetchTonKhoTheoPhieuForIds, type AdminHoaCuSanPham } from "@/lib/data/admin-hoa-cu";
+import { fetchAllHoaCuSanPham, fetchDonBanPage, fetchHoaCuStaffStudentContext, fetchKhoInventoryStats, fetchKhoSanPhamPage, fetchTonKhoTheoPhieuForIds, type AdminHoaCuBanDon, type AdminHoaCuSanPham } from "@/lib/data/admin-hoa-cu";
 import { fetchAdminChiNhanhOptions } from "@/lib/data/admin-chi-nhanh";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -407,6 +407,60 @@ export async function loadKhoPageAction(input: {
     inventoryTotal: inv.total,
     inventoryHetHang: inv.hetHang,
     inventoryTonSum: inv.tonSum,
+  };
+}
+
+export type LoadDonBanPageActionResult =
+  | {
+      ok: true;
+      rows: AdminHoaCuBanDon[];
+      page: number;
+      pageSize: number;
+      total: number;
+    }
+  | { ok: false; error: string };
+
+/** Tải lại trang đơn bán theo chi nhánh + từ khóa — không reload staff/học viên. */
+export async function loadDonBanPageAction(input: {
+  chi_nhanh_id: number;
+  page?: number;
+  q?: string;
+}): Promise<LoadDonBanPageActionResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+
+  const branchId = input.chi_nhanh_id;
+  if (!Number.isFinite(branchId) || branchId <= 0) {
+    return { ok: false, error: "Chọn chi nhánh bán hàng." };
+  }
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const [ctx, branchRes] = await Promise.all([
+    fetchHoaCuStaffStudentContext(supabase, { ensureStaffId: session.staffId }),
+    fetchAdminChiNhanhOptions(supabase),
+  ]);
+  if (!ctx.ok) return { ok: false, error: ctx.error };
+
+  const branchNames = new Map(branchRes.options.map((b) => [b.id, b.ten]));
+  const page = Math.max(1, Math.floor(Number(input.page)) || 1);
+  const q = (input.q ?? "").trim() || undefined;
+
+  const don = await fetchDonBanPage(supabase, ctx.data, {
+    page,
+    q,
+    chi_nhanh_id: branchId,
+    branchNames,
+  });
+  if (!don.ok) return { ok: false, error: don.error };
+
+  return {
+    ok: true,
+    rows: don.rows,
+    page: don.page,
+    pageSize: don.pageSize,
+    total: don.total,
   };
 }
 

@@ -45,6 +45,7 @@ import {
   deleteHoaCuSanPham,
   loadHoaCuDonBanChiTietAction,
   loadHoaCuDonNhapChiTietAction,
+  loadDonBanPageAction,
   loadKhoPageAction,
   pollHoaCuDonBanAction,
   confirmHoaCuDonBanDaThuAction,
@@ -69,6 +70,7 @@ import type { AdminChiNhanhOption } from "@/lib/data/admin-chi-nhanh";
 import type { AdminHoaCuBanChiTietLine, AdminHoaCuNhapChiTietLine } from "@/app/admin/dashboard/quan-ly-hoa-cu/actions";
 import { cn } from "@/lib/utils";
 import { buildVietQrImageUrl, getTpBankQrRecipient, resolveQrPaymentAmounts } from "@/lib/payment/vietqr";
+import { resolveHcBanDonTrangThai } from "@/lib/data/hc-don-ban-helpers";
 
 const KHACH_PICKER_MAX = 10;
 const KHACH_PICKER_PANEL_MIN_PX = 420;
@@ -102,9 +104,7 @@ const BAN_DON_STATUS_BADGE: Record<string, { bg: string; text: string }> = {
 };
 
 function resolveBanDonTrangThai(don: AdminHoaCuBanDon): string {
-  const s = don.status?.trim();
-  if (s) return s;
-  return isHcChuyenKhoanUi(don.hinh_thuc_thu ?? "") ? "Chờ thanh toán" : "Đã thanh toán";
+  return resolveHcBanDonTrangThai(don.hinh_thuc_thu, don.status);
 }
 
 function BanDonStatusBadge({ status }: { status: string }) {
@@ -221,6 +221,118 @@ function KhoFilters({
           }}
           placeholder="Tìm tên hàng, loại…"
           aria-label="Tìm trong kho chi nhánh"
+          aria-busy={pending}
+          className={cn(
+            "h-10 w-full min-w-0 rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-3 text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white",
+            pending && "pr-9",
+          )}
+        />
+        {pending ? (
+          <Loader2
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[#BC8AF9]"
+            aria-hidden
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function BanFilters({
+  searchQ,
+  chiNhanhId,
+  chiNhanhOptions,
+  onApply,
+  pending,
+}: {
+  searchQ: string;
+  chiNhanhId: number;
+  chiNhanhOptions: AdminChiNhanhOption[];
+  onApply: (q: string, branchId: number, page?: number) => void;
+  pending?: boolean;
+}) {
+  const [qInput, setQInput] = useState(searchQ);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setQInput((prev) => {
+      if (prev.trim() === searchQ.trim()) return prev;
+      if (searchQ.trim() && prev.trim().startsWith(searchQ.trim())) return prev;
+      return searchQ;
+    });
+  }, [searchQ]);
+
+  const flushSearchNow = useCallback(() => {
+    if (debounceTimerRef.current != null) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    syncBanUrl(qInput, chiNhanhId, 1);
+    onApply(qInput, chiNhanhId, 1);
+  }, [qInput, chiNhanhId, onApply]);
+
+  useEffect(() => {
+    if (qInput.trim() === searchQ.trim()) return;
+    if (debounceTimerRef.current != null) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      syncBanUrl(qInput, chiNhanhId, 1);
+      onApply(qInput, chiNhanhId, 1);
+    }, KHO_SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (debounceTimerRef.current != null) clearTimeout(debounceTimerRef.current);
+    };
+  }, [qInput, searchQ, chiNhanhId, onApply]);
+
+  function syncBanUrl(q: string, branchId: number, page = 1) {
+    const p = new URLSearchParams();
+    p.set("chi_nhanh", String(branchId));
+    const t = q.trim();
+    if (t) p.set("q", t);
+    if (page > 1) p.set("page", String(page));
+    const qs = p.toString();
+    window.history.replaceState(null, "", qs ? `${HOA_CU_BAN_PATH}?${qs}` : HOA_CU_BAN_PATH);
+  }
+
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+      <label className="flex min-w-[140px] shrink-0 items-center gap-2 sm:max-w-[220px]">
+        <span className="sr-only">Chi nhánh</span>
+        <select
+          value={String(chiNhanhId)}
+          disabled={pending}
+          onChange={(e) => {
+            const branchId = Number(e.target.value);
+            syncBanUrl(qInput, branchId, 1);
+            onApply(qInput, branchId, 1);
+          }}
+          className={cn(
+            "h-10 w-full min-w-[140px] rounded-[10px] border border-[#EAEAEA] bg-white px-2.5 text-[13px] outline-none focus:border-[#BC8AF9] md:max-w-[200px]",
+            pending && "opacity-70",
+          )}
+          aria-label="Chi nhánh đơn bán"
+          aria-busy={pending}
+        >
+          {chiNhanhOptions.map((b) => (
+            <option key={b.id} value={String(b.id)}>
+              {b.ten}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="relative flex min-w-0 flex-1 sm:min-w-[200px] md:max-w-xl">
+        <Search className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+        <input
+          value={qInput}
+          onChange={(e) => setQInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              flushSearchNow();
+            }
+          }}
+          placeholder="Tìm mã đơn, khách, người bán, trạng thái…"
+          aria-label="Tìm đơn bán"
           aria-busy={pending}
           className={cn(
             "h-10 w-full min-w-0 rounded-[10px] border border-[#EAEAEA] bg-[#F5F7F7] py-0 pl-10 pr-3 text-[13px] outline-none focus:border-[#BC8AF9] md:bg-white",
@@ -363,6 +475,18 @@ function fmtDt(iso: string): string {
   }
 }
 
+function fmtDtBanTab(iso: string): { time: string; date: string } {
+  try {
+    const d = new Date(iso);
+    return {
+      time: d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+      date: d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
+    };
+  } catch {
+    return { time: "—", date: iso };
+  }
+}
+
 function HoaCuChiTietThumb({ url }: { url: string | null }) {
   if (url) {
     return (
@@ -419,6 +543,7 @@ type Props = {
     total: number;
     chiNhanhId: number;
     chiNhanhTen: string;
+    searchQ: string;
   };
   chuyenPage?: { rows: AdminHoaCuChuyenDon[]; page: number; pageSize: number; total: number };
 };
@@ -451,9 +576,17 @@ export default function QuanLyHoaCuView({
   const [khoPending, setKhoPending] = useState(false);
   const khoReqRef = useRef(0);
 
+  const [banLive, setBanLive] = useState(banPage);
+  const [banPending, setBanPending] = useState(false);
+  const banReqRef = useRef(0);
+
   useEffect(() => {
     if (khoPage) setKhoLive(khoPage);
   }, [khoPage]);
+
+  useEffect(() => {
+    if (banPage) setBanLive(banPage);
+  }, [banPage]);
 
   const applyKhoFilters = useCallback(
     async (q: string, branchId: number, page = 1) => {
@@ -488,6 +621,35 @@ export default function QuanLyHoaCuView({
     [chiNhanhOptions],
   );
 
+  const applyBanFilters = useCallback(
+    async (q: string, branchId: number, page = 1) => {
+      const reqId = ++banReqRef.current;
+      setBanPending(true);
+      const r = await loadDonBanPageAction({
+        chi_nhanh_id: branchId,
+        q: q.trim() || undefined,
+        page,
+      });
+      if (reqId !== banReqRef.current) return;
+      setBanPending(false);
+      if (r.ok) {
+        const chiNhanhTen = chiNhanhOptions.find((b) => b.id === branchId)?.ten ?? "—";
+        setBanLive({
+          rows: r.rows,
+          page: r.page,
+          pageSize: r.pageSize,
+          total: r.total,
+          searchQ: q.trim(),
+          chiNhanhId: branchId,
+          chiNhanhTen,
+        });
+      } else {
+        notify(r.error, false);
+      }
+    },
+    [chiNhanhOptions],
+  );
+
   const activeBranchId =
     khoLive?.chiNhanhId ?? khoPage?.chiNhanhId ?? nhapPage?.chiNhanhId ?? banPage?.chiNhanhId ?? chiNhanhOptions[0]?.id ?? null;
 
@@ -496,6 +658,7 @@ export default function QuanLyHoaCuView({
   }, [activeBranchId]);
 
   const khoDisplay = activeSection === "kho" ? (khoLive ?? khoPage) : khoPage;
+  const banDisplay = activeSection === "ban" ? (banLive ?? banPage) : banPage;
   const activeSectionMeta = HC_SECTIONS.find((s) => s.id === activeSection);
 
   const prefetchCatalog = () => prefetchHoaCuCatalog(activeBranchId);
@@ -630,26 +793,24 @@ export default function QuanLyHoaCuView({
             </div>
           ) : null}
 
-          {activeSection === "ban" && banPage ? (
+          {activeSection === "ban" && banDisplay ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-              <p className="m-0 max-w-md text-[12px] leading-relaxed text-[#777]">
-                Danh sách đơn bán — theo dõi thanh toán, QR chuyển khoản và xác nhận thu tiền.
-              </p>
-              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                <DonChiNhanhFilter
-                  key={`ban-${banPage.chiNhanhId}`}
-                  basePath={HOA_CU_BAN_PATH}
-                  chiNhanhId={banPage.chiNhanhId}
+              <div className="min-w-0 flex-1">
+                <BanFilters
+                  searchQ={banDisplay.searchQ}
+                  chiNhanhId={banDisplay.chiNhanhId}
                   chiNhanhOptions={chiNhanhOptions}
-                />
-                <HoaCuQuickAction
-                  icon={Plus}
-                  label="Tạo đơn bán"
-                  variant="primary"
-                  onClick={() => setModal("ban")}
-                  onPrefetch={prefetchCatalog}
+                  onApply={applyBanFilters}
+                  pending={banPending}
                 />
               </div>
+              <HoaCuQuickAction
+                icon={Plus}
+                label="Tạo đơn bán"
+                variant="primary"
+                onClick={() => setModal("ban")}
+                onPrefetch={prefetchCatalog}
+              />
             </div>
           ) : null}
 
@@ -719,21 +880,35 @@ export default function QuanLyHoaCuView({
               if (ok) router.refresh();
             }}
           />
-        ) : activeSection === "ban" && banPage ? (
+        ) : activeSection === "ban" && banDisplay ? (
           <BanTab
-            rows={banPage.rows}
+            rows={banDisplay.rows}
+            loading={banPending}
+            searchQ={banDisplay.searchQ}
             pagination={{
-              page: banPage.page,
-              pageSize: banPage.pageSize,
-              total: banPage.total,
+              page: banDisplay.page,
+              pageSize: banDisplay.pageSize,
+              total: banDisplay.total,
               basePath: HOA_CU_BAN_PATH,
-              chiNhanhId: banPage.chiNhanhId,
+              chiNhanhId: banDisplay.chiNhanhId,
+              searchQ: banDisplay.searchQ,
+            }}
+            onPageChange={(page) => {
+              const p = new URLSearchParams();
+              p.set("chi_nhanh", String(banDisplay.chiNhanhId));
+              if (banDisplay.searchQ.trim()) p.set("q", banDisplay.searchQ.trim());
+              if (page > 1) p.set("page", String(page));
+              const qs = p.toString();
+              window.history.replaceState(null, "", qs ? `${HOA_CU_BAN_PATH}?${qs}` : HOA_CU_BAN_PATH);
+              void applyBanFilters(banDisplay.searchQ, banDisplay.chiNhanhId, page);
             }}
             students={studentOptions}
             canMutate={canMutateBanDon}
             onListChanged={(msg, ok) => {
               notify(msg, ok);
-              if (ok) router.refresh();
+              if (ok) {
+                void applyBanFilters(banDisplay.searchQ, banDisplay.chiNhanhId, banDisplay.page);
+              }
             }}
           />
         ) : activeSection === "chuyen" && chuyenPage ? (
@@ -1813,15 +1988,21 @@ function DeleteDonBanConfirmModal({
 function BanTab({
   rows,
   pagination,
+  searchQ,
+  loading,
   students,
   canMutate,
   onListChanged,
+  onPageChange,
 }: {
   rows: AdminHoaCuBanDon[];
-  pagination: { page: number; pageSize: number; total: number; basePath: string; chiNhanhId: number };
+  pagination: { page: number; pageSize: number; total: number; basePath: string; chiNhanhId: number; searchQ: string };
+  searchQ: string;
+  loading?: boolean;
   students: AdminHoaCuHvOpt[];
   canMutate: boolean;
   onListChanged: (msg: string, ok: boolean) => void;
+  onPageChange?: (page: number) => void;
 }) {
   const [editDon, setEditDon] = useState<AdminHoaCuBanDon | null>(null);
   const [detailDon, setDetailDon] = useState<AdminHoaCuBanDon | null>(null);
@@ -1854,27 +2035,29 @@ function BanTab({
     }
   }
 
-  const colCount = canMutate ? 9 : 8;
+  const colCount = canMutate ? 10 : 9;
 
   return (
     <>
       <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
         <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
-          <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
+          <table className="w-full min-w-[1020px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
             <colgroup>
-              <col style={{ width: canMutate ? "11%" : "12%" }} />
               <col style={{ width: canMutate ? "10%" : "11%" }} />
-              <col style={{ width: canMutate ? "10%" : "11%" }} />
-              <col style={{ width: canMutate ? "13%" : "14%" }} />
-              <col style={{ width: canMutate ? "10%" : "11%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "6%" }} />
-              <col style={{ width: canMutate ? "13%" : "15%" }} />
-              {canMutate ? <col style={{ width: "17%" }} /> : null}
+              <col style={{ width: canMutate ? "9%" : "10%" }} />
+              <col style={{ width: canMutate ? "9%" : "10%" }} />
+              <col style={{ width: canMutate ? "9%" : "10%" }} />
+              <col style={{ width: canMutate ? "12%" : "13%" }} />
+              <col style={{ width: canMutate ? "9%" : "10%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "5%" }} />
+              <col style={{ width: canMutate ? "12%" : "14%" }} />
+              {canMutate ? <col style={{ width: "16%" }} /> : null}
             </colgroup>
             <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
               <tr>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Thời gian</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Mã đơn</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Chi nhánh</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Người bán</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Khách</th>
@@ -1894,20 +2077,39 @@ function BanTab({
                     colSpan={colCount}
                     className="border-b border-[#f8fafc] px-4 py-10 text-center align-middle text-sm text-[#888] min-h-[min(50dvh,520px)]"
                   >
-                    Chưa có đơn bán.
+                    {loading ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-[#BC8AF9]" aria-hidden />
+                        Đang tìm…
+                      </span>
+                    ) : searchQ.trim() ? (
+                      "Không tìm thấy đơn bán phù hợp."
+                    ) : (
+                      "Chưa có đơn bán."
+                    )}
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => {
                   const busy = deletingId === r.id;
+                  const { time: banTime, date: banDate } = fmtDtBanTab(r.created_at);
                   return (
                     <tr
                       key={r.id}
                       onClick={() => setDetailDon(r)}
                       className="cursor-pointer hover:bg-[#fafafa]"
                     >
-                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle whitespace-nowrap text-[#666] sm:px-3">
-                        {fmtDt(r.created_at)}
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">
+                        <div className="leading-tight">
+                          <span className="block whitespace-nowrap font-medium text-[#323232]">{banTime}</span>
+                          <span className="block whitespace-nowrap text-[11px] text-[#888]">{banDate}</span>
+                        </div>
+                      </td>
+                      <td
+                        className="border-b border-[#f8fafc] px-2 py-2 align-middle truncate font-semibold text-[#1a1a2e] sm:px-3"
+                        title={r.ma_don_so !== r.ma_don ? `Nội dung CK: ${r.ma_don_so}` : r.ma_don}
+                      >
+                        {r.ma_don}
                       </td>
                       <td className="border-b border-[#f8fafc] px-2 py-2 align-middle font-medium text-[#BC8AF9] sm:px-3">
                         {r.chi_nhanh_ten?.trim() || "—"}
@@ -1964,7 +2166,12 @@ function BanTab({
           total={pagination.total}
           pageSize={pagination.pageSize}
           basePath={pagination.basePath}
-          extraQuery={{ chi_nhanh: String(pagination.chiNhanhId) }}
+          extraQuery={{
+            chi_nhanh: String(pagination.chiNhanhId),
+            ...(pagination.searchQ.trim() ? { q: pagination.searchQ.trim() } : {}),
+          }}
+          onPageChange={onPageChange}
+          pending={loading}
         />
       </div>
       <DeleteDonBanConfirmModal

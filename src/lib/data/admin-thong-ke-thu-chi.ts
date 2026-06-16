@@ -1,4 +1,5 @@
 import type { AdminChiTietDisplay, AdminHpDonRow } from "@/lib/data/admin-quan-ly-hoa-don";
+import { isHcBanDonDaThanhToan, resolveBanDonCodes } from "@/lib/data/hc-don-ban-helpers";
 import { hpGoiHocPhiTableName } from "@/lib/data/hp-goi-hoc-phi-table";
 import {
   hpGoiHocPhiSelectForTable,
@@ -190,7 +191,7 @@ function unwrapSpNhap(
 }
 
 /**
- * Gộp học phí (đã thanh toán), bán họa cụ (thu), nhập họa cụ (chi), thu chi khác cho trang thống kê.
+ * Gộp học phí (đã thanh toán), bán họa cụ (chỉ đơn đã thanh toán), nhập họa cụ (chi), thu chi khác cho trang thống kê.
  * Không gồm `hp_giao_dich_thanh_toan` (SePay) — tránh trùng với dòng Học phí đã match đơn.
  * Nguồn lương nhân sự: gộp theo kỳ thành «Chi lương Giáo viên» / «Chi lương Vận hành».
  * Tiền học phí = tổng dòng `hp_thu_hp_chi_tiet` (theo gói) trừ `giam_gia` và `giam_gia_vnd` đơn — cùng logic «Quản lý hóa đơn».
@@ -211,7 +212,7 @@ export async function fetchAdminThongKeThuChiBundle(
       .limit(MAX_HP_DONS),
     supabase
       .from("hc_don_ban_hoa_cu")
-      .select("id, created_at, hinh_thuc_thu, tong_tien")
+      .select("id, created_at, hinh_thuc_thu, status, ma_don, ma_don_so, tong_tien")
       .order("created_at", { ascending: false })
       .limit(MAX_HC_DONS),
     supabase
@@ -453,19 +454,50 @@ export async function fetchAdminThongKeThuChiBundle(
     }
   }
 
-  const banRecs = banDonRes.data ?? [];
+  const banRecs = (banDonRes.data ?? []).filter((raw) => {
+    const r = raw as { hinh_thuc_thu?: unknown; status?: unknown };
+    return isHcBanDonDaThanhToan(
+      r.hinh_thuc_thu != null ? String(r.hinh_thuc_thu) : null,
+      r.status != null ? String(r.status) : null,
+    );
+  });
   const banIds = banRecs
     .map((r) => nId((r as { id?: unknown }).id))
     .filter((x): x is number => x != null);
 
-  const banMeta = new Map<number, { created_at: string; hinh_thuc_thu: string; tong_tien_db: unknown }>();
+  const banMeta = new Map<
+    number,
+    {
+      created_at: string;
+      hinh_thuc_thu: string;
+      status: string | null;
+      ma_don: string;
+      ma_don_so: string;
+      tong_tien_db: unknown;
+    }
+  >();
   for (const raw of banRecs) {
-    const r = raw as { id?: unknown; created_at?: unknown; hinh_thuc_thu?: unknown; tong_tien?: unknown };
+    const r = raw as {
+      id?: unknown;
+      created_at?: unknown;
+      hinh_thuc_thu?: unknown;
+      status?: unknown;
+      ma_don?: unknown;
+      ma_don_so?: unknown;
+      tong_tien?: unknown;
+    };
     const id = nId(r.id);
     if (!id) continue;
+    const codes = resolveBanDonCodes(id, {
+      ma_don: r.ma_don != null ? String(r.ma_don) : null,
+      ma_don_so: r.ma_don_so != null ? String(r.ma_don_so) : null,
+    });
     banMeta.set(id, {
       created_at: String(r.created_at ?? ""),
       hinh_thuc_thu: String(r.hinh_thuc_thu ?? "").trim(),
+      status: r.status != null ? String(r.status) : null,
+      ma_don: codes.ma_don,
+      ma_don_so: codes.ma_don_so,
       tong_tien_db: r.tong_tien,
     });
   }
@@ -522,7 +554,7 @@ export async function fetchAdminThongKeThuChiBundle(
         id: `hc_${donId}`,
         nguon: "hoa-cu",
         datetime: g.created_at || "",
-        maDon: `HC-${donId}`,
+        maDon: meta?.ma_don ?? `HC-${donId}`,
         tieude,
         hinhThuc: g.hinhThuc,
         thu: Math.round(totalThu),

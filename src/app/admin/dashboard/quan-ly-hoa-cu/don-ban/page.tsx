@@ -22,6 +22,12 @@ function parseChiNhanh(sp: Record<string, string | string[] | undefined>): numbe
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
 }
 
+function parseSearchQ(sp: Record<string, string | string[] | undefined>): string {
+  const raw = sp.q;
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  return typeof s === "string" ? s.trim() : "";
+}
+
 type Props = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
 
 export default async function QuanLyHoaCuDonBanPage({ searchParams }: Props) {
@@ -40,6 +46,7 @@ export default async function QuanLyHoaCuDonBanPage({ searchParams }: Props) {
   const sp = (await searchParams) ?? {};
   const page = parsePage(sp);
   const chiNhanhId = parseChiNhanh(sp);
+  const searchQ = parseSearchQ(sp);
 
   const [ctx, chiNhanhRes] = await Promise.all([
     fetchHoaCuStaffStudentContext(supabase, { ensureStaffId: session.staffId }),
@@ -71,6 +78,7 @@ export default async function QuanLyHoaCuDonBanPage({ searchParams }: Props) {
     const p = new URLSearchParams();
     p.set("chi_nhanh", String(resolvedChiNhanhId));
     if (page > 1) p.set("page", String(page));
+    if (searchQ) p.set("q", searchQ);
     redirect(`${HOA_CU_BAN_PATH}?${p.toString()}`);
   }
 
@@ -79,6 +87,7 @@ export default async function QuanLyHoaCuDonBanPage({ searchParams }: Props) {
 
   const don = await fetchDonBanPage(supabase, ctx.data, {
     page,
+    q: searchQ || undefined,
     chi_nhanh_id: resolvedChiNhanhId,
     branchNames,
   });
@@ -112,6 +121,7 @@ export default async function QuanLyHoaCuDonBanPage({ searchParams }: Props) {
         total: don.total,
         chiNhanhId: resolvedChiNhanhId,
         chiNhanhTen,
+        searchQ,
       }}
     />
   );

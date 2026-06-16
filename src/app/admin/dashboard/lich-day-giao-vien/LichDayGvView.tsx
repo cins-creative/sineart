@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -159,7 +159,9 @@ export default function LichDayGvView({
   teachersError,
 }: Props) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [copyPending, startCopyTransition] = useTransition();
+  const tempIdRef = useRef(0);
+  const [localAssignments, setLocalAssignments] = useState(assignments);
   const [pickSlot, setPickSlot] = useState<PickSlot>(null);
   const [teacherQ, setTeacherQ] = useState("");
   const [pickerSelected, setPickerSelected] = useState<number[]>([]);
@@ -169,6 +171,10 @@ export default function LichDayGvView({
   useEffect(() => {
     setHiddenCa(readHiddenCaFromStorage());
   }, []);
+
+  useEffect(() => {
+    setLocalAssignments(assignments);
+  }, [assignments, chiNhanhId, tuanBatDau]);
 
   const visibleCaOrder = useMemo(
     () => CA_ORDER.filter((ca) => !hiddenCa.has(ca)),
@@ -190,13 +196,13 @@ export default function LichDayGvView({
 
   const bySlot = useMemo(() => {
     const m = new Map<string, LichDayGvAssignment[]>();
-    for (const a of assignments) {
+    for (const a of localAssignments) {
       const k = slotKey(a.thu, a.ca, a.nhom);
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push(a);
     }
     return m;
-  }, [assignments]);
+  }, [localAssignments]);
 
   const filteredTeachers = useMemo(() => {
     const q = teacherQ.trim().toLowerCase();
@@ -240,19 +246,17 @@ export default function LichDayGvView({
     setIsEditMode(false);
   }
 
-  function runAction(
+  function runCopyWeekAction(
     fn: () => Promise<{
       ok: boolean;
       error?: string;
       copied?: number;
-      added?: number;
       needsNhomMigration?: boolean;
     }>,
-    opts?: { closePicker?: boolean },
   ) {
     setActionError(null);
     setActionOk(null);
-    startTransition(async () => {
+    startCopyTransition(async () => {
       const res = await fn();
       if (!res.ok) {
         setActionError(res.error ?? "Lỗi không xác định.");
@@ -260,16 +264,97 @@ export default function LichDayGvView({
         return;
       }
       setNeedsNhomMigration(false);
-      if ("copied" in res && res.copied != null) {
+      if (res.copied != null) {
         setActionOk(`Đã sao chép ${res.copied} ca từ tuần trước.`);
-      } else if ("added" in res && res.added != null) {
-        setActionOk(`Đã thêm ${res.added} giáo viên.`);
-      } else {
-        setActionOk("Đã lưu.");
       }
-      if (opts?.closePicker) {
-        closePicker();
+      router.refresh();
+    });
+  }
+
+  function nextTempAssignmentId(): number {
+    tempIdRef.current -= 1;
+    return tempIdRef.current;
+  }
+
+  function matchesPickSlot(
+    a: LichDayGvAssignment,
+    slot: NonNullable<PickSlot>,
+  ): boolean {
+    return a.thu === slot.thu && a.ca === slot.ca && a.nhom === slot.nhom;
+  }
+
+  function handleOptimisticRemove(row: LichDayGvAssignment): void {
+    setActionError(null);
+    setActionOk(null);
+    setLocalAssignments((prev) => prev.filter((a) => a.id !== row.id));
+
+    if (row.id < 0) return;
+
+    void removeLichDayGiaoVien(row.id).then((res) => {
+      if (!res.ok) {
+        setLocalAssignments((prev) =>
+          prev.some((a) => a.id === row.id) ? prev : [...prev, row],
+        );
+        setActionError(res.error ?? "Không gỡ được giáo viên.");
+        return;
       }
+      router.refresh();
+    });
+  }
+
+  function handleOptimisticAddMany(): void {
+    if (!pickSlot || pickerSelected.length === 0) return;
+
+    const slot = pickSlot;
+    const selectedIds = [...pickerSelected];
+    const teachersToAdd = selectedIds
+      .map((id) => teachers.find((t) => t.id === id))
+      .filter((t): t is LichDayGvTeacherOption => t != null);
+
+    if (teachersToAdd.length === 0) return;
+
+    const optimisticRows: LichDayGvAssignment[] = teachersToAdd.map((t) => ({
+      id: nextTempAssignmentId(),
+      chi_nhanh_id: chiNhanhId,
+      tuan_bat_dau: tuanBatDau,
+      thu: slot.thu,
+      ca: slot.ca,
+      nhom: slot.nhom,
+      nhan_su_id: t.id,
+      nhan_su_ten: t.full_name,
+      nhan_su_sdt: null,
+      ghi_chu: null,
+    }));
+
+    setActionError(null);
+    setActionOk(null);
+    setLocalAssignments((prev) => [...prev, ...optimisticRows]);
+    closePicker();
+
+    void assignLichDayGiaoVienMany({
+      chi_nhanh_id: chiNhanhId,
+      tuan_bat_dau: tuanBatDau,
+      thu: slot.thu,
+      ca: slot.ca,
+      nhom: slot.nhom,
+      nhan_su_ids: selectedIds,
+    }).then((res) => {
+      if (!res.ok) {
+        setLocalAssignments((prev) =>
+          prev.filter(
+            (a) =>
+              !(
+                a.id < 0 &&
+                selectedIds.includes(a.nhan_su_id) &&
+                matchesPickSlot(a, slot)
+              ),
+          ),
+        );
+        setActionError(res.error ?? "Không thêm được giáo viên.");
+        setNeedsNhomMigration(Boolean(res.needsNhomMigration));
+        return;
+      }
+      setNeedsNhomMigration(false);
       router.refresh();
     });
   }
@@ -410,9 +495,9 @@ export default function LichDayGvView({
               ) : (
                 <button
                   type="button"
-                  disabled={pending || chiNhanhId <= 0 || missingTable || permissionDenied}
+                  disabled={copyPending || chiNhanhId <= 0 || missingTable || permissionDenied}
                   onClick={() =>
-                    runAction(() =>
+                    runCopyWeekAction(() =>
                       copyLichDayFromPreviousWeek({ chi_nhanh_id: chiNhanhId, tuan_bat_dau: tuanBatDau }),
                     )
                   }
@@ -424,7 +509,7 @@ export default function LichDayGvView({
               )}
               <button
                 type="button"
-                disabled={pending}
+                disabled={copyPending}
                 onClick={() => {
                   if (isEditMode) exitEditMode();
                   else setIsEditMode(true);
@@ -544,11 +629,8 @@ export default function LichDayGvView({
                                     {isEditMode ? (
                                     <button
                                       type="button"
-                                      disabled={pending}
-                                      onClick={() =>
-                                        runAction(() => removeLichDayGiaoVien(r.id).then((x) => x))
-                                      }
-                                      className="absolute -right-0.5 -top-0.5 z-[1] flex h-3.5 w-3.5 items-center justify-center rounded-full border border-black/[0.08] bg-white text-black/40 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                                      onClick={() => handleOptimisticRemove(r)}
+                                      className="absolute -right-0.5 -top-0.5 z-[1] flex h-3.5 w-3.5 items-center justify-center rounded-full border border-black/[0.08] bg-white text-black/40 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                                       aria-label={`Gỡ ${r.nhan_su_ten}`}
                                     >
                                       <X className="h-2 w-2" strokeWidth={2.5} />
@@ -559,7 +641,7 @@ export default function LichDayGvView({
                                 {isEditMode ? (
                                 <button
                                   type="button"
-                                  disabled={pending || missingTable || permissionDenied}
+                                  disabled={missingTable || permissionDenied}
                                   onClick={() => {
                                     setActionError(null);
                                     setPickSlot({ thu, ca, nhom });
@@ -596,7 +678,7 @@ export default function LichDayGvView({
           role="dialog"
           aria-modal="true"
           aria-labelledby="lich-pick-title"
-          onClick={() => !pending && closePicker()}
+          onClick={() => closePicker()}
         >
           <div
             className="flex max-h-[min(85vh,560px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-[var(--shadow-md,0_10px_32px_rgba(45,32,32,.12))]"
@@ -656,7 +738,7 @@ export default function LichDayGvView({
                           type="checkbox"
                           className="h-4 w-4 shrink-0 cursor-pointer rounded accent-[#BC8AF9] disabled:cursor-not-allowed"
                           checked={checked}
-                          disabled={pending || taken}
+                          disabled={taken}
                           onChange={() => togglePickerTeacher(t.id)}
                         />
                         <TeacherPickerAvatar name={t.full_name} src={t.avatar} size={40} />
@@ -708,33 +790,18 @@ export default function LichDayGvView({
                 {pickerSelected.length > 0 ? (
                   <button
                     type="button"
-                    disabled={pending}
                     onClick={() => setPickerSelected([])}
-                    className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-red-500 transition hover:bg-red-50 disabled:opacity-50"
+                    className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-red-500 transition hover:bg-red-50"
                   >
                     Bỏ chọn
                   </button>
                 ) : null}
                 <button
                   type="button"
-                  disabled={pending || pickerSelected.length === 0}
-                  onClick={() =>
-                    runAction(
-                      () =>
-                        assignLichDayGiaoVienMany({
-                          chi_nhanh_id: chiNhanhId,
-                          tuan_bat_dau: tuanBatDau,
-                          thu: pickSlot.thu,
-                          ca: pickSlot.ca,
-                          nhom: pickSlot.nhom,
-                          nhan_su_ids: pickerSelected,
-                        }),
-                      { closePicker: true },
-                    )
-                  }
+                  disabled={pickerSelected.length === 0}
+                  onClick={handleOptimisticAddMany}
                   className="inline-flex items-center gap-1.5 rounded-full bg-[#BC8AF9] px-4 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
                 >
-                  {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
                   Thêm vào ca
                 </button>
               </div>
@@ -743,10 +810,10 @@ export default function LichDayGvView({
         </div>
       ) : null}
 
-      {pending ? (
+      {copyPending ? (
         <div className="pointer-events-none fixed bottom-6 right-6 z-[210] inline-flex items-center gap-2 rounded-full bg-[#1a1a2e] px-4 py-2 text-[12px] font-semibold text-white shadow-lg">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Đang lưu…
+          Đang sao chép tuần…
         </div>
       ) : null}
     </div>

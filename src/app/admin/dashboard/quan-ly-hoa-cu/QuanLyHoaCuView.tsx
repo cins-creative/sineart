@@ -96,6 +96,29 @@ function isHcChuyenKhoanUi(h: string): boolean {
   return h.trim() === "Chuyển khoản";
 }
 
+const BAN_DON_STATUS_BADGE: Record<string, { bg: string; text: string }> = {
+  "Chờ thanh toán": { bg: "#fff7ed", text: "#ea580c" },
+  "Đã thanh toán": { bg: "#dcfce7", text: "#16a34a" },
+};
+
+function resolveBanDonTrangThai(don: AdminHoaCuBanDon): string {
+  const s = don.status?.trim();
+  if (s) return s;
+  return isHcChuyenKhoanUi(don.hinh_thuc_thu ?? "") ? "Chờ thanh toán" : "Đã thanh toán";
+}
+
+function BanDonStatusBadge({ status }: { status: string }) {
+  const cfg = BAN_DON_STATUS_BADGE[status] ?? { bg: "#f3f4f6", text: "#6b7280" };
+  return (
+    <span
+      className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold"
+      style={{ background: cfg.bg, color: cfg.text }}
+    >
+      {status}
+    </span>
+  );
+}
+
 function fmtVnd(n: number): string {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Math.max(0, Math.round(n))) + " ₫";
 }
@@ -1831,22 +1854,23 @@ function BanTab({
     }
   }
 
-  const colCount = canMutate ? 8 : 7;
+  const colCount = canMutate ? 9 : 8;
 
   return (
     <>
       <div className="isolate flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#EAEAEA] bg-white shadow-sm">
         <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
-          <table className="w-full min-w-[820px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
+          <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-0 text-left text-[13px]">
             <colgroup>
-              <col style={{ width: canMutate ? "12%" : "13%" }} />
               <col style={{ width: canMutate ? "11%" : "12%" }} />
-              <col style={{ width: canMutate ? "12%" : "13%" }} />
-              <col style={{ width: canMutate ? "14%" : "16%" }} />
-              <col style={{ width: canMutate ? "11%" : "12%" }} />
-              <col style={{ width: "7%" }} />
-              <col style={{ width: canMutate ? "15%" : "20%" }} />
-              {canMutate ? <col style={{ width: "18%" }} /> : null}
+              <col style={{ width: canMutate ? "10%" : "11%" }} />
+              <col style={{ width: canMutate ? "10%" : "11%" }} />
+              <col style={{ width: canMutate ? "13%" : "14%" }} />
+              <col style={{ width: canMutate ? "10%" : "11%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: canMutate ? "13%" : "15%" }} />
+              {canMutate ? <col style={{ width: "17%" }} /> : null}
             </colgroup>
             <thead className="bg-[#fafafa] text-[10px] font-extrabold uppercase tracking-wider text-[#AAA]">
               <tr>
@@ -1855,6 +1879,7 @@ function BanTab({
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Người bán</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Khách</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Hình thức</th>
+                <th className="border-b border-[#EAEAEA] px-2 py-2.5 align-middle sm:px-3">Trạng thái</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Dòng</th>
                 <th className="border-b border-[#EAEAEA] px-2 py-2.5 text-right align-middle sm:px-3">Tổng (theo giá bán)</th>
                 {canMutate ? (
@@ -1891,6 +1916,9 @@ function BanTab({
                       <td className="border-b border-[#f8fafc] px-2 py-2 align-middle break-words sm:px-3">{r.khach_hang_name}</td>
                       <td className="border-b border-[#f8fafc] px-2 py-2 align-middle text-[#555] sm:px-3">
                         {r.hinh_thuc_thu?.trim() || "—"}
+                      </td>
+                      <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">
+                        <BanDonStatusBadge status={resolveBanDonTrangThai(r)} />
                       </td>
                       <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle tabular-nums sm:px-3">{r.so_mat_hang}</td>
                       <td className="border-b border-[#f8fafc] px-2 py-2 text-right align-middle font-semibold tabular-nums sm:px-3">

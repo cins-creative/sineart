@@ -43,6 +43,8 @@ export type AdminHoaCuBanDon = {
   id: number;
   created_at: string;
   hinh_thuc_thu: string | null;
+  /** `Chờ thanh toán` | `Đã thanh toán` — null nếu đơn cũ chưa có cột DB. */
+  status: string | null;
   nguoi_ban: number | null;
   khach_hang: number | null;
   nguoi_ban_name: string;
@@ -543,7 +545,7 @@ export async function fetchAdminHoaCuBundle(
 
   const { data: banRecs, error: banErr } = await supabase
     .from("hc_don_ban_hoa_cu")
-    .select("id, created_at, hinh_thuc_thu, nguoi_ban, khach_hang, tong_tien, chi_nhanh_id")
+    .select("id, created_at, hinh_thuc_thu, status, nguoi_ban, khach_hang, tong_tien, chi_nhanh_id")
     .order("created_at", { ascending: false })
     .limit(300);
   if (banErr) return { ok: false, error: banErr.message };
@@ -565,6 +567,7 @@ export async function fetchAdminHoaCuBundle(
       id: number;
       created_at: string;
       hinh_thuc_thu?: string | null;
+      status?: string | null;
       nguoi_ban?: number | null;
       khach_hang?: number | null;
       tong_tien?: unknown;
@@ -577,6 +580,7 @@ export async function fetchAdminHoaCuBundle(
       id: r.id,
       created_at: r.created_at,
       hinh_thuc_thu: r.hinh_thuc_thu ?? null,
+      status: r.status != null ? String(r.status) : null,
       nguoi_ban: r.nguoi_ban ?? null,
       khach_hang: r.khach_hang ?? null,
       nguoi_ban_name: r.nguoi_ban != null ? staffMap.get(r.nguoi_ban) ?? "—" : "—",
@@ -905,7 +909,7 @@ export async function fetchDonBanPage(
 
   let qb = supabase
     .from("hc_don_ban_hoa_cu")
-    .select("id, created_at, hinh_thuc_thu, nguoi_ban, khach_hang, tong_tien, chi_nhanh_id", { count: "exact" });
+    .select("id, created_at, hinh_thuc_thu, status, nguoi_ban, khach_hang, tong_tien, chi_nhanh_id", { count: "exact" });
   const branchId = opts.chi_nhanh_id;
   if (branchId != null && Number.isFinite(branchId) && branchId > 0) {
     qb = qb.eq("chi_nhanh_id", branchId);
@@ -930,6 +934,7 @@ export async function fetchDonBanPage(
       id: number;
       created_at: string;
       hinh_thuc_thu?: string | null;
+      status?: string | null;
       nguoi_ban?: number | null;
       khach_hang?: number | null;
       tong_tien?: unknown;
@@ -942,6 +947,7 @@ export async function fetchDonBanPage(
       id: r.id,
       created_at: r.created_at,
       hinh_thuc_thu: r.hinh_thuc_thu ?? null,
+      status: r.status != null ? String(r.status) : null,
       nguoi_ban: r.nguoi_ban ?? null,
       khach_hang: r.khach_hang ?? null,
       nguoi_ban_name: r.nguoi_ban != null ? staffMap.get(r.nguoi_ban) ?? "—" : "—",

@@ -49,6 +49,7 @@ import {
   loadKhoPageAction,
   pollHoaCuDonBanAction,
   confirmHoaCuDonBanDaThuAction,
+  syncHoaCuGiaChiNhanh,
   updateHoaCuDonBanMeta,
   updateHoaCuDonNhapMeta,
   updateHoaCuSanPham,
@@ -1162,6 +1163,21 @@ function KhoTab({
   onInventoryChanged: (msg: string, ok: boolean) => void;
 }) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [syncingId, setSyncingId] = useState<number | null>(null);
+
+  async function handleSyncGia(r: AdminHoaCuSanPham) {
+    if (
+      !window.confirm(
+        `Đồng bộ giá nhập ${fmtVnd(r.gia_nhap)} và giá bán ${fmtVnd(r.gia_ban)} của «${r.ten_hang}» (ID ${r.id}) sang mọi chi nhánh cùng tên?`,
+      )
+    ) {
+      return;
+    }
+    setSyncingId(r.id);
+    const res = await syncHoaCuGiaChiNhanh(r.id);
+    setSyncingId(null);
+    onInventoryChanged(res.ok ? (res.message ?? "Đã đồng bộ giá.") : res.error, res.ok);
+  }
 
   async function handleDelete(r: AdminHoaCuSanPham) {
     if (!window.confirm(`Xoá «${r.ten_hang}»? Thao tác không hoàn tác.`)) return;
@@ -1220,7 +1236,8 @@ function KhoTab({
               rows.map((r) => {
                 const loai = r.loai_san_pham ?? "";
                 const badge = loai && LOAI_BADGE[loai] ? LOAI_BADGE[loai] : { bg: "#f3f4f6", text: "#6b7280" };
-                const busy = deletingId === r.id;
+                const busyDelete = deletingId === r.id;
+                const busySync = syncingId === r.id;
                 return (
                   <tr key={r.id} className="hover:bg-[#fafafa]">
                     <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">
@@ -1265,9 +1282,24 @@ function KhoTab({
                       <div className="flex flex-wrap items-center justify-end gap-1">
                         <button
                           type="button"
+                          title="Đồng bộ giá chi nhánh"
+                          disabled={busySync || busyDelete}
+                          onClick={() => void handleSyncGia(r)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#EAEAEA] text-[#555] transition hover:border-[#BC8AF9]/50 hover:bg-[#BC8AF9]/8 hover:text-[#BC8AF9] disabled:opacity-50"
+                        >
+                          {busySync ? (
+                            <Loader2 size={15} className="animate-spin" aria-hidden />
+                          ) : (
+                            <RefreshCw size={15} strokeWidth={2} aria-hidden />
+                          )}
+                          <span className="sr-only">Đồng bộ giá chi nhánh</span>
+                        </button>
+                        <button
+                          type="button"
                           title="Sửa"
+                          disabled={busySync || busyDelete}
                           onClick={() => onEdit(r)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#EAEAEA] text-[#555] transition hover:border-[#BC8AF9]/50 hover:bg-[#BC8AF9]/8 hover:text-[#1a1a2e]"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#EAEAEA] text-[#555] transition hover:border-[#BC8AF9]/50 hover:bg-[#BC8AF9]/8 hover:text-[#1a1a2e] disabled:opacity-50"
                         >
                           <Pencil size={15} strokeWidth={2} aria-hidden />
                           <span className="sr-only">Sửa</span>
@@ -1275,11 +1307,11 @@ function KhoTab({
                         <button
                           type="button"
                           title="Xoá"
-                          disabled={busy}
+                          disabled={busyDelete || busySync}
                           onClick={() => void handleDelete(r)}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                         >
-                          {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Trash2 size={15} strokeWidth={2} aria-hidden />}
+                          {busyDelete ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Trash2 size={15} strokeWidth={2} aria-hidden />}
                           <span className="sr-only">Xoá</span>
                         </button>
                       </div>

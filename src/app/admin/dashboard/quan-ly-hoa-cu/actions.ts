@@ -577,6 +577,63 @@ export async function loadHoaCuDonBanChiTietAction(
   return { ok: true, lines };
 }
 
+/** Áp dụng cùng giá nhập/bán cho mọi dòng danh mục có cùng tên hàng (mọi chi nhánh). */
+async function syncHoaCuGiaByTenHang(
+  supabase: NonNullable<ReturnType<typeof createServiceRoleClient>>,
+  tenHang: string,
+  gia_nhap: number,
+  gia_ban: number,
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const key = tenHang.trim();
+  if (!key) return { ok: false, error: "Mặt hàng không có tên." };
+
+  const { data: syncedRows, error: syncErr } = await supabase
+    .from("hc_danh_sach_san_pham")
+    .update({ gia_nhap, gia_ban })
+    .ilike("ten_hang", key)
+    .select("id");
+  if (syncErr) {
+    return { ok: false, error: syncErr.message || "Không đồng bộ được giá sang chi nhánh khác." };
+  }
+  return { ok: true, count: syncedRows?.length ?? 0 };
+}
+
+export async function syncHoaCuGiaChiNhanh(id: number): Promise<HoaCuActionResult> {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { ok: false, error: "Phiên đăng nhập không hợp lệ." };
+  if (!Number.isFinite(id) || id <= 0) return { ok: false, error: "Mặt hàng không hợp lệ." };
+
+  const supabase = createServiceRoleClient();
+  if (!supabase) return { ok: false, error: "Thiếu cấu hình Supabase server." };
+
+  const { data: sp, error: spErr } = await supabase
+    .from("hc_danh_sach_san_pham")
+    .select("id, ten_hang, gia_nhap, gia_ban")
+    .eq("id", id)
+    .maybeSingle();
+  if (spErr) return { ok: false, error: spErr.message || "Không đọc được mặt hàng." };
+  if (!sp) return { ok: false, error: "Không tìm thấy mặt hàng." };
+
+  const tenHang = String((sp as { ten_hang?: unknown }).ten_hang ?? "").trim();
+  const gia_nhap = numMoney((sp as { gia_nhap?: unknown }).gia_nhap);
+  const gia_ban = numMoney((sp as { gia_ban?: unknown }).gia_ban);
+
+  const synced = await syncHoaCuGiaByTenHang(supabase, tenHang, gia_nhap, gia_ban);
+  if (!synced.ok) return { ok: false, error: synced.error };
+
+  revalidatePath(ADMIN_PATH, "layout");
+  if (synced.count <= 1) {
+    return {
+      ok: true,
+      message: "Chỉ có mặt hàng này ở một chi nhánh — giá đã được giữ nguyên.",
+    };
+  }
+  return {
+    ok: true,
+    message: `Đã đồng bộ giá cho ${synced.count} mặt hàng cùng tên «${tenHang}» ở các chi nhánh.`,
+  };
+}
+
 export async function updateHoaCuSanPham(input: {
   id: number;
   ten_hang: string;

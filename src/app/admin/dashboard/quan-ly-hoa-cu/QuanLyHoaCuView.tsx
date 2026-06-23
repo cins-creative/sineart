@@ -75,6 +75,32 @@ import { resolveHcBanDonTrangThai } from "@/lib/data/hc-don-ban-helpers";
 const KHACH_PICKER_MAX = 10;
 const KHACH_PICKER_PANEL_MIN_PX = 420;
 
+/** Dropdown fixed portal — lật lên trên nếu không đủ chỗ phía dưới viewport. */
+function computeAnchoredDropdownRect(
+  triggerEl: HTMLElement,
+  opts: { minWidth: number; maxWidth?: number },
+): { top: number; left: number; width: number; maxHeight: number } {
+  const r = triggerEl.getBoundingClientRect();
+  const edge = 8;
+  const gap = 6;
+  const maxW = opts.maxWidth ?? window.innerWidth - edge * 2;
+  const w = Math.min(Math.max(r.width, opts.minWidth), maxW);
+  const maxLeft = Math.max(edge, window.innerWidth - w - edge);
+  const left = Math.min(Math.max(edge, r.left), maxLeft);
+
+  const preferredMax = Math.min(window.innerHeight * 0.52, 380);
+  const spaceBelow = window.innerHeight - r.bottom - gap - edge;
+  const spaceAbove = r.top - gap - edge;
+  const openAbove = spaceBelow < preferredMax && spaceAbove > spaceBelow;
+  const maxHeight = Math.max(
+    120,
+    Math.min(preferredMax, openAbove ? spaceAbove : spaceBelow),
+  );
+  const top = openAbove ? Math.max(edge, r.top - gap - maxHeight) : r.bottom + gap;
+
+  return { top, left, width: w, maxHeight };
+}
+
 const LOAI_SP = ["Bút", "Màu", "Tẩy", "Giấy", "Bảng vẽ", "Phụ kiện"] as const;
 const HINH_THUC = ["Tiền mặt", "Chuyển khoản"] as const;
 
@@ -1205,8 +1231,11 @@ function KhoTab({
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-lg">📦</div>
                       )}
                     </td>
-                    <td className="border-b border-[#f8fafc] px-2 py-2 align-middle font-medium text-[#1a1a2e] sm:px-3">
-                      <span className="line-clamp-2 break-words">{r.ten_hang}</span>
+                    <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span className="line-clamp-2 break-words font-medium text-[#1a1a2e]">{r.ten_hang}</span>
+                        <span className="text-[10px] font-semibold tabular-nums text-[#AAA]">ID {r.id}</span>
+                      </div>
                     </td>
                     <td className="border-b border-[#f8fafc] px-2 py-2 align-middle sm:px-3">
                       {loai ? (
@@ -2261,6 +2290,7 @@ function HoaCuSanPhamPicker({
   onChange,
   variant,
   branchLabel,
+  excludeHangIds,
 }: {
   sanPham: AdminHoaCuSanPham[];
   value: string;
@@ -2268,10 +2298,12 @@ function HoaCuSanPhamPicker({
   variant: "nhap" | "ban";
   /** Nhãn chi nhánh — hiện gợi ý khi danh mục rỗng (không phải do tìm kiếm). */
   branchLabel?: string;
+  /** Ẩn mặt hàng đã chọn ở dòng khác (cùng phiếu nhập/bán). */
+  excludeHangIds?: ReadonlySet<number>;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -2280,14 +2312,16 @@ function HoaCuSanPhamPicker({
   const filtered = useMemo(() => {
     const t = search.trim().toLowerCase();
     return sanPham.filter((s) => {
+      if (excludeHangIds?.has(s.id) && String(s.id) !== value) return false;
       if (!t) return true;
       return (
         s.ten_hang.toLowerCase().includes(t) ||
         (s.loai_san_pham ?? "").toLowerCase().includes(t) ||
-        String(s.ton_kho).includes(t)
+        String(s.ton_kho).includes(t) ||
+        String(s.id).includes(t)
       );
     });
-  }, [sanPham, search]);
+  }, [sanPham, search, excludeHangIds, value]);
 
   const isHet = (s: AdminHoaCuSanPham) => s.ton_kho <= 0;
   const isDisabled = (s: AdminHoaCuSanPham) => variant === "ban" && isHet(s);
@@ -2295,11 +2329,7 @@ function HoaCuSanPhamPicker({
   const updateRect = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
-    const r = el.getBoundingClientRect();
-    const w = Math.max(r.width, 280);
-    const maxLeft = Math.max(8, window.innerWidth - w - 8);
-    const left = Math.min(Math.max(8, r.left), maxLeft);
-    setRect({ top: r.bottom + 6, left, width: w });
+    setRect(computeAnchoredDropdownRect(el, { minWidth: 280 }));
   }, []);
 
   useLayoutEffect(() => {
@@ -2353,8 +2383,8 @@ function HoaCuSanPhamPicker({
       <div
         ref={panelRef}
         role="listbox"
-        className="fixed z-[200] flex max-h-[min(52vh,380px)] flex-col overflow-hidden rounded-xl border border-[#EAEAEA] bg-white py-1 shadow-xl"
-        style={{ top: rect.top, left: rect.left, width: rect.width }}
+        className="fixed z-[200] flex flex-col overflow-hidden rounded-xl border border-[#EAEAEA] bg-white py-1 shadow-xl"
+        style={{ top: rect.top, left: rect.left, width: rect.width, maxHeight: rect.maxHeight }}
       >
         <div className="shrink-0 border-b border-[#f0f0f0] px-2 py-2">
           <div className="relative">
@@ -2368,7 +2398,7 @@ function HoaCuSanPhamPicker({
             />
           </div>
         </div>
-        <ul className="max-h-[min(44vh,300px)] list-none overflow-y-auto overscroll-contain p-1">
+        <ul className="min-h-0 flex-1 list-none overflow-y-auto overscroll-contain p-1">
           <li>
             <button
               type="button"
@@ -2439,6 +2469,7 @@ function HoaCuSanPhamPicker({
                       <p className={cn("m-0 line-clamp-2 text-[13px] font-semibold leading-snug", het ? "text-[#888]" : "text-[#1a1a2e]")}>
                         {s.ten_hang}
                       </p>
+                      <p className="m-0 mt-0.5 text-[10px] font-semibold tabular-nums text-[#AAA]">ID {s.id}</p>
                       {s.loai_san_pham ? (
                         <p className="m-0 mt-0.5 truncate text-[10px] font-medium uppercase tracking-wide text-[#AAA]">{s.loai_san_pham}</p>
                       ) : null}
@@ -2547,7 +2578,7 @@ function HoaCuKhachPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -2567,12 +2598,12 @@ function HoaCuKhachPicker({
   const updateRect = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
-    const r = el.getBoundingClientRect();
-    const maxW = window.innerWidth - 16;
-    const w = Math.min(Math.max(r.width, KHACH_PICKER_PANEL_MIN_PX), maxW);
-    const maxLeft = Math.max(8, window.innerWidth - w - 8);
-    const left = Math.min(Math.max(8, r.left), maxLeft);
-    setRect({ top: r.bottom + 6, left, width: w });
+    setRect(
+      computeAnchoredDropdownRect(el, {
+        minWidth: KHACH_PICKER_PANEL_MIN_PX,
+        maxWidth: window.innerWidth - 16,
+      }),
+    );
   }, []);
 
   useLayoutEffect(() => {
@@ -2626,8 +2657,8 @@ function HoaCuKhachPicker({
       <div
         ref={panelRef}
         role="listbox"
-        className="fixed z-[200] flex max-h-[min(52vh,380px)] flex-col overflow-hidden rounded-xl border border-[#EAEAEA] bg-white py-1 shadow-xl"
-        style={{ top: rect.top, left: rect.left, width: rect.width }}
+        className="fixed z-[200] flex flex-col overflow-hidden rounded-xl border border-[#EAEAEA] bg-white py-1 shadow-xl"
+        style={{ top: rect.top, left: rect.left, width: rect.width, maxHeight: rect.maxHeight }}
       >
         <div className="shrink-0 border-b border-[#f0f0f0] px-2 py-2">
           <div className="relative">
@@ -2641,7 +2672,7 @@ function HoaCuKhachPicker({
             />
           </div>
         </div>
-        <ul className="max-h-[min(44vh,300px)] list-none overflow-y-auto overscroll-contain p-1">
+        <ul className="min-h-0 flex-1 list-none overflow-y-auto overscroll-contain p-1">
           <li>
             <button
               type="button"
@@ -2858,6 +2889,26 @@ function ModalThemHang({
 
 type Line = { hangId: string; qty: string };
 
+/** Mặt hàng đã chọn ở các dòng khác — ẩn khỏi dropdown dòng hiện tại. */
+function hangIdsOnOtherLines(lines: Line[], lineIndex: number): Set<number> {
+  const out = new Set<number>();
+  for (let j = 0; j < lines.length; j++) {
+    if (j === lineIndex) continue;
+    const id = Number(lines[j]!.hangId);
+    if (Number.isFinite(id) && id > 0) out.add(id);
+  }
+  return out;
+}
+
+function duplicateMatHangError(matHangIds: number[]): string | null {
+  const seen = new Set<number>();
+  for (const id of matHangIds) {
+    if (seen.has(id)) return "Mỗi mặt hàng chỉ được chọn một dòng.";
+    seen.add(id);
+  }
+  return null;
+}
+
 function FieldLoggedInStaffRow({ label, name }: { label: string; name: string }) {
   const display = name.trim() || "—";
   return (
@@ -2987,6 +3038,11 @@ function ModalNhapHang({
         onDone("Thêm ít nhất một mặt hàng.", false);
         return;
       }
+      const dupErr = duplicateMatHangError(valid.map((l) => l.mat_hang));
+      if (dupErr) {
+        onDone(dupErr, false);
+        return;
+      }
       setBusy(true);
       const idempotency_key =
         typeof globalThis.crypto !== "undefined" && "randomUUID" in globalThis.crypto
@@ -3007,6 +3063,56 @@ function ModalNhapHang({
       setBusy(false);
     }
   }
+
+  const hangNhapLines = (
+    <>
+      <div className="space-y-1">
+        <p className="m-0 text-[10px] font-bold uppercase text-[#AAA]">Hàng nhập *</p>
+        <p className="m-0 text-[11px] leading-snug text-[#888]">
+          Ô số là <span className="font-semibold text-[#555]">số lượng nhập trên phiếu</span> — được{" "}
+          <span className="font-semibold text-[#555]">cộng thêm</span> vào tồn kho hiện tại (không phải nhập tồn tuyệt đối).
+        </p>
+      </div>
+      {lines.map((l, i) => (
+        <div key={i} className="flex flex-wrap items-end gap-2">
+          <HoaCuSanPhamPicker
+            variant="nhap"
+            branchLabel={chiNhanhLabel}
+            sanPham={sanPham}
+            value={l.hangId}
+            excludeHangIds={hangIdsOnOtherLines(lines, i)}
+            onChange={(id) => setLines((p) => p.map((x, j) => (j === i ? { ...x, hangId: id } : x)))}
+          />
+          <label className="flex shrink-0 flex-col gap-1">
+            <span className="text-[9px] font-extrabold uppercase tracking-wide text-[#AAA]">SL nhập</span>
+            <input
+              value={l.qty}
+              onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
+              inputMode="numeric"
+              aria-label="Số lượng nhập (cộng vào tồn)"
+              className="w-20 rounded-[10px] border border-[#EAEAEA] px-2 py-2 text-center text-[13px]"
+            />
+          </label>
+          <button
+            type="button"
+            aria-label="Xóa dòng"
+            onClick={() => setLines((p) => p.filter((_, j) => j !== i))}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-red-100 text-red-600 transition hover:bg-red-50"
+          >
+            <X size={18} strokeWidth={2.25} aria-hidden />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => setLines((p) => [...p, { hangId: "", qty: "1" }])}
+        className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#BC8AF9] hover:underline"
+      >
+        <Plus size={16} strokeWidth={2.5} aria-hidden />
+        Thêm mặt hàng
+      </button>
+    </>
+  );
 
   return (
     <ModalShell
@@ -3030,110 +3136,80 @@ function ModalNhapHang({
         </div>
       }
     >
-      <div className="space-y-4">
-        <label className="block">
-          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Chi nhánh nhập *</span>
-          <select
-            value={chiNhanhId}
-            onChange={(e) => setChiNhanhId(e.target.value)}
-            className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
-          >
-            {chiNhanhOptions.map((b) => (
-              <option key={b.id} value={String(b.id)}>
-                {b.ten}
-              </option>
-            ))}
-          </select>
-          <p className="m-0 mt-1 text-[11px] leading-snug text-[#888]">
-            Chỉ chọn mặt hàng thuộc kho <span className="font-semibold text-[#555]">{chiNhanhLabel}</span>.
-          </p>
-        </label>
-        {catalogLoading ? (
-          <div className="flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#fafafa] px-4 py-8 text-[13px] text-[#666]">
-            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#BC8AF9]" aria-hidden />
-            Đang tải danh mục mặt hàng…
-          </div>
-        ) : null}
-        {catalogError ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-700" role="alert">
-            {catalogError}
-          </div>
-        ) : null}
-        <FieldLoggedInStaffRow label="Người nhập *" name={loggedInStaffName} />
-        <label className="block">
-          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Nhà cung cấp</span>
-          <input
-            value={ncc}
-            onChange={(e) => setNcc(e.target.value)}
-            className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px]"
-            placeholder="Tuỳ chọn"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Hình thức chi *</span>
-          <select
-            value={hinhThucChi}
-            onChange={(e) => setHinhThucChi(e.target.value)}
-            className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
-          >
-            {HINH_THUC.map((h) => (
-              <option key={h} value={h}>
-                {h}
-              </option>
-            ))}
-          </select>
-          <p className="m-0 mt-1 text-[11px] leading-snug text-[#888]">
-            Ghi nhận cho <span className="font-semibold text-[#555]">Thống kê thu chi</span> và BCTC (khoản chi nhập kho).
-          </p>
-        </label>
-        <div className="flex items-center justify-between rounded-[10px] border border-[#EAEAEA] bg-[#fafafa] px-3 py-2.5">
-          <span className="text-[11px] font-bold uppercase tracking-wide text-[#AAA]">Tạm tính (giá nhập × SL)</span>
-          <span className="text-sm font-extrabold tabular-nums text-[#1a1a2e]">{fmtVnd(tamTinhNhap)}</span>
-        </div>
-        <div className="space-y-1">
-          <p className="m-0 text-[10px] font-bold uppercase text-[#AAA]">Hàng nhập *</p>
-          <p className="m-0 text-[11px] leading-snug text-[#888]">
-            Ô số là <span className="font-semibold text-[#555]">số lượng nhập trên phiếu</span> — được{" "}
-            <span className="font-semibold text-[#555]">cộng thêm</span> vào tồn kho hiện tại (không phải nhập tồn tuyệt đối).
-          </p>
-        </div>
-        {lines.map((l, i) => (
-          <div key={i} className="flex flex-wrap items-end gap-2">
-            <HoaCuSanPhamPicker
-              variant="nhap"
-              branchLabel={chiNhanhLabel}
-              sanPham={sanPham}
-              value={l.hangId}
-              onChange={(id) => setLines((p) => p.map((x, j) => (j === i ? { ...x, hangId: id } : x)))}
-            />
-            <label className="flex shrink-0 flex-col gap-1">
-              <span className="text-[9px] font-extrabold uppercase tracking-wide text-[#AAA]">SL nhập</span>
-              <input
-                value={l.qty}
-                onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
-                inputMode="numeric"
-                aria-label="Số lượng nhập (cộng vào tồn)"
-                className="w-20 rounded-[10px] border border-[#EAEAEA] px-2 py-2 text-center text-[13px]"
-              />
-            </label>
-            <button
-              type="button"
-              aria-label="Xóa dòng"
-              onClick={() => setLines((p) => p.filter((_, j) => j !== i))}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-red-100 text-red-600 transition hover:bg-red-50"
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+        <div className="min-w-0 space-y-4">
+          <label className="block">
+            <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Chi nhánh nhập *</span>
+            <select
+              value={chiNhanhId}
+              onChange={(e) => setChiNhanhId(e.target.value)}
+              className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px] outline-none focus:border-[#BC8AF9]"
             >
-              <X size={18} strokeWidth={2.25} aria-hidden />
-            </button>
+              {chiNhanhOptions.map((b) => (
+                <option key={b.id} value={String(b.id)}>
+                  {b.ten}
+                </option>
+              ))}
+            </select>
+            <p className="m-0 mt-1 text-[11px] leading-snug text-[#888]">
+              Chỉ chọn mặt hàng thuộc kho <span className="font-semibold text-[#555]">{chiNhanhLabel}</span>.
+            </p>
+          </label>
+          {catalogLoading ? (
+            <div className="flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#fafafa] px-4 py-8 text-[13px] text-[#666]">
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#BC8AF9]" aria-hidden />
+              Đang tải danh mục mặt hàng…
+            </div>
+          ) : null}
+          {catalogError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-700" role="alert">
+              {catalogError}
+            </div>
+          ) : null}
+          <FieldLoggedInStaffRow label="Người nhập *" name={loggedInStaffName} />
+          <label className="block">
+            <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#AAA]">Nhà cung cấp</span>
+            <input
+              value={ncc}
+              onChange={(e) => setNcc(e.target.value)}
+              className="w-full rounded-[10px] border border-[#EAEAEA] px-3 py-2 text-[13px]"
+              placeholder="Tuỳ chọn"
+            />
+          </label>
+          <div>
+            <p className="mb-1.5 text-[10px] font-bold uppercase text-[#AAA]">Hình thức chi *</p>
+            <div className="flex gap-2">
+              {HINH_THUC.map((h) => {
+                const active = hinhThucChi === h;
+                const Icon = h === "Chuyển khoản" ? Smartphone : DollarSign;
+                return (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => setHinhThucChi(h)}
+                    className={cn(
+                      "flex flex-1 flex-col items-center gap-1 rounded-[11px] border-[1.5px] py-2.5 text-[10px] font-semibold transition",
+                      active
+                        ? "border-[#F8A568] bg-[#FFF7F0] text-[#F8A568]"
+                        : "border-[#EAEAEA] bg-white text-[#888]",
+                    )}
+                  >
+                    <Icon size={15} strokeWidth={2} className={active ? "text-[#F8A568]" : "text-[#9ca3af]"} aria-hidden />
+                    {h}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="m-0 mt-1.5 text-[11px] leading-snug text-[#888]">
+              Ghi nhận cho <span className="font-semibold text-[#555]">Thống kê thu chi</span> và BCTC (khoản chi nhập kho).
+            </p>
           </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => setLines((p) => [...p, { hangId: "", qty: "1" }])}
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#BC8AF9] hover:underline"
-        >
-          <Plus size={16} strokeWidth={2.5} aria-hidden />
-          Thêm mặt hàng
-        </button>
+          <div className="flex items-center justify-between rounded-lg bg-[#fafafa] px-3 py-2">
+            <span className="text-xs font-bold uppercase text-[#AAA]">Tạm tính</span>
+            <span className="text-sm font-extrabold tabular-nums text-[#1a1a2e]">{fmtVnd(tamTinhNhap)}</span>
+          </div>
+        </div>
+        <div className="min-w-0 space-y-3">{hangNhapLines}</div>
       </div>
     </ModalShell>
   );
@@ -3407,6 +3483,8 @@ function ModalBanHang({
     if (!Number.isFinite(defaultStaffId) || defaultStaffId <= 0) return "Không xác định được nhân sự đăng nhập.";
     if (!hv) return "Chọn khách hàng (học viên).";
     if (!valid.length) return "Thêm ít nhất một mặt hàng.";
+    const dupErr = duplicateMatHangError(valid.map((l) => l.mat_hang));
+    if (dupErr) return dupErr;
     for (const l of valid) {
       const sp = sanPham.find((x) => x.id === l.mat_hang);
       const t = sp?.ton_kho ?? 0;
@@ -3504,6 +3582,7 @@ function ModalBanHang({
             branchLabel={chiNhanhLabel}
             sanPham={sanPhamCoTon.length > 0 ? sanPhamCoTon : sanPham}
             value={l.hangId}
+            excludeHangIds={hangIdsOnOtherLines(lines, i)}
             onChange={(id) => setLines((p) => p.map((x, j) => (j === i ? { ...x, hangId: id } : x)))}
           />
           <label className="flex shrink-0 flex-col gap-1">
